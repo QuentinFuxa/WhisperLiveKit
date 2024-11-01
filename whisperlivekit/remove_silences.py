@@ -81,7 +81,8 @@ def no_token_to_silence(tokens):
 def ends_with_silence(tokens, beg_loop, vac_detected_silence):
     current_time = time() - (beg_loop if beg_loop else 0.0)
     last_token = tokens[-1]
-    if  vac_detected_silence or (current_time - last_token.end >= END_SILENCE_DURATION):
+    silence_duration = current_time - last_token.end
+    if  (vac_detected_silence and silence_duration > END_SILENCE_DURATION_VAC) or (silence_duration >= END_SILENCE_DURATION):
         if last_token.speaker == -2:
             last_token.end = current_time
         else:

@@ -179,4 +179,5 @@ def online_translation_factory(args, translation_model):
     #one shared nllb model for all speaker
     #one tokenizer per speaker/language
     from nllw import OnlineTranslation
+    from nllw import OnlineTranslation
     return OnlineTranslation(translation_model, [args.lan], [args.target_language])
