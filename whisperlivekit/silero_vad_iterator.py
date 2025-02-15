@@ -115,7 +115,7 @@ class OnnxWrapper():
             out, state = ort_outs
             self._state = torch.from_numpy(state)
         else:
-            raise ValueError()
+            raise ValueError(f"Unsupported sampling rate {sr}. Supported: {self.sample_rates} (with sample sizes 256 for 8000, 512 for 16000)")
 
         self._context = x[..., -context_size:]
         self._last_sr = sr
@@ -129,7 +129,7 @@ def _get_onnx_model_path(model_path: str = None, opset_version: int = 16) -> Pat
     """Get the path to the ONNX model file."""
     available_ops = [15, 16]
     if opset_version not in available_ops:
-        raise Exception(f'Available ONNX opset_version: {available_ops}')
+        raise ValueError(f'Unsupported ONNX opset_version: {opset_version}. Available: {available_ops}')
     
     if model_path is None:
         current_dir = Path(__file__).parent
@@ -255,8 +255,8 @@ class VADIterator:
         if not torch.is_tensor(x):
             try:
                 x = torch.Tensor(x)
-            except:
-                raise TypeError("Audio cannot be casted to tensor. Cast it manually")
+            except (ValueError, TypeError, RuntimeError) as exc:
+                raise TypeError("Audio cannot be cast to tensor. Cast it manually") from exc
 
         window_size_samples = len(x[0]) if x.dim() == 2 else len(x)
         self.current_sample += window_size_samples

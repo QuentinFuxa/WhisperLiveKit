@@ -350,7 +350,7 @@ class SimulStreamingASR:
     def set_translate_task(self):
         """Set up translation task."""
         if self.cfg.language == 'auto':
-            raise Exception('Translation cannot be done with language = auto')
+            raise ValueError('Translation cannot be done with language = auto')
         return tokenizer.get_tokenizer(
             multilingual=True,
             language=self.cfg.language,

@@ -287,11 +287,7 @@ class SortformerDiarizationOnline:
             logger.info(f"Saved {len(concatenated_audio)} samples to diarization_audio.wav")
 
 
-def extract_number(s: str) -> int:
-    """Extract number from speaker string (compatibility function)."""
-    import re
-    m = re.search(r'\d+', s)
-    return int(m.group()) if m else 0
+from whisperlivekit.diarization.utils import extract_number
 
 
 if __name__ == '__main__':

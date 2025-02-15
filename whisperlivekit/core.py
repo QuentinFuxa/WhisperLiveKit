@@ -2,18 +2,12 @@ import logging
 import sys
 import threading
 from argparse import Namespace
+from dataclasses import asdict
 
+from whisperlivekit.config import WhisperLiveKitConfig
 from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
 from whisperlivekit.local_agreement.whisper_online import backend_factory
 from whisperlivekit.simul_whisper import SimulStreamingASR
-
-
-def update_with_kwargs(_dict, kwargs):
-    _dict.update({
-        k: v for k, v in kwargs.items() if k in _dict
-    })
-    return _dict
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,69 +25,51 @@ class TranscriptionEngine:
                     cls._instance = super().__new__(cls)
         return cls._instance
     
-    def __init__(self, **kwargs):
+    def __init__(self, config=None, **kwargs):
         # Thread-safe initialization check
         with TranscriptionEngine._lock:
             if TranscriptionEngine._initialized:
                 return
-            # Set flag immediately to prevent re-initialization
+
+        try:
+            self._do_init(config, **kwargs)
+        except Exception:
+            # Reset singleton so a retry is possible
+            with TranscriptionEngine._lock:
+                TranscriptionEngine._instance = None
+                TranscriptionEngine._initialized = False
+            raise
+
+        with TranscriptionEngine._lock:
             TranscriptionEngine._initialized = True
 
-        # Perform initialization outside lock to avoid holding lock during slow operations
-        global_params = {
-            "host": "localhost",
-            "port": 8000,
-            "diarization": False,
-            "punctuation_split": False,
-            "target_language": "",
-            "vac": True,
-            "vac_chunk_size": 0.04,
-            "log_level": "DEBUG",
-            "ssl_certfile": None,
-            "ssl_keyfile": None,
-            "forwarded_allow_ips": None,
-            "transcription": True,
-            "vad": True,
-            "pcm_input": False,
-            "disable_punctuation_split" : False,
-            "diarization_backend": "sortformer",
-            "backend_policy": "simulstreaming",
-            "backend": "auto",
-        }
-        global_params = update_with_kwargs(global_params, kwargs)
-
-        transcription_common_params = {
-            "warmup_file": None,
-            "min_chunk_size": 0.1,
-            "model_size": "base",
-            "model_cache_dir": None,
-            "model_dir": None,
-            "model_path": None,
-            "lora_path": None,
-            "lan": "auto",
-            "direct_english_translation": False,
-        }
-        transcription_common_params = update_with_kwargs(transcription_common_params, kwargs)                                            
-
-        if transcription_common_params['model_size'].endswith(".en"):
-            transcription_common_params["lan"] = "en"
+    def _do_init(self, config=None, **kwargs):
+        # Handle negated kwargs from programmatic API
         if 'no_transcription' in kwargs:
-            global_params['transcription'] = not global_params['no_transcription']
+            kwargs['transcription'] = not kwargs.pop('no_transcription')
         if 'no_vad' in kwargs:
-            global_params['vad'] = not kwargs['no_vad']
+            kwargs['vad'] = not kwargs.pop('no_vad')
         if 'no_vac' in kwargs:
-            global_params['vac'] = not kwargs['no_vac']
+            kwargs['vac'] = not kwargs.pop('no_vac')
 
-        self.args = Namespace(**{**global_params, **transcription_common_params})
-        
+        if config is None:
+            if isinstance(kwargs.get('config'), WhisperLiveKitConfig):
+                config = kwargs.pop('config')
+            else:
+                config = WhisperLiveKitConfig.from_kwargs(**kwargs)
+        self.config = config
+
+        # Backward compat: expose as self.args (Namespace-like) for AudioProcessor etc.
+        self.args = Namespace(**asdict(config))
+
         self.asr = None
         self.tokenizer = None
         self.diarization = None
         self.vac_session = None
-        
-        if self.args.vac:
+
+        if config.vac:
             from whisperlivekit.silero_vad_iterator import is_onnx_available
-            
+
             if is_onnx_available():
                 from whisperlivekit.silero_vad_iterator import load_onnx_session
                 self.vac_session = load_onnx_session()
@@ -102,46 +78,55 @@ class TranscriptionEngine:
                     "onnxruntime not installed. VAC will use JIT model which is loaded per-session. "
                     "For multi-user scenarios, install onnxruntime: pip install onnxruntime"
                 )
-        backend_policy = self.args.backend_policy
-        if self.args.transcription:
-            if backend_policy == "simulstreaming":                 
+
+        transcription_common_params = {
+            "warmup_file": config.warmup_file,
+            "min_chunk_size": config.min_chunk_size,
+            "model_size": config.model_size,
+            "model_cache_dir": config.model_cache_dir,
+            "model_dir": config.model_dir,
+            "model_path": config.model_path,
+            "lora_path": config.lora_path,
+            "lan": config.lan,
+            "direct_english_translation": config.direct_english_translation,
+        }
+
+        if config.transcription:
+            if config.backend_policy == "simulstreaming":
                 simulstreaming_params = {
-                    "disable_fast_encoder": False,
-                    "custom_alignment_heads": None,
-                    "frame_threshold": 25,
-                    "beams": 1,
-                    "decoder_type": None,
-                    "audio_max_len": 20.0,
-                    "audio_min_len": 0.0,
-                    "cif_ckpt_path": None,
-                    "never_fire": False,
-                    "init_prompt": None,
-                    "static_init_prompt": None,
-                    "max_context_tokens": None,
+                    "disable_fast_encoder": config.disable_fast_encoder,
+                    "custom_alignment_heads": config.custom_alignment_heads,
+                    "frame_threshold": config.frame_threshold,
+                    "beams": config.beams,
+                    "decoder_type": config.decoder_type,
+                    "audio_max_len": config.audio_max_len,
+                    "audio_min_len": config.audio_min_len,
+                    "cif_ckpt_path": config.cif_ckpt_path,
+                    "never_fire": config.never_fire,
+                    "init_prompt": config.init_prompt,
+                    "static_init_prompt": config.static_init_prompt,
+                    "max_context_tokens": config.max_context_tokens,
                 }
-                simulstreaming_params = update_with_kwargs(simulstreaming_params, kwargs)
-                
-                self.tokenizer = None        
+
+                self.tokenizer = None
                 self.asr = SimulStreamingASR(
                     **transcription_common_params,
                     **simulstreaming_params,
-                    backend=self.args.backend,
+                    backend=config.backend,
                 )
                 logger.info(
                     "Using SimulStreaming policy with %s backend",
                     getattr(self.asr, "encoder_backend", "whisper"),
                 )
             else:
-                
                 whisperstreaming_params = {
-                    "buffer_trimming": "segment",
-                    "confidence_validation": False,
-                    "buffer_trimming_sec": 15,
+                    "buffer_trimming": config.buffer_trimming,
+                    "confidence_validation": config.confidence_validation,
+                    "buffer_trimming_sec": config.buffer_trimming_sec,
                 }
-                whisperstreaming_params = update_with_kwargs(whisperstreaming_params, kwargs)
-                
+
                 self.asr = backend_factory(
-                    backend=self.args.backend,
+                    backend=config.backend,
                     **transcription_common_params,
                     **whisperstreaming_params,
                 )
@@ -150,39 +135,32 @@ class TranscriptionEngine:
                     getattr(self.asr, "backend_choice", self.asr.__class__.__name__),
                 )
 
-        if self.args.diarization:
-            if self.args.diarization_backend == "diart":
-                from whisperlivekit.diarization.diart_backend import \
-                    DiartDiarization
-                diart_params = {
-                    "segmentation_model": "pyannote/segmentation-3.0",
-                    "embedding_model": "pyannote/embedding",
-                }
-                diart_params = update_with_kwargs(diart_params, kwargs)
+        if config.diarization:
+            if config.diarization_backend == "diart":
+                from whisperlivekit.diarization.diart_backend import DiartDiarization
                 self.diarization_model = DiartDiarization(
-                    block_duration=self.args.min_chunk_size,
-                    **diart_params
+                    block_duration=config.min_chunk_size,
+                    segmentation_model=config.segmentation_model,
+                    embedding_model=config.embedding_model,
                 )
-            elif self.args.diarization_backend == "sortformer":
-                from whisperlivekit.diarization.sortformer_backend import \
-                    SortformerDiarization
+            elif config.diarization_backend == "sortformer":
+                from whisperlivekit.diarization.sortformer_backend import SortformerDiarization
                 self.diarization_model = SortformerDiarization()
-        
+
         self.translation_model = None
-        if self.args.target_language:
-            if self.args.lan == 'auto' and backend_policy != "simulstreaming":
-                raise Exception('Translation cannot be set with language auto when transcription backend is not simulstreaming')
+        if config.target_language:
+            if config.lan == 'auto' and config.backend_policy != "simulstreaming":
+                raise ValueError('Translation cannot be set with language auto when transcription backend is not simulstreaming')
             else:
                 try:
                     from nllw import load_model
-                except:
-                    raise Exception('To use translation, you must install nllw: `pip install nllw`')
-                translation_params = { 
-                    "nllb_backend": "transformers",
-                    "nllb_size": "600M"
-                }
-                translation_params = update_with_kwargs(translation_params, kwargs)
-                self.translation_model = load_model([self.args.lan], **translation_params) #in the future we want to handle different languages for different speakers
+                except ImportError:
+                    raise ImportError('To use translation, you must install nllw: `pip install nllw`')
+                self.translation_model = load_model(
+                    [config.lan],
+                    nllb_backend=config.nllb_backend,
+                    nllb_size=config.nllb_size,
+                )
 
 
 def online_factory(args, asr):
@@ -196,11 +174,12 @@ def online_diarization_factory(args, diarization_backend):
     if args.diarization_backend == "diart":
         online = diarization_backend
         # Not the best here, since several user/instances will share the same backend, but diart is not SOTA anymore and sortformer is recommended
-    
-    if args.diarization_backend == "sortformer":
+    elif args.diarization_backend == "sortformer":
         from whisperlivekit.diarization.sortformer_backend import \
             SortformerDiarizationOnline
         online = SortformerDiarizationOnline(shared_model=diarization_backend)
+    else:
+        raise ValueError(f"Unknown diarization backend: {args.diarization_backend}")
     return online
 
 

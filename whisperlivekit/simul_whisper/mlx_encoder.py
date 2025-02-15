@@ -7,21 +7,9 @@ from huggingface_hub import snapshot_download
 from mlx.utils import tree_unflatten
 from mlx_whisper import whisper
 
-mlx_model_mapping = {
-    "tiny.en": "mlx-community/whisper-tiny.en-mlx",
-    "tiny": "mlx-community/whisper-tiny-mlx",
-    "base.en": "mlx-community/whisper-base.en-mlx",
-    "base": "mlx-community/whisper-base-mlx",
-    "small.en": "mlx-community/whisper-small.en-mlx",
-    "small": "mlx-community/whisper-small-mlx",
-    "medium.en": "mlx-community/whisper-medium.en-mlx",
-    "medium": "mlx-community/whisper-medium-mlx",
-    "large-v1": "mlx-community/whisper-large-v1-mlx",
-    "large-v2": "mlx-community/whisper-large-v2-mlx",
-    "large-v3": "mlx-community/whisper-large-v3-mlx",
-    "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
-    "large": "mlx-community/whisper-large-mlx",
-}
+from whisperlivekit.model_mapping import MLX_MODEL_MAPPING
+
+mlx_model_mapping = MLX_MODEL_MAPPING
 
 def load_mlx_encoder(
     path_or_hf_repo: str,

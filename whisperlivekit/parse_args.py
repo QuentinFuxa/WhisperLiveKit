@@ -148,7 +148,7 @@ def parse_args():
         type=str,
         default="auto",
         choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api"],
-        help="Select the Whisper backend implementation (auto: prefer MLX on macOS, otherwise Faster-Whisper, else Whisper). Use 'openai-api' with --backend-policy localagreement to call OpenAI's API.",
+        help="Select the ASR backend implementation (auto: prefer MLX on macOS, otherwise Faster-Whisper, else Whisper).",
     )
     parser.add_argument(
         "--no-vac",
@@ -318,15 +318,12 @@ def parse_args():
     )
 
     args = parser.parse_args()
-    
     args.transcription = not args.no_transcription
-    args.vad = not args.no_vad    
+    args.vad = not args.no_vad
+    args.vac = not args.no_vac
     delattr(args, 'no_transcription')
     delattr(args, 'no_vad')
+    delattr(args, 'no_vac')
 
-    if args.backend_policy == "1":
-        args.backend_policy = "simulstreaming"
-    elif args.backend_policy == "2":
-        args.backend_policy = "localagreement"
-    
-    return args
+    from whisperlivekit.config import WhisperLiveKitConfig
+    return WhisperLiveKitConfig.from_namespace(args)

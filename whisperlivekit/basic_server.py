@@ -14,15 +14,13 @@ logging.getLogger().setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-args = parse_args()
+config = parse_args()
 transcription_engine = None
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):    
+async def lifespan(app: FastAPI):
     global transcription_engine
-    transcription_engine = TranscriptionEngine(
-        **vars(args),
-    )
+    transcription_engine = TranscriptionEngine(config=config)
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -63,7 +61,7 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info("WebSocket connection opened.")
 
     try:
-        await websocket.send_json({"type": "config", "useAudioWorklet": bool(args.pcm_input)})
+        await websocket.send_json({"type": "config", "useAudioWorklet": bool(config.pcm_input)})
     except Exception as e:
         logger.warning(f"Failed to send config to client: {e}")
             
@@ -103,26 +101,26 @@ def main():
     
     uvicorn_kwargs = {
         "app": "whisperlivekit.basic_server:app",
-        "host":args.host, 
-        "port":args.port, 
+        "host": config.host,
+        "port": config.port,
         "reload": False,
         "log_level": "info",
         "lifespan": "on",
     }
-    
+
     ssl_kwargs = {}
-    if args.ssl_certfile or args.ssl_keyfile:
-        if not (args.ssl_certfile and args.ssl_keyfile):
+    if config.ssl_certfile or config.ssl_keyfile:
+        if not (config.ssl_certfile and config.ssl_keyfile):
             raise ValueError("Both --ssl-certfile and --ssl-keyfile must be specified together.")
         ssl_kwargs = {
-            "ssl_certfile": args.ssl_certfile,
-            "ssl_keyfile": args.ssl_keyfile
+            "ssl_certfile": config.ssl_certfile,
+            "ssl_keyfile": config.ssl_keyfile,
         }
 
     if ssl_kwargs:
         uvicorn_kwargs = {**uvicorn_kwargs, **ssl_kwargs}
-    if args.forwarded_allow_ips:
-        uvicorn_kwargs = { **uvicorn_kwargs, "forwarded_allow_ips" : args.forwarded_allow_ips }
+    if config.forwarded_allow_ips:
+        uvicorn_kwargs = {**uvicorn_kwargs, "forwarded_allow_ips": config.forwarded_allow_ips}
 
     uvicorn.run(**uvicorn_kwargs)
 

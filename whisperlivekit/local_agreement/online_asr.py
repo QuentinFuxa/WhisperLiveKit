@@ -136,6 +136,11 @@ class OnlineASRProcessor:
                 f"buffer_trimming_sec is set to {self.buffer_trimming_sec}, which is very long. It may cause OOM."
             )
 
+    def new_speaker(self, change_speaker):
+        """Handle speaker change event."""
+        self.process_iter()
+        self.init(offset=change_speaker.start)
+
     def init(self, offset: Optional[float] = None):
         """Initialize or reset the processing buffers."""
         self.audio_buffer = np.array([], dtype=np.float32)

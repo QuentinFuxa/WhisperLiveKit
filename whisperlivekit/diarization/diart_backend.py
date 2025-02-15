@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 import threading
 import time
 from queue import Empty, SimpleQueue
@@ -14,13 +13,10 @@ from diart.sources import AudioSource, MicrophoneAudioSource
 from pyannote.core import Annotation
 from rx.core import Observer
 
+from whisperlivekit.diarization.utils import extract_number
 from whisperlivekit.timed_objects import SpeakerSegment
 
 logger = logging.getLogger(__name__)
-
-def extract_number(s: str) -> int:
-    m = re.search(r'\d+', s)
-    return int(m.group()) if m else None
 
 class DiarizationObserver(Observer):
     """Observer that logs all data emitted by the diarization pipeline and stores speaker segments."""
