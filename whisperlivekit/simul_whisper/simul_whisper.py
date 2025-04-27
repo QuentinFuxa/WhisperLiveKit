@@ -472,7 +472,7 @@ class PaddedAlignAttWhisper:
             content_mel_len = int((mel_padded.shape[2] - mel.shape[2])/2)
             encoder_feature = self.model.encoder(mel)
         end_encode = time()
-        print('Encoder duration:', end_encode-beg_encode)
+        # print('Encoder duration:', end_encode-beg_encode)
                 
         if self.cfg.language == "auto" and self.detected_language is None and self.first_timestamp:
             seconds_since_start = self.segments_len() - self.first_timestamp

@@ -52,8 +52,8 @@ class TranscriptionEngine:
 
         transcription_common_params = {
             "warmup_file": None,
-            "min_chunk_size": 0.5,
-            "model_size": "tiny",
+            "min_chunk_size": 0.1,
+            "model_size": "base",
             "model_cache_dir": None,
             "model_dir": None,
             "model_path": None,

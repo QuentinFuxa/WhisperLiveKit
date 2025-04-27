@@ -81,14 +81,14 @@ def parse_args():
     parser.add_argument(
         "--min-chunk-size",
         type=float,
-        default=0.5,
+        default=0.1,
         help="Minimum audio chunk size in seconds. It waits up to this time to do processing. If the processing takes shorter time, it waits, otherwise it processes the whole segment that was received by this time.",
     )
     
     parser.add_argument(
         "--model",
         type=str,
-        default="small",
+        default="base",
         dest='model_size',
         help="Name size of the Whisper model to use (default: tiny). Suggested values: tiny.en,tiny,base.en,base,small.en,small,medium.en,medium,large-v1,large-v2,large-v3,large,large-v3-turbo. The model is automatically downloaded from the model hub if not present in model cache dir.",
     )
