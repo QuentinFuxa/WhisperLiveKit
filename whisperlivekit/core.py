@@ -115,7 +115,14 @@ class TranscriptionEngine:
                 )
 
             else:
-                self.asr, self.tokenizer = backend_factory(self.args)
+                self.asr, self.tokenizer = backend_factory(self.args.backend,
+                                                       lan=self.args.lan,
+                                                       modelsize=self.args.model,
+                                                       cache_dir=self.args.model_cache_dir,
+                                                       model_dir=self.args.model_dir,
+                                                       init_prompt=self.args.init_prompt)
+        
+        if self.args.warmup_file:
             warmup_asr(self.asr, self.args.warmup_file) #for simulstreaming, warmup should be done in the online class not here
 
         if self.args.diarization:
@@ -165,4 +172,3 @@ def online_diarization_factory(args, diarization_backend):
         online = SortformerDiarizationOnline(shared_model=diarization_backend)
     return online
 
-        
