@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from whisperlivekit import TranscriptionEngine, AudioProcessor, get_web_interface_html, parse_args
+from whisperlivekit import TranscriptionEngine, AudioProcessor, get_inline_ui_html, parse_args
 import asyncio
 import logging
 from starlette.staticfiles import StaticFiles
@@ -38,7 +38,7 @@ app.mount("/web", StaticFiles(directory=str(web_dir)), name="web")
 
 @app.get("/")
 async def get():
-    return HTMLResponse(get_web_interface_html())
+    return HTMLResponse(get_inline_ui_html())
 
 
 async def handle_websocket_results(websocket, results_generator):
