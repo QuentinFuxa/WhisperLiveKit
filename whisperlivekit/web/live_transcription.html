@@ -2,59 +2,102 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>WhisperLiveKit</title>
   <link rel="stylesheet" href="/web/live_transcription.css" />
 </head>
 <body>
-  <div class="settings-container">
-    <button id="recordButton">
-      <div class="shape-container">
-        <div class="shape"></div>
-      </div>
-      <div class="recording-info">
-        <div class="wave-container">
-          <canvas id="waveCanvas"></canvas>
-        </div>
-        <div class="timer">00:00</div>
-      </div>
-    </button>
-
-    <div class="settings">
-      <div class="field">
-        <label for="websocketInput">WebSocket URL</label>
-        <input id="websocketInput" type="text" placeholder="ws://host:port/asr" />
-      </div>
-
-      </div>
+  <div class="neural-grid"></div>
+  
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <div class="pulse-dot"></div>
+      <span>WhisperLiveKit</span>
     </div>
-  </div>
-
-  <div class="theme-selector-container">
-    <div class="segmented" role="radiogroup" aria-label="Theme selector">
+    
+    <!-- Compact recording control in header -->
+    <div id="headerControl" class="header-control" style="display: none;">
+      <button id="headerRecordButton" class="header-record-btn">
+        <div class="header-record-dot"></div>
+        <span class="header-action-text">Stop Transcribe</span>
+        <div class="header-timer">00:00</div>
+      </button>
+    </div>
+    
+    <div class="theme-controls">
       <input type="radio" id="theme-system" name="theme" value="system" />
-      <label for="theme-system" title="System">
-        <img src="/web/src/system_mode.svg" alt="" />
-        <span>System</span>
-      </label>
-
+      <label for="theme-system"><img src="/web/src/system_mode.svg" alt="System" /></label>
       <input type="radio" id="theme-light" name="theme" value="light" />
-      <label for="theme-light" title="Light">
-        <img src="/web/src/light_mode.svg" alt="" />
-        <span>Light</span>
-      </label>
-
+      <label for="theme-light"><img src="/web/src/light_mode.svg" alt="Light" /></label>
       <input type="radio" id="theme-dark" name="theme" value="dark" />
-      <label for="theme-dark" title="Dark">
-        <img src="/web/src/dark_mode.svg" alt="" />
-        <span>Dark</span>
-      </label>
+      <label for="theme-dark"><img src="/web/src/dark_mode.svg" alt="Dark" /></label>
+    </div>
+  </nav>
+
+  <div class="central-hub">
+    <div class="audio-visualizer">      
+      <button id="recordButton" class="transcribe-orb">
+        <div class="orb-inner">
+          <div class="record-state"></div>
+          <canvas id="waveCanvas" class="wave-ring"></canvas>
+        </div>
+        <span class="action-text">Start Transcribe</span>
+        <div class="recording-metrics">
+          <span class="timer">00:00</span>
+        </div>
+      </button>
+    </div>
+
+    <div class="status-beam">
+      <p id="status">Neural transcription ready</p>
     </div>
   </div>
 
-  <p id="status"></p>
+  <div class="transcript-flow">
+    <div id="linesTranscript" class="flow-content"></div>
+    <button id="scrollToBottom" class="scroll-to-bottom" style="display: none;">
+      <span>↓</span>
+      <span>New messages</span>
+    </button>
+  </div>
 
-  <div id="linesTranscript"></div>
+  <div class="control-dock">
+    <div class="config-grid">
+      <div class="config-card">
+        <div class="card-header">
+          <span class="card-icon">⚡</span>
+          <h3>Connection</h3>
+        </div>
+        <div class="card-content">
+          <div class="input-group">
+            <label for="websocketInput">WebSocket Endpoint</label>
+            <input id="websocketInput" type="text" placeholder="ws://localhost:8000/asr" />
+            <small>Default: <span id="wsDefaultUrl"></span></small>
+          </div>
+        </div>
+      </div>
+      
+      <div class="config-card">
+        <div class="card-header">
+          <span class="card-icon">🎤</span>
+          <h3>Microphone</h3>
+        </div>
+        <div class="card-content">
+          <div class="input-group">
+            <label for="microphoneSelect">Select Device</label>
+            <select id="microphoneSelect">
+              <option value="">Default Microphone</option>
+            </select>
+            <small>Choose your preferred microphone</small>
+          </div>
+          <button id="refreshMicsButton" class="refresh-btn">
+            <span class="refresh-icon">🔄</span>
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="/web/live_transcription.js"></script>
 </body>

@@ -7,6 +7,9 @@ let chunkDuration = 100;
 let websocketUrl = "ws://localhost:8000/asr";
 let userClosing = false;
 let wakeLock = null;
+let wakeLockVideo = null;
+let selectedMicrophoneId = null;
+let availableMicrophones = [];
 let startTime = null;
 let timerInterval = null;
 let audioContext = null;
@@ -19,18 +22,28 @@ let waitingForStop = false;
 let lastReceivedData = null;
 let lastSignature = null;
 
-waveCanvas.width = 60 * (window.devicePixelRatio || 1);
-waveCanvas.height = 30 * (window.devicePixelRatio || 1);
+waveCanvas.width = 120 * (window.devicePixelRatio || 1);
+waveCanvas.height = 120 * (window.devicePixelRatio || 1);
 waveCtx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
 
 const statusText = document.getElementById("status");
 const recordButton = document.getElementById("recordButton");
+const actionText = document.querySelector(".action-text");
 const chunkSelector = document.getElementById("chunkSelector");
 const websocketInput = document.getElementById("websocketInput");
 const websocketDefaultSpan = document.getElementById("wsDefaultUrl");
 const linesTranscriptDiv = document.getElementById("linesTranscript");
 const timerElement = document.querySelector(".timer");
 const themeRadios = document.querySelectorAll('input[name="theme"]');
+const scrollToBottomBtn = document.getElementById("scrollToBottom");
+const headerControl = document.getElementById("headerControl");
+const headerRecordButton = document.getElementById("headerRecordButton");
+const headerTimer = document.querySelector(".header-timer");
+const topNav = document.querySelector(".top-nav");
+const centralHub = document.querySelector(".central-hub");
+const transcriptFlow = document.querySelector(".transcript-flow");
+const microphoneSelect = document.getElementById("microphoneSelect");
+const refreshMicsButton = document.getElementById("refreshMicsButton");
 
 function getWaveStroke() {
   const styles = getComputedStyle(document.documentElement);
@@ -86,6 +99,66 @@ if (darkMq && darkMq.addEventListener) {
 function fmt1(x) {
   const n = Number(x);
   return Number.isFinite(n) ? n.toFixed(1) : x;
+}
+
+// Microphone enumeration and selection
+async function enumerateMicrophones() {
+  try {
+    // Request permission first to get device labels
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(track => track.stop());
+    
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    availableMicrophones = devices.filter(device => device.kind === 'audioinput');
+    
+    populateMicrophoneSelect();
+    console.log(`Found ${availableMicrophones.length} microphone(s)`);
+  } catch (error) {
+    console.error('Error enumerating microphones:', error);
+    statusText.textContent = "Error accessing microphones. Please grant permission.";
+  }
+}
+
+function populateMicrophoneSelect() {
+  if (!microphoneSelect) return;
+  
+  // Clear existing options except the default
+  microphoneSelect.innerHTML = '<option value="">Default Microphone</option>';
+  
+  availableMicrophones.forEach((device, index) => {
+    const option = document.createElement('option');
+    option.value = device.deviceId;
+    option.textContent = device.label || `Microphone ${index + 1}`;
+    microphoneSelect.appendChild(option);
+  });
+  
+  // Restore previously selected microphone
+  const savedMicId = localStorage.getItem('selectedMicrophone');
+  if (savedMicId && availableMicrophones.some(mic => mic.deviceId === savedMicId)) {
+    microphoneSelect.value = savedMicId;
+    selectedMicrophoneId = savedMicId;
+  }
+}
+
+function handleMicrophoneChange() {
+  selectedMicrophoneId = microphoneSelect.value || null;
+  localStorage.setItem('selectedMicrophone', selectedMicrophoneId || '');
+  
+  const selectedDevice = availableMicrophones.find(mic => mic.deviceId === selectedMicrophoneId);
+  const deviceName = selectedDevice ? selectedDevice.label : 'Default Microphone';
+  
+  console.log(`Selected microphone: ${deviceName}`);
+  statusText.textContent = `Microphone changed to: ${deviceName}`;
+  
+  // If currently recording, we need to restart with the new microphone
+  if (isRecording) {
+    statusText.textContent = "Switching microphone... Please wait.";
+    stopRecording().then(() => {
+      setTimeout(() => {
+        toggleRecording();
+      }, 1000);
+    });
+  }
 }
 
 // Default WebSocket URL computation
@@ -314,8 +387,38 @@ function renderLinesWithBuffer(
     })
     .join("");
 
-  linesTranscriptDiv.innerHTML = linesHtml;
-  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  // Use requestAnimationFrame for smoother DOM updates
+  requestAnimationFrame(() => {
+    linesTranscriptDiv.innerHTML = linesHtml;
+    
+    // Add live indicator when actively transcribing
+    if (!isFinalizing && isRecording) {
+      linesTranscriptDiv.classList.add('live');
+    } else {
+      linesTranscriptDiv.classList.remove('live');
+    }
+    
+    // Auto-scroll behavior
+    const transcriptContainer = linesTranscriptDiv;
+    if (transcriptContainer) {
+      // Check if user is at the bottom (within 50px tolerance)
+      const isAtBottom = transcriptContainer.scrollHeight - transcriptContainer.scrollTop - transcriptContainer.clientHeight < 50;
+      
+      // Show/hide scroll to bottom button
+      if (scrollToBottomBtn) {
+        const shouldShow = !isAtBottom && transcriptContainer.scrollHeight > transcriptContainer.clientHeight && !isFinalizing;
+        scrollToBottomBtn.style.display = shouldShow ? 'flex' : 'none';
+      }
+      
+      // Always auto-scroll during live recording, or if user is at bottom
+      if (!isFinalizing && isRecording) {
+        // Force scroll to bottom during live transcription
+        transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+      } else if (isAtBottom || transcriptContainer.scrollHeight <= transcriptContainer.clientHeight) {
+        transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+      }
+    }
+  });
 }
 
 function updateTimer() {
@@ -324,7 +427,10 @@ function updateTimer() {
   const elapsed = Math.floor((Date.now() - startTime) / 1000);
   const minutes = Math.floor(elapsed / 60).toString().padStart(2, "0");
   const seconds = (elapsed % 60).toString().padStart(2, "0");
-  timerElement.textContent = `${minutes}:${seconds}`;
+  const timeString = `${minutes}:${seconds}`;
+  
+  if (timerElement) timerElement.textContent = timeString;
+  if (headerTimer) headerTimer.textContent = timeString;
 }
 
 function drawWaveform() {
@@ -332,38 +438,39 @@ function drawWaveform() {
 
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
-  analyser.getByteTimeDomainData(dataArray);
+  analyser.getByteFrequencyData(dataArray);
 
-  waveCtx.clearRect(
-    0,
-    0,
-    waveCanvas.width / (window.devicePixelRatio || 1),
-    waveCanvas.height / (window.devicePixelRatio || 1)
-  );
-  waveCtx.lineWidth = 1;
-  waveCtx.strokeStyle = waveStroke;
+  const canvasWidth = waveCanvas.width / (window.devicePixelRatio || 1);
+  const canvasHeight = waveCanvas.height / (window.devicePixelRatio || 1);
+  const centerX = canvasWidth / 2;
+  const centerY = canvasHeight / 2;
+  const radius = Math.min(centerX, centerY) - 10;
+
+  waveCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+  
+  // Draw circular waveform
+  waveCtx.lineWidth = 2;
+  waveCtx.strokeStyle = '#00d4ff';
+  waveCtx.shadowColor = '#00d4ff';
+  waveCtx.shadowBlur = 10;
   waveCtx.beginPath();
 
-  const sliceWidth = (waveCanvas.width / (window.devicePixelRatio || 1)) / bufferLength;
-  let x = 0;
-
+  const angleStep = (Math.PI * 2) / bufferLength;
+  
   for (let i = 0; i < bufferLength; i++) {
-    const v = dataArray[i] / 128.0;
-    const y = (v * (waveCanvas.height / (window.devicePixelRatio || 1))) / 2;
-
+    const angle = i * angleStep;
+    const amplitude = (dataArray[i] / 255) * 30;
+    const x = centerX + Math.cos(angle) * (radius + amplitude);
+    const y = centerY + Math.sin(angle) * (radius + amplitude);
+    
     if (i === 0) {
       waveCtx.moveTo(x, y);
     } else {
       waveCtx.lineTo(x, y);
     }
-
-    x += sliceWidth;
   }
-
-  waveCtx.lineTo(
-    waveCanvas.width / (window.devicePixelRatio || 1),
-    (waveCanvas.height / (window.devicePixelRatio || 1)) / 2
-  );
+  
+  waveCtx.closePath();
   waveCtx.stroke();
 
   animationFrame = requestAnimationFrame(drawWaveform);
@@ -371,13 +478,35 @@ function drawWaveform() {
 
 async function startRecording() {
   try {
+    // Request wake lock to keep screen awake during recording
     try {
-      wakeLock = await navigator.wakeLock.request("screen");
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request("screen");
+        console.log("Screen wake lock acquired - screen will stay awake");
+        
+        // Listen for wake lock release (e.g., when tab becomes hidden)
+        wakeLock.addEventListener('release', () => {
+          console.log('Screen wake lock was released');
+        });
+      } else {
+        console.log("Wake Lock API not supported in this browser");
+        // Fallback: use a hidden video element to prevent sleep (older method)
+        requestWakeLockFallback();
+      }
     } catch (err) {
-      console.log("Error acquiring wake lock.");
+      console.log("Error acquiring wake lock:", err);
+      // Try fallback method
+      requestWakeLockFallback();
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Use selected microphone if available
+    const audioConstraints = { audio: true };
+    if (selectedMicrophoneId) {
+      audioConstraints.audio = { deviceId: { exact: selectedMicrophoneId } };
+      console.log(`Using selected microphone: ${selectedMicrophoneId}`);
+    }
+    
+    const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
 
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioContext.createAnalyser();
@@ -495,24 +624,104 @@ async function toggleRecording() {
 function updateUI() {
   recordButton.classList.toggle("recording", isRecording);
   recordButton.disabled = waitingForStop;
+  recordButton.setAttribute("aria-pressed", String(isRecording));
+
+  // Toggle layout transformation
+  if (topNav) topNav.classList.toggle("recording", isRecording);
+  if (centralHub) centralHub.classList.toggle("recording", isRecording);
+  if (transcriptFlow) transcriptFlow.classList.toggle("recording", isRecording);
+  
+  // Show/hide header control
+  if (headerControl) {
+    headerControl.style.display = isRecording ? 'flex' : 'none';
+  }
 
   if (waitingForStop) {
     if (statusText.textContent !== "Recording stopped. Processing final audio...") {
       statusText.textContent = "Please wait for processing to complete...";
     }
   } else if (isRecording) {
-    statusText.textContent = "Recording...";
+    statusText.textContent = "Neural transcription active";
   } else {
     if (
       statusText.textContent !== "Finished processing audio! Ready to record again." &&
       statusText.textContent !== "Processing finalized or connection closed."
     ) {
-      statusText.textContent = "Click to start transcription";
+      statusText.textContent = "Neural transcription ready";
     }
   }
   if (!waitingForStop) {
     recordButton.disabled = false;
   }
+
+  if (actionText) {
+    actionText.textContent = isRecording ? "Stop Transcribe" : "Start Transcribe";
+  }
 }
 
 recordButton.addEventListener("click", toggleRecording);
+recordButton.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    toggleRecording();
+  }
+});
+
+// Scroll to bottom button functionality
+if (scrollToBottomBtn) {
+  scrollToBottomBtn.addEventListener("click", () => {
+    if (linesTranscriptDiv) {
+      linesTranscriptDiv.scrollTo({
+        top: linesTranscriptDiv.scrollHeight,
+        behavior: "smooth"
+      });
+    }
+  });
+}
+
+// Header record button functionality
+if (headerRecordButton) {
+  headerRecordButton.addEventListener("click", toggleRecording);
+}
+
+// Microphone selection functionality
+if (microphoneSelect) {
+  microphoneSelect.addEventListener("change", handleMicrophoneChange);
+}
+
+if (refreshMicsButton) {
+  refreshMicsButton.addEventListener("click", async () => {
+    refreshMicsButton.disabled = true;
+    refreshMicsButton.innerHTML = '<span class="refresh-icon">⏳</span><span>Refreshing...</span>';
+    
+    try {
+      await enumerateMicrophones();
+      statusText.textContent = "Microphone list refreshed";
+    } catch (error) {
+      statusText.textContent = "Error refreshing microphones";
+      console.error("Error refreshing microphones:", error);
+    } finally {
+      refreshMicsButton.disabled = false;
+      refreshMicsButton.innerHTML = '<span class="refresh-icon">🔄</span><span>Refresh</span>';
+    }
+  });
+}
+
+// Initialize microphones on page load
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await enumerateMicrophones();
+  } catch (error) {
+    console.log("Could not enumerate microphones on load:", error);
+  }
+});
+
+// Re-enumerate devices when they change
+navigator.mediaDevices.addEventListener('devicechange', async () => {
+  console.log('Device change detected, re-enumerating microphones');
+  try {
+    await enumerateMicrophones();
+  } catch (error) {
+    console.log("Error re-enumerating microphones:", error);
+  }
+});
