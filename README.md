@@ -219,7 +219,7 @@ To deploy WhisperLiveKit in production:
     }}
     ```
 
-4. **HTTPS Support**: For secure deployments, use "wss://" instead of "ws://" in WebSocket URL
+4. **HTTPS Support**: For secure deployments, use "wss://" instead of "wss://" in WebSocket URL
 
 ## 🐋 Docker
 
