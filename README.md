@@ -228,12 +228,14 @@ Deploy the application easily using Docker with GPU or CPU support.
 ### Prerequisites
 - Docker installed on your system
 - For GPU support: NVIDIA Docker runtime installed
+- NVIDIA GPU with CUDA compute capability 3.5 or higher
+- CUDA 12.1 compatible driver installed on the host system
 
 ### Quick Start
 
 **With GPU acceleration (recommended):**
 ```bash
-docker build -t wlk .
+docker build -t wlk -f Dockerfile.gpu .
 docker run --gpus all -p 8000:8000 --name wlk wlk
 ```
 
@@ -242,6 +244,8 @@ docker run --gpus all -p 8000:8000 --name wlk wlk
 docker build -f Dockerfile.cpu -t wlk .
 docker run -p 8000:8000 --name wlk wlk
 ```
+
+> **Note**: The GPU Dockerfile uses CUDA 12.1, which requires a compatible NVIDIA driver on your host system. If you encounter compatibility issues, you may need to update your NVIDIA drivers or use the CPU version.
 
 ### Advanced Usage
 
