@@ -1,0 +1,28 @@
+# Test Dockerfile for CUDA compatibility
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update && \\
+    apt-get install -y --no-install-recommends \\
+        python3 \\
+        python3-pip \\
+        python3-venv && \\
+    rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install PyTorch with CUDA 12.1 support
+RUN pip3 install --upgrade pip setuptools wheel && \\
+    pip3 --disable-pip-version-check install --timeout=120 --retries=5 \\
+        --index-url https://download.pytorch.org/whl/cu121 \\
+        torch torchvision torchaudio
+
+# Copy test script
+COPY test_cuda_compatibility.py .
+
+CMD ["python3", "test_cuda_compatibility.py"]
