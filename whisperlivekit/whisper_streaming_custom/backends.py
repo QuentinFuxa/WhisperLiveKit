@@ -88,6 +88,10 @@ class FasterWhisperASR(ASRBase):
     """Uses faster-whisper as the backend."""
     sep = ""
 
+    def __init__(self, lan, modelsize=None, cache_dir=None, model_dir=None, logfile=sys.stderr, init_prompt=""):
+        super().__init__(lan, modelsize, cache_dir, model_dir, logfile)
+        self.init_prompt = init_prompt
+
     def load_model(self, modelsize=None, cache_dir=None, model_dir=None):
         from faster_whisper import WhisperModel
 
@@ -112,10 +116,12 @@ class FasterWhisperASR(ASRBase):
         return model
 
     def transcribe(self, audio: np.ndarray, init_prompt: str = "") -> list:
+        # faster-whisper's transcribe method has an `initial_prompt` argument
+        # which is perfect for this.
         segments, info = self.model.transcribe(
             audio,
             language=self.original_language,
-            initial_prompt=init_prompt,
+            initial_prompt=self.init_prompt or init_prompt,
             beam_size=5,
             word_timestamps=True,
             condition_on_previous_text=True,
