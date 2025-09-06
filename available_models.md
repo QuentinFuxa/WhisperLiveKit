@@ -58,6 +58,7 @@
 - `small`: ~2GB VRAM
 - `medium`: ~5GB VRAM
 - `large`: ~10GB VRAM
+- `large‑v3‑turbo`: ~6GB VRAM
 
 **Audio Quality Impact**:
 - Clean, clear audio: smaller models may suffice
