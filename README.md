@@ -177,7 +177,7 @@ The rest I don't recommend. But below are your options.
 | `--static-init-prompt` | Static prompt that doesn't scroll | `None` |
 | `--max-context-tokens` | Maximum context tokens | `None` |
 | `--model-path` | Direct path to .pt model file. Download it if not found | `./base.pt` |
-| `--preloaded-model-count` | Optional. Number of models to preload in memory to speed up loading (set up to the expected number of concurrent users) | `1` |
+| `--preload-model-count` | Optional. Number of models to preload in memory to speed up loading (set up to the expected number of concurrent users) | `1` |
 
 
 | WhisperStreaming backend options | Description | Default |
