@@ -85,6 +85,7 @@ def backend_factory(args):
             lan=args.lan,
             cache_dir=getattr(args, 'model_cache_dir', None),
             model_dir=getattr(args, 'model_dir', None),
+            init_prompt=getattr(args, 'init_prompt', ""),  # <-- Here
         )
         e = time.time()
         logger.info(f"done. It took {round(e-t,2)} seconds.")
