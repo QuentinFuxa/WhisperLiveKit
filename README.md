@@ -161,6 +161,7 @@ The rest I don't recommend. But below are your options.
 | `--port` | Server port | `8000` |
 | `--ssl-certfile` | Path to the SSL certificate file (for HTTPS support) | `None` |
 | `--ssl-keyfile` | Path to the SSL private key file (for HTTPS support) | `None` |
+| `--pcm-input` | raw PCM (s16le) data is expected as input and FFmpeg will be bypassed. | `False` |
 
 
 | SimulStreaming backend options | Description | Default |
