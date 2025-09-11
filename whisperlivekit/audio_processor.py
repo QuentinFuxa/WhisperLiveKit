@@ -52,6 +52,7 @@ class AudioProcessor:
         self.last_ffmpeg_activity = time()
         self.ffmpeg_health_check_interval = 5
         self.ffmpeg_max_idle_time = 10
+        self.is_pcm_input = self.args.pcm_input
         self.debug = False
 
         # State management
@@ -208,56 +209,7 @@ class AudioProcessor:
                         continue
                     
                 self.pcm_buffer.extend(chunk)
-
-                # Process when enough data
-                if len(self.pcm_buffer) >= self.bytes_per_sec:
-                    if len(self.pcm_buffer) > self.max_bytes_per_sec:
-                        logger.warning(
-                            f"Audio buffer too large: {len(self.pcm_buffer) / self.bytes_per_sec:.2f}s. "
-                            f"Consider using a smaller model."
-                        )
-
-                    # Process audio chunk
-                    pcm_array = self.convert_pcm_to_float(self.pcm_buffer[:self.max_bytes_per_sec])
-                    self.pcm_buffer = self.pcm_buffer[self.max_bytes_per_sec:]
-                    
-                    res = None
-                    end_of_audio = False
-                    silence_buffer = None
-                    
-                    if self.args.vac:
-                        res = self.vac(pcm_array)
-                    
-                    if res is not None:
-                        if res.get('end', 0) > res.get('start', 0):
-                            end_of_audio = True
-                        elif self.silence: #end of silence
-                            self.silence = False
-                            silence_buffer = Silence(duration=time() - self.start_silence)
-                            
-                    if silence_buffer:
-                        if self.args.transcription and self.transcription_queue:
-                            await self.transcription_queue.put(silence_buffer)
-                        if self.args.diarization and self.diarization_queue:
-                            await self.diarization_queue.put(silence_buffer)
-
-                    if not self.silence:                            
-                        if self.args.transcription and self.transcription_queue:
-                            await self.transcription_queue.put(pcm_array.copy())
-
-                        if self.args.diarization and self.diarization_queue:
-                            await self.diarization_queue.put(pcm_array.copy())
-                        
-                        self.silence_duration = 0.0
-                        if end_of_audio:
-                            self.silence = True
-                            self.start_silence = time()
-
-                    # Sleep if no processing is happening
-                    if not self.args.transcription and not self.args.diarization:
-                        await asyncio.sleep(0.1)
-                    
-                    
+                await self.handle_pcm_data()
                     
             except Exception as e:
                 logger.warning(f"Exception in ffmpeg_stdout_reader: {e}")
@@ -670,10 +622,65 @@ class AudioProcessor:
             logger.warning("AudioProcessor is stopping. Ignoring incoming audio.")
             return
 
-        success = await self.ffmpeg_manager.write_data(message)
-        if not success:
-            ffmpeg_state = await self.ffmpeg_manager.get_state()
-            if ffmpeg_state == FFmpegState.FAILED:
-                logger.error("FFmpeg is in FAILED state, cannot process audio")
-            else:
-                logger.warning("Failed to write audio data to FFmpeg")
+        if self.is_pcm_input:
+            self.pcm_buffer.extend(message)
+            await self.handle_pcm_data()
+        else:
+            success = await self.ffmpeg_manager.write_data(message)
+            if not success:
+                ffmpeg_state = await self.ffmpeg_manager.get_state()
+                if ffmpeg_state == FFmpegState.FAILED:
+                    logger.error("FFmpeg is in FAILED state, cannot process audio")
+                else:
+                    logger.warning("Failed to write audio data to FFmpeg")
+
+    async def handle_pcm_data(self):
+        # Process when enough data
+        if len(self.pcm_buffer) < self.bytes_per_sec:
+            return
+
+        if len(self.pcm_buffer) > self.max_bytes_per_sec:
+            logger.warning(
+                f"Audio buffer too large: {len(self.pcm_buffer) / self.bytes_per_sec:.2f}s. "
+                f"Consider using a smaller model."
+            )
+
+        # Process audio chunk
+        pcm_array = self.convert_pcm_to_float(self.pcm_buffer[:self.max_bytes_per_sec])
+        self.pcm_buffer = self.pcm_buffer[self.max_bytes_per_sec:]
+
+        res = None
+        end_of_audio = False
+        silence_buffer = None
+
+        if self.args.vac:
+            res = self.vac(pcm_array)
+
+        if res is not None:
+            if res.get("end", 0) > res.get("start", 0):
+                end_of_audio = True
+            elif self.silence: #end of silence
+                self.silence = False
+                silence_buffer = Silence(duration=time() - self.start_silence)
+
+        if silence_buffer:
+            if self.args.transcription and self.transcription_queue:
+                await self.transcription_queue.put(silence_buffer)
+            if self.args.diarization and self.diarization_queue:
+                await self.diarization_queue.put(silence_buffer)
+
+        if not self.silence:
+            if self.args.transcription and self.transcription_queue:
+                await self.transcription_queue.put(pcm_array.copy())
+
+            if self.args.diarization and self.diarization_queue:
+                await self.diarization_queue.put(pcm_array.copy())
+
+            self.silence_duration = 0.0
+
+            if end_of_audio:
+                self.silence = True
+                self.start_silence = time()
+
+        if not self.args.transcription and not self.args.diarization:
+            await asyncio.sleep(0.1)
