@@ -167,6 +167,12 @@ def parse_args():
     )
     parser.add_argument("--ssl-certfile", type=str, help="Path to the SSL certificate file.", default=None)
     parser.add_argument("--ssl-keyfile", type=str, help="Path to the SSL private key file.", default=None)
+    parser.add_argument(
+        "--pcm-input",
+        action="store_true",
+        default=False,
+        help="If set, raw PCM (s16le) data is expected as input and FFmpeg will be bypassed."
+    )
 
     # SimulStreaming-specific arguments
     simulstreaming_group = parser.add_argument_group('SimulStreaming arguments (only used with --backend simulstreaming)')

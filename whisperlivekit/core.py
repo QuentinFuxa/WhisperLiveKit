@@ -42,6 +42,7 @@ class TranscriptionEngine:
             "ssl_keyfile": None,
             "transcription": True,
             "vad": True,
+            "pcm_input": False,
             # whisperstreaming params:
             "buffer_trimming": "segment",
             "confidence_validation": False,
