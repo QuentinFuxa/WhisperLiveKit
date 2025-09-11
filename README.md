@@ -108,7 +108,7 @@ transcription_engine = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global transcription_engine
-    transcription_engine = TranscriptionEngine(model="medium", diarization=True, lan="en")
+    transcription_engine = TranscriptionEngine(model="medium", diarization=True, language="en")
     yield
 
 app = FastAPI(lifespan=lifespan)
