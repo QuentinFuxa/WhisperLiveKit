@@ -46,15 +46,14 @@ def append_token_to_last_line(lines, sep, token, debug_info):
         lines[-1].text += sep + token.text + debug_info
         lines[-1].end = token.end
 
-def format_output(state, silence, current_time, args, debug):
+def format_output(state, silence, current_time, args, debug, sep):
     diarization = args.diarization
     disable_punctuation_split = args.disable_punctuation_split
-    tokens = state["tokens"]
-    translated_segments = state["translated_segments"] # Here we will attribute the speakers only based on the timestamps of the segments
-    buffer_transcription = state["buffer_transcription"]
-    buffer_diarization = state["buffer_diarization"]
-    end_attributed_speaker = state["end_attributed_speaker"]
-    sep = state["sep"]
+    tokens = state.tokens
+    translated_segments = state.translated_segments # Here we will attribute the speakers only based on the timestamps of the segments
+    buffer_transcription = state.buffer_transcription
+    buffer_diarization = state.buffer_diarization
+    end_attributed_speaker = state.end_attributed_speaker
     
     previous_speaker = -1
     lines = []
@@ -128,7 +127,7 @@ def format_output(state, silence, current_time, args, debug):
         for line in lines:
             while cts_idx < len(translated_segments):
                 ts = translated_segments[cts_idx]
-                if ts.start and ts.start >= line.start and ts.end <= line.end:
+                if ts and ts.start and ts.start >= line.start and ts.end <= line.end:
                     line.translation += ts.text + ' '
                     cts_idx += 1
                 else:

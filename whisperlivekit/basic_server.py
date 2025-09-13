@@ -54,7 +54,7 @@ async def handle_websocket_results(websocket, results_generator):
     """Consumes results from the audio processor and sends them via WebSocket."""
     try:
         async for response in results_generator:
-            await websocket.send_json(response)
+            await websocket.send_json(response.to_dict())
         # when the results_generator finishes it means all audio has been processed
         logger.info("Results generator finished. Sending 'ready_to_stop' to client.")
         await websocket.send_json({"type": "ready_to_stop"})

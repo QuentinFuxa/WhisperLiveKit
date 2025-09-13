@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 from datetime import timedelta
 
@@ -58,3 +58,37 @@ class Line(TimedText):
             'start': format_time(self.start),
             'end': format_time(self.end),
         }
+        
+@dataclass  
+class FrontData():
+    status: str = ''
+    error: str = ''
+    lines: list[Line] = field(default_factory=list)
+    buffer_transcription: str = ''
+    buffer_diarization: str = ''
+    remaining_time_transcription: float = 0.
+    remaining_time_diarization: float = 0.
+    
+    def to_dict(self):
+        _dict = {
+            'status': self.status,
+            'lines': [line.to_dict() for line in self.lines],
+            'buffer_transcription': self.buffer_transcription,
+            'buffer_diarization': self.buffer_diarization,
+            'remaining_time_transcription': self.remaining_time_transcription,
+            'remaining_time_diarization': self.remaining_time_diarization,
+        }
+        if self.error:
+            _dict['error'] = self.error
+        return _dict
+    
+@dataclass  
+class State():
+    tokens: list
+    translated_segments: list
+    buffer_transcription: str
+    buffer_diarization: str
+    end_buffer: float
+    end_attributed_speaker: float
+    remaining_time_transcription: float
+    remaining_time_diarization: float
