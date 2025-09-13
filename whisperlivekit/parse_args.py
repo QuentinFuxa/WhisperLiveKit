@@ -20,7 +20,7 @@ def parse_args():
         help="""
         The path to a speech audio wav file to warm up Whisper so that the very first chunk processing is fast.
         If not set, uses https://github.com/ggerganov/whisper.cpp/raw/master/samples/jfk.wav.
-        If False, no warmup is performed.
+        If empty, no warmup is performed.
         """,
     )
 
