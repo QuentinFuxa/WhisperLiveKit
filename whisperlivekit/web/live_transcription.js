@@ -12,6 +12,8 @@ let timerInterval = null;
 let audioContext = null;
 let analyser = null;
 let microphone = null;
+let scriptProcessor = null;
+let recorderWorker = null;
 let waveCanvas = document.getElementById("waveCanvas");
 let waveCtx = waveCanvas.getContext("2d");
 let animationFrame = null;
@@ -457,13 +459,31 @@ async function startRecording() {
     microphone = audioContext.createMediaStreamSource(stream);
     microphone.connect(analyser);
 
-    recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-    recorder.ondataavailable = (e) => {
+    scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+    microphone.connect(scriptProcessor);
+    scriptProcessor.connect(audioContext.destination);
+
+    recorderWorker = new Worker("/web/recorder_worker.js");
+    recorderWorker.postMessage({
+      command: "init",
+      config: {
+        sampleRate: audioContext.sampleRate,
+      },
+    });
+
+    recorderWorker.onmessage = (e) => {
       if (websocket && websocket.readyState === WebSocket.OPEN) {
-        websocket.send(e.data);
+        websocket.send(e.data.buffer);
       }
     };
-    recorder.start(chunkDuration);
+
+    scriptProcessor.onaudioprocess = (e) => {
+      const inputData = e.inputBuffer.getChannelData(0);
+      recorderWorker.postMessage({
+        command: "record",
+        buffer: inputData.buffer,
+      }, [inputData.buffer]);
+    };
 
     startTime = Date.now();
     timerInterval = setInterval(updateTimer, 1000);
@@ -501,9 +521,14 @@ async function stopRecording() {
     statusText.textContent = "Recording stopped. Processing final audio...";
   }
 
-  if (recorder) {
-    recorder.stop();
-    recorder = null;
+  if (recorderWorker) {
+    recorderWorker.terminate();
+    recorderWorker = null;
+  }
+  
+  if (scriptProcessor) {
+    scriptProcessor.disconnect();
+    scriptProcessor = null;
   }
 
   if (microphone) {
