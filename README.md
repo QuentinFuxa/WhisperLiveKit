@@ -140,7 +140,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `--model` | Whisper model size. List and recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/available_models.md) | `small` |
-| `--model-dir` | Directory containing Whisper model.bin and other files. Overrides `--model`. | `None` |
+| `--model-path` | Directory containing Whisper model.bin and other files. Overrides `--model`. | `None` |
 | `--language` | List [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py). If you use `auto`, the model attempts to detect the language automatically, but it tends to bias towards English. | `auto` |
 | `--target-language` | If sets, activates translation using NLLB. Ex: `fr`. [118 languages available](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/translation/mapping_languages.py). If you want to translate to english, you should rather use `--task translate`, since Whisper can do it directly. | `None` |
 | `--task` | Set to `translate` to translate *only* to english, using Whisper translation. | `transcribe` |
