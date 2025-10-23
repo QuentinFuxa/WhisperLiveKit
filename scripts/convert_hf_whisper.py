@@ -14,10 +14,10 @@ from typing import Dict, Tuple
 
 import torch
 
+from whisperlivekit.whisper import _convert_hf_state_dict
 from whisperlivekit.whisper.audio import HOP_LENGTH, SAMPLE_RATE
 from whisperlivekit.whisper.model import ModelDimensions
 from whisperlivekit.whisper.utils import exact_div
-from whisperlivekit.whisper import _convert_hf_state_dict
 
 
 def _load_state_dict(repo_path: Path) -> Dict[str, torch.Tensor]:

@@ -1,8 +1,9 @@
 """Copy core files from web directory to Chrome extension directory."""
 
-import shutil
 import os
+import shutil
 from pathlib import Path
+
 
 def sync_extension_files():
     
