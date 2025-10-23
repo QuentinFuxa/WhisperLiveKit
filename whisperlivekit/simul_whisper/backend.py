@@ -111,7 +111,11 @@ class SimulStreamingOnlineProcessor:
         """
         try:
             timestamped_words = self.model.infer(is_last=is_last)
-            if self.model.cfg.language == "auto" and timestamped_words and timestamped_words[0].detected_language == None:
+            
+            if not timestamped_words:
+                return [], self.end
+            
+            if self.model.cfg.language == "auto" and timestamped_words[0].detected_language is None:
                 self.buffer.extend(timestamped_words)
                 return [], self.end
             
