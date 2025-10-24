@@ -6,7 +6,7 @@ import logging
 import traceback
 from whisperlivekit.timed_objects import ASRToken, Silence, Line, FrontData, State, Transcript, ChangeSpeaker
 from whisperlivekit.core import TranscriptionEngine, online_factory, online_diarization_factory, online_translation_factory
-from whisperlivekit.silero_vad_iterator import FixedVADIterator
+from whisperlivekit.silero_vad_iterator import VADIterator
 from whisperlivekit.results_formater import format_output
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
 
@@ -65,7 +65,6 @@ class AudioProcessor:
 
         # State management
         self.is_stopping = False
-        self.silence = False
         self.silence_duration = 0.0
         self.tokens = []
         self.last_validated_token = 0
@@ -80,6 +79,41 @@ class AudioProcessor:
         self.last_detected_speaker = None
         self.speaker_languages = {}
         self.diarization_before_transcription = False
+        
+        # VAD frame size (512 samples = 32ms @16kHz)
+        self.vad_frame_samples = 512
+        self.vad_frame_bytes = self.vad_frame_samples * self.bytes_per_sample  
+        
+        # Tuning parameters (can be exposed via args or kept as safe defaults)
+        self.vad_pre_roll_frames  = int(getattr(self.args, "vad_pre_roll_frames", 5))   # ≈160ms
+        self.vad_min_start_frames = int(getattr(self.args, "vad_min_start_frames", 1))  # start hysteresis (frames)
+        self.vad_min_end_frames   = int(getattr(self.args, "vad_min_end_frames", 3))    # end hysteresis (frames)
+        self.vad_min_hold_frames  = int(getattr(self.args, "vad_min_hold_frames", 5))   # minimum active frames before end
+        
+        from collections import deque
+        self._vad_ring = deque(maxlen=self.vad_pre_roll_frames + max(1, self.vad_min_start_frames))
+        self._vad_triggered = False
+        self._vad_pending_start = 0
+        self._vad_pending_end = 0
+        self._vad_hold = 0
+        self._vad_silence_frames = 0        
+              
+        # Formatter compatibility
+        self.silence = True
+        self.start_silence = None            
+        
+        # Confirmation-silence correction: after an end is confirmed, record a small gap
+        # to subtract from the next measured inter-utterance silence at the next start.
+        # Note: even without injecting audio, we adjust by a small constant (default 0.2s).
+        self._confirmation_gap_pending = 0.0
+        self.confirmation_gap_s = float(getattr(self.args, "confirmation_gap_s", 0.2))
+        
+        # ASR invocation period (batch processing)
+        self.asr_window_s = float(getattr(self.args, "asr_window_s", max(0.5, float(self.args.min_chunk_size))))
+        self._asr_since_last_process_s = 0.0      
+        
+        self._pending_frames = []     # List[np.ndarray], buffer for 32ms frames
+        self._pending_samples = 0     # accumulated sample count (optional, for end-time calculation)            
 
         if self.diarization_before_transcription:
             self.cumulative_pcm = []
@@ -90,7 +124,13 @@ class AudioProcessor:
         self.asr = models.asr
         self.vac_model = models.vac_model
         if self.args.vac:
-            self.vac = FixedVADIterator(models.vac_model)
+            self.vac = VADIterator(
+                models.vac_model,                # TranscriptionEngine passed JIT model
+                threshold=float(getattr(self.args, "vad_threshold", 0.5)),
+                sampling_rate=self.sample_rate,
+                min_silence_duration_ms=int(getattr(self.args, "vad_min_silence_ms", 500)),
+                speech_pad_ms=int(getattr(self.args, "vad_speech_pad_ms", 100)),
+            )
         else:
             self.vac = None
                          
@@ -130,9 +170,21 @@ class AudioProcessor:
             self.diarization = online_diarization_factory(self.args, models.diarization_model)
         if models.translation_model:
             self.translation = online_translation_factory(self.args, models.translation_model)
+            
+    def _flush_pending_audio_to_transcription(self, stream_time_end: float):
+        """Insert accumulated 32ms frames at once into the transcription buffer."""
+        if not self._pending_frames:
+            return
+        if len(self._pending_frames) == 1:
+            concat = self._pending_frames[0]
+        else:
+            concat = np.concatenate(self._pending_frames, axis=0)
+        self.transcription.insert_audio_chunk(concat, stream_time_end)
+        self._pending_frames.clear()
+        self._pending_samples = 0            
 
     def convert_pcm_to_float(self, pcm_buffer):
-        """Convert PCM buffer in s16le format to normalized NumPy array."""
+        """Convert PCM buffer (s16le) to a normalized float32 NumPy array."""
         return np.frombuffer(pcm_buffer, dtype=np.int16).astype(np.float32) / 32768.0
 
     async def add_dummy_token(self):
@@ -230,77 +282,197 @@ class AudioProcessor:
             await self.translation_queue.put(SENTINEL)
 
     async def transcription_processor(self):
-        """Process audio chunks for transcription."""
+        """
+        Process audio for transcription (frame-level collection, windowed process_iter).
+        - accumulate 32ms frames in a pending list
+        - when accumulated duration reaches asr_window_s (e.g., 0.5s/1.0s), insert once and run process_iter
+        - on Silence/ChangeSpeaker/SENTINEL, flush pending first to keep boundary consistency
+        """
+        import numpy as np
+
         cumulative_pcm_duration_stream_time = 0.0
-        
+        self._asr_since_last_process_s = 0.0
+
+        # Use class-level self._pending_frames/self._pending_samples for pending frames
+
         while True:
             try:
                 item = await self.transcription_queue.get()
+
+                # Termination signal
                 if item is SENTINEL:
-                    logger.debug("Transcription processor received sentinel. Finishing.")
+                    # Flush any pending frames first
+                    if self._asr_since_last_process_s > 0 or self._pending_frames:
+                        self._flush_pending_audio_to_transcription(cumulative_pcm_duration_stream_time)
+                        new_tokens, current_audio_processed_upto = await asyncio.to_thread(self.transcription.process_iter)
+
+                        _buffer_transcript = self.transcription.get_buffer()
+                        buffer_text = _buffer_transcript.text
+                        if new_tokens:
+                            validated_text = self.sep.join([t.text for t in new_tokens])
+                            if buffer_text.startswith(validated_text):
+                                _buffer_transcript.text = buffer_text[len(validated_text):].lstrip()
+
+                        candidate_end_times = [self.end_buffer]
+                        if new_tokens:
+                            candidate_end_times.append(new_tokens[-1].end)
+                        if _buffer_transcript.end is not None:
+                            candidate_end_times.append(_buffer_transcript.end)
+                        candidate_end_times.append(current_audio_processed_upto)
+
+                        async with self.lock:
+                            self.tokens.extend(new_tokens)
+                            self.buffer_transcription = _buffer_transcript
+                            self.end_buffer = max(candidate_end_times)
+
+                        if self.translation_queue:
+                            for token in new_tokens:
+                                await self.translation_queue.put(token)
+
+                        self._asr_since_last_process_s = 0.0
+
                     self.transcription_queue.task_done()
                     break
 
+                # Logging: internal buffer duration and estimated lag
                 asr_internal_buffer_duration_s = len(getattr(self.transcription, 'audio_buffer', [])) / self.transcription.SAMPLING_RATE
-                transcription_lag_s = max(0.0, time() - self.beg_loop - self.end_buffer)
+                transcription_lag_s = max(0.0, (time() - self.beg_loop) - self.end_buffer) if self.beg_loop else 0.0
                 asr_processing_logs = f"internal_buffer={asr_internal_buffer_duration_s:.2f}s | lag={transcription_lag_s:.2f}s |"
-                if type(item) is Silence:
-                    asr_processing_logs += f" + Silence of = {item.duration:.2f}s"
+
+                # Silence event: flush pending → insert silence → run one flush process_iter
+                if isinstance(item, Silence):
                     if self.tokens:
-                        asr_processing_logs += f" | last_end = {self.tokens[-1].end} |"
+                        asr_processing_logs += f" + Silence of = {item.duration:.2f}s | last_end = {self.tokens[-1].end} |"
+                    else:
+                        asr_processing_logs += f" + Silence of = {item.duration:.2f}s |"
                     logger.info(asr_processing_logs)
-                    cumulative_pcm_duration_stream_time += item.duration
+
+                    # 1) flush accumulated frames first
+                    self._flush_pending_audio_to_transcription(cumulative_pcm_duration_stream_time)
+
+                    # 2) insert silence
                     self.transcription.insert_silence(item.duration, self.tokens[-1].end if self.tokens else 0)
+
+                    # 3) run a decoding pass after the silence insertion
+                    new_tokens, current_audio_processed_upto = await asyncio.to_thread(self.transcription.process_iter)
+
+                    _buffer_transcript = self.transcription.get_buffer()
+                    buffer_text = _buffer_transcript.text
+                    if new_tokens:
+                        validated_text = self.sep.join([t.text for t in new_tokens])
+                        if buffer_text.startswith(validated_text):
+                            _buffer_transcript.text = buffer_text[len(validated_text):].lstrip()
+
+                    candidate_end_times = [self.end_buffer]
+                    if new_tokens:
+                        candidate_end_times.append(new_tokens[-1].end)
+                    if _buffer_transcript.end is not None:
+                        candidate_end_times.append(_buffer_transcript.end)
+                    candidate_end_times.append(current_audio_processed_upto)
+
+                    async with self.lock:
+                        self.tokens.extend(new_tokens)
+                        self.buffer_transcription = _buffer_transcript
+                        self.end_buffer = max(candidate_end_times)
+
+                    if self.translation_queue:
+                        for token in new_tokens:
+                            await self.translation_queue.put(token)
+
+                    # 4) If there are no commits and buffer has text: force-commit to avoid losing the last utterance
+                    if (not new_tokens) and _buffer_transcript and _buffer_transcript.text:
+                        text_to_commit = _buffer_transcript.text.strip()
+                        if text_to_commit:
+                            # Prefer buffer start/end timestamps; if missing, fall back to the last commit's end
+                            forced_start = _buffer_transcript.start if _buffer_transcript.start is not None else (self.tokens[-1].start if self.tokens else 0.0)
+                            forced_end = _buffer_transcript.end if _buffer_transcript.end is not None else (self.tokens[-1].end if self.tokens else self.end_buffer)
+                            forced_token = ASRToken(start=forced_start, end=forced_end, text=text_to_commit, probability=0.95)
+                            async with self.lock:
+                                self.tokens.append(forced_token)
+                                self.buffer_transcription = Transcript()  # clear buffer
+                                self.end_buffer = max(self.end_buffer, forced_token.end)
+                            if self.translation_queue:
+                                await self.translation_queue.put(forced_token)
+                            # Re-align streaming ASR internal buffer time to current processed time to avoid duplicates
+                            try:
+                                self.transcription.init(offset=current_audio_processed_upto)
+                            except Exception as _:
+                                pass
+
+                    # Reset window counter at the silence boundary
+                    self._asr_since_last_process_s = 0.0
+                    self.transcription_queue.task_done()
                     continue
-                elif isinstance(item, ChangeSpeaker):
+
+                # ChangeSpeaker handling (ensure boundary consistency)
+                if isinstance(item, ChangeSpeaker):
+                    # Flush pending before speaker boundary
+                    self._flush_pending_audio_to_transcription(cumulative_pcm_duration_stream_time)
                     self.transcription.new_speaker(item)
-                elif isinstance(item, np.ndarray):
+                    self.transcription_queue.task_done()
+                    continue
+
+                # Regular audio frame (np.ndarray)
+                if isinstance(item, np.ndarray):
                     pcm_array = item
-                
-                logger.info(asr_processing_logs)
-                
-                duration_this_chunk = len(pcm_array) / self.sample_rate
-                cumulative_pcm_duration_stream_time += duration_this_chunk
-                stream_time_end_of_current_pcm = cumulative_pcm_duration_stream_time
+                    logger.info(asr_processing_logs)
 
-                self.transcription.insert_audio_chunk(pcm_array, stream_time_end_of_current_pcm)
-                new_tokens, current_audio_processed_upto = await asyncio.to_thread(self.transcription.process_iter)
-                
-                _buffer_transcript = self.transcription.get_buffer()
-                buffer_text = _buffer_transcript.text
+                    # Accumulate 32ms frames in the pending buffer
+                    duration_this_chunk = len(pcm_array) / self.sample_rate
+                    cumulative_pcm_duration_stream_time += duration_this_chunk
+                    stream_time_end_of_current_pcm = cumulative_pcm_duration_stream_time
 
-                if new_tokens:
-                    validated_text = self.sep.join([t.text for t in new_tokens])
-                    if buffer_text.startswith(validated_text):
-                        _buffer_transcript.text = buffer_text[len(validated_text):].lstrip()
+                    self._pending_frames.append(pcm_array)
+                    self._pending_samples += len(pcm_array)
 
-                candidate_end_times = [self.end_buffer]
+                    # When asr_window_s is reached: insert pending at once → run process_iter
+                    self._asr_since_last_process_s += duration_this_chunk
+                    if self._asr_since_last_process_s >= self.asr_window_s:
+                        # (1) pending flush
+                        self._flush_pending_audio_to_transcription(stream_time_end_of_current_pcm)
 
-                if new_tokens:
-                    candidate_end_times.append(new_tokens[-1].end)
-                
-                if _buffer_transcript.end is not None:
-                    candidate_end_times.append(_buffer_transcript.end)
-                
-                candidate_end_times.append(current_audio_processed_upto)
-                
-                async with self.lock:
-                    self.tokens.extend(new_tokens)
-                    self.buffer_transcription = _buffer_transcript
-                    self.end_buffer = max(candidate_end_times)
-                
-                if self.translation_queue:
-                    for token in new_tokens:
-                        await self.translation_queue.put(token)
-                        
+                        # (2) run decoding
+                        new_tokens, current_audio_processed_upto = await asyncio.to_thread(self.transcription.process_iter)
+
+                        _buffer_transcript = self.transcription.get_buffer()
+                        buffer_text = _buffer_transcript.text
+                        if new_tokens:
+                            validated_text = self.sep.join([t.text for t in new_tokens])
+                            if buffer_text.startswith(validated_text):
+                                _buffer_transcript.text = buffer_text[len(validated_text):].lstrip()
+
+                        candidate_end_times = [self.end_buffer]
+                        if new_tokens:
+                            candidate_end_times.append(new_tokens[-1].end)
+                        if _buffer_transcript.end is not None:
+                            candidate_end_times.append(_buffer_transcript.end)
+                        candidate_end_times.append(current_audio_processed_upto)
+
+                        async with self.lock:
+                            self.tokens.extend(new_tokens)
+                            self.buffer_transcription = _buffer_transcript
+                            self.end_buffer = max(candidate_end_times)
+
+                        if self.translation_queue:
+                            for token in new_tokens:
+                                await self.translation_queue.put(token)
+
+                        self._asr_since_last_process_s = 0.0
+
+                    self.transcription_queue.task_done()
+                    continue
+
+                # Fallback handling
                 self.transcription_queue.task_done()
-                
+                continue
+
             except Exception as e:
                 logger.warning(f"Exception in transcription_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")
-                if 'pcm_array' in locals() and pcm_array is not SENTINEL : # Check if pcm_array was assigned from queue
+                if 'item' in locals() and item is not SENTINEL:
                     self.transcription_queue.task_done()
-        
+
+        # Post-termination handling (unchanged)
         if self.is_stopping:
             logger.info("Transcription processor finishing due to stopping flag.")
             if self.diarization_queue:
@@ -625,58 +797,110 @@ class AudioProcessor:
                     logger.warning("Failed to write audio data to FFmpeg")
 
     async def handle_pcm_data(self):
-        # Process when enough data
-        if len(self.pcm_buffer) < self.bytes_per_sec:
-            return
+        """
+        Notes:
+        - Run VAD in 512-sample (≈32ms @16k) frames
+        - Maintain pre-roll + start/end hysteresis
+        - Send only voiced frames to queues
+        - Between utterances, compute silence duration from frames and enqueue Silence(duration)
+        """
+        while len(self.pcm_buffer) >= self.vad_frame_bytes:
+            frame_bytes = self.pcm_buffer[:self.vad_frame_bytes]
+            self.pcm_buffer = self.pcm_buffer[self.vad_frame_bytes:]
 
-        if len(self.pcm_buffer) > self.max_bytes_per_sec:
-            logger.warning(
-                f"Audio buffer too large: {len(self.pcm_buffer) / self.bytes_per_sec:.2f}s. "
-                f"Consider using a smaller model."
-            )
+            # Convert to float32 [-1..1], fixed 512-sample frame
+            frame_f32 = np.frombuffer(frame_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            if frame_f32.size != self.vad_frame_samples:
+                continue
 
-        chunk_size = min(len(self.pcm_buffer), self.max_bytes_per_sec)
-        aligned_chunk_size = (chunk_size // self.bytes_per_sample) * self.bytes_per_sample
-        
-        if aligned_chunk_size == 0:
-            return
-        pcm_array = self.convert_pcm_to_float(self.pcm_buffer[:aligned_chunk_size])
-        self.pcm_buffer = self.pcm_buffer[aligned_chunk_size:]
-
-        res = None
-        end_of_audio = False
-        silence_buffer = None
-
-        if self.args.vac:
-            res = self.vac(pcm_array)
-
-        if res is not None:
-            if res.get("end", 0) > res.get("start", 0):
-                end_of_audio = True
-            elif self.silence: #end of silence
+            # VAC disabled: bypass the gate and forward frames directly to queues
+            if self.vac is None:
                 self.silence = False
-                silence_buffer = Silence(duration=time() - self.start_silence)
+                if not self.diarization_before_transcription and self.transcription_queue:
+                    await self.transcription_queue.put(frame_f32.copy())
+                if self.args.diarization and self.diarization_queue:
+                    await self.diarization_queue.put(frame_f32.copy())
+                continue
 
-        if silence_buffer:
+            # Run VAD
+            speech_event = None
+            if self.vac is not None:
+                speech_event = self.vac(frame_f32, return_seconds=False)
+
+            event_start = bool(speech_event and ('start' in speech_event) and not self._vad_triggered)
+            event_end   = bool(speech_event and ('end'   in speech_event) and self._vad_triggered)
+
+            # Before start is confirmed
+            if not self._vad_triggered:
+                # Accumulate pre-roll
+                self._vad_ring.append(frame_f32)
+
+                # Start hysteresis countdown
+                if event_start:
+                    self._vad_pending_start = max(self._vad_pending_start, self.vad_min_start_frames)
+
+                if self._vad_pending_start > 0:
+                    self._vad_pending_start -= 1
+                    if self._vad_pending_start == 0:
+                        # (1) Emit silence for previous end→start gap
+                        if self._vad_silence_frames > 0:
+                            # Subtract pending confirmation-gap from measured silence
+                            measured_silence_sec = (self._vad_silence_frames * self.vad_frame_samples) / float(self.sample_rate)
+                            adjusted_silence_sec = max(0.0, measured_silence_sec - self._confirmation_gap_pending)
+                            # Consume pending confirmation-gap
+                            self._confirmation_gap_pending = 0.0
+                            sil = Silence(duration=adjusted_silence_sec)
+                            if not self.diarization_before_transcription and self.transcription_queue:
+                                await self.transcription_queue.put(sil)
+                            if self.args.diarization and self.diarization_queue:
+                                await self.diarization_queue.put(sil)
+                            if self.translation_queue:
+                                await self.translation_queue.put(sil)
+                            self._vad_silence_frames = 0
+
+                        # (2) Send pre-roll + current frame
+                        while self._vad_ring:
+                            fr = self._vad_ring.popleft()
+                            if not self.diarization_before_transcription and self.transcription_queue:
+                                await self.transcription_queue.put(fr.copy())
+                            if self.args.diarization and self.diarization_queue:
+                                await self.diarization_queue.put(fr.copy())
+
+                        # State transition: start confirmed
+                        self._vad_triggered = True
+                        self._vad_hold = 0
+                        self._vad_pending_end = 0
+                        self.silence = False
+                        self.start_silence = None
+                else:
+                    # Still before start → accumulate silent frames
+                    self._vad_silence_frames += 1
+
+                continue  # stop here while start is not yet confirmed
+
+            # Active speech: forward frames
             if not self.diarization_before_transcription and self.transcription_queue:
-                await self.transcription_queue.put(silence_buffer)
+                await self.transcription_queue.put(frame_f32.copy())
             if self.args.diarization and self.diarization_queue:
-                await self.diarization_queue.put(silence_buffer)
-            if self.translation_queue:
-                await self.translation_queue.put(silence_buffer)
+                await self.diarization_queue.put(frame_f32.copy())
+            self._vad_hold += 1
 
-        if not self.silence:
-            if not self.diarization_before_transcription and self.transcription_queue:
-                await self.transcription_queue.put(pcm_array.copy())
+            # End hysteresis
+            if event_end:
+                if self._vad_hold >= self.vad_min_hold_frames:
+                    self._vad_pending_end = max(self._vad_pending_end, self.vad_min_end_frames)
+                else:
+                    self._vad_pending_end = 0
 
-            if self.args.diarization and self.diarization_queue:
-                await self.diarization_queue.put(pcm_array.copy())
-
-            self.silence_duration = 0.0
-
-            if end_of_audio:
-                self.silence = True
-                self.start_silence = time()
-
-        if not self.args.transcription and not self.args.diarization:
-            await asyncio.sleep(0.1)
+            if self._vad_pending_end > 0:
+                self._vad_pending_end -= 1
+                if self._vad_pending_end == 0:
+                    # End confirmed
+                    self._vad_triggered = False
+                    self._vad_hold = 0
+                    self.silence = True
+                    self._vad_silence_frames = 0
+                    self.start_silence = None
+                    # Record pending confirmation-gap to subtract at the next start
+                    if self.confirmation_gap_s > 0:
+                        self._confirmation_gap_pending += self.confirmation_gap_s
