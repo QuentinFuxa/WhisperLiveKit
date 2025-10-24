@@ -41,7 +41,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-sentence = ["mosestokenizer", "wtpsplit"]
+translation = ["transformers", "huggingface_hub"]
+sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
 
 [project.urls]
 Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
