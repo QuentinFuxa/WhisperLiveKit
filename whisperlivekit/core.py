@@ -33,6 +33,7 @@ class TranscriptionEngine:
             "punctuation_split": False,
             "target_language": "",
             "vac": True,
+            "vac_onnx": False,
             "vac_chunk_size": 0.04,
             "log_level": "DEBUG",
             "ssl_certfile": None,
@@ -75,8 +76,10 @@ class TranscriptionEngine:
         self.vac_model = None
         
         if self.args.vac:
-            import torch
-            self.vac_model, _ = torch.hub.load(repo_or_dir="snakers4/silero-vad", model="silero_vad")            
+            from whisperlivekit.silero_vad_iterator import load_silero_vad
+            # Use ONNX if specified, otherwise use JIT (default)
+            use_onnx = kwargs.get('vac_onnx', False)
+            self.vac_model = load_silero_vad(onnx=use_onnx)
         
         if self.args.transcription:
             if self.args.backend == "simulstreaming": 

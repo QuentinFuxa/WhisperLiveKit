@@ -167,7 +167,10 @@ class PaddedAlignAttWhisper:
             self.inference.kv_cache = self.kv_cache
 
             self.token_decoder = BeamSearchDecoder(inference=self.inference, eot=self.tokenizer.eot, beam_size=cfg.beam_size)
-            
+
+        # Tokens to carry over to next chunk for incomplete UTF-8 characters
+        self.pending_incomplete_tokens = []
+
     def remove_hooks(self):
         for hook in self.l_hooks:
             hook.remove()
@@ -261,6 +264,7 @@ class PaddedAlignAttWhisper:
             self.segments = []
         self.log_segments += 1
 
+        self.pending_incomplete_tokens = []
 
     def fire_at_boundary(self, chunked_encoder_feature: torch.Tensor):
         if self.always_fire: return True
@@ -562,6 +566,12 @@ class PaddedAlignAttWhisper:
 
         tokens_to_split = current_tokens[0, token_len_before_decoding:]
 
+        # Prepend pending tokens from previous chunk if any
+        if self.pending_incomplete_tokens:
+            logger.debug(f"[UTF-8 Fix] Prepending {len(self.pending_incomplete_tokens)} pending tokens: {self.pending_incomplete_tokens}")
+            pending_tensor = torch.tensor(self.pending_incomplete_tokens, dtype=torch.long, device=self.device)
+            tokens_to_split = torch.cat([pending_tensor, tokens_to_split])
+
         if fire_detected or is_last: #or punctuation_stop:
             new_hypothesis = tokens_to_split.flatten().tolist()
             split_words, split_tokens = self.tokenizer.split_to_word_tokens(new_hypothesis)
@@ -590,7 +600,14 @@ class PaddedAlignAttWhisper:
 
         timestamped_words = []
         timestamp_idx = 0
+        replacement_char = "\ufffd"
         for word, word_tokens in zip(split_words, split_tokens):
+            # Skip words containing incomplete UTF-8 from client output
+            if replacement_char in word:
+                logger.warning(f"[UTF-8 Filter] Skipping incomplete word from client output: {repr(word)}")
+                timestamp_idx += len(word_tokens)
+                continue
+
             try:
                 current_timestamp = l_absolute_timestamps[timestamp_idx]
             except:
@@ -608,5 +625,11 @@ class PaddedAlignAttWhisper:
                     self.global_time_offset
             )
             timestamped_words.append(timestamp_entry)
-        
+
+        # Hold incomplete tokens for next chunk
+        self.pending_incomplete_tokens = []
+        if split_words and replacement_char in split_words[-1]:
+            self.pending_incomplete_tokens = split_tokens[-1]
+            logger.warning(f"[UTF-8 Fix] Holding {len(self.pending_incomplete_tokens)} incomplete tokens for next chunk: {self.pending_incomplete_tokens}")
+
         return timestamped_words

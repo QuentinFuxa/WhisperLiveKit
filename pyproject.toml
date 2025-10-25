@@ -41,7 +41,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-sentence = ["mosestokenizer", "wtpsplit"]
+translation = ["transformers", "huggingface_hub"]
+sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
 
 [project.urls]
 Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
@@ -50,8 +51,20 @@ Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
 whisperlivekit-server = "whisperlivekit.basic_server:main"
 
 [tool.setuptools]
-packages = ["whisperlivekit", "whisperlivekit.diarization", "whisperlivekit.simul_whisper", "whisperlivekit.simul_whisper.whisper", "whisperlivekit.simul_whisper.whisper.assets", "whisperlivekit.simul_whisper.whisper.normalizers", "whisperlivekit.web", "whisperlivekit.whisper_streaming_custom", "whisperlivekit.translation"]
+packages = [
+    "whisperlivekit",
+    "whisperlivekit.diarization",
+    "whisperlivekit.simul_whisper",
+    "whisperlivekit.simul_whisper.whisper",
+    "whisperlivekit.simul_whisper.whisper.assets",
+    "whisperlivekit.simul_whisper.whisper.normalizers",
+    "whisperlivekit.web",
+    "whisperlivekit.whisper_streaming_custom",
+    "whisperlivekit.translation",
+    "whisperlivekit.vad_models"
+]
 
 [tool.setuptools.package-data]
 whisperlivekit = ["web/*.html", "web/*.css", "web/*.js", "web/src/*.svg"]
 "whisperlivekit.simul_whisper.whisper.assets" = ["*.tiktoken", "*.npz"]
+"whisperlivekit.vad_models" = ["*.jit", "*.onnx"]
