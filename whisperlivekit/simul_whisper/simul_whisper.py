@@ -326,7 +326,7 @@ class PaddedAlignAttWhisper:
             self.segments = self.segments[1:]
             logger.debug(f"remove segments: {len(self.segments)} {len(self.tokens)}, cumulative offset: {self.cumulative_time_offset:.2f}s")
             if len(self.tokens) > 1:
-                self.context.append_token_ids(self.tokens[1][0,:])
+                self.context.append_token_ids(self.tokens[1][0,:].tolist())
                 self.tokens = [self.initial_tokens] + self.tokens[2:]
         return removed_len
 
