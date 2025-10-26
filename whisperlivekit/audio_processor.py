@@ -437,7 +437,6 @@ class AudioProcessor:
 
                 state = await self.get_current_state()
                 
-                
                 lines, undiarized_text = format_output(
                     state,
                     self.silence,
@@ -482,23 +481,14 @@ class AudioProcessor:
                     yield response
                     self.last_response_content = response
                 
-                # Check for termination condition
-                if self.is_stopping:
-                    all_processors_done = True
-                    if self.args.transcription and self.transcription_task and not self.transcription_task.done():
-                        all_processors_done = False
-                    if self.args.diarization and self.diarization_task and not self.diarization_task.done():
-                        all_processors_done = False
-                    
-                    if all_processors_done:
-                        logger.info("Results formatter: All upstream processors are done and in stopping state. Terminating.")
-                        return
+                if self.is_stopping and self.transcription_task and self.transcription_task.done() and self.diarization_task and self.diarization_task.done():
+                    logger.info("Results formatter: All upstream processors are done and in stopping state. Terminating.")
+                    return
                 
                 await asyncio.sleep(0.05)
                 
             except Exception as e:
-                logger.warning(f"Exception in results_formatter: {e}")
-                logger.warning(f"Traceback: {traceback.format_exc()}")
+                logger.warning(f"Exception in results_formatter. Traceback: {traceback.format_exc()}")
                 await asyncio.sleep(0.5)
         
     async def create_tasks(self):
