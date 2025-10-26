@@ -52,16 +52,17 @@ def append_token_to_last_line(lines, sep, token):
             lines[-1].detected_language = token.detected_language
             
 
-def format_output(state, silence, current_time, args, sep):
+def format_output(state, silence, args, sep):
     diarization = args.diarization
     disable_punctuation_split = args.disable_punctuation_split
     tokens = state.tokens
-    translated_segments = state.translated_segments # Here we will attribute the speakers only based on the timestamps of the segments
+    translation_validated_segments = state.translation_validated_segments # Here we will attribute the speakers only based on the timestamps of the segments
+    translation_buffer = state.translation_buffer
     last_validated_token = state.last_validated_token
     
     previous_speaker = 1
     undiarized_text = []
-    tokens = handle_silences(tokens, current_time, silence)
+    tokens = handle_silences(tokens, state.beg_loop, silence)
     last_punctuation = None
     for i, token in enumerate(tokens[last_validated_token:]):
         speaker = int(token.speaker)
@@ -71,13 +72,6 @@ def format_output(state, silence, current_time, args, sep):
                 token.corrected_speaker = 1
                 token.validated_speaker = True
         else:
-            # if token.end > end_attributed_speaker and token.speaker != -2:
-            #     if tokens[-1].speaker == -2:  #if it finishes by a silence, we want to append the undiarized text to the last speaker.
-            #         token.corrected_speaker = previous_speaker
-            #     else:
-            #         undiarized_text.append(token.text)
-            #         continue
-            # else:
                 if is_punctuation(token):
                     last_punctuation = i  
                 
@@ -123,9 +117,9 @@ def format_output(state, silence, current_time, args, sep):
 
         previous_speaker = token.corrected_speaker        
 
-    if lines and translated_segments:
+    if lines:
         unassigned_translated_segments = []
-        for ts in translated_segments:
+        for ts in translation_validated_segments:
             assigned = False
             for line in lines:
                 if ts and ts.overlaps_with(line):

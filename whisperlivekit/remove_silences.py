@@ -1,4 +1,5 @@
 from whisperlivekit.timed_objects import ASRToken
+from time import time
 import re
 
 MIN_SILENCE_DURATION = 4 #in seconds
@@ -77,7 +78,8 @@ def no_token_to_silence(tokens):
             new_tokens.append(token)
     return new_tokens
             
-def ends_with_silence(tokens, current_time, vac_detected_silence):
+def ends_with_silence(tokens, beg_loop, vac_detected_silence):
+    current_time = time() - (beg_loop if beg_loop else 0.0)
     last_token = tokens[-1]
     if  vac_detected_silence or (current_time - last_token.end >= END_SILENCE_DURATION):
         if last_token.speaker == -2:
@@ -94,11 +96,11 @@ def ends_with_silence(tokens, current_time, vac_detected_silence):
     return tokens
     
 
-def handle_silences(tokens, current_time, vac_detected_silence):
+def handle_silences(tokens, beg_loop, vac_detected_silence):
     if not tokens:
         return []
     tokens = blank_to_silence(tokens) #useful for simulstreaming backend which tends to generate [BLANK_AUDIO] text
     tokens = no_token_to_silence(tokens)
-    tokens = ends_with_silence(tokens, current_time, vac_detected_silence)
+    tokens = ends_with_silence(tokens, beg_loop, vac_detected_silence)
     return tokens
      

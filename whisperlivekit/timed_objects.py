@@ -174,11 +174,13 @@ class ChangeSpeaker:
 
 @dataclass  
 class State():
-    tokens: list
-    last_validated_token: int
-    translated_segments: list
-    buffer_transcription: str
-    end_buffer: float
-    end_attributed_speaker: float
-    remaining_time_transcription: float
-    remaining_time_diarization: float
+    tokens: list = field(default_factory=list)
+    last_validated_token: int = 0
+    translation_validated_segments: list = field(default_factory=list)
+    translation_buffer: list = field(default_factory=list)
+    buffer_transcription: str = field(default_factory=Transcript)
+    end_buffer: float = 0.0
+    end_attributed_speaker: float = 0.0
+    remaining_time_transcription: float = 0.0
+    remaining_time_diarization: float = 0.0
+    beg_loop: Optional[int] = None
