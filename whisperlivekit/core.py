@@ -141,9 +141,9 @@ class TranscriptionEngine:
             if self.args.lan == 'auto' and self.args.backend != "simulstreaming":
                 raise Exception('Translation cannot be set with language auto when transcription backend is not simulstreaming')
             else:
-                from whisperlivekit.translation.translation import load_model
+                from nllw import load_model
                 translation_params = { 
-                    "nllb_backend": "ctranslate2",
+                    "nllb_backend": "transformers",
                     "nllb_size": "600M"
                 }
                 translation_params = update_with_kwargs(translation_params, kwargs)
@@ -175,5 +175,5 @@ def online_translation_factory(args, translation_model):
     #should be at speaker level in the future:
     #one shared nllb model for all speaker
     #one tokenizer per speaker/language
-    from whisperlivekit.translation.translation import OnlineTranslation
+    from nllw import OnlineTranslation
     return OnlineTranslation(translation_model, [args.lan], [args.target_language])

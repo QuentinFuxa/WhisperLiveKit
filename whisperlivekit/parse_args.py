@@ -300,7 +300,7 @@ def parse_args():
     simulstreaming_group.add_argument(
         "--nllb-backend",
         type=str,
-        default="ctranslate2",
+        default="transformers",
         help="transformers or ctranslate2",
     )
     

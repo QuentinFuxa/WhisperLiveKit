@@ -41,7 +41,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-translation = ["transformers", "huggingface_hub"]
+translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
 
 [project.urls]
@@ -60,7 +60,6 @@ packages = [
     "whisperlivekit.simul_whisper.whisper.normalizers",
     "whisperlivekit.web",
     "whisperlivekit.whisper_streaming_custom",
-    "whisperlivekit.translation",
     "whisperlivekit.vad_models"
 ]
 

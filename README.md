@@ -18,8 +18,8 @@ Real-time transcription directly to your browser, with a ready-to-use backend+se
 
 #### Powered by Leading Research:
 
-- Simul-[Whisper](https://github.com/backspacetg/simul_whisper)/[Streaming](https://github.com/ufalSimul/Streaming) (SOTA 2025) - Ultra-low latency transcription using [AlignAtt policy](https://arxiv.org/pdf/2305.11408)
-- [NLLB](https://arxiv.org/abs/2207.04672), ([distilled](https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2)) (2024) - Translation to more than 100 languages.
+- Simul-[Whisper](https://github.com/backspacetg/simul_whisper)/[Streaming](https://github.com/ufal/SimulStreaming) (SOTA 2025) - Ultra-low latency transcription using [AlignAtt policy](https://arxiv.org/pdf/2305.11408)
+- [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting) (2025), based on [distilled](https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2) [NLLB](https://arxiv.org/abs/2207.04672) (2022, 2024) - Simulatenous translation from & to 200 languages.
 - [WhisperStreaming](https://github.com/ufal/whisper_streaming) (SOTA 2023) - Low latency transcription using [LocalAgreement policy](https://www.isca-archive.org/interspeech_2020/liu20s_interspeech.pdf)
 - [Streaming Sortformer](https://arxiv.org/abs/2507.18446) (SOTA 2025) - Advanced real-time speaker diarization
 - [Diart](https://github.com/juanmc2005/diart) (SOTA 2021) - Real-time speaker diarization
@@ -68,9 +68,9 @@ Go to `chrome-extension` for instructions.
 
 | Optional | `pip install` |
 |-----------|-------------|
-| **Speaker diarization with Sortformer** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
-| **Apple Silicon optimized backend** | `mlx-whisper` |
-| **NLLB Translation** | `huggingface_hub` & `transformers` |
+| **Speaker diarization** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
+| **Apple Silicon optimizations** | `mlx-whisper` |
+| **Translation** | `nllw` |
 | *[Not recommanded]*  Speaker diarization with Diart | `diart` |
 | *[Not recommanded]*  Original Whisper backend | `whisper` |
 | *[Not recommanded]*  Improved timestamps backend | `whisper-timestamped` |

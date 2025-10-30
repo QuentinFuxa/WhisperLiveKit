@@ -222,7 +222,7 @@ class SimulStreamingASR():
         self.mlx_encoder, self.fw_encoder = None, None
         if not self.disable_fast_encoder:
             if HAS_MLX_WHISPER:
-                print('Simulstreaming will use MLX whisper for a faster encoder.')
+                print('Simulstreaming will use MLX whisper to increase encoding speed.')
                 if self.model_path and compatible_whisper_mlx:
                     mlx_model = self.model_path
                 else:

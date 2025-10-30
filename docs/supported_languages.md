@@ -26,7 +26,7 @@ whisperlivekit-server --target-language fra_Latn
 
 ### Python API
 ```python
-from whisperlivekit.translation import get_language_info
+from nllw.translation import get_language_info
 
 # Get language information by name
 lang_info = get_language_info("French")
