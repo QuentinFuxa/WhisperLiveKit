@@ -141,7 +141,10 @@ class TranscriptionEngine:
             if self.args.lan == 'auto' and self.args.backend != "simulstreaming":
                 raise Exception('Translation cannot be set with language auto when transcription backend is not simulstreaming')
             else:
-                from nllw import load_model
+                try:
+                    from nllw import load_model
+                except:
+                    raise Exception('To use translation, you must install nllw: `pip install nllw`')
                 translation_params = { 
                     "nllb_backend": "transformers",
                     "nllb_size": "600M"
