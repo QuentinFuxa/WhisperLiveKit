@@ -464,7 +464,7 @@ class AudioProcessor:
                     yield response
                     self.last_response_content = response
                 
-                if self.is_stopping and self.transcription_task and self.transcription_task.done() and self.diarization_task and self.diarization_task.done():
+                if self.is_stopping and self._processing_tasks_done():
                     logger.info("Results formatter: All upstream processors are done and in stopping state. Terminating.")
                     return
                 
@@ -517,11 +517,16 @@ class AudioProcessor:
 
     async def watchdog(self, tasks_to_monitor):
         """Monitors the health of critical processing tasks."""
+        tasks_remaining = [task for task in tasks_to_monitor if task]
         while True:
             try:
+                if not tasks_remaining:
+                    logger.info("Watchdog task finishing: all monitored tasks completed.")
+                    return
+
                 await asyncio.sleep(10)
                 
-                for i, task in enumerate(tasks_to_monitor):
+                for i, task in enumerate(list(tasks_remaining)):
                     if task.done():
                         exc = task.exception()
                         task_name = task.get_name() if hasattr(task, 'get_name') else f"Monitored Task {i}"
@@ -529,6 +534,7 @@ class AudioProcessor:
                             logger.error(f"{task_name} unexpectedly completed with exception: {exc}")
                         else:
                             logger.info(f"{task_name} completed normally.")
+                        tasks_remaining.remove(task)
                     
             except asyncio.CancelledError:
                 logger.info("Watchdog task cancelled.")
@@ -558,6 +564,16 @@ class AudioProcessor:
         if self.diarization:
             self.diarization.close()
         logger.info("AudioProcessor cleanup complete.")
+
+    def _processing_tasks_done(self):
+        """Return True when all active processing tasks have completed."""
+        tasks_to_check = [
+            self.transcription_task,
+            self.diarization_task,
+            self.translation_task,
+            self.ffmpeg_reader_task,
+        ]
+        return all(task.done() for task in tasks_to_check if task)
 
 
     async def process_audio(self, message):

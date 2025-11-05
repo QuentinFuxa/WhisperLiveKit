@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "whisperlivekit"
-version = "0.2.13"
+version = "0.2.13.post1"
 description = "Real-time speech-to-text with speaker diarization using Whisper"
 readme = "README.md"
 authors = [
@@ -30,7 +30,6 @@ dependencies = [
     "fastapi",
     "librosa",
     "soundfile",
-    "faster-whisper",
     "uvicorn",
     "websockets",
     "torchaudio>=2.0.0",
