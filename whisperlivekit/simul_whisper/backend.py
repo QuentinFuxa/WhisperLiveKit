@@ -23,7 +23,7 @@ try:
     HAS_MLX_WHISPER = True
 except ImportError:
     if platform.system() == "Darwin" and platform.machine() == "arm64":
-        print(f"""{"="*50}\nMLX Whisper not found but you are on Apple Silicon. Consider installing mlx-whisper for better performance: pip install `mlx-whisper\n{"="*50}`""")
+        print(f"""{"="*50}\nMLX Whisper not found but you are on Apple Silicon. Consider installing mlx-whisper for better performance: `pip install mlx-whisper`\n{"="*50}""")
     HAS_MLX_WHISPER = False
 if HAS_MLX_WHISPER:
     HAS_FASTER_WHISPER = False
@@ -33,7 +33,7 @@ else:
         HAS_FASTER_WHISPER = True
     except ImportError:
         if platform.system() != "Darwin":
-            print(f"""{"="*50}\nFaster-Whisper not found but. Consider installing faster-whisper for better performance: pip install `faster-whisper\n{"="*50}`""")
+            print(f"""{"="*50}\nFaster-Whisper not found but. Consider installing faster-whisper for better performance: `pip install faster-whisper`\n{"="*50}`""")
         HAS_FASTER_WHISPER = False
 
 def model_path_and_type(model_path):
@@ -42,7 +42,8 @@ def model_path_and_type(model_path):
     compatible_whisper_mlx = False
     compatible_faster_whisper = False
     pt_path = path if path.is_file() and path.suffix.lower() == '.pt' else None
-    
+    if pt_path is None:
+        pt_path = path if path.is_file() and path.suffix.lower() == '.bin' else None
     if path.is_dir():
         for file in path.iterdir():
             if file.is_file():
@@ -52,6 +53,9 @@ def model_path_and_type(model_path):
                     compatible_faster_whisper = True
                 elif file.suffix.lower() == '.pt':
                     pt_path = file
+        if pt_path is None:
+            if (model_path / Path("pytorch_model.bin")).exists():
+                pt_path = model_path / Path("pytorch_model.bin")
     return pt_path, compatible_whisper_mlx, compatible_faster_whisper
 
 
@@ -171,11 +175,11 @@ class SimulStreamingASR():
             self.decoder_type = 'greedy' if self.beams == 1 else 'beam'
 
         self.fast_encoder = False
-        
-        pt_path, compatible_whisper_mlx, compatible_faster_whisper = None, True, True
+        self.pt_path, compatible_whisper_mlx, compatible_faster_whisper = None, True, True
         if self.model_path:
-            pt_path, compatible_whisper_mlx, compatible_faster_whisper = model_path_and_type(self.model_path)
-            
+            self.pt_path, compatible_whisper_mlx, compatible_faster_whisper = model_path_and_type(self.model_path)
+            self.model_name = self.pt_path.stem
+            is_multilingual = not self.model_path.endswith(".en")
         elif self.model_size is not None:
             model_mapping = {
                 'tiny': './tiny.pt',
@@ -191,12 +195,12 @@ class SimulStreamingASR():
                 'large-v3': './large-v3.pt',
                 'large': './large-v3.pt'
             }
-            pt_path = Path(model_mapping.get(self.model_size, f'./{self.model_size}.pt'))
-        
-        self.model_name = pt_path.name.replace(".pt", "")
-        
+            self.pt_path = Path(model_mapping.get(self.model_size, f'./{self.model_size}.pt'))
+            self.model_name = self.model_size
+            is_multilingual = not self.model_name.endswith(".en")
+                    
         self.cfg = AlignAttConfig(
-                tokenizer_is_multilingual= not self.model_name.endswith(".en"),
+                tokenizer_is_multilingual= is_multilingual,
                 segment_length=self.min_chunk_size,
                 frame_threshold=self.frame_threshold,
                 language=self.lan,
@@ -249,7 +253,7 @@ class SimulStreamingASR():
 
     def load_model(self):
         whisper_model = load_model(
-            name=self.model_path if self.model_path else self.model_name,
+            name=self.pt_path if self.pt_path else self.model_name,
             download_root=self.model_path,
             decoder_only=self.fast_encoder,
             custom_alignment_heads=self.custom_alignment_heads
