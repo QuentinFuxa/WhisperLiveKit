@@ -91,7 +91,11 @@ class SpeakerSegment(TimedText):
 
 @dataclass
 class Translation(TimedText):
+    is_validated : bool = False
     pass
+
+    # def split(self):
+    #     return self.text.split(" ") # should be customized with the sep
 
     def approximate_cut_at(self, cut_time):
         """
@@ -120,6 +124,19 @@ class Translation(TimedText):
 
         return segment0, segment1
         
+    def cut_position(self, position):
+        sep=" "
+        words = self.text.split(sep)
+        num_words = len(words)
+        duration_per_word = self.duration() / num_words
+        cut_time=duration_per_word*position
+        
+        text0 = sep.join(words[:position])
+        text1 = sep.join(words[position:])
+
+        segment0 = Translation(start=self.start, end=cut_time, text=text0)
+        segment1 = Translation(start=cut_time, end=self.end, text=text1)
+        return segment0, segment1
 
 @dataclass
 class Silence():
@@ -143,6 +160,90 @@ class Line(TimedText):
             _dict['detected_language'] = self.detected_language
         return _dict
     
+@dataclass
+class WordValidation:
+    """Validation status for word-level data."""
+    text: bool = False
+    speaker: bool = False
+    language: bool = False
+    
+    def to_dict(self):
+        return {
+            'text': self.text,
+            'speaker': self.speaker,
+            'language': self.language
+        }
+
+
+@dataclass
+class Word:
+    """Word-level object with timing and validation information."""
+    text: str = ''
+    start: float = 0.0
+    end: float = 0.0
+    validated: WordValidation = field(default_factory=WordValidation)
+    
+    def to_dict(self):
+        return {
+            'text': self.text,
+            'start': self.start,
+            'end': self.end,
+            'validated': self.validated.to_dict()
+        }
+
+
+@dataclass
+class SegmentBuffer:
+    """Per-segment temporary buffers for ephemeral data."""
+    transcription: str = ''
+    diarization: str = ''
+    translation: str = ''
+    
+    def to_dict(self):
+        return {
+            'transcription': self.transcription,
+            'diarization': self.diarization,
+            'translation': self.translation
+        }
+
+
+@dataclass
+class Segment:
+    """Represents a segment in the new API structure."""
+    id: int = 0
+    speaker: int = -1
+    text: str = ''
+    start_speaker: float = 0.0
+    start: float = 0.0
+    end: float = 0.0
+    language: Optional[str] = None
+    translation: str = ''
+    words: List[ASRToken] = field(default_factory=list)
+    buffer_tokens: List[ASRToken] = field(default_factory=list)
+    buffer_translation = ''
+    buffer: SegmentBuffer = field(default_factory=SegmentBuffer)
+    
+    def to_dict(self):
+        """Convert segment to dictionary for JSON serialization."""
+        return {
+            'id': self.id,
+            'speaker': self.speaker,
+            'text': self.text,
+            'start_speaker': self.start_speaker,
+            'start': self.start,
+            'end': self.end,
+            'language': self.language,
+            'translation': self.translation,
+            'words': [word.to_dict() for word in self.words],
+            'buffer': self.buffer.to_dict()
+        }
+
+    def consolidate(self, sep):
+        self.text = sep.join([word.text for word in self.words])
+        if self.words:
+            self.start = self.words[0].start
+            self.end = self.words[-1].end
+        
 
 @dataclass  
 class FrontData():
@@ -175,7 +276,9 @@ class ChangeSpeaker:
 @dataclass  
 class State():
     tokens: list = field(default_factory=list)
+    segments: list = field(default_factory=list)
     last_validated_token: int = 0
+    last_validated_segment: int = 0 # validated means tokens speaker and transcription are validated and terminated
     translation_validated_segments: list = field(default_factory=list)
     translation_buffer: list = field(default_factory=list)
     buffer_transcription: str = field(default_factory=Transcript)
@@ -184,3 +287,4 @@ class State():
     remaining_time_transcription: float = 0.0
     remaining_time_diarization: float = 0.0
     beg_loop: Optional[int] = None
+

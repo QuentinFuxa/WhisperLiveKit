@@ -1,7 +1,6 @@
-
 import logging
 from whisperlivekit.remove_silences import handle_silences
-from whisperlivekit.timed_objects import Line, format_time
+from whisperlivekit.timed_objects import Line, Segment, format_time
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -72,83 +71,96 @@ def format_output(state, silence, args, sep):
                 token.corrected_speaker = 1
                 token.validated_speaker = True
         else:
-                if is_punctuation(token):
-                    last_punctuation = i  
-                
-                if last_punctuation == i-1:
-                    if token.speaker != previous_speaker:
+            if is_punctuation(token):
+                last_punctuation = i  
+            
+            if last_punctuation == i-1:
+                if token.speaker != previous_speaker:
+                    token.validated_speaker = True
+                    # perfect, diarization perfectly aligned
+                    last_punctuation = None
+                else:
+                    speaker_change_pos, new_speaker = next_speaker_change(i, tokens, speaker)
+                    if speaker_change_pos:
+                        # Corrects delay:
+                        # That was the idea. <Okay> haha |SPLIT SPEAKER| that's a good one 
+                        # should become:
+                        # That was the idea. |SPLIT SPEAKER| <Okay> haha that's a good one 
+                        token.corrected_speaker = new_speaker
                         token.validated_speaker = True
-                        # perfect, diarization perfectly aligned
-                        last_punctuation = None
-                    else:
-                        speaker_change_pos, new_speaker = next_speaker_change(i, tokens, speaker)
-                        if speaker_change_pos:
-                            # Corrects delay:
-                            # That was the idea. <Okay> haha |SPLIT SPEAKER| that's a good one 
-                            # should become:
-                            # That was the idea. |SPLIT SPEAKER| <Okay> haha that's a good one 
-                            token.corrected_speaker = new_speaker
-                            token.validated_speaker = True
-                elif speaker != previous_speaker:
-                    if not (speaker == -2 or previous_speaker == -2):
-                        if next_punctuation_change(i, tokens):
-                            # Corrects advance:
-                            # Are you |SPLIT SPEAKER| <okay>? yeah, sure. Absolutely 
-                            # should become:
-                            # Are you <okay>? |SPLIT SPEAKER| yeah, sure. Absolutely 
+            elif speaker != previous_speaker:
+                if not (speaker == -2 or previous_speaker == -2):
+                    if next_punctuation_change(i, tokens):
+                        # Corrects advance:
+                        # Are you |SPLIT SPEAKER| <okay>? yeah, sure. Absolutely 
+                        # should become:
+                        # Are you <okay>? |SPLIT SPEAKER| yeah, sure. Absolutely 
+                        token.corrected_speaker = previous_speaker
+                        token.validated_speaker = True
+                    else: #Problematic, except if the language has no punctuation. We append to previous line, except if disable_punctuation_split is set to True.
+                        if not disable_punctuation_split:
                             token.corrected_speaker = previous_speaker
-                            token.validated_speaker = True
-                        else: #Problematic, except if the language has no punctuation. We append to previous line, except if disable_punctuation_split is set to True.
-                            if not disable_punctuation_split:
-                                token.corrected_speaker = previous_speaker
-                                token.validated_speaker = False
+                            token.validated_speaker = False
         if token.validated_speaker:
-            state.last_validated_token = i
+            state.last_validated_token = i + last_validated_token
         previous_speaker = token.corrected_speaker  
 
-    previous_speaker = 1
+    for token in tokens[last_validated_token+1:state.last_validated_token+1]:
+        if not state.segments or int(token.corrected_speaker) != int(state.segments[-1].speaker):
+            state.segments.append(
+                Segment(
+                    speaker=token.corrected_speaker,
+                    words=[token]
+                )
+            )
+        else:
+            state.segments[-1].words.append(token)
+ 
+    for token in tokens[state.last_validated_token+1:]:
+        # if not state.segments or int(token.corrected_speaker) != int(state.segments[-1].speaker):
+        #     state.segments.append(
+        #         Segment(
+        #             speaker=token.corrected_speaker,
+        #             buffer_tokens=[token]
+        #         )
+        #     )
+        # else:
+        state.segments[-1].buffer_tokens.append(token) 
+    
+    for segment in state.segments:
+        segment.consolidate(sep)
+    # lines = []
+    # for token in tokens:
+    #     if int(token.corrected_speaker) != int(previous_speaker):
+    #         lines.append(new_line(token))
+    #     else:
+    #         append_token_to_last_line(lines, sep, token)
+
+    #     previous_speaker = token.corrected_speaker
+
+    for ts in translation_validated_segments:
+        for segment in state.segments[state.last_validated_segment:]:
+            if ts.is_within(segment):
+                segment.translation += ts.text + sep
+                break
+
+    for ts in translation_buffer:
+        for segment in state.segments[state.last_validated_segment:]:
+            if ts.is_within(segment):
+                segment.buffer.translation += ts.text + sep
+                break
+    
+    # if state.buffer_transcription and lines:
+    #     lines[-1].end = max(state.buffer_transcription.end, lines[-1].end)
     
     lines = []
-    for token in tokens:
-        if int(token.corrected_speaker) != int(previous_speaker):
-            lines.append(new_line(token))
-        else:
-            append_token_to_last_line(lines, sep, token)
-
-        previous_speaker = token.corrected_speaker        
-
-    if lines:
-        unassigned_translated_segments = []
-        for ts in translation_validated_segments:
-            assigned = False
-            for line in lines:
-                if ts and ts.overlaps_with(line):
-                    if ts.is_within(line):
-                        line.translation += ts.text + ' '
-                        assigned = True
-                        break
-                    else:
-                        ts0, ts1 = ts.approximate_cut_at(line.end)
-                        if ts0 and line.overlaps_with(ts0):
-                            line.translation += ts0.text + ' '
-                        if ts1:
-                            unassigned_translated_segments.append(ts1)
-                        assigned = True
-                        break
-            if not assigned:
-                unassigned_translated_segments.append(ts)
-        
-        if unassigned_translated_segments:
-            for line in lines:
-                remaining_segments = []
-                for ts in unassigned_translated_segments:
-                    if ts and ts.overlaps_with(line):
-                        line.translation += ts.text + ' '
-                    else:
-                        remaining_segments.append(ts)
-                unassigned_translated_segments = remaining_segments #maybe do smth in the future about that
+    for segment in state.segments:
+        lines.append(Line(
+            start=segment.start,
+            end=segment.end,
+            speaker=segment.speaker,
+            text=segment.text,
+            translation=segment.translation
+        ))
     
-    if state.buffer_transcription and lines:
-        lines[-1].end = max(state.buffer_transcription.end, lines[-1].end)
-        
     return lines, undiarized_text
