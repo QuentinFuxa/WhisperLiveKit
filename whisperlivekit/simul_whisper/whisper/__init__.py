@@ -8,6 +8,7 @@ from typing import List, Optional, Union, Dict
 
 import torch
 from tqdm import tqdm
+from pathlib import Path
 
 from .audio import load_audio, log_mel_spectrogram, pad_or_trim
 from .decoding import DecodingOptions, DecodingResult, decode, detect_language
@@ -279,10 +280,20 @@ def load_model(
     if custom_alignment_heads:
         alignment_heads = custom_alignment_heads.encode()
 
-    with (
-        io.BytesIO(checkpoint_file) if in_memory else open(checkpoint_file, "rb")
-    ) as fp:
-        checkpoint = torch.load(fp, map_location=device)
+    if isinstance(checkpoint_file, Path) and checkpoint_file.suffix == '.safetensors':
+        try:
+            from safetensors.torch import load_file
+        except ImportError:
+            raise ImportError("Please install safetensors to load .safetensors model files: `pip install safetensors`")
+        if in_memory:
+            checkpoint = load_file(checkpoint_file, device=device)
+        else:
+            checkpoint = load_file(checkpoint_file, device=device)
+    else:
+        with (
+            io.BytesIO(checkpoint_file) if in_memory else open(checkpoint_file, "rb")
+        ) as fp:
+            checkpoint = torch.load(fp, map_location=device)
     del checkpoint_file
 
     dims_cfg = checkpoint.get("dims") if isinstance(checkpoint, dict) else None
