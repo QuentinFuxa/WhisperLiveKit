@@ -1,9 +1,10 @@
+"""Copy core files from web directory to Chrome extension directory."""
+
 import shutil
 import os
 from pathlib import Path
 
 def sync_extension_files():
-    """Copy core files from web directory to Chrome extension directory."""
     
     web_dir = Path("whisperlivekit/web")
     extension_dir = Path("chrome-extension")

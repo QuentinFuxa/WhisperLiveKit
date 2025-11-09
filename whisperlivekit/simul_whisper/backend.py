@@ -195,7 +195,6 @@ class SimulStreamingASR():
                 'large-v3': './large-v3.pt',
                 'large': './large-v3.pt'
             }
-            self.pt_path = Path(model_mapping.get(self.model_size, f'./{self.model_size}.pt'))
             self.model_name = self.model_size
             is_multilingual = not self.model_name.endswith(".en")
                     

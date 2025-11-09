@@ -171,7 +171,8 @@ async def websocket_endpoint(websocket: WebSocket):
 | SimulStreaming backend options | Description | Default |
 |-----------|-------------|---------|
 | `--disable-fast-encoder` | Disable Faster Whisper or MLX Whisper backends for the encoder (if installed). Inference can be slower but helpful when GPU memory is limited | `False` |
-| `--custom-alignment-heads` | Use your own alignment heads, useful when `--model-dir` is used | `None` |
+| `--custom-alignment-heads` | Use your own alignment heads, useful when `--model-dir` is used. Use `scripts/determine_alignment_heads.py` to extract them. <img src="scripts/alignment_heads.png" alt="WhisperLiveKit Demo" width="300">
+ | `None` |
 | `--frame-threshold` | AlignAtt frame threshold (lower = faster, higher = more accurate) | `25` |
 | `--beams` | Number of beams for beam search (1 = greedy decoding) | `1` |
 | `--decoder` | Force decoder type (`beam` or `greedy`) | `auto` |
