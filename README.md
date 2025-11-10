@@ -72,7 +72,6 @@ Go to `chrome-extension` for instructions.
 | **Apple Silicon optimizations** | `mlx-whisper` |
 | **Translation** | `nllw` |
 | *[Not recommanded]*  Speaker diarization with Diart | `diart` |
-| *[Not recommanded]*  Original Whisper backend | `whisper` |
 | *[Not recommanded]*  Improved timestamps backend | `whisper-timestamped` |
 | OpenAI API backend | `openai` |
 

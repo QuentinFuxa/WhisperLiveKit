@@ -1,5 +1,3 @@
-# This code was originally in simul_whisper/transcriber/simul_whisper.py . It is adapted a lot for SimulStreaming.
-
 from dataclasses import dataclass, field
 from typing import Literal
 

@@ -6,17 +6,18 @@ import logging
 import platform
 from whisperlivekit.timed_objects import ASRToken, Transcript, ChangeSpeaker
 from whisperlivekit.warmup import load_file
-from .whisper import load_model, tokenizer
-from .whisper.audio import TOKENS_PER_SECOND
+from whisperlivekit.whisper import load_model, tokenizer
+from whisperlivekit.whisper.audio import TOKENS_PER_SECOND
 import os
 import gc
 from pathlib import Path
-logger = logging.getLogger(__name__)
 
 import torch
 from whisperlivekit.simul_whisper.config import AlignAttConfig
 from whisperlivekit.simul_whisper.simul_whisper import PaddedAlignAttWhisper
-from whisperlivekit.simul_whisper.whisper import tokenizer
+
+logger = logging.getLogger(__name__)
+
 
 try:
     from .mlx_encoder import mlx_model_mapping, load_mlx_encoder

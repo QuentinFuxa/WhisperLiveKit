@@ -6,12 +6,12 @@ import logging
 import torch
 import torch.nn.functional as F
 
-from .whisper import load_model, DecodingOptions, tokenizer
+from whisperlivekit.whisper import load_model, DecodingOptions, tokenizer
 from .config import AlignAttConfig
 from whisperlivekit.timed_objects import ASRToken
-from .whisper.audio import log_mel_spectrogram, TOKENS_PER_SECOND, pad_or_trim, N_SAMPLES, N_FRAMES
-from .whisper.timing import median_filter
-from .whisper.decoding import GreedyDecoder, BeamSearchDecoder, SuppressTokens, detect_language
+from whisperlivekit.whisper.audio import log_mel_spectrogram, TOKENS_PER_SECOND, pad_or_trim, N_SAMPLES, N_FRAMES
+from whisperlivekit.whisper.timing import median_filter
+from whisperlivekit.whisper.decoding import GreedyDecoder, BeamSearchDecoder, SuppressTokens, detect_language
 from .beam import BeamPyTorchInference
 from .eow_detection import fire_at_boundary, load_cif
 import os

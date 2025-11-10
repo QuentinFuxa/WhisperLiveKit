@@ -1,9 +1,6 @@
-try:
-    from whisperlivekit.whisper_streaming_custom.whisper_online import backend_factory
-    from whisperlivekit.whisper_streaming_custom.online_asr import OnlineASRProcessor
-except ImportError:
-    from .whisper_streaming_custom.whisper_online import backend_factory
-    from .whisper_streaming_custom.online_asr import OnlineASRProcessor
+from whisperlivekit.local_agreement.whisper_online import backend_factory
+from whisperlivekit.simul_whisper import SimulStreamingASR
+from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
 from argparse import Namespace
 import sys
 
@@ -82,9 +79,7 @@ class TranscriptionEngine:
             self.vac_model = load_silero_vad(onnx=use_onnx)
         
         if self.args.transcription:
-            if self.args.backend == "simulstreaming": 
-                from whisperlivekit.simul_whisper import SimulStreamingASR
-                
+            if self.args.backend == "simulstreaming":                 
                 simulstreaming_params = {
                     "disable_fast_encoder": False,
                     "custom_alignment_heads": None,

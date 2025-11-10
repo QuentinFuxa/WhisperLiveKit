@@ -54,15 +54,15 @@ packages = [
     "whisperlivekit",
     "whisperlivekit.diarization",
     "whisperlivekit.simul_whisper",
-    "whisperlivekit.simul_whisper.whisper",
-    "whisperlivekit.simul_whisper.whisper.assets",
-    "whisperlivekit.simul_whisper.whisper.normalizers",
+    "whisperlivekit.whisper",
+    "whisperlivekit.whisper.assets",
+    "whisperlivekit.whisper.normalizers",
     "whisperlivekit.web",
-    "whisperlivekit.whisper_streaming_custom",
+    "whisperlivekit.local_agreement",
     "whisperlivekit.vad_models"
 ]
 
 [tool.setuptools.package-data]
 whisperlivekit = ["web/*.html", "web/*.css", "web/*.js", "web/src/*.svg"]
-"whisperlivekit.simul_whisper.whisper.assets" = ["*.tiktoken", "*.npz"]
+"whisperlivekit.whisper.assets" = ["*.tiktoken", "*.npz"]
 "whisperlivekit.vad_models" = ["*.jit", "*.onnx"]
