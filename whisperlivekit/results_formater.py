@@ -57,7 +57,6 @@ def format_output(state, silence, args, sep):
     disable_punctuation_split = args.disable_punctuation_split
     tokens = state.tokens
     translation_validated_segments = state.translation_validated_segments # Here we will attribute the speakers only based on the timestamps of the segments
-    translation_buffer = state.translation_buffer
     last_validated_token = state.last_validated_token
     
     previous_speaker = 1

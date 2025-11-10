@@ -490,6 +490,11 @@ label {
   margin-left: 4px;
 }
 
+.buffer_translation {
+  color: #a0a0a0;
+  margin-left: 6px;
+}
+
 .spinner {
   display: inline-block;
   width: 8px;

@@ -387,10 +387,10 @@ class AudioProcessor:
                         tokens_to_process.append(additional_token)                
                 if tokens_to_process:
                     self.translation.insert_tokens(tokens_to_process)
-                    translation_validated_segments, translation_buffer = await asyncio.to_thread(self.translation.process)
+                    translation_validated_segments, buffer_translation = await asyncio.to_thread(self.translation.process)
                     async with self.lock:
                         self.state.translation_validated_segments = translation_validated_segments
-                        self.state.translation_buffer = translation_buffer
+                        self.state.buffer_translation = buffer_translation
                 self.translation_queue.task_done()
                 for _ in additional_tokens:
                     self.translation_queue.task_done()
@@ -438,6 +438,12 @@ class AudioProcessor:
 
                     async with self.lock:
                         self.state.end_attributed_speaker = state.end_attributed_speaker
+
+                buffer_translation_text = ''
+                if state.buffer_translation:
+                    raw_buffer_translation = getattr(state.buffer_translation, 'text', state.buffer_translation)
+                    if raw_buffer_translation:
+                        buffer_translation_text = raw_buffer_translation.strip()
                 
                 response_status = "active_transcription"
                 if not state.tokens and not buffer_transcription and not buffer_diarization:
@@ -455,6 +461,7 @@ class AudioProcessor:
                     lines=lines,
                     buffer_transcription=buffer_transcription.text.strip(),
                     buffer_diarization=buffer_diarization,
+                    buffer_translation=buffer_translation_text,
                     remaining_time_transcription=state.remaining_time_transcription,
                     remaining_time_diarization=state.remaining_time_diarization if self.args.diarization else 0
                 )

@@ -151,6 +151,7 @@ class FrontData():
     lines: list[Line] = field(default_factory=list)
     buffer_transcription: str = ''
     buffer_diarization: str = ''
+    buffer_translation: str = ''
     remaining_time_transcription: float = 0.
     remaining_time_diarization: float = 0.
     
@@ -160,6 +161,7 @@ class FrontData():
             'lines': [line.to_dict() for line in self.lines if (line.text or line.speaker == -2)],
             'buffer_transcription': self.buffer_transcription,
             'buffer_diarization': self.buffer_diarization,
+            'buffer_translation': self.buffer_translation,
             'remaining_time_transcription': self.remaining_time_transcription,
             'remaining_time_diarization': self.remaining_time_diarization,
         }
@@ -178,7 +180,7 @@ class State():
     last_validated_token: int = 0
     last_punctuation_index: Optional[int] = None
     translation_validated_segments: list = field(default_factory=list)
-    translation_buffer: list = field(default_factory=list)
+    buffer_translation: str = field(default_factory=Transcript)
     buffer_transcription: str = field(default_factory=Transcript)
     end_buffer: float = 0.0
     end_attributed_speaker: float = 0.0
