@@ -52,7 +52,7 @@ class TranscriptionEngine:
             "model_cache_dir": None,
             "model_dir": None,
             "lan": "auto",
-            "task": "transcribe",
+            "direct_english_translation": False,
         }
         transcription_common_params = update_with_kwargs(transcription_common_params, kwargs)                                            
 

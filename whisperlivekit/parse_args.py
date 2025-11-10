@@ -114,11 +114,10 @@ def parse_args():
         help="Source language code, e.g. en,de,cs, or 'auto' for language detection.",
     )
     parser.add_argument(
-        "--task",
-        type=str,
-        default="transcribe",
-        choices=["transcribe", "translate"],
-        help="Transcribe or translate.",
+        "--direct-english-translation",
+        action="store_true",
+        default=False,
+        help="Use Whisper to directly translate to english.",
     )
     
     parser.add_argument(

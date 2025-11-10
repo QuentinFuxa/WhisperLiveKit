@@ -211,7 +211,7 @@ class SimulStreamingASR():
                 cif_ckpt_path=self.cif_ckpt_path,
                 decoder_type="beam",
                 beam_size=self.beams,
-                task=self.task,
+                task=self.direct_english_translation,
                 never_fire=self.never_fire,
                 init_prompt=self.init_prompt,
                 max_context_tokens=self.max_context_tokens,
@@ -219,7 +219,7 @@ class SimulStreamingASR():
         )  
         
         # Set up tokenizer for translation if needed
-        if self.task == "translate":
+        if self.direct_english_translation:
             self.tokenizer = self.set_translate_task()
         else:
             self.tokenizer = None

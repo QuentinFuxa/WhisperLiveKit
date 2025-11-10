@@ -80,10 +80,6 @@ class WhisperTimestampedASR(ASRBase):
     def use_vad(self):
         self.transcribe_kargs["vad"] = True
 
-    def set_translate_task(self):
-        self.transcribe_kargs["task"] = "translate"
-
-
 class FasterWhisperASR(ASRBase):
     """Uses faster-whisper as the backend."""
     sep = ""
@@ -138,10 +134,6 @@ class FasterWhisperASR(ASRBase):
 
     def use_vad(self):
         self.transcribe_kargs["vad_filter"] = True
-
-    def set_translate_task(self):
-        self.transcribe_kargs["task"] = "translate"
-
 
 class MLXWhisper(ASRBase):
     """
@@ -218,10 +210,6 @@ class MLXWhisper(ASRBase):
     def use_vad(self):
         self.transcribe_kargs["vad_filter"] = True
 
-    def set_translate_task(self):
-        self.transcribe_kargs["task"] = "translate"
-
-
 class OpenaiApiASR(ASRBase):
     """Uses OpenAI's Whisper API for transcription."""
     def __init__(self, lan=None, temperature=0, logfile=sys.stderr):
@@ -232,7 +220,7 @@ class OpenaiApiASR(ASRBase):
         self.temperature = temperature
         self.load_model()
         self.use_vad_opt = False
-        self.task = "transcribe"
+        self.direct_english_translation = False
 
     def load_model(self, *args, **kwargs):
         from openai import OpenAI
@@ -274,7 +262,7 @@ class OpenaiApiASR(ASRBase):
             "temperature": self.temperature,
             "timestamp_granularities": ["word", "segment"],
         }
-        if self.task != "translate" and self.original_language:
+        if not self.direct_english_translation and self.original_language:
             params["language"] = self.original_language
         if prompt:
             params["prompt"] = prompt
@@ -285,6 +273,3 @@ class OpenaiApiASR(ASRBase):
 
     def use_vad(self):
         self.use_vad_opt = True
-
-    def set_translate_task(self):
-        self.task = "translate"

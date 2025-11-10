@@ -70,7 +70,7 @@ def backend_factory(
             model_size,
             model_cache_dir,
             model_dir,
-            task,
+            direct_english_translation,
             buffer_trimming,
             buffer_trimming_sec,
             confidence_validation,
@@ -102,7 +102,7 @@ def backend_factory(
         e = time.time()
         logger.info(f"done. It took {round(e-t,2)} seconds.")
 
-    if task == "translate":
+    if direct_english_translation:
         tgt_language = "en"  # Whisper translates into English
     else:
         tgt_language = lan  # Whisper transcribes in this language
