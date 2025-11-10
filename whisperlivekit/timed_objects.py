@@ -176,6 +176,7 @@ class ChangeSpeaker:
 class State():
     tokens: list = field(default_factory=list)
     last_validated_token: int = 0
+    last_punctuation_index: Optional[int] = None
     translation_validated_segments: list = field(default_factory=list)
     translation_buffer: list = field(default_factory=list)
     buffer_transcription: str = field(default_factory=Transcript)

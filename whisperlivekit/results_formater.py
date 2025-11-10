@@ -63,8 +63,8 @@ def format_output(state, silence, args, sep):
     previous_speaker = 1
     undiarized_text = []
     tokens = handle_silences(tokens, state.beg_loop, silence)
-    last_punctuation = None
-    for i, token in enumerate(tokens[last_validated_token:]):
+    for i in range(last_validated_token, len(tokens)):
+        token = tokens[i]
         speaker = int(token.speaker)
         token.corrected_speaker = speaker
         if not diarization:
@@ -73,9 +73,9 @@ def format_output(state, silence, args, sep):
                 token.validated_speaker = True
         else:
                 if is_punctuation(token):
-                    last_punctuation = i  
+                    state.last_punctuation_index = i  
                 
-                if last_punctuation == i-1:
+                if state.last_punctuation_index == i-1:
                     if token.speaker != previous_speaker:
                         token.validated_speaker = True
                         # perfect, diarization perfectly aligned
