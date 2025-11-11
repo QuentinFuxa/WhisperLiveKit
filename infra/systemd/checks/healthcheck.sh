@@ -19,4 +19,19 @@ for service in "${services[@]}"; do
   fi
 done
 
+APP_PORT="${APP_PORT:-8000}"
+echo "Checking HTTP endpoints on port ${APP_PORT}"
+if curl -fsS "http://127.0.0.1:${APP_PORT}/healthz" >/dev/null; then
+  echo "✅ /healthz responded"
+else
+  echo "❌ /healthz failed"
+  status=1
+fi
+
+if curl -fsS "http://127.0.0.1:${APP_PORT}/metrics" >/dev/null; then
+  echo "✅ /metrics responded"
+else
+  echo "⚠️  /metrics not available (non-fatal)"
+fi
+
 exit "$status"

@@ -95,7 +95,8 @@ DayMind core is MIT licensed (see [`LICENSE`](LICENSE)); third-party dependencie
 
 ### Run as a Service / Production Notes
 
-- **Systemd-first:** Copy the repo to `/opt/daymind`, install the units in `infra/systemd/`, and keep secrets in `/etc/daymind/daymind.env`. `DEPLOY.md` documents provisioning, smoke tests, firewall, rollback, and the optional Docker Compose path.
+- **Systemd-first:** Copy the repo to `/opt/daymind`, install the units in `infra/systemd/`, and keep runtime env vars in `/etc/default/daymind`. `DEPLOY.md` documents provisioning, smoke tests, firewall, rollback, and the optional Docker Compose path.
+- **Services:** `daymind-api` (Uvicorn) and `daymind-fava` (Fava UI) run as systemd units sourced from `/etc/default/daymind`; tail logs with `journalctl -u daymind-api -f` / `journalctl -u daymind-fava -f`. CI deploys via `scripts/remote_deploy.sh`, reloads units, and the verify job curls `/healthz` + `/metrics` over SSH.
 - **CI/CD deploys:** `.github/workflows/ci_cd.yml` now runs `terraform_apply → deploy_app → verify_services`, provisioning the droplet with Terraform, rsyncing `/opt/daymind`, and restarting `daymind-api` + `daymind-fava` before running Redis/API/Fava healthchecks.
 
 Manual runs can be triggered via the CLI:

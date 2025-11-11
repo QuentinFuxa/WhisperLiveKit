@@ -1,17 +1,17 @@
 [Unit]
-Description=DayMind FastAPI Bridge
-After=network-online.target
-Wants=network-online.target
+Description=DayMind API (Uvicorn)
+After=network.target redis-server.service
+Requires=redis-server.service
 
 [Service]
 Type=simple
+EnvironmentFile=-/etc/default/daymind
 User=daymind
 Group=daymind
-EnvironmentFile=/etc/daymind/daymind.env
 WorkingDirectory=/opt/daymind
-ExecStart=/opt/daymind/.venv/bin/uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --workers 2
-Restart=on-failure
-RestartSec=5
+ExecStart=/opt/daymind/venv/bin/python -m uvicorn src.api.main:app --host 0.0.0.0 --port $APP_PORT --workers $APP_WORKERS
+Restart=always
+RestartSec=3
 StandardOutput=journal
 StandardError=journal
 

@@ -1,17 +1,16 @@
 [Unit]
-Description=DayMind Fava Dashboard
-After=network-online.target daymind-api.service
-Wants=network-online.target
+Description=DayMind Fava Ledger UI
+After=network.target
 
 [Service]
 Type=simple
+EnvironmentFile=-/etc/default/daymind
 User=daymind
 Group=daymind
-EnvironmentFile=/etc/daymind/daymind.env
 WorkingDirectory=/opt/daymind
-ExecStart=/opt/daymind/.venv/bin/python -m src.finance.fava_runner
-Restart=on-failure
-RestartSec=5
+ExecStart=/opt/daymind/scripts/start_fava.sh
+Restart=always
+RestartSec=3
 StandardOutput=journal
 StandardError=journal
 
