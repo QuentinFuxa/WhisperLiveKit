@@ -19,12 +19,13 @@ resource "digitalocean_droplet" "app" {
   ssh_keys = [var.ssh_fingerprint]
 }
 
-resource "digitalocean_redis" "cache" {
-  name    = "${var.project_name}-redis"
-  region  = var.region
-  size    = "db-s-1vcpu-1gb"
-  engine  = "redis"
-  version = "7"
+resource "digitalocean_database_cluster" "redis" {
+  name       = "${var.project_name}-redis"
+  engine     = "redis"
+  version    = "7"
+  size       = "db-s-1vcpu-1gb"
+  region     = "sgp1"
+  node_count = 1
 }
 
 output "app_ip" {
@@ -32,5 +33,5 @@ output "app_ip" {
 }
 
 output "redis_uri" {
-  value = digitalocean_redis.cache.uri
+  value = digitalocean_database_cluster.redis.uri
 }
