@@ -16,10 +16,27 @@ fun propertyOrDefault(key: String, defaultValue: String): String =
 
 val serverUrl = propertyOrDefault("BASE_URL", "https://example.org")
 val apiKey = propertyOrDefault("API_KEY", "demo-key")
+val releaseStoreFile = (project.findProperty("daymindReleaseStoreFile") as String?)?.takeIf { it.isNotBlank() }
+val releaseStorePassword = (project.findProperty("daymindReleaseStorePassword") as String?)?.takeIf { it.isNotBlank() }
+val releaseKeyAlias = (project.findProperty("daymindReleaseKeyAlias") as String?)?.takeIf { it.isNotBlank() }
+val releaseKeyPassword = (project.findProperty("daymindReleaseKeyPassword") as String?)?.takeIf { it.isNotBlank() }
+val hasReleaseSigning =
+    releaseStoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null
 
 android {
     namespace = "com.symbioza.daymind"
     compileSdk = 34
+
+    signingConfigs {
+        create("releaseConfig") {
+            if (hasReleaseSigning) {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword!!
+                keyAlias = releaseKeyAlias!!
+                keyPassword = releaseKeyPassword!!
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.symbioza.daymind"
@@ -42,6 +59,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("releaseConfig")
+            }
         }
         debug {
             applicationIdSuffix = ".debug"

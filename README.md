@@ -105,6 +105,12 @@ gh run list
 gh run view --web
 ```
 Omit `--ref` to target `main`. Populate the `DO_TOKEN`, `SSH_FINGERPRINT`, and `DEPLOY_SSH_KEY` repository secrets so Terraform and SSH steps can complete.
+Android Compose builds use `.github/workflows/android_build.yml` and surface artifacts (debug, release unsigned, and an optional signed release) under the workflow run plus any GitHub Release tied to a tag:
+```bash
+gh workflow run android_build.yml -f build_type=both -f runner=gh --ref main
+gh workflow run android_build.yml -f build_type=release -f runner=self -f ref=main
+```
+Artifacts appear as `daymind-android-*` in the run summary; tag builds also upload the APKs to the matching GitHub Release. Provide the optional `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_ALIAS_PASSWORD` secrets to produce a signed `app-release.apk`; otherwise the workflow still publishes debug + unsigned release builds.
 - **Observability:** `/healthz` now reports `redis`, `disk`, and `openai` status; `/metrics` exposes Prometheus counters with route/method/status labels.
 
 ### Installation & Quick Start

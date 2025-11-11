@@ -1,0 +1,12 @@
+org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
+kotlin.code.style=official
+android.useAndroidX=true
+android.enableJetifier=false
+android.nonTransitiveRClass=true
+
+# Optional release signing (used when android_build.yml secrets are set)
+# Copy to gradle.properties (or set matching ORG_GRADLE_PROJECT_* env vars)
+# daymindReleaseStoreFile=/path/to/keystore.jks
+# daymindReleaseStorePassword=change-me
+# daymindReleaseKeyAlias=daymind
+# daymindReleaseKeyPassword=change-me

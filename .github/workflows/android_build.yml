@@ -1,0 +1,164 @@
+name: android-build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Variants to build (debug, release, or both)"
+        required: false
+        default: both
+        type: choice
+        options:
+          - debug
+          - release
+          - both
+      runner:
+        description: "Runner type for manual builds"
+        required: false
+        default: gh
+        type: choice
+        options:
+          - gh
+          - self
+      ref:
+        description: "Git ref (branch/tag/SHA) to check out"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  ANDROID_PROJECT_DIR: mobile/android/daymind
+  DEBUG_APK: mobile/android/daymind/app/build/outputs/apk/debug/app-debug.apk
+  RELEASE_UNSIGNED_APK: mobile/android/daymind/app/build/outputs/apk/release/app-release-unsigned.apk
+  RELEASE_SIGNED_APK: mobile/android/daymind/app/build/outputs/apk/release/app-release-signed.apk
+
+jobs:
+  build_gh:
+    name: Build (GitHub runner)
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.runner == 'gh' || github.event.inputs.runner == '' }}
+    defaults:
+      run:
+        working-directory: ${{ env.ANDROID_PROJECT_DIR }}
+    env:
+      BUILD_TYPE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_type || 'both' }}
+      SIGNING_READY: ${{ (secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_ALIAS_PASSWORD != '') && 'true' || 'false' }}
+    steps: &android-build-steps
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install Android SDK (API 34)
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+          components: |
+            platform-tools
+
+      - name: Gradle cache
+        uses: gradle/gradle-build-action@v2
+
+      - name: Configure release signing
+        if: env.SIGNING_READY == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/daymind-keystore.jks"
+          {
+            echo "ORG_GRADLE_PROJECT_daymindReleaseStoreFile=$RUNNER_TEMP/daymind-keystore.jks"
+            echo "ORG_GRADLE_PROJECT_daymindReleaseStorePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            echo "ORG_GRADLE_PROJECT_daymindReleaseKeyAlias=${{ secrets.ANDROID_KEY_ALIAS }}"
+            echo "ORG_GRADLE_PROJECT_daymindReleaseKeyPassword=${{ secrets.ANDROID_KEY_ALIAS_PASSWORD }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Assemble debug APK
+        if: env.BUILD_TYPE == 'debug' || env.BUILD_TYPE == 'both'
+        run: ./gradlew --stacktrace assembleDebug
+
+      - name: Assemble release APK
+        if: env.BUILD_TYPE == 'release' || env.BUILD_TYPE == 'both'
+        run: ./gradlew --stacktrace assembleRelease
+
+      - name: Copy signed release artifact
+        if: (env.BUILD_TYPE == 'release' || env.BUILD_TYPE == 'both') && env.SIGNING_READY == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/app-release-signed.apk
+
+      - name: Upload debug artifact
+        if: env.BUILD_TYPE == 'debug' || env.BUILD_TYPE == 'both'
+        uses: actions/upload-artifact@v4
+        with:
+          name: daymind-android-debug-apk
+          path: ${{ env.DEBUG_APK }}
+
+      - name: Upload release (unsigned) artifact
+        if: env.BUILD_TYPE == 'release' || env.BUILD_TYPE == 'both'
+        uses: actions/upload-artifact@v4
+        with:
+          name: daymind-android-release-unsigned
+          path: ${{ env.RELEASE_UNSIGNED_APK }}
+
+      - name: Upload release (signed) artifact
+        if: (env.BUILD_TYPE == 'release' || env.BUILD_TYPE == 'both') && env.SIGNING_READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: daymind-android-release-signed
+          path: ${{ env.RELEASE_SIGNED_APK }}
+
+      - name: Attach debug APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && (env.BUILD_TYPE == 'debug' || env.BUILD_TYPE == 'both') && hashFiles('mobile/android/daymind/app/build/outputs/apk/debug/app-debug.apk') != ''
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: ${{ env.DEBUG_APK }}
+
+      - name: Attach unsigned release APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && (env.BUILD_TYPE == 'release' || env.BUILD_TYPE == 'both') && hashFiles('mobile/android/daymind/app/build/outputs/apk/release/app-release-unsigned.apk') != ''
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: ${{ env.RELEASE_UNSIGNED_APK }}
+
+      - name: Attach signed release APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') && (env.BUILD_TYPE == 'release' || env.BUILD_TYPE == 'both') && env.SIGNING_READY == 'true' && hashFiles('mobile/android/daymind/app/build/outputs/apk/release/app-release-signed.apk') != ''
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: ${{ env.RELEASE_SIGNED_APK }}
+
+  build_self:
+    name: Build (self-hosted runner)
+    runs-on: self-hosted
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.runner == 'self' }}
+    defaults:
+      run:
+        working-directory: ${{ env.ANDROID_PROJECT_DIR }}
+    env:
+      BUILD_TYPE: ${{ github.event.inputs.build_type || 'both' }}
+      SIGNING_READY: ${{ (secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_ALIAS_PASSWORD != '') && 'true' || 'false' }}
+    steps: *android-build-steps

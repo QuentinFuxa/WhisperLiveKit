@@ -37,5 +37,23 @@ Foreground-only Kotlin/Compose app that records mono 16 kHz WAV chunks, queues
 - No AI inference, ledgers, or summaries run locally; the FastAPI backend continues to own all Text-First artifacts.
 - Delete the app data to purge cached chunks if needed.
 
+## Build requirements
+- JDK 17 (Temurin/Azul/OpenJDK)
+- Android SDK Platform 34 + Build Tools 34.0.0 (install via `sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"`)
+- Gradle wrapper bundled in this repo (`./gradlew`)
+
+Local builds stay deterministic with:
+```bash
+./gradlew assembleDebug               # debug (default local target)
+./gradlew assembleRelease             # release (unsigned unless signing props configured)
+```
+Copy `gradle.properties.template` to `gradle.properties` (or export `ORG_GRADLE_PROJECT_*` vars) when providing signing credentials locally.
+
 ## CI
-`.github/workflows/android.yml` assembles `app-debug.apk` on every push/PR touching `mobile/android/daymind/**` and publishes the artifact at `mobile/android/daymind/app/build/outputs/apk/debug/app-debug.apk`.
+`.github/workflows/android_build.yml` assembles debug/release APKs on pushes to `main`, pull requests, tags, and manual dispatches. Manual triggers stay CLI-first:
+```bash
+gh workflow run android_build.yml -f build_type=debug -f runner=gh --ref main
+gh workflow run android_build.yml -f build_type=release -f runner=gh --ref main
+gh workflow run android_build.yml -f build_type=both -f runner=self -f ref=feature/android-ci
+```
+Artifacts land as `daymind-android-*` on each run; tag builds also attach the APKs to the GitHub Release. Set the optional signing secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_ALIAS_PASSWORD`) or matching `gradle.properties` entries to emit `app-release-signed.apk` in addition to the default debug + unsigned release packages.

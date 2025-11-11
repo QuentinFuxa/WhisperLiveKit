@@ -36,7 +36,7 @@
 
 | Backlog | Next | In Progress | Done |
 |---------|------|-------------|------|
-| EPIC-10 – LangGraph DAG + Redis streams<br>EPIC-8 – Automations & notifications backlog<br>EPIC-9 – Release management automation | EPIC-13 – US-13.2 Summary + Finance views<br>EPIC-13 – US-13.3 Settings + diagnostics | EPIC-13 – US-13.1 Recording + chunk uploader (Kotlin client)<br>EPIC-13 – full Android Kotlin client integration | EPIC-1 .. EPIC-6 stories<br>EPIC-11 US-11.1..US-11.4<br>EPIC-12 US-12.1..US-12.3 |
+| EPIC-10 – LangGraph DAG + Redis streams<br>EPIC-8 – Automations & notifications backlog<br>EPIC-9 – Release management automation | EPIC-13 – US-13.2 Summary + Finance views<br>EPIC-13 – US-13.3 Settings + diagnostics | EPIC-13 – US-13.1 Recording + chunk uploader (Kotlin client)<br>EPIC-13 – full Android Kotlin client integration | EPIC-1 .. EPIC-6 stories<br>EPIC-11 US-11.1..US-11.4<br>EPIC-12 US-12.1..US-12.3<br>EPIC-13 – US-13.CI Terraform apply + health gates<br>EPIC-13 – US-13.4 Android CI build pipeline |
 
 ### Epic Tracker
 
@@ -119,7 +119,10 @@
 - **US-13.2 – Summary & Finance Views** — Next (summary fetch, category totals chart, offline/refresh states using Compose/MPAndroidChart). 
 - **US-13.3 – Settings & Key Storage** — Next (EncryptedSharedPreferences server URL + API key, diagnostics ping `/healthz`, persistent config survives restarts).
 - **US-13.CI – Terraform apply + remote deploy health gates** — ✅ `terraform_apply` now runs pytest + Terraform against DO via secrets, `deploy_app` syncs `/opt/daymind` through `scripts/remote_deploy.sh`, and `verify_services` enforces Redis/API/Fava health plus `/healthz` + `/metrics`.
+- **US-13.4 – Android CI build pipeline** — ✅ `.github/workflows/android_build.yml` compiles Compose debug + release variants on GitHub-hosted or self-hosted runners, publishes unsigned + optionally signed APKs, and uploads tag artifacts to GitHub Releases.
 > **US-13.1 Acceptance Gates:** Record toggle spins a notification-backed foreground service, chunk WAV files appear in cache, WorkManager auto-uploads queued chunks with metadata (`session_ts`, `device_id`, `sample_rate`, `format`), UI surfaces pending chunk count + last upload result and exposes “Retry uploads” for auth lockouts, HTTP 401/403 pauses the queue without deleting files, `/v1/transcribe` requests include `X-API-Key` + multipart `file=@chunk.wav`, CI builds/publishes `app-debug.apk`, and no real secrets are committed (keys supplied via `local.properties` or EncryptedSharedPreferences).
+> **US-13.CI Acceptance Gates:** `terraform_apply` must init/validate/apply Terraform via repo secrets while uploading `terraform.tfstate`, `deploy_app` must invoke `scripts/remote_deploy.sh` for an idempotent `/opt/daymind` sync + service restart, and `verify_services` must run the Redis/API/Fava healthcheck script plus `/healthz` + `/metrics` curls before succeeding.
+> **US-13.4 Acceptance Gates:** `android_build.yml` exposes `workflow_dispatch` inputs (`build_type`, `runner`, `ref`), `build_gh` (ubuntu-latest) and `build_self` (self-hosted) jobs assemble debug/release variants per input, artifacts (`daymind-android-*`) upload for every run, optional signing secrets emit `app-release-signed.apk`, and tag pushes attach all generated APKs to the corresponding GitHub Release.
 > **Epic Acceptance Gates:** Kotlin app uploads chunks with exponential retry, summary and finance tabs render real data with errors handled, stored credentials survive reboots, health indicator toggles based on `/healthz` response, and the CI pipeline (`terraform_apply → deploy_app → verify_services`) must pass to certify infra, deploy, and healthcheck steps.
 
 ### Operational Gates
