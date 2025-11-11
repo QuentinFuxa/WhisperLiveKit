@@ -139,3 +139,13 @@ build/
 *.jar
 local.properties
 mobile/android/daymind/.idea/
+# Android/Gradle build artifacts
+.gradle/
+.idea/
+**/build/
+**/.gradle/
+**/.idea/
+*.apk
+*.zip
+*.jar
+local.properties
