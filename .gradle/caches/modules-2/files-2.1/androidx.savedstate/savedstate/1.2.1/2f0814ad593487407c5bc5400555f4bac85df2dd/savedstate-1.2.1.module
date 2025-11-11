@@ -1,0 +1,151 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.savedstate",
+    "module": "savedstate",
+    "version": "1.2.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.0"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.10"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.savedstate",
+          "module": "savedstate-ktx",
+          "version": {
+            "requires": "1.2.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "savedstate-1.2.1.aar",
+          "url": "savedstate-1.2.1.aar",
+          "size": 20217,
+          "sha512": "847b0d39c56189b5ce459ac9408c9b24671917c2fe1529fc3e4e6b152d905d46fab39f98f4bc8cc654f162565b156895b8aae85442f0165418f236e3fb856b02",
+          "sha256": "21a7d4bcf6bdb94ad7b9283801529300b4fbb8808ca4f191e0cdce6fd8e4705a",
+          "sha1": "e364fc9dec32aa569d855f85864e50250318a093",
+          "md5": "86008fd3502c84e4343f040ea929c52a"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "androidx.arch.core",
+          "module": "core-common",
+          "version": {
+            "requires": "2.1.0"
+          }
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common",
+          "version": {
+            "requires": "2.6.1"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.10"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.savedstate",
+          "module": "savedstate-ktx",
+          "version": {
+            "requires": "1.2.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "savedstate-1.2.1.aar",
+          "url": "savedstate-1.2.1.aar",
+          "size": 20217,
+          "sha512": "847b0d39c56189b5ce459ac9408c9b24671917c2fe1529fc3e4e6b152d905d46fab39f98f4bc8cc654f162565b156895b8aae85442f0165418f236e3fb856b02",
+          "sha256": "21a7d4bcf6bdb94ad7b9283801529300b4fbb8808ca4f191e0cdce6fd8e4705a",
+          "sha1": "e364fc9dec32aa569d855f85864e50250318a093",
+          "md5": "86008fd3502c84e4343f040ea929c52a"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.savedstate",
+          "module": "savedstate-ktx",
+          "version": {
+            "requires": "1.2.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "savedstate-1.2.1-sources.jar",
+          "url": "savedstate-1.2.1-sources.jar",
+          "size": 8863,
+          "sha512": "e7fd1822fa56aaf70c1e5479a13214f2dc3aab87b73a69f961f839973b2ba71a53930a37147d86017cf9c4b2613caf539a4d39a1b269817b5e8b280a089330fb",
+          "sha256": "fd201fb9ea2d3e66262cb09bf1e33cbbe41050fcfcb96c9ce197f1780b614a73",
+          "sha1": "58d4c9fd35e826d3bce813974006451ee9ba4344",
+          "md5": "5ea0a7491fd6532e1dfee96c19fd73cc"
+        }
+      ]
+    }
+  ]
+}

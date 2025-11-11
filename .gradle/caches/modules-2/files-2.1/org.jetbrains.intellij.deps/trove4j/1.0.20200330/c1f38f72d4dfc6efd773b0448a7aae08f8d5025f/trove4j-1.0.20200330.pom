@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.jetbrains.intellij.deps</groupId>
+  <artifactId>trove4j</artifactId>
+  <version>1.0.20200330</version>
+  <name>Trove4J</name>
+  <description>Fork of trove4j library used in IntelliJ Platform.</description>
+  <url>https://github.com/JetBrains/intellij-deps-trove4j</url>
+  <scm>
+    <url>https://github.com/JetBrains/intellij-deps-trove4j</url>
+    <connection>scm:git:git://github.com/JetBrains/intellij-deps-trove4j.git</connection>
+    <developerConnection>scm:git:ssh://github.com:JetBrains/intellij-deps-trove4j.git</developerConnection>
+  </scm>
+  <licenses>
+    <license>
+      <name>GNU LESSER GENERAL PUBLIC LICENSE 2.1</name>
+      <url>https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>JetBrains</id>
+      <name>JetBrains Team</name>
+      <organization>JetBrains</organization>
+      <organizationUrl>https://www.jetbrains.com</organizationUrl>
+    </developer>
+  </developers>
+</project>

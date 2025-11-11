@@ -1,0 +1,8 @@
+okhttp3.logging.HttpLoggingInterceptor
+okhttp3.logging.HttpLoggingInterceptor$Level
+okhttp3.logging.HttpLoggingInterceptor$Logger
+okhttp3.logging.HttpLoggingInterceptor$Logger$Companion
+okhttp3.logging.HttpLoggingInterceptor$Logger$Companion$DefaultLogger
+okhttp3.logging.LoggingEventListener
+okhttp3.logging.LoggingEventListener$Factory
+okhttp3.logging.Utf8Kt

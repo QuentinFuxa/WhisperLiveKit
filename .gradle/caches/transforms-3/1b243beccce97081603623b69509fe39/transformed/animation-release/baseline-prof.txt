@@ -1,0 +1,18 @@
+# Baseline profile rules for androidx.compose.animation
+# =============================================
+HSPLandroidx/compose/animation/AndroidFlingSpline**;->**(**)**
+HSPLandroidx/compose/animation/AnimatedVisibilityKt**->**(**)**
+HSPLandroidx/compose/animation/AnimatedVisibilityScope;-><init>(**)V
+HSPLandroidx/compose/animation/ChangeSize;->**(**)**
+HSPLandroidx/compose/animation/ColorVectorConverterKt**->**(**)**
+HSPLandroidx/compose/animation/CrossfadeAnimationItem;->**(**)**
+HSPLandroidx/compose/animation/CrossfadeKt**->**(**)**
+HSPLandroidx/compose/animation/EnterExitTransitionKt;->**(**)**
+HSPLandroidx/compose/animation/FlingCalculator**;->**(**)**
+HSPLandroidx/compose/animation/SingleValueAnimationKt;->**(**)**
+HSPLandroidx/compose/animation/SplineBasedFloatDecayAnimationSpec**->**(**)**
+HSPLandroidx/compose/animation/SplineBasedDecayKt;->**(**)**
+HSPLandroidx/compose/animation/TransitionData;->**(**)**
+
+# Include all of androidx.compose.animation
+Landroidx/compose/animation/*;

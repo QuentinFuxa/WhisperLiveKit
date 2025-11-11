@@ -1,0 +1,4 @@
+androidx.localbroadcastmanager.content.LocalBroadcastManager
+androidx.localbroadcastmanager.content.LocalBroadcastManager$1
+androidx.localbroadcastmanager.content.LocalBroadcastManager$BroadcastRecord
+androidx.localbroadcastmanager.content.LocalBroadcastManager$ReceiverRecord

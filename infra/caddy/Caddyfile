@@ -1,0 +1,22 @@
+# Caddy reverse proxy for DayMind (API + Fava)
+
+{$DAYMIND_DOMAIN} {
+    encode gzip zstd
+    log
+
+    route /v1/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    route /finance* {
+        reverse_proxy 127.0.0.1:5000
+    }
+
+    route /healthz {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8000
+    }
+}

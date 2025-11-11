@@ -1,0 +1,15 @@
+androidx.versionedparcelable.CustomVersionedParcelable
+androidx.versionedparcelable.NonParcelField
+androidx.versionedparcelable.ParcelField
+androidx.versionedparcelable.ParcelImpl
+androidx.versionedparcelable.ParcelImpl$1
+androidx.versionedparcelable.ParcelUtils
+androidx.versionedparcelable.VersionedParcel
+androidx.versionedparcelable.VersionedParcel$1
+androidx.versionedparcelable.VersionedParcel$ParcelException
+androidx.versionedparcelable.VersionedParcelParcel
+androidx.versionedparcelable.VersionedParcelStream
+androidx.versionedparcelable.VersionedParcelStream$1
+androidx.versionedparcelable.VersionedParcelStream$FieldBuffer
+androidx.versionedparcelable.VersionedParcelable
+androidx.versionedparcelable.VersionedParcelize

@@ -1,0 +1,5 @@
+androidx.arch.core.executor.ArchTaskExecutor
+androidx.arch.core.executor.DefaultTaskExecutor
+androidx.arch.core.executor.DefaultTaskExecutor$1
+androidx.arch.core.executor.DefaultTaskExecutor$Api28Impl
+androidx.arch.core.executor.TaskExecutor

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DayMind – Always-on Speech Memory</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>DayMind</h1>
+      <p>Text-first, privacy-aware speech memory for your life and business.</p>
+      <nav>
+        <a href="index.html">Product</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="docs.html">Docs</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <h2>Capture. Understand. Act.</h2>
+      <p>
+        Real-time Whisper STT → GPT structuring → finance, memory, and automation
+        feeds. Ship it as SaaS or self-host on a single droplet.
+      </p>
+      <a class="cta" href="docs.html">View API Docs</a>
+    </section>
+
+    <section class="grid">
+      <article>
+        <h3>Text-First Storage</h3>
+        <p>
+          Every transcript, GPT insight, and ledger entry is persisted as JSONL for
+          instant auditing, replay, and agent collaboration.
+        </p>
+      </article>
+      <article>
+        <h3>Finance Ready</h3>
+        <p>
+          Built-in Beancount/Fava pipeline plus `/v1/finance` API for totals and
+          dashboards.
+        </p>
+      </article>
+      <article>
+        <h3>Commercial Controls</h3>
+        <p>
+          API keys with usage tracking, per-key rate limits, and optional billing
+          hooks (Stripe/Paddle-ready stubs).
+        </p>
+      </article>
+    </section>
+
+    <footer>
+      <p>© {{year}} DayMind. MIT core license. External dependencies retain their licenses.</p>
+    </footer>
+    <script>
+      document.querySelector("footer p").innerHTML = `© ${new Date().getFullYear()} DayMind. MIT core license.`;
+    </script>
+  </body>
+</html>

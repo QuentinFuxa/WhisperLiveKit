@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from src.api.deps.auth import reset_auth_service_cache
+
 
 @pytest.fixture()
 def api_client(tmp_path, monkeypatch):
@@ -16,12 +18,16 @@ def api_client(tmp_path, monkeypatch):
     from src.api.app import create_app
 
     get_settings.cache_clear()  # type: ignore
+    reset_auth_service_cache()
     settings = APISettings(
         api_keys=["test-key"],
+        api_key_store_path=str(tmp_path / "keys.json"),
         transcript_path=str(transcripts),
         ledger_path=str(ledger),
         summary_dir=str(summary_dir),
         data_dir=str(tmp_path),
+        api_rate_limit_per_minute=120,
+        ip_rate_limit_per_minute=0,
     )
 
     app = create_app()
@@ -45,7 +51,10 @@ def test_health_ok(api_client):
     client, *_ = api_client
     resp = client.get("/healthz", headers=_auth_headers())
     assert resp.status_code == 200
-    assert resp.json()["ok"] is True
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["openai"] == "skip"
+    assert "tls" in body
 
 
 def test_ingest_transcript_appends(api_client):
@@ -102,3 +111,49 @@ def test_metrics_secured(api_client):
     resp = client.get("/metrics", headers=_auth_headers())
     assert resp.status_code == 200
     assert "api_requests_total" in resp.text
+
+
+def test_usage_endpoint(api_client):
+    client, *_ = api_client
+    resp = client.get("/v1/usage", headers=_auth_headers())
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["usage_count"] >= 1
+
+
+def test_welcome_public(api_client):
+    client, *_ = api_client
+    resp = client.get("/welcome")
+    assert resp.status_code == 200
+    assert "docs" in resp.json()
+
+
+def test_rate_limit_enforced(tmp_path):
+    transcripts = tmp_path / "transcripts.jsonl"
+    ledger = tmp_path / "ledger.jsonl"
+    summary_dir = tmp_path
+
+    from src.api.settings import APISettings, get_settings
+    from src.api.app import create_app
+
+    get_settings.cache_clear()  # type: ignore
+    reset_auth_service_cache()
+    settings = APISettings(
+        api_keys=["test-key"],
+        api_key_store_path=str(tmp_path / "keys.json"),
+        transcript_path=str(transcripts),
+        ledger_path=str(ledger),
+        summary_dir=str(summary_dir),
+        data_dir=str(tmp_path),
+        api_rate_limit_per_minute=1,
+        ip_rate_limit_per_minute=0,
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_settings] = lambda: settings
+    client = TestClient(app)
+    headers = {"X-API-Key": "test-key"}
+
+    assert client.get("/healthz", headers=headers).status_code == 200
+    resp = client.get("/healthz", headers=headers)
+    assert resp.status_code == 429

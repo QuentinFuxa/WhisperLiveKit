@@ -1,0 +1,117 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.security",
+    "module": "security-crypto",
+    "version": "1.1.0-alpha06",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.0"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.1.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "security-crypto-1.1.0-alpha06.aar",
+          "url": "security-crypto-1.1.0-alpha06.aar",
+          "size": 32306,
+          "sha512": "e9a2a654ef4e52f611943b7833b4b3382a5589f3126b203235853133dfcf39fd070ac92573d3ab4ae3f4e97af5454ff9c35bcacbc616551386672e8ab7ce1fa6",
+          "sha256": "976111170b3f13d2f0f9457d9f9f579347143cb65c054265906d33c7618a4c2a",
+          "sha1": "d23f6c36fbbeea99668bf077e14184bb2d4fc7d1",
+          "md5": "50e4979c235918c4e2fb0e1de1f53a1d"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.2.0"
+          }
+        },
+        {
+          "group": "androidx.collection",
+          "module": "collection",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "com.google.crypto.tink",
+          "module": "tink-android",
+          "version": {
+            "requires": "1.8.0"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "security-crypto-1.1.0-alpha06.aar",
+          "url": "security-crypto-1.1.0-alpha06.aar",
+          "size": 32306,
+          "sha512": "e9a2a654ef4e52f611943b7833b4b3382a5589f3126b203235853133dfcf39fd070ac92573d3ab4ae3f4e97af5454ff9c35bcacbc616551386672e8ab7ce1fa6",
+          "sha256": "976111170b3f13d2f0f9457d9f9f579347143cb65c054265906d33c7618a4c2a",
+          "sha1": "d23f6c36fbbeea99668bf077e14184bb2d4fc7d1",
+          "md5": "50e4979c235918c4e2fb0e1de1f53a1d"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "security-crypto-1.1.0-alpha06-sources.jar",
+          "url": "security-crypto-1.1.0-alpha06-sources.jar",
+          "size": 15787,
+          "sha512": "5bddd02ae4cb4c75cd7f7bc6a9466dfdcc93c41a72a450830998bfbec4d4a86fbce785be507cf87c13c752d1a76e8185c84133d044cd66d1b597af959a8c5b46",
+          "sha256": "c3c3c296d0a64b48b0f89d9b9305499fc78db99e97b7a5ace2a21f76d36f8a44",
+          "sha1": "9bd8e29776fba2c0113183619f0bd2ca4804716b",
+          "md5": "853128d6eb71743f211657c90c490ac7"
+        }
+      ]
+    }
+  ]
+}

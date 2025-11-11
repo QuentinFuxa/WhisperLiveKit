@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string msgid="2988463736136100848" name="m3c_bottom_sheet_collapse_description">"దిగువున ఉన్న షీట్‌ను కుదిస్తుంది"</string>
+    <string msgid="1555567894577437024" name="m3c_bottom_sheet_dismiss_description">"దిగువున ఉన్న షీట్‌ను విస్మరిస్తుంది"</string>
+    <string msgid="8403354765404029791" name="m3c_bottom_sheet_drag_handle_description">"లాగే హ్యాండిల్"</string>
+    <string msgid="6670819569745899763" name="m3c_bottom_sheet_expand_description">"దిగువున ఉన్న షీట్‌ను విస్తరిస్తుంది"</string>
+    <string msgid="3010635850035863127" name="m3c_bottom_sheet_pane_title">"దిగువున ఉన్న షీట్"</string>
+    <string msgid="8166741421776570875" name="m3c_date_input_headline">"ఎంటర్ చేసిన తేదీ"</string>
+    <string msgid="229313757840775812" name="m3c_date_input_headline_description">"ఎంటర్ చేసిన తేదీ: %1$s"</string>
+    <string msgid="6116910750161463197" name="m3c_date_input_invalid_for_pattern">"తేదీ, ఉండాల్సిన ఫార్మాట్‌తో మ్యాచ్ కాలేదు: %1$s"</string>
+    <string msgid="2521768508935305279" name="m3c_date_input_invalid_not_allowed">"చెల్లని తేదీ: %1$s"</string>
+    <string msgid="7052898923934555305" name="m3c_date_input_invalid_year_range">"ఉండాల్సిన సంవత్సరాల పరిధి %1$s - %2$s‌లో తేదీ లేదు"</string>
+    <string msgid="2895559812010326913" name="m3c_date_input_label">"తేదీ"</string>
+    <string msgid="1237013946323089826" name="m3c_date_input_no_input_description">"ఏదీ లేదు"</string>
+    <string msgid="7306227249789210568" name="m3c_date_input_title">"తేదీని ఎంచుకోండి"</string>
+    <string msgid="7605002211875882969" name="m3c_date_picker_headline">"ఎంచుకున్న తేదీ"</string>
+    <string msgid="3664277305226978227" name="m3c_date_picker_headline_description">"ప్రస్తుత ఎంపిక: %1$s"</string>
+    <string msgid="8436650776581492840" name="m3c_date_picker_navigate_to_year_description">"%1$s సంవత్సరానికి వెళ్లండి"</string>
+    <string msgid="5811000998184572395" name="m3c_date_picker_no_selection_description">"ఏదీ లేదు"</string>
+    <string msgid="7813882352367152251" name="m3c_date_picker_scroll_to_earlier_years">"మునుపటి సంవత్సరాల డేటాను చూడటానికి స్క్రోల్ చేయండి"</string>
+    <string msgid="5727367015496556177" name="m3c_date_picker_scroll_to_later_years">"తర్వాతి సంవత్సరాల డేటాను చూడటానికి స్క్రోల్ చేయండి"</string>
+    <string msgid="1804346892470238807" name="m3c_date_picker_switch_to_calendar_mode">"క్యాలెండర్ ఇన్‌పుట్ మోడ్‌కు మారండి"</string>
+    <string msgid="395627960681594326" name="m3c_date_picker_switch_to_day_selection">"సంవత్సరాన్ని ఎంచుకోవడానికి స్వైప్ చేయండి, లేదా తిరిగి రోజును ఎంచుకునేందుకు మారడానికి ట్యాప్ చేయండి"</string>
+    <string msgid="2219746470065162704" name="m3c_date_picker_switch_to_input_mode">"టెక్స్ట్ ఇన్‌పుట్ మోడ్‌కు మారండి"</string>
+    <string msgid="7142101321095356500" name="m3c_date_picker_switch_to_next_month">"వచ్చే నెలకు మార్చండి"</string>
+    <string msgid="228438865139394590" name="m3c_date_picker_switch_to_previous_month">"మునుపటి నెలకు మార్చండి"</string>
+    <string msgid="791651718641787594" name="m3c_date_picker_switch_to_year_selection">"సంవత్సరాన్ని ఎంచుకునే ఆప్షన్‌కు మారండి"</string>
+    <string msgid="7430790972741451689" name="m3c_date_picker_title">"తేదీని ఎంచుకోండి"</string>
+    <string msgid="3199387177749801575" name="m3c_date_picker_today_description">"నేడు"</string>
+    <string msgid="2068382232816991922" name="m3c_date_picker_year_picker_pane_title">"సంవత్సరం పికర్ కనిపిస్తుంది"</string>
+    <string msgid="3190049423327661366" name="m3c_date_range_input_invalid_range_input">"తేదీల పరిధి ఇన్‌పుట్ చెల్లదు"</string>
+    <string msgid="3148384720560189467" name="m3c_date_range_input_title">"తేదీలను ఎంటర్ చేయండి"</string>
+    <string msgid="2138321128465719402" name="m3c_date_range_picker_day_in_range">"పరిధిలో ఉంది"</string>
+    <string msgid="4947636797751277713" name="m3c_date_range_picker_end_headline">"ముగింపు తేదీ"</string>
+    <string msgid="602077859540990149" name="m3c_date_range_picker_scroll_to_next_month">"వచ్చే నెల డేటాను చూడటానికి స్క్రోల్ చేయండి"</string>
+    <string msgid="4592174524846109496" name="m3c_date_range_picker_scroll_to_previous_month">"మునుపటి నెల డేటాను చూడటానికి స్క్రోల్ చేయండి"</string>
+    <string msgid="4665981448952749820" name="m3c_date_range_picker_start_headline">"ప్రారంభ తేదీ"</string>
+    <string msgid="3134165431120340385" name="m3c_date_range_picker_title">"తేదీలను ఎంచుకోండి"</string>
+    <string msgid="7617233117134790350" name="m3c_dialog">"డైలాగ్"</string>
+    <string msgid="3177828188723359358" name="m3c_dropdown_menu_collapsed">"కుదించబడింది"</string>
+    <string msgid="2360841780724299882" name="m3c_dropdown_menu_expanded">"విస్తరించబడింది"</string>
+    <string msgid="6152806324422087846" name="m3c_search_bar_search">"సెర్చ్ చేయండి"</string>
+    <string msgid="6152755701819882931" name="m3c_snackbar_dismiss">"విస్మరించండి"</string>
+    <string msgid="7655536806087401899" name="m3c_suggestions_available">"సూచనలు దిగువున ఉన్నాయి"</string>
+    <string msgid="2786685010796619560" name="m3c_time_picker_am">"AM"</string>
+    <string msgid="2349193472625211372" name="m3c_time_picker_hour">"గంట"</string>
+    <string msgid="9179527532316922345" name="m3c_time_picker_hour_24h_suffix">"%1$d గంటలు"</string>
+    <string msgid="8876759303332837035" name="m3c_time_picker_hour_selection">"గంటలను ఎంచుకోవడానికి వీలు కల్పిస్తుంది"</string>
+    <string msgid="3458167507790628988" name="m3c_time_picker_hour_suffix">"%1$d గం"</string>
+    <string msgid="6973808109666874069" name="m3c_time_picker_hour_text_field">"గంటలను ఎంచుకోవడం కోసం"</string>
+    <string msgid="4313071914266462005" name="m3c_time_picker_minute">"నిమిషం"</string>
+    <string msgid="4699133535056739733" name="m3c_time_picker_minute_selection">"నిమిషాలను ఎంచుకోండి"</string>
+    <string msgid="5064177921781937179" name="m3c_time_picker_minute_suffix">"%1$d నిమిషాలు"</string>
+    <string msgid="7661234488295443182" name="m3c_time_picker_minute_text_field">"నిమిషాలను ఎంచుకోవడం కోసం"</string>
+    <string msgid="5865171949528594571" name="m3c_time_picker_period_toggle_description">"AM లేదా PMను ఎంచుకోండి"</string>
+    <string msgid="6616362054113087709" name="m3c_time_picker_pm">"PM"</string>
+    <string msgid="1805687647081129904" name="m3c_tooltip_long_press_label">"టూల్‌టిప్‌ను చూడండి"</string>
+    <string msgid="5460405025248574620" name="m3c_tooltip_pane_description">"టూల్‌టిప్"</string>
+</resources>

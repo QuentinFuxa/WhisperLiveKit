@@ -1,0 +1,309 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.compose.material",
+    "module": "material-ripple",
+    "version": "1.6.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.4"
+    }
+  },
+  "variants": [
+    {
+      "name": "androidxSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "androidx-multiplatform-docs"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.compose.material",
+          "module": "material",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-core",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-extended",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        }
+      ],
+      "files": [
+        {
+          "name": "material-ripple-1.6.3-multiplatform-sources.jar",
+          "url": "material-ripple-1.6.3-multiplatform-sources.jar",
+          "size": 24937,
+          "sha512": "be67a1a122c4dd79e8568fb7bfa609a4fd7bffd9b666938dbf0d307d0f7b4a0155fb52e5d8f32708ea1d1558348d4dcdb08d0b6098d3e02b82d7fe8908c0dd16",
+          "sha256": "f24110e50e64bb408896a4e40208e18cd10a068487d944686684eb8ae87b4c91",
+          "sha1": "b9252c06312e88ee5d2eb6ce8cf6eff6bf1a7b78",
+          "md5": "3b202c00c97bf5006311a8e8d0b79d35"
+        }
+      ]
+    },
+    {
+      "name": "libraryVersionMetadata",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.usage": "library-version-metadata"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.compose.material",
+          "module": "material",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-core",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-extended",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        }
+      ],
+      "files": [
+        {
+          "name": "apiLevels.json",
+          "url": "material-ripple-1.6.3-versionMetadata.json",
+          "size": 1252,
+          "sha512": "cf14d4dd998e8c7d500543aa036721659d4731d6d413e42b21b064c0cbb042b2e2b14740f52f6e73451847c8318673f3fd77488ae0d75d83b54bfe21f81a967e",
+          "sha256": "686f85015f2b78b6fe2804e32dc60c96d810519be1dcaa3d5cfe2d5c22c8da01",
+          "sha1": "cf1f4173342f8ad96fc2fa5d84f831c734a2624b",
+          "md5": "87d0928ae8f27008e7b6cbdf70f51fec"
+        }
+      ]
+    },
+    {
+      "name": "metadataApiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.compose.foundation",
+          "module": "foundation",
+          "version": {
+            "requires": "1.6.3"
+          }
+        },
+        {
+          "group": "androidx.compose.runtime",
+          "module": "runtime",
+          "version": {
+            "requires": "1.6.3"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.compose.material",
+          "module": "material",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-core",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-extended",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        }
+      ],
+      "files": [
+        {
+          "name": "material-ripple-metadata-1.6.3.jar",
+          "url": "material-ripple-1.6.3.jar",
+          "size": 738,
+          "sha512": "b88adab5159fc7ae006e7b5b9662f5edecd6e92e22954f6ae2d0838c5bece7e7a57bcbb07b3fba63493b74038450c440de9196aab93b893338600fb9bb953c3b",
+          "sha256": "3018ecf7ef0302f1c2492e4c627ae36b763167779b4595fa89331553f5b0c51a",
+          "sha1": "ea4753f9abbd0c3933fe6e0a63e312bf5ee4ce53",
+          "md5": "ab7a0bc48ccce06f8cfe54c6eda193ae"
+        }
+      ]
+    },
+    {
+      "name": "metadataSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.compose.material",
+          "module": "material",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-core",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        },
+        {
+          "group": "androidx.compose.material",
+          "module": "material-icons-extended",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "material-ripple is in atomic group androidx.compose.material"
+        }
+      ],
+      "files": [
+        {
+          "name": "material-ripple-kotlin-1.6.3-sources.jar",
+          "url": "material-ripple-1.6.3-sources.jar",
+          "size": 11125,
+          "sha512": "4cd3bd92c863624c265ec27cd25b057667f48d60ed90e890ef6017f19988a5c142f9969f80d11f3c58e416229cd9c7f6aadad37dcd657c9cfe540c3aa503a7b8",
+          "sha256": "7cffb1d0c854c397d25e83286b1c890b4cc3f74bfc8b6afc1cb8e643882799cf",
+          "sha1": "c49881f17d7c608237037c74e83d76f309c318cb",
+          "md5": "dbf4ef746159c425ba19de0fc74d216a"
+        }
+      ]
+    },
+    {
+      "name": "releaseApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../material-ripple-android/1.6.3/material-ripple-android-1.6.3.module",
+        "group": "androidx.compose.material",
+        "module": "material-ripple-android",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "releaseRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../material-ripple-android/1.6.3/material-ripple-android-1.6.3.module",
+        "group": "androidx.compose.material",
+        "module": "material-ripple-android",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "releaseSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "fake-sources",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../material-ripple-android/1.6.3/material-ripple-android-1.6.3.module",
+        "group": "androidx.compose.material",
+        "module": "material-ripple-android",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "desktopApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../material-ripple-desktop/1.6.3/material-ripple-desktop-1.6.3.module",
+        "group": "androidx.compose.material",
+        "module": "material-ripple-desktop",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "desktopRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../material-ripple-desktop/1.6.3/material-ripple-desktop-1.6.3.module",
+        "group": "androidx.compose.material",
+        "module": "material-ripple-desktop",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "desktopSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../material-ripple-desktop/1.6.3/material-ripple-desktop-1.6.3.module",
+        "group": "androidx.compose.material",
+        "module": "material-ripple-desktop",
+        "version": "1.6.3"
+      }
+    }
+  ]
+}

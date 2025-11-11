@@ -1,0 +1,94 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.customview",
+    "module": "customview-poolingcontainer",
+    "version": "1.0.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "7.5-20220518001855+0000"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "customview-poolingcontainer-1.0.0.aar",
+          "url": "customview-poolingcontainer-1.0.0.aar",
+          "size": 6608,
+          "sha512": "0a78a23a59904fd8bc17f7c5c9aa7adae344cb54bb7b9c7931fe09f0e62240a682f8ad22f7edf709027e7a7a3a73f5e15461a3f822827094d4b43449c60cc87d",
+          "sha256": "3584102fc49bf399c56e3b7be4bfe12000c46112320cd8cf85cc0a8f93f3e752",
+          "sha1": "0579fc832cf0e5be08d8d9571850b50d22d9de3c",
+          "md5": "0f95ae5b0d7d1f4e36b08dd8bca03077"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.core",
+          "module": "core-ktx",
+          "version": {
+            "requires": "1.5.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.6.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "customview-poolingcontainer-1.0.0.aar",
+          "url": "customview-poolingcontainer-1.0.0.aar",
+          "size": 6608,
+          "sha512": "0a78a23a59904fd8bc17f7c5c9aa7adae344cb54bb7b9c7931fe09f0e62240a682f8ad22f7edf709027e7a7a3a73f5e15461a3f822827094d4b43449c60cc87d",
+          "sha256": "3584102fc49bf399c56e3b7be4bfe12000c46112320cd8cf85cc0a8f93f3e752",
+          "sha1": "0579fc832cf0e5be08d8d9571850b50d22d9de3c",
+          "md5": "0f95ae5b0d7d1f4e36b08dd8bca03077"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "customview-poolingcontainer-1.0.0-sources.jar",
+          "url": "customview-poolingcontainer-1.0.0-sources.jar",
+          "size": 2651,
+          "sha512": "ea38897b7e2f7b732ac334970608ffff4597cf43bd2d152366f7929241f3dfc8647deba31244b806482daa58e29a566d9046a1fed588d95b405f7099b28ef620",
+          "sha256": "0715571baa86e8f7683fcc1d59fe2881c5e8603af9ff212c82423ae098d34c62",
+          "sha1": "5e65119797aba752f003a6d3cf2ea9bdee6aac7d",
+          "md5": "6033e33d5159663a11e34b1fe86e2e8b"
+        }
+      ]
+    }
+  ]
+}

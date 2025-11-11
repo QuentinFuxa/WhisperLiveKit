@@ -1,0 +1,613 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.compose.ui",
+    "module": "ui-util",
+    "version": "1.6.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.4"
+    }
+  },
+  "variants": [
+    {
+      "name": "androidxSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "androidx-multiplatform-docs"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-geometry",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-graphics",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test-junit4",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test-manifest",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-text",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-text-google-fonts",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling-data",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling-preview",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-unit",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-viewbinding",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        }
+      ],
+      "files": [
+        {
+          "name": "ui-util-1.6.3-multiplatform-sources.jar",
+          "url": "ui-util-1.6.3-multiplatform-sources.jar",
+          "size": 11352,
+          "sha512": "bf4ab43f948ac0085c8424bba1c253743ee1a79bf6ed802be4f0eb30d1e48d756a0c1ea72945dc4f00c3de6675d2172365509cb1a47a19fe0d6facd7090ead92",
+          "sha256": "55464084cb2629319f40fcd03148ea670d98d2d83d7dc75bf0b8eb006f3e6a6c",
+          "sha1": "21ab8297d910fb35aa21d7d5e4c9e7e13d2fe16c",
+          "md5": "a971dd8471963cdf54a01998c617aaa3"
+        }
+      ]
+    },
+    {
+      "name": "libraryVersionMetadata",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.usage": "library-version-metadata"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-geometry",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-graphics",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test-junit4",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test-manifest",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-text",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-text-google-fonts",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling-data",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling-preview",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-unit",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-viewbinding",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        }
+      ],
+      "files": [
+        {
+          "name": "apiLevels.json",
+          "url": "ui-util-1.6.3-versionMetadata.json",
+          "size": 5035,
+          "sha512": "447359dc142620439449127ec3a826152ce37d058fa1c525d8c625a2b8460113391d899594e5164146ae3fe8aae1ebbc1d7b4b75347ce187c5c0df8f778e3dbb",
+          "sha256": "fcc43fe2261cb57f8e2a34fc3ee5dd8458c4b2540dacce1c9829c57d1da5b807",
+          "sha1": "d73dc8b22ae38c53cca9760287f6b21200f66daa",
+          "md5": "cb61419cdf6045c1f3ff3530905b7b0d"
+        }
+      ]
+    },
+    {
+      "name": "metadataApiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-geometry",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-graphics",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test-junit4",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test-manifest",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-text",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-text-google-fonts",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling-data",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling-preview",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-unit",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-viewbinding",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        }
+      ],
+      "files": [
+        {
+          "name": "ui-util-metadata-1.6.3.jar",
+          "url": "ui-util-1.6.3.jar",
+          "size": 686,
+          "sha512": "3670896f9db064a294104884c88b87c16a74bda01b7d4a27a9a57e66098e0ecaafc2df156b820030fc3b03a8d1600116006377fd3efc0f5ee41a1aefd784545e",
+          "sha256": "00421ed4ed83f8b1ef2a22434a6c7102bb08e16b2cc4acfda503da9ddc213e91",
+          "sha1": "62eb93f6962892bbee14e30bae1deef051d38845",
+          "md5": "2569cf553a2f2e71a0c5ea1c5d7a87e2"
+        }
+      ]
+    },
+    {
+      "name": "metadataSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-geometry",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-graphics",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test-junit4",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-test-manifest",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-text",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-text-google-fonts",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling-data",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-tooling-preview",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-unit",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        },
+        {
+          "group": "androidx.compose.ui",
+          "module": "ui-viewbinding",
+          "version": {
+            "requires": "1.6.3"
+          },
+          "reason": "ui-util is in atomic group androidx.compose.ui"
+        }
+      ],
+      "files": [
+        {
+          "name": "ui-util-kotlin-1.6.3-sources.jar",
+          "url": "ui-util-1.6.3-sources.jar",
+          "size": 8328,
+          "sha512": "132c34c49818b456fe639b55ed855ab6e2c3974591fca174267ff24cf67a7eb487bc7d7b8c63623e94e058128b3d33ab4ff1739227b964faa890c725f6361211",
+          "sha256": "0d4eccf535752be2caed7e121e51115a4c9a8297737b9c6cc6ad8ac49f07ce0c",
+          "sha1": "9fe454eefe8e85fe5150999a4986855328e51347",
+          "md5": "322c2c114780cd705922bdfbf62fb6db"
+        }
+      ]
+    },
+    {
+      "name": "releaseApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../ui-util-android/1.6.3/ui-util-android-1.6.3.module",
+        "group": "androidx.compose.ui",
+        "module": "ui-util-android",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "releaseRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../ui-util-android/1.6.3/ui-util-android-1.6.3.module",
+        "group": "androidx.compose.ui",
+        "module": "ui-util-android",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "releaseSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "fake-sources",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "androidJvm"
+      },
+      "available-at": {
+        "url": "../../ui-util-android/1.6.3/ui-util-android-1.6.3.module",
+        "group": "androidx.compose.ui",
+        "module": "ui-util-android",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "desktopApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../ui-util-desktop/1.6.3/ui-util-desktop-1.6.3.module",
+        "group": "androidx.compose.ui",
+        "module": "ui-util-desktop",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "desktopRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../ui-util-desktop/1.6.3/ui-util-desktop-1.6.3.module",
+        "group": "androidx.compose.ui",
+        "module": "ui-util-desktop",
+        "version": "1.6.3"
+      }
+    },
+    {
+      "name": "desktopSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../ui-util-desktop/1.6.3/ui-util-desktop-1.6.3.module",
+        "group": "androidx.compose.ui",
+        "module": "ui-util-desktop",
+        "version": "1.6.3"
+      }
+    }
+  ]
+}

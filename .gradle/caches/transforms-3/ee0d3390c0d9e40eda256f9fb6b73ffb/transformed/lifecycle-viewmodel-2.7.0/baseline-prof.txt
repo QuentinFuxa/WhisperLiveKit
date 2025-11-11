@@ -1,0 +1,15 @@
+# Baseline profiles for Lifecycle ViewModel
+
+HSPLandroidx/lifecycle/ViewModel;-><init>()V
+HSPLandroidx/lifecycle/ViewModelLazy;-><init>(Lkotlin/reflect/KClass;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;)V
+HSPLandroidx/lifecycle/ViewModelLazy;->getValue()Landroidx/lifecycle/ViewModel;
+HSPLandroidx/lifecycle/ViewModelLazy;->getValue()Ljava/lang/Object;
+HSPLandroidx/lifecycle/ViewModelProvider;-><init>(Landroidx/lifecycle/ViewModelStore;Landroidx/lifecycle/ViewModelProvider$Factory;)V
+HSPLandroidx/lifecycle/ViewModelProvider;->get(Ljava/lang/Class;)Landroidx/lifecycle/ViewModel;
+HSPLandroidx/lifecycle/ViewModelProvider;->get(Ljava/lang/String;Ljava/lang/Class;)Landroidx/lifecycle/ViewModel;
+HSPLandroidx/lifecycle/ViewModelStore;-><init>()V
+HSPLandroidx/lifecycle/ViewModelStore;->get(Ljava/lang/String;)Landroidx/lifecycle/ViewModel;
+HSPLandroidx/lifecycle/ViewModelStore;->put(Ljava/lang/String;Landroidx/lifecycle/ViewModel;)V
+PLandroidx/lifecycle/ViewModel;->clear()V
+PLandroidx/lifecycle/ViewModel;->onCleared()V
+PLandroidx/lifecycle/ViewModelStore;->clear()V

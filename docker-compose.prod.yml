@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --workers 2
+    ports:
+      - "8000:8000"
+    env_file:
+      - infra/systemd/daymind.env.example
+    volumes:
+      - ./data:/app/data
+      - ./finance:/app/finance
+    depends_on:
+      - redis
+
+  fava:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: python -m src.finance.fava_runner
+    ports:
+      - "5000:5000"
+    env_file:
+      - infra/systemd/daymind.env.example
+    volumes:
+      - ./finance:/app/finance
+      - ./data:/app/data
+    depends_on:
+      - api
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

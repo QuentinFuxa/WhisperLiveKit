@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string msgid="2988463736136100848" name="m3c_bottom_sheet_collapse_description">"Zbaliť dolný hárok"</string>
+    <string msgid="1555567894577437024" name="m3c_bottom_sheet_dismiss_description">"Zavrieť dolný hárok"</string>
+    <string msgid="8403354765404029791" name="m3c_bottom_sheet_drag_handle_description">"Presúvadlo"</string>
+    <string msgid="6670819569745899763" name="m3c_bottom_sheet_expand_description">"Rozbaliť dolný hárok"</string>
+    <string msgid="3010635850035863127" name="m3c_bottom_sheet_pane_title">"Dolný hárok"</string>
+    <string msgid="8166741421776570875" name="m3c_date_input_headline">"Zadaný dátum"</string>
+    <string msgid="229313757840775812" name="m3c_date_input_headline_description">"Zadaný dátum: %1$s"</string>
+    <string msgid="6116910750161463197" name="m3c_date_input_invalid_for_pattern">"Dátum nezodpovedá očakávanému vzoru: %1$s"</string>
+    <string msgid="2521768508935305279" name="m3c_date_input_invalid_not_allowed">"Nepovolený dátum: %1$s"</string>
+    <string msgid="7052898923934555305" name="m3c_date_input_invalid_year_range">"Dátum sa nenachádza v očakávanom rozsahu rokov: %1$s – %2$s"</string>
+    <string msgid="2895559812010326913" name="m3c_date_input_label">"Dátum"</string>
+    <string msgid="1237013946323089826" name="m3c_date_input_no_input_description">"Žiadne"</string>
+    <string msgid="7306227249789210568" name="m3c_date_input_title">"Vybrať dátum"</string>
+    <string msgid="7605002211875882969" name="m3c_date_picker_headline">"Vybraný dátum"</string>
+    <string msgid="3664277305226978227" name="m3c_date_picker_headline_description">"Aktuálny výber: %1$s"</string>
+    <string msgid="8436650776581492840" name="m3c_date_picker_navigate_to_year_description">"Prejsť na rok %1$s"</string>
+    <string msgid="5811000998184572395" name="m3c_date_picker_no_selection_description">"Žiadne"</string>
+    <string msgid="7813882352367152251" name="m3c_date_picker_scroll_to_earlier_years">"Posunutím si zobrazte skoršie roky"</string>
+    <string msgid="5727367015496556177" name="m3c_date_picker_scroll_to_later_years">"Posunutím si zobrazte neskoršie roky"</string>
+    <string msgid="1804346892470238807" name="m3c_date_picker_switch_to_calendar_mode">"Prepnúť na kalendárový režim vstupu"</string>
+    <string msgid="395627960681594326" name="m3c_date_picker_switch_to_day_selection">"Potiahnutím vyberte rok alebo klepnutím prepnite späť na výber dňa"</string>
+    <string msgid="2219746470065162704" name="m3c_date_picker_switch_to_input_mode">"Prepnúť na režim zadávania textu"</string>
+    <string msgid="7142101321095356500" name="m3c_date_picker_switch_to_next_month">"Zmeniť na nasledujúci mesiac"</string>
+    <string msgid="228438865139394590" name="m3c_date_picker_switch_to_previous_month">"Zmeniť na predchádzajúci mesiac"</string>
+    <string msgid="791651718641787594" name="m3c_date_picker_switch_to_year_selection">"Prepnúť na výber roka"</string>
+    <string msgid="7430790972741451689" name="m3c_date_picker_title">"Vybrať dátum"</string>
+    <string msgid="3199387177749801575" name="m3c_date_picker_today_description">"Dnes"</string>
+    <string msgid="2068382232816991922" name="m3c_date_picker_year_picker_pane_title">"Výber roka je viditeľný"</string>
+    <string msgid="3190049423327661366" name="m3c_date_range_input_invalid_range_input">"Neplatné zadané obdobie"</string>
+    <string msgid="3148384720560189467" name="m3c_date_range_input_title">"Zadať dátumy"</string>
+    <string msgid="2138321128465719402" name="m3c_date_range_picker_day_in_range">"V rozsahu"</string>
+    <string msgid="4947636797751277713" name="m3c_date_range_picker_end_headline">"Dátum ukončenia"</string>
+    <string msgid="602077859540990149" name="m3c_date_range_picker_scroll_to_next_month">"Posunutím si zobrazte nasledujúci mesiac"</string>
+    <string msgid="4592174524846109496" name="m3c_date_range_picker_scroll_to_previous_month">"Posunutím si zobrazte predchádzajúci mesiac"</string>
+    <string msgid="4665981448952749820" name="m3c_date_range_picker_start_headline">"Dátum začatia"</string>
+    <string msgid="3134165431120340385" name="m3c_date_range_picker_title">"Vybrať dátumy"</string>
+    <string msgid="7617233117134790350" name="m3c_dialog">"Dialógové okno"</string>
+    <string msgid="3177828188723359358" name="m3c_dropdown_menu_collapsed">"Zbalené"</string>
+    <string msgid="2360841780724299882" name="m3c_dropdown_menu_expanded">"Rozbalené"</string>
+    <string msgid="6152806324422087846" name="m3c_search_bar_search">"Hľadať"</string>
+    <string msgid="6152755701819882931" name="m3c_snackbar_dismiss">"Zavrieť"</string>
+    <string msgid="7655536806087401899" name="m3c_suggestions_available">"Návrhy sú nižšie"</string>
+    <string msgid="2786685010796619560" name="m3c_time_picker_am">"AM"</string>
+    <string msgid="2349193472625211372" name="m3c_time_picker_hour">"Hodina"</string>
+    <string msgid="9179527532316922345" name="m3c_time_picker_hour_24h_suffix">"%1$d h"</string>
+    <string msgid="8876759303332837035" name="m3c_time_picker_hour_selection">"Vybrať hodinu"</string>
+    <string msgid="3458167507790628988" name="m3c_time_picker_hour_suffix">"%1$d h"</string>
+    <string msgid="6973808109666874069" name="m3c_time_picker_hour_text_field">"hodiny"</string>
+    <string msgid="4313071914266462005" name="m3c_time_picker_minute">"Minúty"</string>
+    <string msgid="4699133535056739733" name="m3c_time_picker_minute_selection">"Vybrať minúty"</string>
+    <string msgid="5064177921781937179" name="m3c_time_picker_minute_suffix">"%1$d min"</string>
+    <string msgid="7661234488295443182" name="m3c_time_picker_minute_text_field">"minúty"</string>
+    <string msgid="5865171949528594571" name="m3c_time_picker_period_toggle_description">"Vyberte AM alebo PM"</string>
+    <string msgid="6616362054113087709" name="m3c_time_picker_pm">"PM"</string>
+    <string msgid="1805687647081129904" name="m3c_tooltip_long_press_label">"Zobraziť popis"</string>
+    <string msgid="5460405025248574620" name="m3c_tooltip_pane_description">"Popis"</string>
+</resources>

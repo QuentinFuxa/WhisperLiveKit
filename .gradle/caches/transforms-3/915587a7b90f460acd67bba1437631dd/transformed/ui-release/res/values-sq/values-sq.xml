@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="urn:oasis:names:tc:xliff:document:1.2">
+    <string msgid="406453423630273620" name="close_drawer">"Mbyll menynë e navigimit"</string>
+    <string msgid="7573152094250666567" name="close_sheet">"Mbyll fletën"</string>
+    <string msgid="8038256446254964252" name="default_error_message">"Hyrje e pavlefshme"</string>
+    <string msgid="6312721426453364202" name="default_popup_window_title">"Dritare kërcyese"</string>
+    <string msgid="1890207353314751437" name="dropdown_menu">"Menyja me lëshim poshtë"</string>
+    <string msgid="6827826412747255547" name="in_progress">"Në vazhdim"</string>
+    <string msgid="7933458017204019916" name="indeterminate">"Pjesërisht e shënuar"</string>
+    <string msgid="542007171693138492" name="navigation_menu">"Menyja e navigimit"</string>
+    <string msgid="6610465462668679431" name="not_selected">"Nuk është zgjedhur"</string>
+    <string msgid="875452955155264703" name="off">"Joaktiv"</string>
+    <string msgid="8655164131929253426" name="on">"Aktiv"</string>
+    <string msgid="5941395253238309765" name="range_end">"Fundi i diapazonit"</string>
+    <string msgid="7097486360902471446" name="range_start">"Fillimi i diapazonit"</string>
+    <string msgid="6043586758067023" name="selected">"Zgjedhur"</string>
+    <string msgid="2561197295334830845" name="switch_role">"Ndërro"</string>
+    <string msgid="1672349317127674378" name="tab">"Tab"</string>
+    <string msgid="5946805113151406391" name="template_percent">"<ns1:g id="PERCENTAGE">%1$d</ns1:g> për qind."</string>
+</resources>

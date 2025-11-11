@@ -1,0 +1,2 @@
+int string tooltip_description 0x0
+int string tooltip_label 0x0

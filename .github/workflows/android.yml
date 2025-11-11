@@ -1,0 +1,36 @@
+name: android-client
+
+on:
+  push:
+    paths:
+      - 'mobile/android/daymind/**'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'mobile/android/daymind/**'
+      - '.github/workflows/android.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/android/daymind
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Gradle cache
+        uses: gradle/gradle-build-action@v2
+      - name: Assemble debug APK
+        run: ./gradlew --stacktrace assembleDebug
+      - name: Publish debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daymind-android-debug-apk
+          path: mobile/android/daymind/app/build/outputs/apk/debug/app-debug.apk

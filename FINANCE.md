@@ -52,6 +52,8 @@ Once running, the FastAPI bridge exposes:
 - `/finance` – authenticated redirect to the Fava UI (e.g., `http://localhost:5000/finance/`)
 - `/v1/finance` – JSON summary aggregated by date + category; accepts optional `?date=YYYY-MM-DD`
 
+> **Production note:** keep Fava bound to localhost (`FAVA_HOST=127.0.0.1`) and either access it via SSH/VPN or front it with a reverse proxy that re-uses the API key guard. The systemd unit `infra/systemd/daymind-fava.service` mirrors these defaults.
+
 Example response:
 
 ```json

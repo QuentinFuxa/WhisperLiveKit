@@ -1,0 +1,12 @@
+androidx.drawerlayout.widget.DrawerLayout
+androidx.drawerlayout.widget.DrawerLayout$1
+androidx.drawerlayout.widget.DrawerLayout$2
+androidx.drawerlayout.widget.DrawerLayout$AccessibilityDelegate
+androidx.drawerlayout.widget.DrawerLayout$ChildAccessibilityDelegate
+androidx.drawerlayout.widget.DrawerLayout$DrawerListener
+androidx.drawerlayout.widget.DrawerLayout$LayoutParams
+androidx.drawerlayout.widget.DrawerLayout$SavedState
+androidx.drawerlayout.widget.DrawerLayout$SavedState$1
+androidx.drawerlayout.widget.DrawerLayout$SimpleDrawerListener
+androidx.drawerlayout.widget.DrawerLayout$ViewDragCallback
+androidx.drawerlayout.widget.DrawerLayout$ViewDragCallback$1

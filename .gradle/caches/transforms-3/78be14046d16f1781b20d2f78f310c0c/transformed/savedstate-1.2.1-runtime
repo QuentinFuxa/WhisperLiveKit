@@ -1,0 +1,13 @@
+androidx.savedstate.Recreator
+androidx.savedstate.Recreator$Companion
+androidx.savedstate.Recreator$SavedStateProvider
+androidx.savedstate.SavedStateRegistry
+androidx.savedstate.SavedStateRegistry$AutoRecreated
+androidx.savedstate.SavedStateRegistry$Companion
+androidx.savedstate.SavedStateRegistry$SavedStateProvider
+androidx.savedstate.SavedStateRegistryController
+androidx.savedstate.SavedStateRegistryController$Companion
+androidx.savedstate.SavedStateRegistryOwner
+androidx.savedstate.ViewTreeSavedStateRegistryOwner
+androidx.savedstate.ViewTreeSavedStateRegistryOwner$findViewTreeSavedStateRegistryOwner$1
+androidx.savedstate.ViewTreeSavedStateRegistryOwner$findViewTreeSavedStateRegistryOwner$2

@@ -1,0 +1,10 @@
+androidx.lifecycle.EmptyActivityLifecycleCallbacks
+androidx.lifecycle.LifecycleDispatcher
+androidx.lifecycle.LifecycleDispatcher$DispatcherActivityCallback
+androidx.lifecycle.ProcessLifecycleInitializer
+androidx.lifecycle.ProcessLifecycleOwner
+androidx.lifecycle.ProcessLifecycleOwner$Api29Impl
+androidx.lifecycle.ProcessLifecycleOwner$Companion
+androidx.lifecycle.ProcessLifecycleOwner$attach$1
+androidx.lifecycle.ProcessLifecycleOwner$attach$1$onActivityPreCreated$1
+androidx.lifecycle.ProcessLifecycleOwner$initializationListener$1

@@ -33,6 +33,12 @@ Real-time transcription directly to your browser, with a ready-to-use backend+se
 
 <img alt="Architecture" src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/architecture.png" />
 
+Fava and Beancount operate as external services; DayMind orchestrates data exchange with them only through shared text/JSONL files and the `/finance` HTTP redirect.
+
+### Architectural Principles
+
+**Text-First Storage** is our guiding invariant: every capture, transcript, GPT insight, or finance record is written as human-readable text or JSONL so downstream agents can audit, replay, and extend the pipeline without replaying raw audio. Binary representations (e.g., WAV) exist only for ingestion and drop once the corresponding transcript persists.
+
 *The backend supports multiple concurrent users. Voice Activity Detection reduces overhead when no voice is detected.*
 
 ### DayMind API Bridge
@@ -49,6 +55,8 @@ curl -H "X-API-Key: YOUR_KEY" \
 ```
 
 Endpoints: `/v1/transcribe`, `/v1/ingest-transcript`, `/v1/ledger`, `/v1/summary`, `/healthz`, `/metrics`.
+
+Full request/response contracts live in [`API_REFERENCE.md`](API_REFERENCE.md).
 
 ### Mobile Client (Android)
 
@@ -72,6 +80,24 @@ scripts/build_apk.sh   # copies APK to dist/daymind-debug.apk
 ```
 
 For manual Buildozer steps, troubleshooting, and acceptance checklist, see [`mobile/daymind/README.md`](mobile/daymind/README.md).
+
+### Commercial Readiness
+
+- **Security:** [`SECURITY.md`](SECURITY.md) covers HTTPS (Caddy/Nginx), firewall policy, IP throttling, and the `/healthz` gating logic.
+- **Billing & Auth:** [`BILLING.md`](BILLING.md) describes the JSON-based API key store, rate limiting, `/v1/usage`, and Stripe-ready stubs.
+- **Onboarding:** [`ONBOARDING.md`](ONBOARDING.md) + [`API_REFERENCE.md`](API_REFERENCE.md) help operators spin up new tenants with a single script (`scripts/setup_daymind.sh`).
+- **Deployments:** [`DEPLOY.md`](DEPLOY.md) documents the systemd-first runbook, with `infra/caddy/Caddyfile` for TLS and `docker-compose.prod.yml` as an optional mirror.
+- **Landing Site:** The `landing/` directory is published to GitHub Pages after every push to `main`, giving prospects a text-first marketing site without extra tooling.
+
+### Licensing & Compliance
+
+DayMind core is MIT licensed (see [`LICENSE`](LICENSE)); third-party dependencies (FastAPI, Fava, Beancount, Redis, Whisper/OpenAI API, Kivy, Terraform, PyDub, webrtcvad, etc.) retain their respective licenses listed in [`NOTICE.md`](NOTICE.md). GPL tools like Fava and Beancount run externally so the MIT-licensed runtime never links into GPL binaries.
+
+### Run as a Service / Production Notes
+
+- **Systemd-first:** Copy the repo to `/opt/daymind`, install the units in `infra/systemd/`, and keep secrets in `/etc/daymind/daymind.env`. `DEPLOY.md` documents provisioning, smoke tests, firewall, rollback, and the optional Docker Compose path.
+- **CI/CD deploys:** `.github/workflows/ci_cd.yml` now adds a `deploy_app` job that rsyncs the repo to the droplet, writes the env file from `DAYMIND_ENV`, installs dependencies, and restarts `daymind-api` + `daymind-fava`.
+- **Observability:** `/healthz` now reports `redis`, `disk`, and `openai` status; `/metrics` exposes Prometheus counters with route/method/status labels.
 
 ### Installation & Quick Start
 

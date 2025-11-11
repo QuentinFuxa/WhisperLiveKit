@@ -1,0 +1,441 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.navigation",
+    "module": "navigation-safe-args-gradle-plugin",
+    "version": "2.7.7",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.0"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-safe-args-generator",
+          "version": {
+            "requires": "2.7.7"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-common",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-common-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-compose",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-dynamic-features-fragment",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-dynamic-features-runtime",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-fragment",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-fragment-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-runtime",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-runtime-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-safe-args-generator",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-testing",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-ui",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-ui-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        }
+      ],
+      "files": [
+        {
+          "name": "navigation-safe-args-gradle-plugin-2.7.7.jar",
+          "url": "navigation-safe-args-gradle-plugin-2.7.7.jar",
+          "size": 29681,
+          "sha512": "b5a1a1ecb1ec0f894569733ae1eafa39253b63d657b0a4d31d98bce556c9fb9382526684cd6962cdea006d0e5e996cebe284065c180fdb4136222d478e3757ba",
+          "sha256": "5beb2eea244e025927b59763a46b347919219d33baa577c05fb1d7203de45f38",
+          "sha1": "c78ded9a5417fb71317450cd32d07416ed630572",
+          "md5": "3157b70bcbec296b90cbedabab48b31b"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-safe-args-generator",
+          "version": {
+            "requires": "2.7.7"
+          }
+        },
+        {
+          "group": "com.android.tools.build",
+          "module": "gradle",
+          "version": {
+            "requires": "7.3.0"
+          }
+        },
+        {
+          "group": "com.google.code.gson",
+          "module": "gson",
+          "version": {
+            "requires": "2.9.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-gradle-plugin",
+          "version": {
+            "requires": "1.9.0"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-common",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-common-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-compose",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-dynamic-features-fragment",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-dynamic-features-runtime",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-fragment",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-fragment-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-runtime",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-runtime-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-safe-args-generator",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-testing",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-ui",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-ui-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        }
+      ],
+      "files": [
+        {
+          "name": "navigation-safe-args-gradle-plugin-2.7.7.jar",
+          "url": "navigation-safe-args-gradle-plugin-2.7.7.jar",
+          "size": 29681,
+          "sha512": "b5a1a1ecb1ec0f894569733ae1eafa39253b63d657b0a4d31d98bce556c9fb9382526684cd6962cdea006d0e5e996cebe284065c180fdb4136222d478e3757ba",
+          "sha256": "5beb2eea244e025927b59763a46b347919219d33baa577c05fb1d7203de45f38",
+          "sha1": "c78ded9a5417fb71317450cd32d07416ed630572",
+          "md5": "3157b70bcbec296b90cbedabab48b31b"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-common",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-common-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-compose",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-dynamic-features-fragment",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-dynamic-features-runtime",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-fragment",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-fragment-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-runtime",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-runtime-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-safe-args-generator",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-testing",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-ui",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        },
+        {
+          "group": "androidx.navigation",
+          "module": "navigation-ui-ktx",
+          "version": {
+            "requires": "2.7.7"
+          },
+          "reason": "navigation-safe-args-gradle-plugin is in atomic group androidx.navigation"
+        }
+      ],
+      "files": [
+        {
+          "name": "navigation-safe-args-gradle-plugin-2.7.7-sources.jar",
+          "url": "navigation-safe-args-gradle-plugin-2.7.7-sources.jar",
+          "size": 5377,
+          "sha512": "d69b4818c5ff011b43a5919dd2614535bac3a19ecaae34d48e30dae43ae03d3367450345951aad719a0b91e7fb7c2456be607325ce73deddc6d5776a86dc980b",
+          "sha256": "ecd937bfa67869d07bf9ac8a5845f69d6ecbcb53d6133693913562dfc383799f",
+          "sha1": "9e4ee7c88477e295846d0181e7102838ff59078a",
+          "md5": "1843e03df4a6f5108843c16b195bbac4"
+        }
+      ]
+    }
+  ]
+}

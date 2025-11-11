@@ -1,0 +1,741 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.lifecycle",
+    "module": "lifecycle-runtime-ktx",
+    "version": "2.7.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.4"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.0.0"
+          }
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime",
+          "version": {
+            "requires": "2.7.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.22"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-android",
+          "version": {
+            "requires": "1.7.1"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common-java8",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-compiler",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-core",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-core-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-process",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-reactivestreams",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-reactivestreams-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime-compose",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime-testing",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-service",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-compose",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-savedstate",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        }
+      ],
+      "files": [
+        {
+          "name": "lifecycle-runtime-ktx-2.7.0.aar",
+          "url": "lifecycle-runtime-ktx-2.7.0.aar",
+          "size": 60544,
+          "sha512": "42af623dba9e06a17e8dc613279b700a5805cdd09bf82527eec784cf9581730fe0c35847cc0b06f3b1ec94da61b54ad52c8014bae85bf7956c84b31a427095cb",
+          "sha256": "ef7033b15db27569771c3c0aeb6f92392b5654216195fe74136ea3e108912ad4",
+          "sha1": "99b5608d5971ae4cb95dea85cd0a2bdb1519b89d",
+          "md5": "7c406d72914eeb6df261fd47e87049e8"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.0.0"
+          }
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime",
+          "version": {
+            "requires": "2.7.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.22"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlinx",
+          "module": "kotlinx-coroutines-android",
+          "version": {
+            "requires": "1.7.1"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common-java8",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-compiler",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-core",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-core-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-process",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-reactivestreams",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-reactivestreams-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime-compose",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime-testing",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-service",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-compose",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-savedstate",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        }
+      ],
+      "files": [
+        {
+          "name": "lifecycle-runtime-ktx-2.7.0.aar",
+          "url": "lifecycle-runtime-ktx-2.7.0.aar",
+          "size": 60544,
+          "sha512": "42af623dba9e06a17e8dc613279b700a5805cdd09bf82527eec784cf9581730fe0c35847cc0b06f3b1ec94da61b54ad52c8014bae85bf7956c84b31a427095cb",
+          "sha256": "ef7033b15db27569771c3c0aeb6f92392b5654216195fe74136ea3e108912ad4",
+          "sha1": "99b5608d5971ae4cb95dea85cd0a2bdb1519b89d",
+          "md5": "7c406d72914eeb6df261fd47e87049e8"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common-java8",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-compiler",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-core",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-core-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-process",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-reactivestreams",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-reactivestreams-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime-compose",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime-testing",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-service",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-compose",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-savedstate",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        }
+      ],
+      "files": [
+        {
+          "name": "lifecycle-runtime-ktx-2.7.0-sources.jar",
+          "url": "lifecycle-runtime-ktx-2.7.0-sources.jar",
+          "size": 7212,
+          "sha512": "5b1c9e1ced7b1e0db90bd474dde8c536374d417fdae029409d6f443fcc2a8af3ade3dc8e5ec17926f792afc813051f69d179ac0c11dc22cc7f01b398faa66891",
+          "sha256": "ec5ea7c2ee6a6af3c6a53a0380b843418d05c58e1f2fdc18bd5cd7f7d9158bdb",
+          "sha1": "7b0a2de553c0359c8890577f015303a04219b6c5",
+          "md5": "6b51e98d9997304169a9a4a905fd3508"
+        }
+      ]
+    },
+    {
+      "name": "libraryVersionMetadata",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.usage": "library-version-metadata"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-common-java8",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-compiler",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-core",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-core-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-livedata-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-process",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-reactivestreams",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-reactivestreams-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime-compose",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-runtime-testing",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-service",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-compose",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-ktx",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        },
+        {
+          "group": "androidx.lifecycle",
+          "module": "lifecycle-viewmodel-savedstate",
+          "version": {
+            "requires": "2.7.0"
+          },
+          "reason": "lifecycle-runtime-ktx is in atomic group androidx.lifecycle"
+        }
+      ],
+      "files": [
+        {
+          "name": "lifecycle-runtime-ktx-2.7.0-versionMetadata.json",
+          "url": "lifecycle-runtime-ktx-2.7.0-versionMetadata.json",
+          "size": 5626,
+          "sha512": "242d65cd5f1722e8fdc7e93ba2b8e5ff9fafe9f177121cba3396c4ac88b960e3965e14f216abe88c1c477442bc575903d999e8425d720aa1a24d98dc463def8b",
+          "sha256": "662fd0b56b32374f67e4c4f601336adc631351273931be028a95caf4325de113",
+          "sha1": "9fc09f10cb45d0f8cbb38b77c9ff0a17aca0721c",
+          "md5": "b8b42a5c729f517783da7216e4e31ab7"
+        }
+      ]
+    }
+  ]
+}

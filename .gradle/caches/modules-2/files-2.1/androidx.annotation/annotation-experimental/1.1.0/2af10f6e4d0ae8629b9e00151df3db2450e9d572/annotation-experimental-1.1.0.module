@@ -1,0 +1,79 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.annotation",
+    "module": "annotation-experimental",
+    "version": "1.1.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "6.8.1",
+      "buildId:": "7246076"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "annotation-experimental-1.1.0.aar",
+          "url": "annotation-experimental-1.1.0.aar",
+          "size": 17209,
+          "sha512": "a3c3e3efc42b8ca5e044d6499af7f85483e81b67a620f3798f2dfd14e8575dd13447f6f6330633b416d8cb65528f16226fa2fd0eeae7a0ec9c4c77ec21c34a2e",
+          "sha256": "0157de61a2064047896a058080f3fd67ba57ad9a94857b3f7a363660243e3f90",
+          "sha1": "5481c9aca18271c977d67b30e26f484f3f8f1c02",
+          "md5": "457619a74e9b9e9056c0a6f65a9badde"
+        }
+      ]
+    },
+    {
+      "name": "releaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "annotation-experimental-1.1.0.aar",
+          "url": "annotation-experimental-1.1.0.aar",
+          "size": 17209,
+          "sha512": "a3c3e3efc42b8ca5e044d6499af7f85483e81b67a620f3798f2dfd14e8575dd13447f6f6330633b416d8cb65528f16226fa2fd0eeae7a0ec9c4c77ec21c34a2e",
+          "sha256": "0157de61a2064047896a058080f3fd67ba57ad9a94857b3f7a363660243e3f90",
+          "sha1": "5481c9aca18271c977d67b30e26f484f3f8f1c02",
+          "md5": "457619a74e9b9e9056c0a6f65a9badde"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "annotation-experimental-1.1.0-sources.jar",
+          "url": "annotation-experimental-1.1.0-sources.jar",
+          "size": 5310,
+          "sha512": "24d5b9245f60fc2b8b321e49743b4196dec130e42a83ca6a880353f78070d1772e64a3baae6cfef73f3e5616c803c7461eeb4833c4f9b48f56536c113fcfbe99",
+          "sha256": "7ea8c98ebd649ee4c0a74b19e1e81ac5f4469be5a12555f288083f1efd4f29d9",
+          "sha1": "238eb640abf1ca6c952c7cd2e9423fe7f715713f",
+          "md5": "05d975aadee90454e8e41c039e3895ed"
+        }
+      ]
+    }
+  ]
+}

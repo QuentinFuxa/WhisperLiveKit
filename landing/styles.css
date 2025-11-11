@@ -1,0 +1,67 @@
+:root {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 960px;
+  padding: 2rem;
+}
+
+header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+nav a {
+  margin: 0 0.5rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.hero {
+  background: #dbeafe;
+  border-radius: 1rem;
+  padding: 2rem;
+  margin: 2rem 0;
+  text-align: center;
+}
+
+.cta {
+  background: #2563eb;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  text-decoration: none;
+  display: inline-block;
+  margin-top: 1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+article {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.price {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+footer {
+  margin-top: 3rem;
+  text-align: center;
+  color: #475569;
+}

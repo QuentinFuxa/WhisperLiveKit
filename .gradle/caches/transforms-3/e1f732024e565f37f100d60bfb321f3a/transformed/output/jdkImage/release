@@ -1,0 +1,2 @@
+JAVA_VERSION="17"
+MODULES="java.base"

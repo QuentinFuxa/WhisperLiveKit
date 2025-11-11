@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string msgid="2988463736136100848" name="m3c_bottom_sheet_collapse_description">"ქვედა ფურცლის ჩაკეცვა"</string>
+    <string msgid="1555567894577437024" name="m3c_bottom_sheet_dismiss_description">"ქვედა ფურცლის უარყოფა"</string>
+    <string msgid="8403354765404029791" name="m3c_bottom_sheet_drag_handle_description">"სახელური ჩავლებისთვის"</string>
+    <string msgid="6670819569745899763" name="m3c_bottom_sheet_expand_description">"ქვედა ფურცლის გაშლა"</string>
+    <string msgid="3010635850035863127" name="m3c_bottom_sheet_pane_title">"ქვედა ფურცელი"</string>
+    <string msgid="8166741421776570875" name="m3c_date_input_headline">"შეყვანილი სახელი"</string>
+    <string msgid="229313757840775812" name="m3c_date_input_headline_description">"შეყვანილი თარიღი: %1$s"</string>
+    <string msgid="6116910750161463197" name="m3c_date_input_invalid_for_pattern">"თარიღი არ ემთხვევა მოსალოდნელ ნიმუშს: %1$s"</string>
+    <string msgid="2521768508935305279" name="m3c_date_input_invalid_not_allowed">"თარიღი დაუშვებელია: %1$s"</string>
+    <string msgid="7052898923934555305" name="m3c_date_input_invalid_year_range">"თარიღი არ არის წლების მოსალოდნელ დიაპაზონში %1$s - %2$s"</string>
+    <string msgid="2895559812010326913" name="m3c_date_input_label">"თარიღი"</string>
+    <string msgid="1237013946323089826" name="m3c_date_input_no_input_description">"არცერთი"</string>
+    <string msgid="7306227249789210568" name="m3c_date_input_title">"თარიღის არჩევა"</string>
+    <string msgid="7605002211875882969" name="m3c_date_picker_headline">"არჩეული თარიღი"</string>
+    <string msgid="3664277305226978227" name="m3c_date_picker_headline_description">"ამჟამინდელი არჩევანი: %1$s"</string>
+    <string msgid="8436650776581492840" name="m3c_date_picker_navigate_to_year_description">"%1$s-ზე გადასვლა"</string>
+    <string msgid="5811000998184572395" name="m3c_date_picker_no_selection_description">"არცერთი"</string>
+    <string msgid="7813882352367152251" name="m3c_date_picker_scroll_to_earlier_years">"გადააადგილეთ წინა წლების საჩვენებლად"</string>
+    <string msgid="5727367015496556177" name="m3c_date_picker_scroll_to_later_years">"გადააადგილეთ შემდგომი წლების საჩვენებლად"</string>
+    <string msgid="1804346892470238807" name="m3c_date_picker_switch_to_calendar_mode">"კალენდარში შეყვანის რეჟიმზე გადართვა"</string>
+    <string msgid="395627960681594326" name="m3c_date_picker_switch_to_day_selection">"გადაფურცლეთ წლის ასარჩევად, ან შეხებით აირჩიეთ ისევ დღის არჩევაზე გადართვა"</string>
+    <string msgid="2219746470065162704" name="m3c_date_picker_switch_to_input_mode">"ტექსტის შეყვანის რეჟიმზე გადართვა"</string>
+    <string msgid="7142101321095356500" name="m3c_date_picker_switch_to_next_month">"შემდეგ თვეზე გადასვლა"</string>
+    <string msgid="228438865139394590" name="m3c_date_picker_switch_to_previous_month">"წინა თვეზე გადასვლა"</string>
+    <string msgid="791651718641787594" name="m3c_date_picker_switch_to_year_selection">"წლის არჩევაზე გადასვლა"</string>
+    <string msgid="7430790972741451689" name="m3c_date_picker_title">"თარიღის არჩევა"</string>
+    <string msgid="3199387177749801575" name="m3c_date_picker_today_description">"დღეს"</string>
+    <string msgid="2068382232816991922" name="m3c_date_picker_year_picker_pane_title">"არჩეული წელი ხილულია"</string>
+    <string msgid="3190049423327661366" name="m3c_date_range_input_invalid_range_input">"შეყვანილია თარიღების არასწორი დიაპაზონი"</string>
+    <string msgid="3148384720560189467" name="m3c_date_range_input_title">"თარიღების შეყვანა"</string>
+    <string msgid="2138321128465719402" name="m3c_date_range_picker_day_in_range">"არეალშია"</string>
+    <string msgid="4947636797751277713" name="m3c_date_range_picker_end_headline">"დასრულების თარიღი"</string>
+    <string msgid="602077859540990149" name="m3c_date_range_picker_scroll_to_next_month">"გადააადგილეთ შემდეგი თვის საჩვენებლად"</string>
+    <string msgid="4592174524846109496" name="m3c_date_range_picker_scroll_to_previous_month">"გადააადგილეთ წინა თვის საჩვენებლად"</string>
+    <string msgid="4665981448952749820" name="m3c_date_range_picker_start_headline">"დაწყების თარიღი"</string>
+    <string msgid="3134165431120340385" name="m3c_date_range_picker_title">"თარიღების არჩევა"</string>
+    <string msgid="7617233117134790350" name="m3c_dialog">"დიალოგი"</string>
+    <string msgid="3177828188723359358" name="m3c_dropdown_menu_collapsed">"ჩაკეცილი"</string>
+    <string msgid="2360841780724299882" name="m3c_dropdown_menu_expanded">"გაფართოებული"</string>
+    <string msgid="6152806324422087846" name="m3c_search_bar_search">"ძიება"</string>
+    <string msgid="6152755701819882931" name="m3c_snackbar_dismiss">"დახურვა"</string>
+    <string msgid="7655536806087401899" name="m3c_suggestions_available">"შემოთავაზებები იხილეთ ქვემოთ"</string>
+    <string msgid="2786685010796619560" name="m3c_time_picker_am">"AM"</string>
+    <string msgid="2349193472625211372" name="m3c_time_picker_hour">"საათი"</string>
+    <string msgid="9179527532316922345" name="m3c_time_picker_hour_24h_suffix">"%1$d საათი"</string>
+    <string msgid="8876759303332837035" name="m3c_time_picker_hour_selection">"აირჩიეთ საათი"</string>
+    <string msgid="3458167507790628988" name="m3c_time_picker_hour_suffix">"%1$d სთ"</string>
+    <string msgid="6973808109666874069" name="m3c_time_picker_hour_text_field">"ერთი საათით"</string>
+    <string msgid="4313071914266462005" name="m3c_time_picker_minute">"წუთი"</string>
+    <string msgid="4699133535056739733" name="m3c_time_picker_minute_selection">"აირჩიეთ წუთები"</string>
+    <string msgid="5064177921781937179" name="m3c_time_picker_minute_suffix">"%1$d წთ"</string>
+    <string msgid="7661234488295443182" name="m3c_time_picker_minute_text_field">"რამდენიმე წუთით"</string>
+    <string msgid="5865171949528594571" name="m3c_time_picker_period_toggle_description">"აირჩიეთ AM ან PM"</string>
+    <string msgid="6616362054113087709" name="m3c_time_picker_pm">"PM"</string>
+    <string msgid="1805687647081129904" name="m3c_tooltip_long_press_label">"მინიშნების ჩვენება"</string>
+    <string msgid="5460405025248574620" name="m3c_tooltip_pane_description">"მინიშნება"</string>
+</resources>

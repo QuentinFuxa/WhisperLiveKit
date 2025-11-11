@@ -1,0 +1,12 @@
+androidx.lifecycle.LifecycleRegistry
+androidx.lifecycle.LifecycleRegistry$Companion
+androidx.lifecycle.LifecycleRegistry$ObserverWithState
+androidx.lifecycle.LifecycleRegistryOwner
+androidx.lifecycle.ReportFragment
+androidx.lifecycle.ReportFragment$ActivityInitializationListener
+androidx.lifecycle.ReportFragment$Companion
+androidx.lifecycle.ReportFragment$LifecycleCallbacks
+androidx.lifecycle.ReportFragment$LifecycleCallbacks$Companion
+androidx.lifecycle.ViewTreeLifecycleOwner
+androidx.lifecycle.ViewTreeLifecycleOwner$findViewTreeLifecycleOwner$1
+androidx.lifecycle.ViewTreeLifecycleOwner$findViewTreeLifecycleOwner$2

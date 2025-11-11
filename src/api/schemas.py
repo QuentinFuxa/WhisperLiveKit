@@ -55,6 +55,8 @@ class HealthResponse(BaseModel):
     ok: bool
     redis: str
     disk: str
+    openai: str
+    tls: str
     timestamp: datetime
 
 
@@ -68,3 +70,11 @@ class FinanceSummaryItem(BaseModel):
 class FinanceSummaryResponse(BaseModel):
     count: int
     items: list[FinanceSummaryItem]
+
+
+class UsageResponse(BaseModel):
+    owner: str
+    created_at: float
+    usage_count: int
+    requests_today: int
+    last_used: float | None = None

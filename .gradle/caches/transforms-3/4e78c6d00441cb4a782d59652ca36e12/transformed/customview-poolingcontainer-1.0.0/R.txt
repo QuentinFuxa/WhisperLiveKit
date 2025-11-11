@@ -1,0 +1,2 @@
+int id is_pooling_container_tag 0x0
+int id pooling_container_listener_holder_tag 0x0

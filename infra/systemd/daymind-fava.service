@@ -1,0 +1,19 @@
+[Unit]
+Description=DayMind Fava Dashboard
+After=network-online.target daymind-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=daymind
+Group=daymind
+EnvironmentFile=/etc/daymind/daymind.env
+WorkingDirectory=/opt/daymind
+ExecStart=/opt/daymind/.venv/bin/python -m src.finance.fava_runner
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

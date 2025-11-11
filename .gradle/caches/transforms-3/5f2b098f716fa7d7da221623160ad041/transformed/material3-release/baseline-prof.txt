@@ -1,0 +1,27 @@
+# Baseline profile rules for androidx.compose.material3
+# =============================================
+
+HSPLandroidx/compose/material3/CardColors;->**(**)**
+HSPLandroidx/compose/material3/CardElevation;->**(**)**
+HSPLandroidx/compose/material3/CardKt**->**(**)**
+HSPLandroidx/compose/material3/CheckDrawingCache;->**(**)**
+HSPLandroidx/compose/material3/CheckboxColors;->**(**)**
+HSPLandroidx/compose/material3/CheckboxKt**->**(**)**
+HSPLandroidx/compose/material3/ColorScheme**->**(**)**
+HSPLandroidx/compose/material3/ContentColorKt;->**(**)**
+HSPLandroidx/compose/material3/DefaultPlatformTextStyle_androidKt;->**(**)**
+HSPLandroidx/compose/material3/InteractiveComponentSizeKt;->**(**)**
+HSPLandroidx/compose/material3/MinimumInteractiveComponentSizeModifier**->**(**)**
+HSPLandroidx/compose/material3/ShapeDefaults;->**(**)**
+HSPLandroidx/compose/material3/Shapes;->**(**)**
+HSPLandroidx/compose/material3/ShapesKt**->**(**)**
+HSPLandroidx/compose/material3/SurfaceKt**->**(**)**
+HSPLandroidx/compose/material3/TextKt**->**(**)**
+HSPLandroidx/compose/material3/CheckboxTokens;->**(**)**
+HSPLandroidx/compose/material3/ColorDarkTokens;->**(**)**
+HSPLandroidx/compose/material3/ColorLightTokens;->**(**)**
+HSPLandroidx/compose/material3/ElevationTokens;->**(**)**
+HSPLandroidx/compose/material3/FilledCardTokens;->**(**)**
+HSPLandroidx/compose/material3/PaletteTokens;->**(**)**
+HSPLandroidx/compose/material3/ShapeTokens;->**(**)**
+HSPLandroidx/compose/material3/TypographyTokens;->**(**)**

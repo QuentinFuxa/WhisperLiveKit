@@ -1,0 +1,32 @@
+<project>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>net.sf.kxml</groupId>
+    <artifactId>kxml2</artifactId>
+    <version>2.3.0</version>
+    <packaging>jar</packaging>
+    <name>kXML 2 is a small XML pull parser based on the common XML pull API</name>
+    <url>http://kxml.sourceforge.net/</url>
+    <description>kXML is a small XML pull parser, specially designed for constrained environments such as Applets, Personal Java or MIDP devices. In contrast to kXML 1, kXML 2 is based on the common XML pull API.</description>
+    <licenses>
+        <license>
+            <name>BSD style</name>
+            <url>http://kxml.cvs.sourceforge.net/viewvc/kxml/kxml2/license.txt?view=markup</url>
+            <distribution>repo</distribution>
+            <comments>The license applies to the kXML2 classes (all classes below the org.kxml2 package).</comments>
+        </license>
+        <license>
+            <name>Public Domain</name>
+            <url>http://creativecommons.org/licenses/publicdomain</url>
+            <distribution>repo</distribution>
+            <comments>The license applies to the XmlPull API (all classes directly in the org.xmlpull.v1 package)</comments>
+        </license>
+    </licenses>
+    <scm>
+        <url>http://kxml.cvs.sourceforge.net/viewvc/kxml/kxml2/</url>
+    </scm>
+    <organization>
+        <name>Stefan Haustein, Oberhausen, Rhld., Germany</name>
+        <url>http://kxml.sourceforge.net/</url>
+    </organization>
+    <dependencies/>
+</project>

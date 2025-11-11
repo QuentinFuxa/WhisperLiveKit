@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string msgid="2988463736136100848" name="m3c_bottom_sheet_collapse_description">"Restrânge foaia din partea de jos"</string>
+    <string msgid="1555567894577437024" name="m3c_bottom_sheet_dismiss_description">"Închide foaia din partea de jos"</string>
+    <string msgid="8403354765404029791" name="m3c_bottom_sheet_drag_handle_description">"Ghidaj de tragere"</string>
+    <string msgid="6670819569745899763" name="m3c_bottom_sheet_expand_description">"Extinde foaia din partea de jos"</string>
+    <string msgid="3010635850035863127" name="m3c_bottom_sheet_pane_title">"Foaia din partea de jos"</string>
+    <string msgid="8166741421776570875" name="m3c_date_input_headline">"Data introdusă"</string>
+    <string msgid="229313757840775812" name="m3c_date_input_headline_description">"Data introdusă: %1$s"</string>
+    <string msgid="6116910750161463197" name="m3c_date_input_invalid_for_pattern">"Data nu corespunde modelului așteptat: %1$s"</string>
+    <string msgid="2521768508935305279" name="m3c_date_input_invalid_not_allowed">"Data nu este permisă: %1$s"</string>
+    <string msgid="7052898923934555305" name="m3c_date_input_invalid_year_range">"Data este în afara intervalului de ani %1$s – %2$s"</string>
+    <string msgid="2895559812010326913" name="m3c_date_input_label">"Dată"</string>
+    <string msgid="1237013946323089826" name="m3c_date_input_no_input_description">"Niciuna"</string>
+    <string msgid="7306227249789210568" name="m3c_date_input_title">"Selectează data"</string>
+    <string msgid="7605002211875882969" name="m3c_date_picker_headline">"Data selectată"</string>
+    <string msgid="3664277305226978227" name="m3c_date_picker_headline_description">"Opțiunea selectată: %1$s"</string>
+    <string msgid="8436650776581492840" name="m3c_date_picker_navigate_to_year_description">"Navighează la anul %1$s"</string>
+    <string msgid="5811000998184572395" name="m3c_date_picker_no_selection_description">"Niciuna"</string>
+    <string msgid="7813882352367152251" name="m3c_date_picker_scroll_to_earlier_years">"Derulează pentru a afișa anii anteriori"</string>
+    <string msgid="5727367015496556177" name="m3c_date_picker_scroll_to_later_years">"Derulează pentru a afișa anii ulteriori"</string>
+    <string msgid="1804346892470238807" name="m3c_date_picker_switch_to_calendar_mode">"Comută la modul de introducere în calendar"</string>
+    <string msgid="395627960681594326" name="m3c_date_picker_switch_to_day_selection">"Glisează pentru a selecta un an sau atinge pentru a reveni la selectarea zilei"</string>
+    <string msgid="2219746470065162704" name="m3c_date_picker_switch_to_input_mode">"Comută la modul de introducere a textului"</string>
+    <string msgid="7142101321095356500" name="m3c_date_picker_switch_to_next_month">"Treci la luna următoare"</string>
+    <string msgid="228438865139394590" name="m3c_date_picker_switch_to_previous_month">"Treci la luna anterioară"</string>
+    <string msgid="791651718641787594" name="m3c_date_picker_switch_to_year_selection">"Comută la selectarea anului"</string>
+    <string msgid="7430790972741451689" name="m3c_date_picker_title">"Selectează data"</string>
+    <string msgid="3199387177749801575" name="m3c_date_picker_today_description">"Azi"</string>
+    <string msgid="2068382232816991922" name="m3c_date_picker_year_picker_pane_title">"Selectorul de an este vizibil"</string>
+    <string msgid="3190049423327661366" name="m3c_date_range_input_invalid_range_input">"Intervalul de date introdus nu este valid"</string>
+    <string msgid="3148384720560189467" name="m3c_date_range_input_title">"Introdu datele"</string>
+    <string msgid="2138321128465719402" name="m3c_date_range_picker_day_in_range">"În interval"</string>
+    <string msgid="4947636797751277713" name="m3c_date_range_picker_end_headline">"Data de încheiere"</string>
+    <string msgid="602077859540990149" name="m3c_date_range_picker_scroll_to_next_month">"Derulează pentru a afișa luna următoare"</string>
+    <string msgid="4592174524846109496" name="m3c_date_range_picker_scroll_to_previous_month">"Derulează pentru a afișa luna anterioară"</string>
+    <string msgid="4665981448952749820" name="m3c_date_range_picker_start_headline">"Data de începere"</string>
+    <string msgid="3134165431120340385" name="m3c_date_range_picker_title">"Selectează datele"</string>
+    <string msgid="7617233117134790350" name="m3c_dialog">"Dialog"</string>
+    <string msgid="3177828188723359358" name="m3c_dropdown_menu_collapsed">"Restrâns"</string>
+    <string msgid="2360841780724299882" name="m3c_dropdown_menu_expanded">"Extins"</string>
+    <string msgid="6152806324422087846" name="m3c_search_bar_search">"Caută"</string>
+    <string msgid="6152755701819882931" name="m3c_snackbar_dismiss">"Închide"</string>
+    <string msgid="7655536806087401899" name="m3c_suggestions_available">"Sugestii mai jos"</string>
+    <string msgid="2786685010796619560" name="m3c_time_picker_am">"a.m."</string>
+    <string msgid="2349193472625211372" name="m3c_time_picker_hour">"Oră"</string>
+    <string msgid="9179527532316922345" name="m3c_time_picker_hour_24h_suffix">"Ora %1$d"</string>
+    <string msgid="8876759303332837035" name="m3c_time_picker_hour_selection">"Selectează ora"</string>
+    <string msgid="3458167507790628988" name="m3c_time_picker_hour_suffix">"Ora %1$d"</string>
+    <string msgid="6973808109666874069" name="m3c_time_picker_hour_text_field">"pentru oră"</string>
+    <string msgid="4313071914266462005" name="m3c_time_picker_minute">"Minut"</string>
+    <string msgid="4699133535056739733" name="m3c_time_picker_minute_selection">"Selectează minutele"</string>
+    <string msgid="5064177921781937179" name="m3c_time_picker_minute_suffix">"%1$d minute"</string>
+    <string msgid="7661234488295443182" name="m3c_time_picker_minute_text_field">"pentru minute"</string>
+    <string msgid="5865171949528594571" name="m3c_time_picker_period_toggle_description">"Selectează AM sau PM"</string>
+    <string msgid="6616362054113087709" name="m3c_time_picker_pm">"p.m."</string>
+    <string msgid="1805687647081129904" name="m3c_tooltip_long_press_label">"Afișează balonul explicativ"</string>
+    <string msgid="5460405025248574620" name="m3c_tooltip_pane_description">"Balon explicativ"</string>
+</resources>

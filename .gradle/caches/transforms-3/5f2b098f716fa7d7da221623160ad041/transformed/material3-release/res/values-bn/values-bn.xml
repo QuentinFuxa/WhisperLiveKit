@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string msgid="2988463736136100848" name="m3c_bottom_sheet_collapse_description">"স্ক্রিনের নিচে অ্যাটাচ করা শিট আড়াল করুন"</string>
+    <string msgid="1555567894577437024" name="m3c_bottom_sheet_dismiss_description">"স্ক্রিনের নিচে অ্যাটাচ করা শিট বাতিল করুন"</string>
+    <string msgid="8403354765404029791" name="m3c_bottom_sheet_drag_handle_description">"টেনে আনার হ্যান্ডেল"</string>
+    <string msgid="6670819569745899763" name="m3c_bottom_sheet_expand_description">"স্ক্রিনের নিচে অ্যাটাচ করা শিট বড় করুন"</string>
+    <string msgid="3010635850035863127" name="m3c_bottom_sheet_pane_title">"স্ক্রিনের নিচে অ্যাটাচ করা শিট"</string>
+    <string msgid="8166741421776570875" name="m3c_date_input_headline">"উল্লেখ করা তারিখ"</string>
+    <string msgid="229313757840775812" name="m3c_date_input_headline_description">"উল্লেখ করা তারিখ: %1$s"</string>
+    <string msgid="6116910750161463197" name="m3c_date_input_invalid_for_pattern">"প্রত্যাশিত প্যাটার্নের সাথে তারিখ মিলছে না: %1$s"</string>
+    <string msgid="2521768508935305279" name="m3c_date_input_invalid_not_allowed">"এই তারিখ লেখা যাবে না: %1$s"</string>
+    <string msgid="7052898923934555305" name="m3c_date_input_invalid_year_range">"প্রত্যাশিত বছরের রেঞ্জের বাইরের তারিখ %1$s - %2$s"</string>
+    <string msgid="2895559812010326913" name="m3c_date_input_label">"তারিখ"</string>
+    <string msgid="1237013946323089826" name="m3c_date_input_no_input_description">"কোনওটিই নয়"</string>
+    <string msgid="7306227249789210568" name="m3c_date_input_title">"তারিখ বেছে নিন"</string>
+    <string msgid="7605002211875882969" name="m3c_date_picker_headline">"বেছে নেওয়া তারিখ"</string>
+    <string msgid="3664277305226978227" name="m3c_date_picker_headline_description">"বর্তমানে বেছে নেওয়া হয়েছে: %1$s"</string>
+    <string msgid="8436650776581492840" name="m3c_date_picker_navigate_to_year_description">"নেভিগেট করে %1$s বছরে যান"</string>
+    <string msgid="5811000998184572395" name="m3c_date_picker_no_selection_description">"কোনওটিই নয়"</string>
+    <string msgid="7813882352367152251" name="m3c_date_picker_scroll_to_earlier_years">"আগের বছরগুলি দেখতে স্ক্রল করুন"</string>
+    <string msgid="5727367015496556177" name="m3c_date_picker_scroll_to_later_years">"পরের বছরগুলি দেখতে স্ক্রল করুন"</string>
+    <string msgid="1804346892470238807" name="m3c_date_picker_switch_to_calendar_mode">"ক্যালেন্ডার ইনপুট মোডে বদল করুন"</string>
+    <string msgid="395627960681594326" name="m3c_date_picker_switch_to_day_selection">"একটি বছর বেছে নিতে সোয়াইপ করুন অথবা দিন বেছে নেওয়ার বিকল্পে ফিরে যেতে ট্যাপ করুন"</string>
+    <string msgid="2219746470065162704" name="m3c_date_picker_switch_to_input_mode">"টেক্সট ইনপুট মোডে বদল করুন"</string>
+    <string msgid="7142101321095356500" name="m3c_date_picker_switch_to_next_month">"আগামী মাসে পরিবর্তন করুন"</string>
+    <string msgid="228438865139394590" name="m3c_date_picker_switch_to_previous_month">"আগের মাসে পরিবর্তন করুন"</string>
+    <string msgid="791651718641787594" name="m3c_date_picker_switch_to_year_selection">"কোনও একটি বছর বেছে নিতে বদল করুন"</string>
+    <string msgid="7430790972741451689" name="m3c_date_picker_title">"তারিখ বেছে নিন"</string>
+    <string msgid="3199387177749801575" name="m3c_date_picker_today_description">"আজ"</string>
+    <string msgid="2068382232816991922" name="m3c_date_picker_year_picker_pane_title">"বছর বেছে নেওয়ার তালিকা দেখা যাচ্ছে"</string>
+    <string msgid="3190049423327661366" name="m3c_date_range_input_invalid_range_input">"তারিখের ব্যাপ্তি সম্পর্কিত ইনপুট ভুল দেওয়া আছে"</string>
+    <string msgid="3148384720560189467" name="m3c_date_range_input_title">"তারিখ লিখুন"</string>
+    <string msgid="2138321128465719402" name="m3c_date_range_picker_day_in_range">"সীমার মধ্যে"</string>
+    <string msgid="4947636797751277713" name="m3c_date_range_picker_end_headline">"শেষ হওয়ার তারিখ"</string>
+    <string msgid="602077859540990149" name="m3c_date_range_picker_scroll_to_next_month">"পরের মাস দেখতে স্ক্রল করুন"</string>
+    <string msgid="4592174524846109496" name="m3c_date_range_picker_scroll_to_previous_month">"আগের মাস দেখতে স্ক্রল করুন"</string>
+    <string msgid="4665981448952749820" name="m3c_date_range_picker_start_headline">"শুরুর তারিখ"</string>
+    <string msgid="3134165431120340385" name="m3c_date_range_picker_title">"তারিখ বেছে নিন"</string>
+    <string msgid="7617233117134790350" name="m3c_dialog">"ডায়ালগ"</string>
+    <string msgid="3177828188723359358" name="m3c_dropdown_menu_collapsed">"আড়াল করা হয়েছে"</string>
+    <string msgid="2360841780724299882" name="m3c_dropdown_menu_expanded">"বড় করা হয়েছে"</string>
+    <string msgid="6152806324422087846" name="m3c_search_bar_search">"সার্চ করুন"</string>
+    <string msgid="6152755701819882931" name="m3c_snackbar_dismiss">"বাতিল করুন"</string>
+    <string msgid="7655536806087401899" name="m3c_suggestions_available">"নিচে দেওয়া সাজেশন"</string>
+    <string msgid="2786685010796619560" name="m3c_time_picker_am">"AM"</string>
+    <string msgid="2349193472625211372" name="m3c_time_picker_hour">"ঘণ্টা"</string>
+    <string msgid="9179527532316922345" name="m3c_time_picker_hour_24h_suffix">"%1$d ঘণ্টা"</string>
+    <string msgid="8876759303332837035" name="m3c_time_picker_hour_selection">"ঘণ্টা বেছে নিন"</string>
+    <string msgid="3458167507790628988" name="m3c_time_picker_hour_suffix">"%1$dটা"</string>
+    <string msgid="6973808109666874069" name="m3c_time_picker_hour_text_field">"এত ঘণ্টার জন্য"</string>
+    <string msgid="4313071914266462005" name="m3c_time_picker_minute">"মিনিট"</string>
+    <string msgid="4699133535056739733" name="m3c_time_picker_minute_selection">"মিনিট বেছে নিন"</string>
+    <string msgid="5064177921781937179" name="m3c_time_picker_minute_suffix">"%1$d মিনিট"</string>
+    <string msgid="7661234488295443182" name="m3c_time_picker_minute_text_field">"এত মিনিটের জন্য"</string>
+    <string msgid="5865171949528594571" name="m3c_time_picker_period_toggle_description">"AM বা PM বেছে নিন"</string>
+    <string msgid="6616362054113087709" name="m3c_time_picker_pm">"PM"</string>
+    <string msgid="1805687647081129904" name="m3c_tooltip_long_press_label">"টুলটিপ দেখান"</string>
+    <string msgid="5460405025248574620" name="m3c_tooltip_pane_description">"টুলটিপ"</string>
+</resources>

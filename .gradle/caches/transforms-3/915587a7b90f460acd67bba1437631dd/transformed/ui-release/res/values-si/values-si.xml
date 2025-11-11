@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="urn:oasis:names:tc:xliff:document:1.2">
+    <string msgid="406453423630273620" name="close_drawer">"සංචාලන මෙනුව වසන්න"</string>
+    <string msgid="7573152094250666567" name="close_sheet">"පත්‍රය වසන්න"</string>
+    <string msgid="8038256446254964252" name="default_error_message">"වලංගු නොවන ආදානයකි"</string>
+    <string msgid="6312721426453364202" name="default_popup_window_title">"උත්පතන කවුළුව"</string>
+    <string msgid="1890207353314751437" name="dropdown_menu">"පතන මෙනුව"</string>
+    <string msgid="6827826412747255547" name="in_progress">"ප්‍රගතියේ පවතී"</string>
+    <string msgid="7933458017204019916" name="indeterminate">"අඩ වශයෙන් ලකුණු කළ"</string>
+    <string msgid="542007171693138492" name="navigation_menu">"සංචාලන මෙනුව"</string>
+    <string msgid="6610465462668679431" name="not_selected">"තෝරා නැත"</string>
+    <string msgid="875452955155264703" name="off">"ක්‍රියාවිරහිතයි"</string>
+    <string msgid="8655164131929253426" name="on">"ක්‍රියාත්මකයි"</string>
+    <string msgid="5941395253238309765" name="range_end">"පරාස අන්තය"</string>
+    <string msgid="7097486360902471446" name="range_start">"පරාස ආරම්භය"</string>
+    <string msgid="6043586758067023" name="selected">"තෝරන ලදි"</string>
+    <string msgid="2561197295334830845" name="switch_role">"මාරු කරන්න"</string>
+    <string msgid="1672349317127674378" name="tab">"ටැබය"</string>
+    <string msgid="5946805113151406391" name="template_percent">"සියයට <ns1:g id="PERCENTAGE">%1$d</ns1:g>."</string>
+</resources>

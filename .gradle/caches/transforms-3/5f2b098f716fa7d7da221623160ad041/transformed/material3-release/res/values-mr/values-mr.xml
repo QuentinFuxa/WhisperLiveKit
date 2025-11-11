@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string msgid="2988463736136100848" name="m3c_bottom_sheet_collapse_description">"तळाशी असलेली शीट कोलॅप्स करा"</string>
+    <string msgid="1555567894577437024" name="m3c_bottom_sheet_dismiss_description">"तळाशी असलेली शीट डिसमिस करा"</string>
+    <string msgid="8403354765404029791" name="m3c_bottom_sheet_drag_handle_description">"ड्रॅग हॅंडल"</string>
+    <string msgid="6670819569745899763" name="m3c_bottom_sheet_expand_description">"तळाशी असलेली शीट विस्तारीत करा"</string>
+    <string msgid="3010635850035863127" name="m3c_bottom_sheet_pane_title">"तळाशी असलेली शीट"</string>
+    <string msgid="8166741421776570875" name="m3c_date_input_headline">"एंटर केलेली तारीख"</string>
+    <string msgid="229313757840775812" name="m3c_date_input_headline_description">"एंटर केली तारीख: %1$s"</string>
+    <string msgid="6116910750161463197" name="m3c_date_input_invalid_for_pattern">"तारीख ही अपेक्षित पॅटर्नशी जुळत नाही: %1$s"</string>
+    <string msgid="2521768508935305279" name="m3c_date_input_invalid_not_allowed">"अशा तारखेला अनुमती नाही: %1$s"</string>
+    <string msgid="7052898923934555305" name="m3c_date_input_invalid_year_range">"तारीख ही %1$s - %2$s या अपेक्षित रेंजच्या बाहेरची आहे"</string>
+    <string msgid="2895559812010326913" name="m3c_date_input_label">"तारीख"</string>
+    <string msgid="1237013946323089826" name="m3c_date_input_no_input_description">"काहीही नाही"</string>
+    <string msgid="7306227249789210568" name="m3c_date_input_title">"तारीख निवडा"</string>
+    <string msgid="7605002211875882969" name="m3c_date_picker_headline">"निवडलेली तारीख"</string>
+    <string msgid="3664277305226978227" name="m3c_date_picker_headline_description">"सध्याची निवड: %1$s"</string>
+    <string msgid="8436650776581492840" name="m3c_date_picker_navigate_to_year_description">"%1$s वर्षावर नेव्हिगेट करा"</string>
+    <string msgid="5811000998184572395" name="m3c_date_picker_no_selection_description">"काहीही नाही"</string>
+    <string msgid="7813882352367152251" name="m3c_date_picker_scroll_to_earlier_years">"मागील वर्षे दाखवण्यासाठी स्क्रोल करा"</string>
+    <string msgid="5727367015496556177" name="m3c_date_picker_scroll_to_later_years">"नंतरची वर्षे दाखवण्यासाठी स्क्रोल करा"</string>
+    <string msgid="1804346892470238807" name="m3c_date_picker_switch_to_calendar_mode">"कॅलेंडर इनपुट मोडवर स्विच करा"</string>
+    <string msgid="395627960681594326" name="m3c_date_picker_switch_to_day_selection">"वर्ष निवडण्यासाठी स्‍वाइप करा किंवा दिवस निवडण्यावर परत स्विच करण्यासाठी टॅप करा"</string>
+    <string msgid="2219746470065162704" name="m3c_date_picker_switch_to_input_mode">"टेक्स्ट इनपुट मोडवर स्विच करा"</string>
+    <string msgid="7142101321095356500" name="m3c_date_picker_switch_to_next_month">"पुढील महिन्यावर बदला"</string>
+    <string msgid="228438865139394590" name="m3c_date_picker_switch_to_previous_month">"मागील महिन्यावर बदला"</string>
+    <string msgid="791651718641787594" name="m3c_date_picker_switch_to_year_selection">"वर्ष निवडणे यावर स्विच करा"</string>
+    <string msgid="7430790972741451689" name="m3c_date_picker_title">"तारीख निवडा"</string>
+    <string msgid="3199387177749801575" name="m3c_date_picker_today_description">"आज"</string>
+    <string msgid="2068382232816991922" name="m3c_date_picker_year_picker_pane_title">"वर्ष पिकर दृश्यमान आहे"</string>
+    <string msgid="3190049423327661366" name="m3c_date_range_input_invalid_range_input">"तारीख रेंजचे इनपुट चुकीचे आहे"</string>
+    <string msgid="3148384720560189467" name="m3c_date_range_input_title">"तारखा एंटर करा"</string>
+    <string msgid="2138321128465719402" name="m3c_date_range_picker_day_in_range">"रेंजमध्ये"</string>
+    <string msgid="4947636797751277713" name="m3c_date_range_picker_end_headline">"संपण्याची तारीख"</string>
+    <string msgid="602077859540990149" name="m3c_date_range_picker_scroll_to_next_month">"पुढील महिना दाखवण्यासाठी स्क्रोल करा"</string>
+    <string msgid="4592174524846109496" name="m3c_date_range_picker_scroll_to_previous_month">"मागील महिना दाखवण्यासाठी स्क्रोल करा"</string>
+    <string msgid="4665981448952749820" name="m3c_date_range_picker_start_headline">"सुरू होण्याची तारीख"</string>
+    <string msgid="3134165431120340385" name="m3c_date_range_picker_title">"तारखा निवडा"</string>
+    <string msgid="7617233117134790350" name="m3c_dialog">"डायलॉग"</string>
+    <string msgid="3177828188723359358" name="m3c_dropdown_menu_collapsed">"कोलॅप्स केला आहे"</string>
+    <string msgid="2360841780724299882" name="m3c_dropdown_menu_expanded">"विस्तारित केला आहे"</string>
+    <string msgid="6152806324422087846" name="m3c_search_bar_search">"शोधा"</string>
+    <string msgid="6152755701819882931" name="m3c_snackbar_dismiss">"डिसमिस करा"</string>
+    <string msgid="7655536806087401899" name="m3c_suggestions_available">"सूचना खाली आहेत"</string>
+    <string msgid="2786685010796619560" name="m3c_time_picker_am">"AM"</string>
+    <string msgid="2349193472625211372" name="m3c_time_picker_hour">"तास"</string>
+    <string msgid="9179527532316922345" name="m3c_time_picker_hour_24h_suffix">"%1$d तास"</string>
+    <string msgid="8876759303332837035" name="m3c_time_picker_hour_selection">"तास निवडा"</string>
+    <string msgid="3458167507790628988" name="m3c_time_picker_hour_suffix">"%1$d वाजता"</string>
+    <string msgid="6973808109666874069" name="m3c_time_picker_hour_text_field">"तासासाठी"</string>
+    <string msgid="4313071914266462005" name="m3c_time_picker_minute">"मिनिट"</string>
+    <string msgid="4699133535056739733" name="m3c_time_picker_minute_selection">"मिनिटे निवडा"</string>
+    <string msgid="5064177921781937179" name="m3c_time_picker_minute_suffix">"%1$d मिनिटे"</string>
+    <string msgid="7661234488295443182" name="m3c_time_picker_minute_text_field">"मिनिटांसाठी"</string>
+    <string msgid="5865171949528594571" name="m3c_time_picker_period_toggle_description">"AM किंवा PM निवडा"</string>
+    <string msgid="6616362054113087709" name="m3c_time_picker_pm">"PM"</string>
+    <string msgid="1805687647081129904" name="m3c_tooltip_long_press_label">"टूलटिप दाखवा"</string>
+    <string msgid="5460405025248574620" name="m3c_tooltip_pane_description">"टूलटिप"</string>
+</resources>

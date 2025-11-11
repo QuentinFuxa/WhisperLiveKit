@@ -1,0 +1,4 @@
+int bool enable_system_alarm_service_default 0x0
+int bool enable_system_foreground_service_default 0x0
+int bool enable_system_job_service_default 0x0
+int bool workmanager_test_configuration 0x0

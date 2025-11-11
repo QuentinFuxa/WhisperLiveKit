@@ -1,0 +1,9 @@
+androidx.cursoradapter.widget.CursorAdapter
+androidx.cursoradapter.widget.CursorAdapter$ChangeObserver
+androidx.cursoradapter.widget.CursorAdapter$MyDataSetObserver
+androidx.cursoradapter.widget.CursorFilter
+androidx.cursoradapter.widget.CursorFilter$CursorFilterClient
+androidx.cursoradapter.widget.ResourceCursorAdapter
+androidx.cursoradapter.widget.SimpleCursorAdapter
+androidx.cursoradapter.widget.SimpleCursorAdapter$CursorToStringConverter
+androidx.cursoradapter.widget.SimpleCursorAdapter$ViewBinder

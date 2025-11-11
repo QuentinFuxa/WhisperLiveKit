@@ -1,0 +1,14 @@
+androidx.coordinatorlayout.widget.CoordinatorLayout
+androidx.coordinatorlayout.widget.CoordinatorLayout$1
+androidx.coordinatorlayout.widget.CoordinatorLayout$AttachedBehavior
+androidx.coordinatorlayout.widget.CoordinatorLayout$Behavior
+androidx.coordinatorlayout.widget.CoordinatorLayout$DefaultBehavior
+androidx.coordinatorlayout.widget.CoordinatorLayout$DispatchChangeEvent
+androidx.coordinatorlayout.widget.CoordinatorLayout$HierarchyChangeListener
+androidx.coordinatorlayout.widget.CoordinatorLayout$LayoutParams
+androidx.coordinatorlayout.widget.CoordinatorLayout$OnPreDrawListener
+androidx.coordinatorlayout.widget.CoordinatorLayout$SavedState
+androidx.coordinatorlayout.widget.CoordinatorLayout$SavedState$1
+androidx.coordinatorlayout.widget.CoordinatorLayout$ViewElevationComparator
+androidx.coordinatorlayout.widget.DirectedAcyclicGraph
+androidx.coordinatorlayout.widget.ViewGroupUtils

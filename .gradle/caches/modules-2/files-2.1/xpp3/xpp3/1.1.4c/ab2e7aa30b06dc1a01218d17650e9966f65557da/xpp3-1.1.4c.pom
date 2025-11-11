@@ -1,0 +1,40 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>xpp3</groupId>
+    <artifactId>xpp3</artifactId>
+    <version>1.1.4c</version>
+    <packaging>jar</packaging>
+    <name>MXP1: Xml Pull Parser 3rd Edition (XPP3)</name>
+    <url>http://www.extreme.indiana.edu/xgws/xsoap/xpp/mxp1/</url>
+    <description>MXP1 is a stable XmlPull parsing engine that is based on ideas from XPP and in particular XPP2 but completely revised and rewritten to take the best advantage of latest JIT JVMs such as Hotspot in JDK 1.4+.</description>
+    <licenses>
+        <license>
+            <name>Indiana University Extreme! Lab Software License, vesion 1.1.1</name>
+            <url>http://www.extreme.indiana.edu/viewcvs/~checkout~/XPP3/java/LICENSE.txt</url>
+            <distribution>repo</distribution>
+            <comments>The license applies to the Xpp3 classes (all classes below the org.xmlpull package with exception of classes directly in package org.xmlpull.v1 )</comments>
+        </license>
+        <license>
+            <name>Public Domain</name>
+            <url>http://creativecommons.org/licenses/publicdomain</url>
+            <distribution>repo</distribution>
+            <comments>The license applies to the XmlPull API (all classes directly in the org.xmlpull.v1 package)</comments>
+        </license>
+        <license>
+            <name>Apache Software License, version 1.1</name>
+            <url>http://www.apache.org/licenses/LICENSE-1.1</url>
+            <distribution>repo</distribution>
+            <comments>The license applies to the class javax.xml.namespace.QName</comments>
+        </license>
+    </licenses>
+    <scm>
+        <url>http://www.extreme.indiana.edu/viewcvs/~checkout~/XPP3/java/</url>
+    </scm>
+    <organization>
+        <name>Extreme! Lab, Indiana University</name>
+        <url>http://www.extreme.indiana.edu/</url>
+    </organization>
+    <dependencies/>
+</project>

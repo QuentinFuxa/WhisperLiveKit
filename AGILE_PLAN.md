@@ -114,11 +114,12 @@
 > **Acceptance Gates:** `/v1/usage` reports live stats, HTTPS enforced via reverse proxy (`infra/caddy/Caddyfile`), firewall docs updated, landing site auto publishes from CI, onboarding doc validated by new operator walkthrough, `v1.5+` customers can self-serve API keys + billing data.
 > **Success:** `v1.8-EPIC-12-COMMERCIAL` release delivered with auth/billing, TLS, onboarding docs, and pytest verification.
 
-#### EPIC-13 — Android Kotlin Client (⏭ Next)
-- **US-13.1 – Recording + Chunk Uploader** — Next (Kotlin/Compose recorder, 5–10 s chunks, Retrofit upload to `/v1/transcribe`, API-key header, background retry/queue). 
+#### EPIC-13 — Android Kotlin Client (🟠 In Progress)
+- **US-13.1 – Recording + Chunk Uploader** — 🛠 In Progress (Jetpack Compose MVP screen with record toggle/pending queue counter, notification-backed ForegroundService writing mono 16 kHz ~30 s WAV chunks, Retrofit + WorkManager uploader w/ exponential backoff and `X-API-Key`, EncryptedSharedPreferences/`local.properties` config fallbacks).
 - **US-13.2 – Summary & Finance Views** — Next (summary fetch, category totals chart, offline/refresh states using Compose/MPAndroidChart). 
 - **US-13.3 – Settings & Key Storage** — Next (EncryptedSharedPreferences server URL + API key, diagnostics ping `/healthz`, persistent config survives restarts).
-> **Acceptance Gates:** Kotlin app uploads chunks with exponential retry, summary and finance tabs render real data with errors handled, stored credentials survive reboots, health indicator toggles based on `/healthz` response.
+> **US-13.1 Acceptance Gates:** Record toggle spins a notification-backed foreground service, chunk WAV files appear in cache, WorkManager auto-uploads queued chunks with metadata (`session_ts`, `device_id`, `sample_rate`, `format`), UI surfaces pending chunk count + last upload result and exposes “Retry uploads” for auth lockouts, HTTP 401/403 pauses the queue without deleting files, `/v1/transcribe` requests include `X-API-Key` + multipart `file=@chunk.wav`, CI builds/publishes `app-debug.apk`, and no real secrets are committed (keys supplied via `local.properties` or EncryptedSharedPreferences).
+> **Epic Acceptance Gates:** Kotlin app uploads chunks with exponential retry, summary and finance tabs render real data with errors handled, stored credentials survive reboots, health indicator toggles based on `/healthz` response.
 
 ### Operational Gates
 - `/healthz` must expose `redis`, `disk`, `openai`, and `tls`; fail-fast when critical checks fail and return JSON for monitoring.

@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">DayMind</string>
+    <string name="notification_channel_name">DayMind Recording</string>
+    <string name="notification_channel_desc">Foreground recording status</string>
+    <string name="notification_title">DayMind is recording...</string>
+    <string name="notification_text">Audio is captured securely and queued for upload.</string>
+</resources>

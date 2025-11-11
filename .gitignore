@@ -123,3 +123,10 @@ launch.json
 .DS_Store
 nllb-200-distilled-600M-ctranslate2/*
 *.mp3
+
+# Android local config/build outputs
+local.properties
+**/local.properties
+*.apk
+mobile/android/daymind/.gradle/
+mobile/android/daymind/app/build/

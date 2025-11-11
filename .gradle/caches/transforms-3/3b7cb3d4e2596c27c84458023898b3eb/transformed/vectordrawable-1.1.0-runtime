@@ -1,0 +1,12 @@
+androidx.vectordrawable.graphics.drawable.AndroidResources
+androidx.vectordrawable.graphics.drawable.VectorDrawableCommon
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$1
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$VClipPath
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$VFullPath
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$VGroup
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$VObject
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$VPath
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$VPathRenderer
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$VectorDrawableCompatState
+androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$VectorDrawableDelegateState

@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <attr format="reference" name="animate_relativeTo"/>
+    <attr format="enum" name="arcMode">
+        <enum name="startVertical" value="0"/>
+        <enum name="startHorizontal" value="1"/>
+        <enum name="flip" value="2"/>
+    </attr>
+    <attr format="boolean" name="barrierAllowsGoneWidgets"/>
+    <attr format="enum" name="barrierDirection">
+        <enum name="left" value="0"/>
+        <enum name="right" value="1"/>
+        <enum name="top" value="2"/>
+        <enum name="bottom" value="3"/>
+        <enum name="start" value="5"/>
+        <enum name="end" value="6"/>
+    </attr>
+    <attr format="dimension" name="barrierMargin"/>
+    <attr format="boolean" name="chainUseRtl"/>
+    <attr format="dimension" name="circleRadius"/>
+    <attr format="reference" name="constraintSet"/>
+    <attr format="string" name="constraint_referenced_ids"/>
+    <attr format="reference" name="content"/>
+    <attr format="enum" name="curveFit">
+        <enum name="spline" value="0"/>
+        <enum name="linear" value="1"/>
+    </attr>
+    <attr format="integer" name="defaultDuration"/>
+    <attr format="float" name="deltaPolarAngle"/>
+    <attr format="float" name="deltaPolarRadius"/>
+    <attr format="enum" name="dragDirection">
+        <enum name="dragUp" value="0"/>
+        <enum name="dragDown" value="1"/>
+        <enum name="dragLeft" value="2"/>
+        <enum name="dragRight" value="3"/>
+        <enum name="dragStart" value="4"/>
+        <enum name="dragEnd" value="5"/>
+    </attr>
+    <attr format="enum" name="drawPath">
+        <enum name="none" value="0"/>
+        <enum name="path" value="1"/>
+        <enum name="pathRelative" value="2"/>
+        <enum name="deltaRelative" value="3"/>
+        <enum name="asConfigured" value="4"/>
+        <enum name="rectangles" value="5"/>
+    </attr>
+    <attr format="integer" name="duration"/>
+    <attr format="float" name="flow_firstHorizontalBias"/>
+    <attr format="enum" name="flow_firstHorizontalStyle">
+        <enum name="spread" value="0"/>
+        <enum name="spread_inside" value="1"/>
+        <enum name="packed" value="2"/>
+    </attr>
+    <attr format="float" name="flow_firstVerticalBias"/>
+    <attr format="enum" name="flow_firstVerticalStyle">
+        <enum name="spread" value="0"/>
+        <enum name="spread_inside" value="1"/>
+        <enum name="packed" value="2"/>
+    </attr>
+    <attr format="float" name="flow_horizontalAlign">
+        <enum name="start" value="0"/>
+        <enum name="end" value="1"/>
+        <enum name="center" value="2"/>
+    </attr>
+    <attr format="float" name="flow_horizontalBias"/>
+    <attr format="dimension" name="flow_horizontalGap"/>
+    <attr format="enum" name="flow_horizontalStyle">
+        <enum name="spread" value="0"/>
+        <enum name="spread_inside" value="1"/>
+        <enum name="packed" value="2"/>
+    </attr>
+    <attr format="float" name="flow_lastHorizontalBias"/>
+    <attr format="enum" name="flow_lastHorizontalStyle">
+        <enum name="spread" value="0"/>
+        <enum name="spread_inside" value="1"/>
+        <enum name="packed" value="2"/>
+    </attr>
+    <attr format="float" name="flow_lastVerticalBias"/>
+    <attr format="enum" name="flow_lastVerticalStyle">
+        <enum name="spread" value="0"/>
+        <enum name="spread_inside" value="1"/>
+        <enum name="packed" value="2"/>
+    </attr>
+    <attr format="integer" name="flow_maxElementsWrap"/>
+    <attr format="dimension" name="flow_padding"/>
+    <attr format="enum" name="flow_verticalAlign">
+        <enum name="top" value="0"/>
+        <enum name="bottom" value="1"/>
+        <enum name="center" value="2"/>
+        <enum name="baseline" value="3"/>
+    </attr>
+    <attr format="float" name="flow_verticalBias"/>
+    <attr format="dimension" name="flow_verticalGap"/>
+    <attr format="enum" name="flow_verticalStyle">
+        <enum name="spread" value="0"/>
+        <enum name="spread_inside" value="1"/>
+        <enum name="packed" value="2"/>
+    </attr>
+    <attr format="enum" name="flow_wrapMode">
+        <enum name="none" value="0"/>
+        <enum name="chain" value="1"/>
+        <enum name="aligned" value="2"/>
+    </attr>
+    <attr format="integer" name="framePosition"/>
+    <attr format="reference" name="layoutDescription"/>
+    <attr format="enum" name="layoutDuringTransition">
+        <enum name="ignoreRequest" value="0"/>
+        <enum name="honorRequest" value="1"/>
+    </attr>
+    <attr format="boolean" name="layout_constrainedHeight"/>
+    <attr format="boolean" name="layout_constrainedWidth"/>
+    <attr format="integer" name="layout_constraintBaseline_creator"/>
+    <attr format="reference|enum" name="layout_constraintBaseline_toBaselineOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="integer" name="layout_constraintBottom_creator"/>
+    <attr format="reference|enum" name="layout_constraintBottom_toBottomOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="reference|enum" name="layout_constraintBottom_toTopOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="reference" name="layout_constraintCircle"/>
+    <attr format="integer" name="layout_constraintCircleAngle"/>
+    <attr format="dimension" name="layout_constraintCircleRadius"/>
+    <attr format="string" name="layout_constraintDimensionRatio"/>
+    <attr format="reference|enum" name="layout_constraintEnd_toEndOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="reference|enum" name="layout_constraintEnd_toStartOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="dimension" name="layout_constraintGuide_begin"/>
+    <attr format="dimension" name="layout_constraintGuide_end"/>
+    <attr format="float" name="layout_constraintGuide_percent"/>
+    <attr name="layout_constraintHeight_default">
+        <enum name="spread" value="0"/>
+        <enum name="wrap" value="1"/>
+        <enum name="percent" value="2"/>
+    </attr>
+    <attr format="dimension|enum" name="layout_constraintHeight_max">
+        <enum name="wrap" value="-2"/>
+    </attr>
+    <attr format="dimension|enum" name="layout_constraintHeight_min">
+        <enum name="wrap" value="-2"/>
+    </attr>
+    <attr format="float" name="layout_constraintHeight_percent"/>
+    <attr format="float" name="layout_constraintHorizontal_bias"/>
+    <attr format="enum" name="layout_constraintHorizontal_chainStyle">
+        <enum name="spread" value="0"/>
+        <enum name="spread_inside" value="1"/>
+        <enum name="packed" value="2"/>
+    </attr>
+    <attr format="float" name="layout_constraintHorizontal_weight"/>
+    <attr format="integer" name="layout_constraintLeft_creator"/>
+    <attr format="reference|enum" name="layout_constraintLeft_toLeftOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="reference|enum" name="layout_constraintLeft_toRightOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="integer" name="layout_constraintRight_creator"/>
+    <attr format="reference|enum" name="layout_constraintRight_toLeftOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="reference|enum" name="layout_constraintRight_toRightOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="reference|enum" name="layout_constraintStart_toEndOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="reference|enum" name="layout_constraintStart_toStartOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="string" name="layout_constraintTag"/>
+    <attr format="integer" name="layout_constraintTop_creator"/>
+    <attr format="reference|enum" name="layout_constraintTop_toBottomOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="reference|enum" name="layout_constraintTop_toTopOf">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr format="float" name="layout_constraintVertical_bias"/>
+    <attr format="enum" name="layout_constraintVertical_chainStyle">
+        <enum name="spread" value="0"/>
+        <enum name="spread_inside" value="1"/>
+        <enum name="packed" value="2"/>
+    </attr>
+    <attr format="float" name="layout_constraintVertical_weight"/>
+    <attr name="layout_constraintWidth_default">
+        <enum name="spread" value="0"/>
+        <enum name="wrap" value="1"/>
+        <enum name="percent" value="2"/>
+    </attr>
+    <attr format="dimension|enum" name="layout_constraintWidth_max">
+        <enum name="wrap" value="-2"/>
+    </attr>
+    <attr format="dimension|enum" name="layout_constraintWidth_min">
+        <enum name="wrap" value="-2"/>
+    </attr>
+    <attr format="float" name="layout_constraintWidth_percent"/>
+    <attr format="dimension" name="layout_editor_absoluteX"/>
+    <attr format="dimension" name="layout_editor_absoluteY"/>
+    <attr format="dimension" name="layout_goneMarginBottom"/>
+    <attr format="dimension" name="layout_goneMarginEnd"/>
+    <attr format="dimension" name="layout_goneMarginLeft"/>
+    <attr format="dimension" name="layout_goneMarginRight"/>
+    <attr format="dimension" name="layout_goneMarginStart"/>
+    <attr format="dimension" name="layout_goneMarginTop"/>
+    <attr name="layout_optimizationLevel">
+        <flag name="none" value="0"/>
+        <flag name="standard" value="7"/> <!-- direct, barriers, chains -->
+        <flag name="direct" value="1"/>
+        <flag name="barrier" value="2"/>
+        <flag name="chains" value="4"/>
+        <flag name="dimensions" value="8"/>
+        <flag name="ratio" value="16"/>
+        <flag name="groups" value="32"/>
+        <flag name="graph" value="64"/>
+        <flag name="graph_wrap" value="128"/>
+    </attr>
+    <attr format="float" name="motionPathRotate"/>
+    <attr format="float" name="motionProgress"/>
+    <attr format="float" name="motionStagger"/>
+    <attr format="reference|string" name="motionTarget"/>
+    <attr format="enum" name="pathMotionArc">
+        <enum name="none" value="0"/>
+        <enum name="startVertical" value="1"/>
+        <enum name="startHorizontal" value="2"/>
+        <enum name="flip" value="3"/>
+    </attr>
+    <attr format="float" name="path_percent"/>
+    <attr format="float" name="perpendicularPath_percent"/>
+    <attr format="reference|enum" name="pivotAnchor">
+        <enum name="parent" value="0"/>
+    </attr>
+    <attr name="placeholder_emptyVisibility">
+        <enum name="visible" value="0"/>
+        <enum name="invisible" value="4"/>
+        <enum name="gone" value="8"/>
+    </attr>
+    <attr format="float" name="sizePercent"/>
+    <attr format="reference" name="targetId"/>
+    <attr format="reference" name="touchAnchorId"/>
+    <attr format="enum" name="touchAnchorSide">
+        <enum name="top" value="0"/>
+        <enum name="left" value="1"/>
+        <enum name="right" value="2"/>
+        <enum name="bottom" value="3"/>
+        <enum name="middle" value="4"/>
+        <enum name="start" value="5"/>
+        <enum name="end" value="6"/>
+    </attr>
+    <attr format="string|enum" name="transitionEasing">
+        <enum name="standard" value="0"/>
+        <enum name="accelerate" value="1"/>
+        <enum name="decelerate" value="2"/>
+        <enum name="linear" value="3"/>
+    </attr>
+    <attr format="float" name="transitionPathRotate"/>
+    <attr format="enum" name="visibilityMode">
+        <enum name="normal" value="0"/>
+        <enum name="ignore" value="1"/>
+    </attr>
+    <attr format="integer" name="waveDecay"/>
+    <attr format="float|dimension" name="waveOffset"/>
+    <attr format="float" name="wavePeriod"/>
+    <attr format="enum" name="waveShape">
+        <enum name="sin" value="0"/>
+        <enum name="square" value="1"/>
+        <enum name="triangle" value="2"/>
+        <enum name="sawtooth" value="3"/>
+        <enum name="reverseSawtooth" value="4"/>
+        <enum name="cos" value="5"/>
+        <enum name="bounce" value="6"/>
+    </attr>
+    <attr format="enum" name="waveVariesBy">
+        <enum name="position" value="0"/>
+        <enum name="path" value="1"/>
+    </attr>
+    <declare-styleable name="Constraint"><attr name="android:orientation"/><attr name="android:id"/><attr name="android:visibility"/><attr name="visibilityMode"/><attr name="android:alpha"/><attr name="android:elevation"/><attr name="android:rotation"/><attr name="android:rotationX"/><attr name="android:rotationY"/><attr name="android:scaleX"/><attr name="android:scaleY"/><attr name="pivotAnchor"/><attr name="android:transformPivotX"/><attr name="android:transformPivotY"/><attr name="android:translationX"/><attr name="android:translationY"/><attr name="android:translationZ"/><attr name="android:layout_width"/><attr name="android:layout_height"/><attr name="android:layout_marginStart"/><attr name="android:layout_marginBottom"/><attr name="android:layout_marginTop"/><attr name="android:layout_marginEnd"/><attr name="android:layout_marginLeft"/><attr name="android:layout_marginRight"/><attr name="layout_constraintCircle"/><attr name="layout_constraintCircleRadius"/><attr name="layout_constraintCircleAngle"/><attr name="layout_constraintGuide_begin"/><attr name="layout_constraintGuide_end"/><attr name="layout_constraintGuide_percent"/><attr name="layout_constraintLeft_toLeftOf"/><attr name="layout_constraintLeft_toRightOf"/><attr name="layout_constraintRight_toLeftOf"/><attr name="layout_constraintRight_toRightOf"/><attr name="layout_constraintTop_toTopOf"/><attr name="layout_constraintTop_toBottomOf"/><attr name="layout_constraintBottom_toTopOf"/><attr name="layout_constraintBottom_toBottomOf"/><attr name="layout_constraintBaseline_toBaselineOf"/><attr name="layout_constraintStart_toEndOf"/><attr name="layout_constraintStart_toStartOf"/><attr name="layout_constraintEnd_toStartOf"/><attr name="layout_constraintEnd_toEndOf"/><attr name="layout_goneMarginLeft"/><attr name="layout_goneMarginTop"/><attr name="layout_goneMarginRight"/><attr name="layout_goneMarginBottom"/><attr name="layout_goneMarginStart"/><attr name="layout_goneMarginEnd"/><attr name="layout_constrainedWidth"/><attr name="layout_constrainedHeight"/><attr name="layout_constraintHorizontal_bias"/><attr name="layout_constraintVertical_bias"/><attr name="layout_constraintWidth_default"/><attr name="layout_constraintHeight_default"/><attr name="layout_constraintWidth_min"/><attr name="layout_constraintWidth_max"/><attr name="layout_constraintWidth_percent"/><attr name="layout_constraintHeight_min"/><attr name="layout_constraintHeight_max"/><attr name="layout_constraintHeight_percent"/><attr name="layout_constraintLeft_creator"/><attr name="layout_constraintTop_creator"/><attr name="layout_constraintRight_creator"/><attr name="layout_constraintBottom_creator"/><attr name="layout_constraintBaseline_creator"/><attr name="layout_constraintDimensionRatio"/><attr name="layout_constraintHorizontal_weight"/><attr name="layout_constraintVertical_weight"/><attr name="layout_constraintHorizontal_chainStyle"/><attr name="layout_constraintVertical_chainStyle"/><attr name="layout_editor_absoluteX"/><attr name="layout_editor_absoluteY"/><attr name="barrierDirection"/><attr name="barrierMargin"/><attr name="constraint_referenced_ids"/><attr name="android:maxHeight"/><attr name="android:maxWidth"/><attr name="android:minHeight"/><attr name="android:minWidth"/><attr name="barrierAllowsGoneWidgets"/><attr name="chainUseRtl"/><attr name="flow_horizontalStyle"/><attr name="flow_verticalStyle"/><attr name="flow_verticalAlign"/><attr name="flow_horizontalAlign"/><attr name="flow_verticalBias"/><attr name="flow_horizontalBias"/><attr name="flow_wrapMode"/><attr name="flow_maxElementsWrap"/><attr name="flow_horizontalGap"/><attr name="flow_verticalGap"/><attr name="flow_firstHorizontalStyle"/><attr name="flow_firstVerticalStyle"/><attr name="flow_firstHorizontalBias"/><attr name="flow_firstVerticalBias"/><attr name="flow_lastHorizontalStyle"/><attr name="flow_lastVerticalStyle"/><attr name="flow_lastHorizontalBias"/><attr name="flow_lastVerticalBias"/><attr name="animate_relativeTo"/><attr name="transitionEasing"/><attr name="pathMotionArc"/><attr name="transitionPathRotate"/><attr name="drawPath"/><attr name="motionProgress"/><attr name="layout_constraintTag"/><attr name="motionStagger"/></declare-styleable>
+    <declare-styleable name="ConstraintLayout_Layout"><attr name="android:orientation"/><attr name="android:minWidth"/><attr name="android:minHeight"/><attr name="android:maxWidth"/><attr name="android:maxHeight"/><attr name="android:visibility"/><attr name="android:elevation"/><attr name="layout_optimizationLevel"/><attr name="layoutDescription"/><attr name="constraintSet"/><attr name="barrierDirection"/><attr name="barrierAllowsGoneWidgets"/><attr name="barrierMargin"/><attr name="constraint_referenced_ids"/><attr name="chainUseRtl"/><attr name="flow_horizontalStyle"/><attr name="flow_verticalStyle"/><attr name="flow_wrapMode"/><attr name="flow_maxElementsWrap"/><attr name="flow_horizontalGap"/><attr name="flow_verticalGap"/><attr name="android:padding"/><attr name="android:paddingTop"/><attr name="android:paddingBottom"/><attr name="android:paddingLeft"/><attr name="android:paddingRight"/><attr name="android:paddingStart"/><attr name="android:paddingEnd"/><attr name="flow_verticalAlign"/><attr name="flow_horizontalAlign"/><attr name="flow_verticalBias"/><attr name="flow_horizontalBias"/><attr name="flow_firstHorizontalStyle"/><attr name="flow_firstVerticalStyle"/><attr name="flow_firstHorizontalBias"/><attr name="flow_firstVerticalBias"/><attr name="flow_lastHorizontalStyle"/><attr name="flow_lastVerticalStyle"/><attr name="flow_lastHorizontalBias"/><attr name="flow_lastVerticalBias"/><attr name="layout_constraintCircle"/><attr name="layout_constraintCircleRadius"/><attr name="layout_constraintCircleAngle"/><attr name="layout_constraintGuide_begin"/><attr name="layout_constraintGuide_end"/><attr name="layout_constraintGuide_percent"/><attr name="layout_constraintLeft_toLeftOf"/><attr name="layout_constraintLeft_toRightOf"/><attr name="layout_constraintRight_toLeftOf"/><attr name="layout_constraintRight_toRightOf"/><attr name="layout_constraintTop_toTopOf"/><attr name="layout_constraintTop_toBottomOf"/><attr name="layout_constraintBottom_toTopOf"/><attr name="layout_constraintBottom_toBottomOf"/><attr name="layout_constraintBaseline_toBaselineOf"/><attr name="layout_constraintStart_toEndOf"/><attr name="layout_constraintStart_toStartOf"/><attr name="layout_constraintEnd_toStartOf"/><attr name="layout_constraintEnd_toEndOf"/><attr name="layout_goneMarginLeft"/><attr name="layout_goneMarginTop"/><attr name="layout_goneMarginRight"/><attr name="layout_goneMarginBottom"/><attr name="layout_goneMarginStart"/><attr name="layout_goneMarginEnd"/><attr name="layout_constrainedWidth"/><attr name="layout_constrainedHeight"/><attr name="layout_constraintHorizontal_bias"/><attr name="layout_constraintVertical_bias"/><attr name="layout_constraintWidth_default"/><attr name="layout_constraintHeight_default"/><attr name="layout_constraintWidth_min"/><attr name="layout_constraintWidth_max"/><attr name="layout_constraintWidth_percent"/><attr name="layout_constraintHeight_min"/><attr name="layout_constraintHeight_max"/><attr name="layout_constraintHeight_percent"/><attr name="layout_constraintLeft_creator"/><attr name="layout_constraintTop_creator"/><attr name="layout_constraintRight_creator"/><attr name="layout_constraintBottom_creator"/><attr name="layout_constraintBaseline_creator"/><attr name="layout_constraintDimensionRatio"/><attr name="layout_constraintHorizontal_weight"/><attr name="layout_constraintVertical_weight"/><attr name="layout_constraintHorizontal_chainStyle"/><attr name="layout_constraintVertical_chainStyle"/><attr name="layout_editor_absoluteX"/><attr name="layout_editor_absoluteY"/><attr name="layout_constraintTag"/></declare-styleable>
+    <declare-styleable name="ConstraintLayout_placeholder"><attr name="placeholder_emptyVisibility"/><attr name="content"/></declare-styleable>
+    <declare-styleable name="ConstraintSet"><attr format="reference" name="deriveConstraintsFrom"/><attr name="android:orientation"/><attr name="android:id"/><attr name="android:visibility"/><attr name="android:alpha"/><attr name="android:elevation"/><attr name="android:rotation"/><attr name="android:rotationX"/><attr name="android:rotationY"/><attr name="android:scaleX"/><attr name="android:scaleY"/><attr name="pivotAnchor"/><attr name="android:pivotX"/><attr name="android:pivotY"/><attr name="android:transformPivotX"/><attr name="android:transformPivotY"/><attr name="android:translationX"/><attr name="android:translationY"/><attr name="android:translationZ"/><attr name="android:layout_width"/><attr name="android:layout_height"/><attr name="android:layout_marginStart"/><attr name="android:layout_marginBottom"/><attr name="android:layout_marginTop"/><attr name="android:layout_marginEnd"/><attr name="android:layout_marginLeft"/><attr name="android:layout_marginRight"/><attr name="layout_constraintCircle"/><attr name="layout_constraintCircleRadius"/><attr name="layout_constraintCircleAngle"/><attr name="layout_constraintGuide_begin"/><attr name="layout_constraintGuide_end"/><attr name="layout_constraintGuide_percent"/><attr name="layout_constraintLeft_toLeftOf"/><attr name="layout_constraintLeft_toRightOf"/><attr name="layout_constraintRight_toLeftOf"/><attr name="layout_constraintRight_toRightOf"/><attr name="layout_constraintTop_toTopOf"/><attr name="layout_constraintTop_toBottomOf"/><attr name="layout_constraintBottom_toTopOf"/><attr name="layout_constraintBottom_toBottomOf"/><attr name="layout_constraintBaseline_toBaselineOf"/><attr name="layout_constraintStart_toEndOf"/><attr name="layout_constraintStart_toStartOf"/><attr name="layout_constraintEnd_toStartOf"/><attr name="layout_constraintEnd_toEndOf"/><attr name="layout_goneMarginLeft"/><attr name="layout_goneMarginTop"/><attr name="layout_goneMarginRight"/><attr name="layout_goneMarginBottom"/><attr name="layout_goneMarginStart"/><attr name="layout_goneMarginEnd"/><attr name="layout_constrainedWidth"/><attr name="layout_constrainedHeight"/><attr name="layout_constraintHorizontal_bias"/><attr name="layout_constraintVertical_bias"/><attr name="layout_constraintWidth_default"/><attr name="layout_constraintHeight_default"/><attr name="layout_constraintWidth_min"/><attr name="layout_constraintWidth_max"/><attr name="layout_constraintWidth_percent"/><attr name="layout_constraintHeight_min"/><attr name="layout_constraintHeight_max"/><attr name="layout_constraintHeight_percent"/><attr name="layout_constraintLeft_creator"/><attr name="layout_constraintTop_creator"/><attr name="layout_constraintRight_creator"/><attr name="layout_constraintBottom_creator"/><attr name="layout_constraintBaseline_creator"/><attr name="layout_constraintDimensionRatio"/><attr name="layout_constraintHorizontal_weight"/><attr name="layout_constraintVertical_weight"/><attr name="layout_constraintHorizontal_chainStyle"/><attr name="layout_constraintVertical_chainStyle"/><attr name="layout_editor_absoluteX"/><attr name="layout_editor_absoluteY"/><attr name="barrierDirection"/><attr name="constraint_referenced_ids"/><attr name="barrierMargin"/><attr name="android:maxHeight"/><attr name="android:maxWidth"/><attr name="android:minHeight"/><attr name="android:minWidth"/><attr name="barrierAllowsGoneWidgets"/><attr name="chainUseRtl"/><attr name="flow_horizontalStyle"/><attr name="flow_verticalStyle"/><attr name="flow_verticalAlign"/><attr name="flow_horizontalAlign"/><attr name="flow_verticalBias"/><attr name="flow_horizontalBias"/><attr name="flow_wrapMode"/><attr name="flow_maxElementsWrap"/><attr name="flow_horizontalGap"/><attr name="flow_verticalGap"/><attr name="flow_firstHorizontalStyle"/><attr name="flow_firstVerticalStyle"/><attr name="flow_firstHorizontalBias"/><attr name="flow_firstVerticalBias"/><attr name="flow_lastHorizontalStyle"/><attr name="flow_lastVerticalStyle"/><attr name="flow_lastHorizontalBias"/><attr name="flow_lastVerticalBias"/><attr name="animate_relativeTo"/><attr name="transitionEasing"/><attr name="pathMotionArc"/><attr name="transitionPathRotate"/><attr name="motionStagger"/><attr name="drawPath"/><attr name="motionProgress"/><attr name="layout_constraintTag"/></declare-styleable>
+    <declare-styleable name="CustomAttribute"><attr format="string" name="attributeName"/><attr format="color" name="customColorValue"/><attr format="color" name="customColorDrawableValue"/><attr format="integer" name="customIntegerValue"/><attr format="float" name="customFloatValue"/><attr format="string" name="customStringValue"/><attr format="dimension" name="customDimension"/><attr format="dimension" name="customPixelDimension"/><attr format="boolean" name="customBoolean"/></declare-styleable>
+    <declare-styleable name="ImageFilterView"><attr format="reference" name="altSrc"/><attr format="float" name="saturation"/><attr format="float" name="brightness"/><attr format="float" name="warmth"/><attr format="float" name="contrast"/><attr format="float" name="crossfade"/><attr format="dimension" name="round"/><attr format="boolean" name="overlay"/><attr format="float" name="roundPercent"/></declare-styleable>
+    <declare-styleable name="KeyAttribute"><attr name="framePosition"/><attr name="motionTarget"/><attr name="transitionEasing"/><attr name="curveFit"/><attr name="motionProgress"/><attr name="android:alpha"/><attr name="android:elevation"/><attr name="android:rotation"/><attr name="android:rotationX"/><attr name="android:rotationY"/><attr name="android:transformPivotX"/><attr name="android:transformPivotY"/><attr name="transitionPathRotate"/><attr name="android:scaleX"/><attr name="android:scaleY"/><attr name="android:translationX"/><attr name="android:translationY"/><attr name="android:translationZ"/></declare-styleable>
+    <declare-styleable name="KeyCycle"><attr name="motionTarget"/><attr name="curveFit"/><attr name="framePosition"/><attr name="transitionEasing"/><attr name="motionProgress"/><attr name="waveShape"/><attr name="wavePeriod"/><attr name="waveOffset"/><attr name="waveVariesBy"/><attr name="transitionPathRotate"/><attr name="android:alpha"/><attr name="android:elevation"/><attr name="android:rotation"/><attr name="android:rotationX"/><attr name="android:rotationY"/><attr name="android:scaleX"/><attr name="android:scaleY"/><attr name="android:translationX"/><attr name="android:translationY"/><attr name="android:translationZ"/></declare-styleable>
+    <declare-styleable name="KeyFrame"/>
+    <declare-styleable name="KeyFramesAcceleration"/>
+    <declare-styleable name="KeyFramesVelocity"/>
+    <declare-styleable name="KeyPosition"><attr format="enum" name="keyPositionType">
+            <enum name="deltaRelative" value="0"/>
+            <enum name="pathRelative" value="1"/>
+            <enum name="parentRelative" value="2"/>
+        </attr><attr format="float" name="percentX"/><attr format="float" name="percentY"/><attr format="float" name="percentWidth"/><attr format="float" name="percentHeight"/><attr name="framePosition"/><attr name="motionTarget"/><attr name="transitionEasing"/><attr name="pathMotionArc"/><attr name="curveFit"/><attr name="drawPath"/><attr name="sizePercent"/></declare-styleable>
+    <declare-styleable name="KeyTimeCycle"><attr name="framePosition"/><attr name="motionTarget"/><attr name="transitionEasing"/><attr name="curveFit"/><attr name="waveShape"/><attr name="wavePeriod"/><attr name="motionProgress"/><attr name="waveOffset"/><attr name="waveDecay"/><attr name="android:alpha"/><attr name="android:elevation"/><attr name="android:rotation"/><attr name="android:rotationX"/><attr name="android:rotationY"/><attr name="transitionPathRotate"/><attr name="android:scaleX"/><attr name="android:scaleY"/><attr name="android:translationX"/><attr name="android:translationY"/><attr name="android:translationZ"/></declare-styleable>
+    <declare-styleable name="KeyTrigger"><attr name="framePosition"/><attr name="motionTarget"/><attr format="reference" name="triggerReceiver"/><attr format="string" name="onNegativeCross"/><attr format="string" name="onPositiveCross"/><attr format="string" name="onCross"/><attr format="float" name="triggerSlack"/><attr format="reference" name="triggerId"/><attr format="boolean" name="motion_postLayoutCollision"/><attr format="reference" name="motion_triggerOnCollision"/></declare-styleable>
+    <declare-styleable name="Layout"><attr name="android:layout_width"/><attr name="android:layout_height"/><attr name="android:layout_marginStart"/><attr name="android:layout_marginBottom"/><attr name="android:layout_marginTop"/><attr name="android:layout_marginEnd"/><attr name="android:layout_marginLeft"/><attr name="android:layout_marginRight"/><attr name="layout_constraintCircle"/><attr name="layout_constraintCircleRadius"/><attr name="layout_constraintCircleAngle"/><attr name="layout_constraintGuide_begin"/><attr name="layout_constraintGuide_end"/><attr name="layout_constraintGuide_percent"/><attr name="layout_constraintLeft_toLeftOf"/><attr name="layout_constraintLeft_toRightOf"/><attr name="layout_constraintRight_toLeftOf"/><attr name="layout_constraintRight_toRightOf"/><attr name="layout_constraintTop_toTopOf"/><attr name="layout_constraintTop_toBottomOf"/><attr name="layout_constraintBottom_toTopOf"/><attr name="layout_constraintBottom_toBottomOf"/><attr name="layout_constraintBaseline_toBaselineOf"/><attr name="layout_constraintStart_toEndOf"/><attr name="layout_constraintStart_toStartOf"/><attr name="layout_constraintEnd_toStartOf"/><attr name="layout_constraintEnd_toEndOf"/><attr name="layout_goneMarginLeft"/><attr name="layout_goneMarginTop"/><attr name="layout_goneMarginRight"/><attr name="layout_goneMarginBottom"/><attr name="layout_goneMarginStart"/><attr name="layout_goneMarginEnd"/><attr name="layout_constrainedWidth"/><attr name="layout_constrainedHeight"/><attr name="layout_constraintHorizontal_bias"/><attr name="layout_constraintVertical_bias"/><attr name="layout_constraintWidth_default"/><attr name="layout_constraintHeight_default"/><attr name="layout_constraintWidth_min"/><attr name="layout_constraintWidth_max"/><attr name="android:orientation"/><attr name="layout_constraintWidth_percent"/><attr name="layout_constraintHeight_min"/><attr name="layout_constraintHeight_max"/><attr name="layout_constraintHeight_percent"/><attr name="layout_constraintLeft_creator"/><attr name="layout_constraintTop_creator"/><attr name="layout_constraintRight_creator"/><attr name="layout_constraintBottom_creator"/><attr name="layout_constraintBaseline_creator"/><attr name="layout_constraintDimensionRatio"/><attr name="layout_constraintHorizontal_weight"/><attr name="layout_constraintVertical_weight"/><attr name="layout_constraintHorizontal_chainStyle"/><attr name="layout_constraintVertical_chainStyle"/><attr name="layout_editor_absoluteX"/><attr name="layout_editor_absoluteY"/><attr name="barrierDirection"/><attr name="barrierMargin"/><attr name="constraint_referenced_ids"/><attr format="dimension" name="maxHeight"/><attr format="dimension" name="maxWidth"/><attr format="dimension" name="minHeight"/><attr format="dimension" name="minWidth"/><attr name="barrierAllowsGoneWidgets"/><attr name="chainUseRtl"/></declare-styleable>
+    <declare-styleable name="MockView"><attr format="string" name="mock_label"/><attr format="color" name="mock_labelColor"/><attr format="color" name="mock_labelBackgroundColor"/><attr format="color" name="mock_diagonalsColor"/><attr format="boolean" name="mock_showDiagonals"/><attr format="boolean" name="mock_showLabel"/></declare-styleable>
+    <declare-styleable name="Motion"><attr name="animate_relativeTo"/><attr name="transitionEasing"/><attr name="pathMotionArc"/><attr name="motionPathRotate"/><attr name="motionStagger"/><attr name="drawPath"/></declare-styleable>
+    <declare-styleable name="MotionHelper"><attr format="boolean" name="onShow"/><attr format="boolean" name="onHide"/></declare-styleable>
+    <declare-styleable name="MotionLayout"><attr name="layoutDescription"/><attr format="reference" name="currentState"/><attr name="motionProgress"/><attr format="boolean" name="applyMotionScene"/><attr format="boolean" name="showPaths"/><attr format="enum" name="motionDebug">
+            <enum name="NO_DEBUG" value="0"/>
+            <enum name="SHOW_PROGRESS" value="1"/>
+            <enum name="SHOW_PATH" value="2"/>
+            <enum name="SHOW_ALL" value="3"/>
+        </attr></declare-styleable>
+    <declare-styleable name="MotionScene"><attr name="defaultDuration"/><attr name="layoutDuringTransition"/></declare-styleable>
+    <declare-styleable name="MotionTelltales"><attr format="enum" name="telltales_velocityMode">
+            <enum name="layout" value="0"/>
+            <enum name="postLayout" value="1"/>
+            <enum name="staticPostLayout" value="2"/>
+            <enum name="staticLayout" value="3"/>
+        </attr><attr format="color" name="telltales_tailColor"/><attr format="float" name="telltales_tailScale"/></declare-styleable>
+    <declare-styleable name="OnClick"><attr name="targetId"/><attr name="clickAction">
+            <flag name="toggle" value="0x0011"/>
+            <flag name="transitionToEnd" value="0x0001"/>
+            <flag name="transitionToStart" value="0x0010"/>
+            <flag name="jumpToEnd" value="0x100"/>
+            <flag name="jumpToStart" value="0x1000"/>
+        </attr></declare-styleable>
+    <declare-styleable name="OnSwipe"><attr format="float" name="dragScale"/><attr format="float" name="dragThreshold"/><attr format="float" name="maxVelocity"/><attr format="float" name="maxAcceleration"/><attr name="dragDirection"/><attr name="touchAnchorId"/><attr name="touchAnchorSide"/><attr format="reference" name="touchRegionId"/><attr format="reference" name="limitBoundsTo"/><attr format="flags" name="nestedScrollFlags">
+            <flag name="none" value="0"/>
+            <flag name="disablePostScroll" value="1"/>
+            <flag name="disableScroll" value="2"/>
+        </attr><attr format="boolean" name="moveWhenScrollAtTop"/><attr format="enum" name="onTouchUp">
+            <enum name="autoComplete" value="0"/>
+            <enum name="autoCompleteToStart" value="1"/>
+            <enum name="autoCompleteToEnd" value="2"/>
+            <enum name="stop" value="3"/>
+            <enum name="decelerate" value="4"/>
+            <enum name="decelerateAndComplete" value="5"/>
+        </attr></declare-styleable>
+    <declare-styleable name="PropertySet"><attr name="android:visibility"/><attr name="visibilityMode"/><attr format="float" name="android:alpha"/><attr name="motionProgress"/><attr name="layout_constraintTag"/></declare-styleable>
+    <declare-styleable name="State"><attr name="android:id"/><attr format="reference" name="constraints"/></declare-styleable>
+    <declare-styleable name="StateSet"><attr format="reference" name="defaultState"/></declare-styleable>
+    <declare-styleable name="Transform"><attr name="android:elevation"/><attr name="android:rotation"/><attr name="android:rotationX"/><attr name="android:rotationY"/><attr name="android:scaleX"/><attr name="android:scaleY"/><attr name="android:transformPivotX"/><attr name="android:transformPivotY"/><attr format="dimension" name="android:translationX"/><attr format="dimension" name="android:translationY"/><attr format="dimension" name="android:translationZ"/></declare-styleable>
+    <declare-styleable name="Transition"><attr name="android:id"/><attr format="reference" name="constraintSetStart"/><attr format="reference" name="constraintSetEnd"/><attr format="boolean" name="transitionDisable"/><attr name="layoutDuringTransition"/><attr name="pathMotionArc"/><attr format="enum" name="autoTransition">
+            <enum name="none" value="0"/>
+            <enum name="jumpToStart" value="1"/>
+            <enum name="jumpToEnd" value="2"/>
+            <enum name="animateToStart" value="3"/>
+            <enum name="animateToEnd" value="4"/>
+        </attr><attr format="string|reference|enum" name="motionInterpolator">
+            <enum name="easeInOut" value="0"/>
+            <enum name="easeIn" value="1"/>
+            <enum name="easeOut" value="2"/>
+            <enum name="linear" value="3"/>
+            <enum name="bounce" value="5"/>
+        </attr><attr name="duration"/><attr format="float" name="staggered"/><attr name="transitionFlags">
+            <flag name="none" value="0"/>
+            <flag name="beginOnFirstDraw" value="1"/>
+            />
+        </attr></declare-styleable>
+    <declare-styleable name="Variant"><attr format="dimension" name="region_widthLessThan"/><attr format="dimension" name="region_widthMoreThan"/><attr format="dimension" name="region_heightLessThan"/><attr format="dimension" name="region_heightMoreThan"/><attr name="constraints"/></declare-styleable>
+    <item name="motion_base" type="id"/>
+</resources>

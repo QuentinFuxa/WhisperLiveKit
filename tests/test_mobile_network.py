@@ -17,7 +17,7 @@ def test_upload_chunk_success(tmp_path):
         if request.method == "POST" and request.url.path.endswith("/v1/transcribe"):
             return httpx.Response(200, json={"text": "ok"})
         if request.url.path == "/healthz":
-            return httpx.Response(200, json={"ok": True})
+            return httpx.Response(200, json={"ok": True, "tls": "skip"})
         raise AssertionError("Unexpected request")
 
     transport = httpx.MockTransport(handler)

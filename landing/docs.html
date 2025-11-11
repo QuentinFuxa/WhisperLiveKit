@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DayMind Documentation</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Documentation</h1>
+      <nav>
+        <a href="index.html">Product</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="docs.html">Docs</a>
+      </nav>
+    </header>
+    <section>
+      <h2>Quick Start</h2>
+      <ol>
+        <li>Deploy the API droplet (Terraform + systemd units).</li>
+        <li>Create an API key using <code>python -m src.api.services.auth_service create OWNER</code>.</li>
+        <li>Call <code>/welcome</code> then <code>/v1/summary</code> to verify auth.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>Key Docs</h2>
+      <ul>
+        <li><a href="../API_REFERENCE.md">API_REFERENCE.md</a></li>
+        <li><a href="../ONBOARDING.md">ONBOARDING.md</a></li>
+        <li><a href="../SECURITY.md">SECURITY.md</a></li>
+        <li><a href="../BILLING.md">BILLING.md</a></li>
+      </ul>
+    </section>
+    <footer>
+      <small>Docs deploy via GitHub Pages on every push to main.</small>
+    </footer>
+  </body>
+</html>

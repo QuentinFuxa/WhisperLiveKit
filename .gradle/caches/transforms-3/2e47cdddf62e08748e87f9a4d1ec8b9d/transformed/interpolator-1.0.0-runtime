@@ -1,0 +1,4 @@
+androidx.interpolator.view.animation.FastOutLinearInInterpolator
+androidx.interpolator.view.animation.FastOutSlowInInterpolator
+androidx.interpolator.view.animation.LinearOutSlowInInterpolator
+androidx.interpolator.view.animation.LookupTableInterpolator

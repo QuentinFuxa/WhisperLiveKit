@@ -1,0 +1,3 @@
+# Copy to local.properties (never commit real values)
+BASE_URL=https://your.server
+API_KEY=demo-key

@@ -1,0 +1,5 @@
+androidx.startup.AppInitializer
+androidx.startup.InitializationProvider
+androidx.startup.Initializer
+androidx.startup.StartupException
+androidx.startup.StartupLogger

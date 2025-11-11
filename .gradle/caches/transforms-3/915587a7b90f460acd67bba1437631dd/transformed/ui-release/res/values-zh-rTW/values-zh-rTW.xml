@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="urn:oasis:names:tc:xliff:document:1.2">
+    <string msgid="406453423630273620" name="close_drawer">"關閉導覽選單"</string>
+    <string msgid="7573152094250666567" name="close_sheet">"關閉功能表"</string>
+    <string msgid="8038256446254964252" name="default_error_message">"輸入內容無效"</string>
+    <string msgid="6312721426453364202" name="default_popup_window_title">"彈出式視窗"</string>
+    <string msgid="1890207353314751437" name="dropdown_menu">"下拉式選單"</string>
+    <string msgid="6827826412747255547" name="in_progress">"處理中"</string>
+    <string msgid="7933458017204019916" name="indeterminate">"部分檢查"</string>
+    <string msgid="542007171693138492" name="navigation_menu">"導覽選單"</string>
+    <string msgid="6610465462668679431" name="not_selected">"未選取"</string>
+    <string msgid="875452955155264703" name="off">"已關閉"</string>
+    <string msgid="8655164131929253426" name="on">"已開啟"</string>
+    <string msgid="5941395253238309765" name="range_end">"範圍終點"</string>
+    <string msgid="7097486360902471446" name="range_start">"範圍起點"</string>
+    <string msgid="6043586758067023" name="selected">"已選取"</string>
+    <string msgid="2561197295334830845" name="switch_role">"切換鈕"</string>
+    <string msgid="1672349317127674378" name="tab">"Tab 鍵"</string>
+    <string msgid="5946805113151406391" name="template_percent">"百分之 <ns1:g id="PERCENTAGE">%1$d</ns1:g>。"</string>
+</resources>

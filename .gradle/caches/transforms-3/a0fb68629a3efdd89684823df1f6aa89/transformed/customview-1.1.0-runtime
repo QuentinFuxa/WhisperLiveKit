@@ -1,0 +1,16 @@
+androidx.customview.view.AbsSavedState
+androidx.customview.view.AbsSavedState$1
+androidx.customview.view.AbsSavedState$2
+androidx.customview.widget.ExploreByTouchHelper
+androidx.customview.widget.ExploreByTouchHelper$1
+androidx.customview.widget.ExploreByTouchHelper$2
+androidx.customview.widget.ExploreByTouchHelper$MyNodeProvider
+androidx.customview.widget.FocusStrategy
+androidx.customview.widget.FocusStrategy$BoundsAdapter
+androidx.customview.widget.FocusStrategy$CollectionAdapter
+androidx.customview.widget.FocusStrategy$SequentialComparator
+androidx.customview.widget.Openable
+androidx.customview.widget.ViewDragHelper
+androidx.customview.widget.ViewDragHelper$1
+androidx.customview.widget.ViewDragHelper$2
+androidx.customview.widget.ViewDragHelper$Callback

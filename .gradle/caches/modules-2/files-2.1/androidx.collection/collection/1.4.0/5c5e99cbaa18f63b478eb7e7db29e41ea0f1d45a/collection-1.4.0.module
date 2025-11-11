@@ -1,0 +1,478 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "androidx.collection",
+    "module": "collection",
+    "version": "1.4.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.5"
+    }
+  },
+  "variants": [
+    {
+      "name": "androidxSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "androidx-multiplatform-docs"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.collection",
+          "module": "collection-ktx",
+          "version": {
+            "requires": "1.4.0"
+          },
+          "reason": "collection is in atomic group androidx.collection"
+        }
+      ],
+      "files": [
+        {
+          "name": "collection-1.4.0-multiplatform-sources.jar",
+          "url": "collection-1.4.0-multiplatform-sources.jar",
+          "size": 249633,
+          "sha512": "b064ff6abff3cd9c8fef4327b46e26219fd471e8b3599bf5fd5274528626db0281fe171b9b571f14b77eaf45a70c460c8a74a0e3e645d2a011e724cff653e789",
+          "sha256": "60b0d3834ef9b59a2c0c18f3d2e20859761e7c929407086c5016fd3023f38475",
+          "sha1": "18d41dce0a3fc0488ff9bd05b2fd4941754c3663",
+          "md5": "a9efbd82a8e56d8de14ef9b91592bd0c"
+        }
+      ]
+    },
+    {
+      "name": "libraryVersionMetadata",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.usage": "library-version-metadata"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.collection",
+          "module": "collection-ktx",
+          "version": {
+            "requires": "1.4.0"
+          },
+          "reason": "collection is in atomic group androidx.collection"
+        }
+      ],
+      "files": [
+        {
+          "name": "apiLevels.json",
+          "url": "collection-1.4.0-versionMetadata.json",
+          "size": 143389,
+          "sha512": "0bb62a0115407db695c8a5a53e8ecf9251ddca2e9649c9c77e74bfaad9a7e2e62e7156e3f946bb347ea3265623a8cbc54014d256ec346cc61d53f7c26e9e0d27",
+          "sha256": "48ffb94f81e31463748e83a4204531370416b00557cd9c90c329d1e319b01d71",
+          "sha1": "44041f5584c267bf96ef16346d4df86f1b23556c",
+          "md5": "a2f1c7471c5ec4dc8220b7c2a1297f57"
+        }
+      ]
+    },
+    {
+      "name": "metadataApiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencies": [
+        {
+          "group": "androidx.annotation",
+          "module": "annotation",
+          "version": {
+            "requires": "1.7.0"
+          }
+        },
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "1.8.22"
+          }
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "androidx.collection",
+          "module": "collection-ktx",
+          "version": {
+            "requires": "1.4.0"
+          },
+          "reason": "collection is in atomic group androidx.collection"
+        }
+      ],
+      "files": [
+        {
+          "name": "collection-metadata-1.4.0.jar",
+          "url": "collection-1.4.0.jar",
+          "size": 33989,
+          "sha512": "813d003165557db3d3bab7e7b6da0db8f3123e79297d2733c9844dabe666fd73f4551684e644e12d3998e72c11f1dc9facd99307c32d3c4ea9eac14a62c00d29",
+          "sha256": "335679dcda5b9047e8e0838772c272fd7cbcbbceed87565184a369c0563ac06b",
+          "sha1": "7084bf38796ad2ef67f5496efcdb4bbec5930e83",
+          "md5": "4c0dbf6984ed3cff68974b6d464933e3"
+        }
+      ]
+    },
+    {
+      "name": "metadataSourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.platform.type": "common"
+      },
+      "dependencyConstraints": [
+        {
+          "group": "androidx.collection",
+          "module": "collection-ktx",
+          "version": {
+            "requires": "1.4.0"
+          },
+          "reason": "collection is in atomic group androidx.collection"
+        }
+      ],
+      "files": [
+        {
+          "name": "collection-kotlin-1.4.0-sources.jar",
+          "url": "collection-1.4.0-sources.jar",
+          "size": 227470,
+          "sha512": "62f6b74e2afc4694685d492be10a731ce1f19e40de6c64c89b7a7e9bef0239a3c6488d93d031d3b6ff979a199dca68aa5bfe969cbe3efe7f46a4f7a6565d6e11",
+          "sha256": "05800c83476a79ea1a00a050c2df09255e798d4ee7df1d7f6d3c96374f2b4164",
+          "sha1": "0b92478438161afd454a20eb3d04b09f28c529ae",
+          "md5": "cce464e9b93f244fc0e2ba797a83bddf"
+        }
+      ]
+    },
+    {
+      "name": "iosArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iosarm64/1.4.0/collection-iosarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iosarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "iosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iosarm64/1.4.0/collection-iosarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iosarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "iosArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iosarm64/1.4.0/collection-iosarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iosarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iossimulatorarm64/1.4.0/collection-iossimulatorarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iossimulatorarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iossimulatorarm64/1.4.0/collection-iossimulatorarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iossimulatorarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "iosSimulatorArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_simulator_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iossimulatorarm64/1.4.0/collection-iossimulatorarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iossimulatorarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "iosX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "ios_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iosx64/1.4.0/collection-iosx64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iosx64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "iosX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "ios_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iosx64/1.4.0/collection-iosx64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iosx64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "iosX64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "ios_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-iosx64/1.4.0/collection-iosx64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-iosx64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "jvmApiElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../collection-jvm/1.4.0/collection-jvm-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-jvm",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "jvmRuntimeElements-published",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../collection-jvm/1.4.0/collection-jvm-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-jvm",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "jvmSourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "available-at": {
+        "url": "../../collection-jvm/1.4.0/collection-jvm-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-jvm",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "linuxX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "linux_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-linuxx64/1.4.0/collection-linuxx64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-linuxx64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "linuxX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "linux_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-linuxx64/1.4.0/collection-linuxx64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-linuxx64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "macosArm64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-macosarm64/1.4.0/collection-macosarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-macosarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "macosArm64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-macosarm64/1.4.0/collection-macosarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-macosarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "macosArm64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "macos_arm64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-macosarm64/1.4.0/collection-macosarm64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-macosarm64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "macosX64ApiElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-api",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-macosx64/1.4.0/collection-macosx64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-macosx64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "macosX64SourcesElements-published",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "kotlin-runtime",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-macosx64/1.4.0/collection-macosx64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-macosx64",
+        "version": "1.4.0"
+      }
+    },
+    {
+      "name": "macosX64MetadataElements-published",
+      "attributes": {
+        "artifactType": "org.jetbrains.kotlin.klib",
+        "org.gradle.category": "library",
+        "org.gradle.usage": "kotlin-metadata",
+        "org.jetbrains.kotlin.native.target": "macos_x64",
+        "org.jetbrains.kotlin.platform.type": "native"
+      },
+      "available-at": {
+        "url": "../../collection-macosx64/1.4.0/collection-macosx64-1.4.0.module",
+        "group": "androidx.collection",
+        "module": "collection-macosx64",
+        "version": "1.4.0"
+      }
+    }
+  ]
+}

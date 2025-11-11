@@ -23,7 +23,7 @@ jobs:
         run: pytest -q
 
   deploy:
-    needs: test
+    needs: [test, landing]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -40,3 +40,73 @@ jobs:
           terraform apply -auto-approve \
             -var "do_token=$DO_TOKEN" \
             -var "ssh_fingerprint=$SSH_FINGERPRINT"
+
+  deploy_app:
+    needs: deploy
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DAYMIND_ENV: ${{ secrets.DAYMIND_ENV }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rsync
+        run: sudo apt-get update && sudo apt-get install -y rsync
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Trust host key
+        if: env.DEPLOY_HOST != ''
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Ensure remote directory exists
+        if: env.DEPLOY_HOST != ''
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p $DEPLOY_PATH"
+      - name: Sync repository to droplet
+        if: env.DEPLOY_HOST != ''
+        run: |
+          rsync -az --delete \
+            --exclude ".git" \
+            ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH"
+      - name: Upload environment file
+        if: env.DEPLOY_HOST != '' && env.DAYMIND_ENV != ''
+        run: |
+          printf "%s" "$DAYMIND_ENV" > daymind.env
+          scp daymind.env "$DEPLOY_USER@$DEPLOY_HOST:/tmp/daymind.env"
+          rm daymind.env
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "sudo mkdir -p /etc/daymind && sudo mv /tmp/daymind.env /etc/daymind/daymind.env && sudo chown root:daymind /etc/daymind/daymind.env && sudo chmod 640 /etc/daymind/daymind.env"
+      - name: Install dependencies and restart services
+        if: env.DEPLOY_HOST != ''
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" <<EOF
+          set -euo pipefail
+          sudo getent group daymind >/dev/null 2>&1 || sudo groupadd --system daymind
+          sudo id -u daymind >/dev/null 2>&1 || sudo useradd --system --home "$DEPLOY_PATH" --shell /usr/sbin/nologin -g daymind daymind
+          sudo mkdir -p "$DEPLOY_PATH"
+          sudo chown -R daymind:daymind "$DEPLOY_PATH"
+          cd "$DEPLOY_PATH"
+          python3 -m venv .venv
+          ./.venv/bin/pip install --upgrade pip
+          ./.venv/bin/pip install -r requirements.txt
+          ./.venv/bin/pip install -e .
+          sudo cp infra/systemd/daymind-api.service /etc/systemd/system/daymind-api.service
+          sudo cp infra/systemd/daymind-fava.service /etc/systemd/system/daymind-fava.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now daymind-api.service daymind-fava.service
+          EOF
+  landing:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy landing site to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./landing

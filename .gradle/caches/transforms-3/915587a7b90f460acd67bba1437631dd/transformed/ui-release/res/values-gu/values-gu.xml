@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="urn:oasis:names:tc:xliff:document:1.2">
+    <string msgid="406453423630273620" name="close_drawer">"નૅવિગેશન મેનૂ બંધ કરો"</string>
+    <string msgid="7573152094250666567" name="close_sheet">"શીટ બંધ કરો"</string>
+    <string msgid="8038256446254964252" name="default_error_message">"અમાન્ય ઇનપુટ"</string>
+    <string msgid="6312721426453364202" name="default_popup_window_title">"પૉપ-અપ વિન્ડો"</string>
+    <string msgid="1890207353314751437" name="dropdown_menu">"ડ્રૉપડાઉન મેનૂ"</string>
+    <string msgid="6827826412747255547" name="in_progress">"પ્રક્રિયામાં છે"</string>
+    <string msgid="7933458017204019916" name="indeterminate">"આંશિક રીતે ચેક કરેલા વિકલ્પો"</string>
+    <string msgid="542007171693138492" name="navigation_menu">"નૅવિગેશન મેનૂ"</string>
+    <string msgid="6610465462668679431" name="not_selected">"પસંદગી કરી નથી"</string>
+    <string msgid="875452955155264703" name="off">"બંધ છે"</string>
+    <string msgid="8655164131929253426" name="on">"ચાલુ છે"</string>
+    <string msgid="5941395253238309765" name="range_end">"રેંજની સમાપ્તિ"</string>
+    <string msgid="7097486360902471446" name="range_start">"રેંજની શરૂઆત"</string>
+    <string msgid="6043586758067023" name="selected">"પસંદગી કરી"</string>
+    <string msgid="2561197295334830845" name="switch_role">"સ્વિચ"</string>
+    <string msgid="1672349317127674378" name="tab">"ટૅબ"</string>
+    <string msgid="5946805113151406391" name="template_percent">"<ns1:g id="PERCENTAGE">%1$d</ns1:g> ટકા."</string>
+</resources>
