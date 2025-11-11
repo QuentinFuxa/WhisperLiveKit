@@ -96,15 +96,15 @@ DayMind core is MIT licensed (see [`LICENSE`](LICENSE)); third-party dependencie
 ### Run as a Service / Production Notes
 
 - **Systemd-first:** Copy the repo to `/opt/daymind`, install the units in `infra/systemd/`, and keep secrets in `/etc/daymind/daymind.env`. `DEPLOY.md` documents provisioning, smoke tests, firewall, rollback, and the optional Docker Compose path.
-- **CI/CD deploys:** `.github/workflows/ci_cd.yml` now adds a `deploy_app` job that rsyncs the repo to the droplet, writes the env file from `DAYMIND_ENV`, installs dependencies, and restarts `daymind-api` + `daymind-fava`.
+- **CI/CD deploys:** `.github/workflows/ci_cd.yml` now runs `terraform_apply → deploy_app → verify_services`, provisioning the droplet with Terraform, rsyncing `/opt/daymind`, and restarting `daymind-api` + `daymind-fava` before running Redis/API/Fava healthchecks.
 
 Manual runs can be triggered via the CLI:
 ```bash
-gh workflow run ci_cd.yml --ref feature/US-6.2-fava-ui
+gh workflow run ci_cd.yml --ref main
 gh run list
 gh run view --web
 ```
-Omit `--ref` to target `main`.
+Omit `--ref` to target `main`. Populate the `DO_TOKEN`, `SSH_FINGERPRINT`, and `DEPLOY_SSH_KEY` repository secrets so Terraform and SSH steps can complete.
 - **Observability:** `/healthz` now reports `redis`, `disk`, and `openai` status; `/metrics` exposes Prometheus counters with route/method/status labels.
 
 ### Installation & Quick Start

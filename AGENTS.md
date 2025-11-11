@@ -92,6 +92,7 @@
 - EPIC-6 finance track live: JSONL→Beancount exporter + Fava `/finance` bridge with `/v1/finance` aggregates.
 - EPIC-11 services hardened: systemd units, CI deploy job, TLS-aware health checks, and Text-First compliance gates.
 - EPIC-12 kickoff: Auth/billing service, security hardening, landing site, and onboarding docs tracked for commercial readiness.
+- EPIC-13 CI gates: GitHub Actions `terraform_apply → deploy_app → verify_services` pipeline provisions infra, pushes `/opt/daymind` via `scripts/remote_deploy.sh`, and enforces Redis/API/Fava + `/healthz`/`/metrics` checks on every run.
 
 ## Tech Stack Decision Log
 - **Beancount + Fava:** Standard for double-entry audits + interactive dashboards; integrates cleanly with JSONL exporters.
@@ -103,6 +104,7 @@
 ## Operator Runbook (DevOps + Release)
 - **Status & logs:** `systemctl status daymind-api daymind-fava`, `journalctl -u daymind-api -n 200`.
 - **Health:** `curl -H "X-API-Key:..." http://<host>:8000/healthz` (expects `redis/disk/openai` keys) and `curl .../metrics | grep api_requests_total`.
-- **Deploy:** Merge to `main` ⇒ GitHub Actions `deploy_app` job rsyncs to `$DEPLOY_PATH`, writes `/etc/daymind/daymind.env`, reinstalls deps, restarts services.
+- **Deploy:** Merge to `main` ⇒ GitHub Actions `deploy_app` job drives `scripts/remote_deploy.sh` to sync `/opt/daymind`, seeds `/etc/daymind/daymind.env` from the example only if missing, reinstalls deps, and restarts services.
+- **CI Deploy Flow:** `terraform_apply` runs pytest/terraform with DO + SSH secrets, `deploy_app` calls `scripts/remote_deploy.sh` to sync `/opt/daymind` and restart services, `verify_services` runs `infra/systemd/checks/healthcheck.sh` plus `/healthz`/`/metrics` curls before tagging.
 - **Firewall:** Only ports 22/8000 (and optional 5000/443) open; Redis remains private.
 - **Rollback:** `git checkout <tag>` in `/opt/daymind`, rerun install block, `systemctl restart daymind-api daymind-fava`. ReleaseAgent coordinates tags (`v1.7.0-EPIC-11-MVP_SERVER` onward).

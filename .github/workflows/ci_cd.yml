@@ -1,5 +1,9 @@
 name: CI-CD
 
+concurrency:
+  group: main-ci
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main ]
@@ -8,149 +12,121 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  terraform_apply:
     runs-on: ubuntu-latest
+    outputs:
+      app_ip: ${{ steps.terraform.outputs.app_ip }}
+    env:
+      SHOULD_APPLY: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .
-      - name: Run pytest
-        run: pytest -q
-
-  deploy:
-    needs: [test, landing]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: Run pytest (API + infra)
+        run: |
+          pytest -q --ignore-glob='tests/test_mobile_*'
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
-      - name: Prepare Terraform SSH key
+      - name: Prepare SSH key
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/terraform_key
-          chmod 600 ~/.ssh/terraform_key
-      - name: Terraform Init & Apply
+          mkdir -p "${RUNNER_TEMP}"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "${RUNNER_TEMP}/deploy_key"
+          chmod 600 "${RUNNER_TEMP}/deploy_key"
+      - name: Terraform Apply
+        id: terraform
         env:
           DO_TOKEN: ${{ secrets.DO_TOKEN }}
           SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
         run: |
-          cd infra/terraform
-          terraform init -input=false
-          terraform apply -auto-approve \
+          if [ "$SHOULD_APPLY" != "true" ]; then
+            echo "Skipping Terraform apply for ref $GITHUB_REF"
+            echo "app_ip=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          terraform -chdir=infra/terraform init
+          terraform -chdir=infra/terraform validate
+          terraform -chdir=infra/terraform apply -auto-approve \
             -var "do_token=$DO_TOKEN" \
             -var "ssh_fingerprint=$SSH_FINGERPRINT" \
-            -var "ssh_private_key_path=$HOME/.ssh/terraform_key"
+            -var "ssh_private_key_path=${RUNNER_TEMP}/deploy_key"
+          APP_IP=$(terraform -chdir=infra/terraform output -raw app_ip)
+          echo "app_ip=$APP_IP"
+          echo "app_ip=$APP_IP" >> "$GITHUB_OUTPUT"
       - name: Upload Terraform state
+        if: ${{ env.SHOULD_APPLY == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: terraform-state
           path: infra/terraform/terraform.tfstate
 
   deploy_app:
-    needs: deploy
-    if: github.ref == 'refs/heads/main'
+    needs: terraform_apply
     runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-      DAYMIND_ENV: ${{ secrets.DAYMIND_ENV }}
+      APP_IP: ${{ needs.terraform_apply.outputs.app_ip }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install rsync
         run: sudo apt-get update && sudo apt-get install -y rsync
-      - name: Configure SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-      - name: Trust host key
-        if: env.DEPLOY_HOST != ''
+      - name: Prepare SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "${RUNNER_TEMP}/deploy_key"
+          chmod 600 "${RUNNER_TEMP}/deploy_key"
+      - name: Trust droplet host key
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-      - name: Ensure remote directory exists
-        if: env.DEPLOY_HOST != ''
+          ssh-keyscan -H "$APP_IP" >> ~/.ssh/known_hosts
+      - name: Deploy application via helper script
         run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p $DEPLOY_PATH"
-      - name: Sync repository to droplet
-        if: env.DEPLOY_HOST != ''
-        run: |
-          rsync -az --delete \
-            --exclude ".git" \
-            ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH"
-      - name: Upload environment file
-        if: env.DEPLOY_HOST != '' && env.DAYMIND_ENV != ''
-        run: |
-          printf "%s" "$DAYMIND_ENV" > daymind.env
-          scp daymind.env "$DEPLOY_USER@$DEPLOY_HOST:/tmp/daymind.env"
-          rm daymind.env
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "sudo mkdir -p /etc/daymind && sudo mv /tmp/daymind.env /etc/daymind/daymind.env && sudo chown root:daymind /etc/daymind/daymind.env && sudo chmod 640 /etc/daymind/daymind.env"
-      - name: Install dependencies and restart services
-        if: env.DEPLOY_HOST != ''
-        run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" <<EOF
-          set -euo pipefail
-          sudo getent group daymind >/dev/null 2>&1 || sudo groupadd --system daymind
-          sudo id -u daymind >/dev/null 2>&1 || sudo useradd --system --home "$DEPLOY_PATH" --shell /usr/sbin/nologin -g daymind daymind
-          sudo mkdir -p "$DEPLOY_PATH"
-          sudo chown -R daymind:daymind "$DEPLOY_PATH"
-          cd "$DEPLOY_PATH"
-          python3 -m venv .venv
-          ./.venv/bin/pip install --upgrade pip
-          ./.venv/bin/pip install -r requirements.txt
-          ./.venv/bin/pip install -e .
-          sudo cp infra/systemd/daymind-api.service /etc/systemd/system/daymind-api.service
-          sudo cp infra/systemd/daymind-fava.service /etc/systemd/system/daymind-fava.service
-          sudo systemctl daemon-reload
-          sudo systemctl enable --now daymind-api.service daymind-fava.service
-          EOF
-  verify-services:
-    needs: deploy_app
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download Terraform state
-        uses: actions/download-artifact@v4
+          KEY_PATH="${RUNNER_TEMP}/deploy_key"
+          bash scripts/remote_deploy.sh \
+            --host "$APP_IP" \
+            --user "root" \
+            --key "$KEY_PATH" | tee deploy.log
+      - name: Upload deploy log
+        uses: actions/upload-artifact@v4
         with:
-          name: terraform-state
-          path: infra/terraform
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-      - name: Resolve app IP
-        id: app_ip
-        run: |
-          cd infra/terraform
-          APP_IP=$(terraform output -state=terraform.tfstate -raw app_ip)
-          echo "app_ip=$APP_IP" >> "$GITHUB_OUTPUT"
-      - name: Configure SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-      - name: Run remote healthcheck
-        env:
-          APP_IP: ${{ steps.app_ip.outputs.app_ip }}
-        run: |
-          ssh -o StrictHostKeyChecking=no "root@$APP_IP" 'bash -s' < infra/systemd/checks/healthcheck.sh
+          name: deploy-log
+          path: deploy.log
 
-  landing:
-    needs: test
-    if: github.ref == 'refs/heads/main'
+  verify_services:
+    needs:
+      - terraform_apply
+      - deploy_app
     runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+    env:
+      APP_IP: ${{ needs.terraform_apply.outputs.app_ip }}
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy landing site to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./landing
+      - name: Prepare SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "${RUNNER_TEMP}/deploy_key"
+          chmod 600 "${RUNNER_TEMP}/deploy_key"
+      - name: Run remote healthcheck
+        run: |
+          ssh -i "${RUNNER_TEMP}/deploy_key" -o StrictHostKeyChecking=no "root@${APP_IP}" 'bash -s' < infra/systemd/checks/healthcheck.sh
+      - name: Check /healthz endpoint
+        run: curl -fsS "http://${APP_IP}/healthz"
+      - name: Check /metrics endpoint
+        run: curl -fsS "http://${APP_IP}/metrics"
