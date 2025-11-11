@@ -19,13 +19,22 @@ resource "digitalocean_droplet" "app" {
   ssh_keys = [var.ssh_fingerprint]
 }
 
-resource "digitalocean_database_cluster" "redis" {
-  name       = "${var.project_name}-redis"
-  engine     = "redis"
-  version    = "7"
-  size       = "db-s-1vcpu-1gb"
-  region     = "sgp1"
-  node_count = 1
+resource "null_resource" "redis_install" {
+  depends_on = [digitalocean_droplet.app]
+
+  connection {
+    host        = digitalocean_droplet.app.ipv4_address
+    user        = "root"
+    private_key = file(var.ssh_private_key_path)
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "apt update",
+      "apt install -y redis-server",
+      "systemctl enable redis-server --now"
+    ]
+  }
 }
 
 output "app_ip" {
@@ -33,5 +42,6 @@ output "app_ip" {
 }
 
 output "redis_uri" {
-  value = digitalocean_database_cluster.redis.uri
+  value     = "redis://127.0.0.1:6379"
+  sensitive = true
 }
