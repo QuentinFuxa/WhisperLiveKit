@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+IFS=$'\n\t'
 
 usage() {
   cat <<'USAGE'
@@ -107,27 +108,32 @@ RSYNC_EXCLUDES=(
   "--exclude=dist"
 )
 rsync -az --delete "${RSYNC_EXCLUDES[@]}" -e "ssh ${SSH_OPTS[*]}" ./ "$REMOTE:$REMOTE_PATH/"
+ssh_exec "$SUDO chown -R daymind:daymind '$REMOTE_PATH'"
 
-echo "==> Installing Python dependencies"
-VENV_PATH="${REMOTE_PATH}/venv"
+echo "==> Rebuilding virtual environment"
 ssh_exec "
   set -euo pipefail
-  cd '$REMOTE_PATH'
-  python3 -m venv '$VENV_PATH'
-  '$VENV_PATH/bin/pip' install --upgrade pip wheel
-  '$VENV_PATH/bin/pip' install -r requirements.txt
-  '$VENV_PATH/bin/pip' install -e .
-  chmod +x scripts/start_fava.sh
-  $SUDO chown -R daymind:daymind '$REMOTE_PATH' '$VENV_PATH'
+  $SUDO -u daymind bash -lc '
+    set -euo pipefail
+    IFS=$'"'"'\n\t'"'"'
+    cd \"$REMOTE_PATH\"
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -U pip wheel setuptools
+    pip install -r requirements.txt -e .
+  '
+  $SUDO chown -R daymind:daymind '$REMOTE_PATH'
 "
 
 echo "==> Writing /etc/default/daymind"
 ssh_exec "
   set -euo pipefail
   $SUDO tee /etc/default/daymind >/dev/null <<'EOF'
-REDIS_URL=redis://127.0.0.1:6379/0
+APP_ENV=production
 APP_PORT=8000
 APP_WORKERS=1
+REDIS_URI=redis://127.0.0.1:6379
+REDIS_URL=redis://127.0.0.1:6379/0
 FAVA_PORT=5000
 FAVA_LEDGER_PATH=/opt/daymind/ledger/main.beancount
 EOF
@@ -139,6 +145,7 @@ ssh_exec "
   set -euo pipefail
   $SUDO cp '$REMOTE_PATH/infra/systemd/daymind-api.service' /etc/systemd/system/daymind-api.service
   $SUDO cp '$REMOTE_PATH/infra/systemd/daymind-fava.service' /etc/systemd/system/daymind-fava.service
+  $SUDO chown daymind:daymind '$REMOTE_PATH/scripts/start_fava.sh'
 "
 
 echo "==> Restarting services"
@@ -148,8 +155,13 @@ ssh_exec "
   $SUDO systemctl daemon-reload
   $SUDO systemctl enable --now daymind-api.service daymind-fava.service
   sleep 5
-  $SUDO systemctl is-active daymind-api.service
-  $SUDO systemctl is-active daymind-fava.service
+  for svc in daymind-api daymind-fava; do
+    if ! $SUDO systemctl is-active --quiet \"\$svc\"; then
+      echo \"::error::\$svc failed to start\" >&2
+      $SUDO journalctl -u \"\$svc\" -n 200 --no-pager || true
+      exit 1
+    fi
+  done
   curl -fsS \"http://127.0.0.1:\${APP_PORT}/healthz\" >/dev/null
   curl -fsS \"http://127.0.0.1:\${APP_PORT}/metrics\" >/dev/null || true
 "

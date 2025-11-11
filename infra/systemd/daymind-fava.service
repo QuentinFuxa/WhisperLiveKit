@@ -4,13 +4,14 @@ After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/default/daymind
+WorkingDirectory=/opt/daymind
+EnvironmentFile=/etc/default/daymind
+ExecStartPre=/usr/bin/test -x /opt/daymind/venv/bin/fava
 User=daymind
 Group=daymind
-WorkingDirectory=/opt/daymind
 ExecStart=/opt/daymind/scripts/start_fava.sh
 Restart=always
-RestartSec=3
+RestartSec=2
 StandardOutput=journal
 StandardError=journal
 

@@ -5,13 +5,14 @@ Requires=redis-server.service
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/default/daymind
+WorkingDirectory=/opt/daymind
+EnvironmentFile=/etc/default/daymind
+ExecStartPre=/usr/bin/test -x /opt/daymind/venv/bin/uvicorn
 User=daymind
 Group=daymind
-WorkingDirectory=/opt/daymind
 ExecStart=/opt/daymind/venv/bin/python -m uvicorn src.api.main:app --host 0.0.0.0 --port $APP_PORT --workers $APP_WORKERS
 Restart=always
-RestartSec=3
+RestartSec=2
 StandardOutput=journal
 StandardError=journal
 
