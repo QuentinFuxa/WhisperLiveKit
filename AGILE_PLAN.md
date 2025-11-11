@@ -125,3 +125,4 @@
 - `/healthz` must expose `redis`, `disk`, `openai`, and `tls`; fail-fast when critical checks fail and return JSON for monitoring.
 - Fava runs strictly as an external HTTP service; FastAPI only redirects/proxies (`/finance`, `FAVA_BASE_URL`) and never embeds GPL binaries.
 - Text-First Storage invariant enforced: every pipeline writes transcripts/summaries/ledger entries to JSONL/MD before downstream processing or UI surfaces data.
+- CI can be manually invoked via workflow_dispatch.
