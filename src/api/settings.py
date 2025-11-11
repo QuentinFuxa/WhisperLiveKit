@@ -22,6 +22,11 @@ class APISettings(BaseModel):
     redis_stream: str = Field(default=os.getenv("REDIS_STREAM", "daymind:transcripts"))
     summary_dir: str = Field(default=os.getenv("SUMMARY_DIR", "data"))
     session_gap_sec: float = Field(float(os.getenv("SESSION_GAP_SEC", "45")))
+    finance_ledger_path: str = Field(default=os.getenv("FINANCE_LEDGER_PATH", "finance/ledger.beancount"))
+    finance_default_currency: str = Field(default=os.getenv("FINANCE_DEFAULT_CURRENCY", "CZK"))
+    fava_host: str = Field(default=os.getenv("FAVA_HOST", "127.0.0.1"))
+    fava_port: int = Field(default=int(os.getenv("FAVA_PORT", "5000")))
+    fava_base_url: str | None = Field(default=os.getenv("FAVA_BASE_URL"))
 
 
 def _split_keys() -> List[str]:
@@ -32,4 +37,3 @@ def _split_keys() -> List[str]:
 @lru_cache()
 def get_settings() -> APISettings:
     return APISettings()
-

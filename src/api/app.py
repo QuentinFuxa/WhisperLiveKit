@@ -7,7 +7,7 @@ import logging
 from fastapi import Depends, FastAPI
 
 from .metrics import instrument_app, router as metrics_router
-from .routers import health, ingest, ledger, summary, transcribe
+from .routers import finance, health, ingest, ledger, summary, transcribe
 
 
 def create_app() -> FastAPI:
@@ -20,6 +20,8 @@ def create_app() -> FastAPI:
     app.include_router(ingest.router)
     app.include_router(ledger.router)
     app.include_router(summary.router)
+    app.include_router(finance.api_router)
+    app.include_router(finance.ui_router)
 
     return app
 

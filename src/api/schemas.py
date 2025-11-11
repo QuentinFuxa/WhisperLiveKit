@@ -57,3 +57,14 @@ class HealthResponse(BaseModel):
     disk: str
     timestamp: datetime
 
+
+class FinanceSummaryItem(BaseModel):
+    date: str
+    category: str
+    total: float
+    currency: str
+
+
+class FinanceSummaryResponse(BaseModel):
+    count: int
+    items: list[FinanceSummaryItem]

@@ -10,3 +10,4 @@ python-multipart>=0.0.9
 prometheus-client>=0.20.0
 beancount>=2.3.6
 pyyaml>=6.0.0
+fava>=1.30.0

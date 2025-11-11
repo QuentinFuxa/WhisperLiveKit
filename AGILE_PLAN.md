@@ -66,7 +66,7 @@ Release recap: Android MVP verified via 24 green pytest suites, manual desktop p
 #### EPIC-6 — Finance / Ledger Analytics (Beancount + Fava) (🟡 In Progress)
 Goal: turn GPT ledger events into double-entry books and dashboards.
 - **US-6.1 – JSONL→Beancount exporter** — 🚧 In progress. Produce deterministic mappings of categories/currencies/time into `ledger.beancount`; cron runs daily straight from `data/ledger*.jsonl`. Success: `ledger.beancount` regenerates without manual edits.
-- **US-6.2 – Fava dashboard service** — Wrap Fava under `/finance` with project ledger mounted and auth aligned with API keys. Success: charts/filters render for current dataset.
+- **US-6.2 – Fava dashboard service** — 🚧 In progress. Fava runner + `/finance` redirect + `/v1/finance` JSON summaries expose spending and income derived from `finance/ledger.beancount`. Success: charts/filters render for current dataset.
 - **US-6.3 – Finance aggregates endpoint** — `GET /v1/finance` surfaces totals grouped by date/category with tests covering edge cases. Success: regression tests assert schema + calculations.
 > **Acceptance Gates**
 > - Exporter CI test compares known JSONL sample to `ledger.beancount`.
@@ -114,5 +114,4 @@ Goal: model DayMind as a LangGraph DAG stitched via Redis Streams for observabil
 ### Kanban – Sprint 1
 | Backlog | Next | In Progress | Done |
 |---------|------|-------------|------|
-| US-6.2 – Fava dashboard<br>US-6.3 – Finance aggregates endpoint<br>US-7.1 – Memory deck builder<br>US-7.2 – CI deck artifact<br>US-7.3 – Schema & QA<br>US-8.1 – Daily cron workflow<br>US-8.2 – Apprise notifications<br>US-8.3 – Health metrics snapshot<br>US-9.1 – Release-Please config<br>US-9.2 – Epic-aware tagging<br>US-10.1 – LangGraph DAG nodes<br>US-10.2 – Redis Streams wiring<br>US-10.3 – Runbook & contracts | — | **US-6.1 – JSONL→Beancount exporter** | US-1.1 / 1.2 / 1.3<br>US-2.1 / 2.2 / 2.3<br>US-3.1 / 3.2 / 3.3<br>US-4.1 / 4.2 / 4.3 / 4.4<br>US-5.1 / 5.2 / 5.3 |
-US-6.2 Fava dashboard service — In Progress
+| US-6.3 – Finance aggregates endpoint<br>US-7.1 – Memory deck builder<br>US-7.2 – CI deck artifact<br>US-7.3 – Schema & QA<br>US-8.1 – Daily cron workflow<br>US-8.2 – Apprise notifications<br>US-8.3 – Health metrics snapshot<br>US-9.1 – Release-Please config<br>US-9.2 – Epic-aware tagging<br>US-10.1 – LangGraph DAG nodes<br>US-10.2 – Redis Streams wiring<br>US-10.3 – Runbook & contracts | — | **US-6.1 – JSONL→Beancount exporter**<br>**US-6.2 – Fava dashboard service** | US-1.1 / 1.2 / 1.3<br>US-2.1 / 2.2 / 2.3<br>US-3.1 / 3.2 / 3.3<br>US-4.1 / 4.2 / 4.3 / 4.4<br>US-5.1 / 5.2 / 5.3 |

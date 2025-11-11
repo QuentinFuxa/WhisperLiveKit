@@ -35,3 +35,31 @@ The exporter rewrites `finance/ledger.beancount` each run. Generated files inclu
 - Call `python -m src.finance.export_beancount` from cron/GitHub Actions (planned in EPIC-8) to regenerate the Beancount ledger daily.
 - `scripts/export_finance.sh` wraps the CLI for local runs or CI steps.
 - Next story (US-6.2) wires Fava to serve `finance/ledger.beancount` via `/finance`.
+
+## Fava Dashboard (US-6.2)
+
+Run the dashboard locally:
+
+```bash
+python -m src.finance.fava_runner --ledger finance/ledger.beancount --host 0.0.0.0 --port 5000
+```
+
+Environment variables:
+- `FAVA_LEDGER_PATH` – defaults to `finance/ledger.beancount`
+- `FAVA_HOST`, `FAVA_PORT` – network binding for the Flask server
+
+Once running, the FastAPI bridge exposes:
+- `/finance` – authenticated redirect to the Fava UI (e.g., `http://localhost:5000/finance/`)
+- `/v1/finance` – JSON summary aggregated by date + category; accepts optional `?date=YYYY-MM-DD`
+
+Example response:
+
+```json
+{
+  "count": 2,
+  "items": [
+    {"date": "2024-11-10", "category": "Expenses:Food", "total": 120.0, "currency": "CZK"},
+    {"date": "2024-11-11", "category": "Income:Salary", "total": 5000.0, "currency": "CZK"}
+  ]
+}
+```
