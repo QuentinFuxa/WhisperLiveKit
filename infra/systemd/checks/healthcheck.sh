@@ -15,6 +15,7 @@ for service in "${services[@]}"; do
     echo "✅ $service is active"
   else
     echo "❌ $service is NOT active"
+    journalctl -u "$service" -n 80 --no-pager || true
     status=1
   fi
 done

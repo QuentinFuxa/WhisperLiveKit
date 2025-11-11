@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${FAVA_PORT:=5000}"
-: "${FAVA_LEDGER_PATH:=/opt/daymind/ledger/main.beancount}"
+export PYTHONPATH="${PYTHONPATH:-/opt/daymind}"
 
-mkdir -p "$(dirname "$FAVA_LEDGER_PATH")"
+LEDGER_DEFAULT="/opt/daymind/runtime/ledger.beancount"
+LEDGER_FILE="${LEDGER_FILE:-${FAVA_LEDGER_PATH:-$LEDGER_DEFAULT}}"
+FAVA_PORT="${FAVA_PORT:-8010}"
+FAVA_HOST="${FAVA_HOST:-127.0.0.1}"
 
-if [ ! -s "$FAVA_LEDGER_PATH" ]; then
-  echo "; DayMind bootstrap ledger" > "$FAVA_LEDGER_PATH"
+mkdir -p "$(dirname "$LEDGER_FILE")"
+
+if [ ! -s "$LEDGER_FILE" ]; then
+  cat <<'LEDGER' > "$LEDGER_FILE"
+option "title" "DayMind Ledger"
+option "operating_currency" "USD"
+
+1970-01-01 * "Bootstrap" "Ledger initialized"
+  equity:opening-balances  0 USD
+LEDGER
 fi
 
-exec /opt/daymind/venv/bin/fava --host 0.0.0.0 --port "$FAVA_PORT" "$FAVA_LEDGER_PATH"
+exec /opt/daymind/venv/bin/fava --host "$FAVA_HOST" --port "$FAVA_PORT" "$LEDGER_FILE"

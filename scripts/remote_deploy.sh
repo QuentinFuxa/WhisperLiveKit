@@ -86,7 +86,7 @@ ssh_exec "
   if ! id -u daymind >/dev/null 2>&1; then
     $SUDO useradd --system --home '$REMOTE_PATH' --shell /usr/sbin/nologin -g daymind daymind
   fi
-  $SUDO mkdir -p '$REMOTE_PATH'
+  $SUDO mkdir -p '$REMOTE_PATH' '$REMOTE_PATH/runtime'
   if [ ! -d '$REMOTE_PATH/.git' ]; then
     $SUDO rm -rf '$REMOTE_PATH'
     $SUDO -u daymind git clone '$REPO_URL' '$REMOTE_PATH' || true
@@ -103,6 +103,7 @@ echo "==> Rsyncing working tree"
 RSYNC_EXCLUDES=(
   "--exclude=.git"
   "--exclude=.venv"
+  "--exclude=runtime"
   "--exclude=mobile/android/daymind/app/build"
   "--exclude=.gradle"
   "--exclude=dist"
@@ -117,27 +118,58 @@ ssh_exec "
     set -euo pipefail
     IFS=$'"'"'\n\t'"'"'
     cd \"$REMOTE_PATH\"
-    python3 -m venv venv
+    if [ ! -d venv ]; then
+      python3 -m venv venv
+    fi
     source venv/bin/activate
-    pip install -U pip wheel setuptools
-    pip install -r requirements.txt -e .
+    pip install -U pip wheel
+    pip install -r requirements.txt
+    pip install -e .
+    python -c \"import src, src.api.main\"
   '
+  for bin in uvicorn fava; do
+    if [ ! -x \"$REMOTE_PATH\"/venv/bin/\"$bin\" ]; then
+      echo \"::error::missing $bin in venv\" >&2
+      exit 1
+    fi
+  done
   $SUDO chown -R daymind:daymind '$REMOTE_PATH'
 "
 
 echo "==> Writing /etc/default/daymind"
 ssh_exec "
   set -euo pipefail
-  $SUDO tee /etc/default/daymind >/dev/null <<'EOF'
+  ENV_FILE=/etc/default/daymind
+  if [ ! -f \"\$ENV_FILE\" ]; then
+    $SUDO tee \"\$ENV_FILE\" >/dev/null <<'EOF'
 APP_ENV=production
+APP_HOST=127.0.0.1
 APP_PORT=8000
 APP_WORKERS=1
-REDIS_URI=redis://127.0.0.1:6379
-REDIS_URL=redis://127.0.0.1:6379/0
-FAVA_PORT=5000
-FAVA_LEDGER_PATH=/opt/daymind/ledger/main.beancount
+REDIS_URL=redis://127.0.0.1:6379
+REDIS_URI=redis://127.0.0.1:6379/0
+PYTHONPATH=/opt/daymind
+FAVA_HOST=127.0.0.1
+FAVA_PORT=8010
+LEDGER_FILE=/opt/daymind/runtime/ledger.beancount
 EOF
-  $SUDO chmod 640 /etc/default/daymind
+    $SUDO chmod 640 \"\$ENV_FILE\"
+  fi
+  LEDGER_FILE_PATH=\$($SUDO awk -F'=' '/^LEDGER_FILE=/{print \$2}' \"\$ENV_FILE\" | tail -n1)
+  if [[ -z \"\$LEDGER_FILE_PATH\" ]]; then
+    LEDGER_FILE_PATH=/opt/daymind/runtime/ledger.beancount
+  fi
+  $SUDO mkdir -p \"\$(dirname \"\$LEDGER_FILE_PATH\")\"
+  if [ ! -s \"\$LEDGER_FILE_PATH\" ]; then
+    $SUDO tee \"\$LEDGER_FILE_PATH\" >/dev/null <<'LEDGER'
+option \"title\" \"DayMind Ledger\"
+option \"operating_currency\" \"USD\"
+
+1970-01-01 * \"Bootstrap\" \"Ledger initialized\"
+  equity:opening-balances  0 USD
+LEDGER
+  fi
+  $SUDO chown daymind:daymind \"\$LEDGER_FILE_PATH\"
 "
 
 echo "==> Installing systemd units"
@@ -151,19 +183,39 @@ ssh_exec "
 echo "==> Restarting services"
 ssh_exec "
   set -euo pipefail
-  APP_PORT=8000
+  ENV_FILE=/etc/default/daymind
+  if [ -f \"\$ENV_FILE\" ]; then
+    # shellcheck disable=SC1090
+    source \"\$ENV_FILE\"
+  fi
+  APP_PORT=\"\${APP_PORT:-8000}\"
   $SUDO systemctl daemon-reload
-  $SUDO systemctl enable --now daymind-api.service daymind-fava.service
+  if ! $SUDO systemctl enable --now daymind-api daymind-fava; then
+    for svc in daymind-api daymind-fava; do
+      $SUDO journalctl -u \"\$svc\" -n 120 --no-pager || true
+    done
+    exit 1
+  fi
   sleep 5
   for svc in daymind-api daymind-fava; do
     if ! $SUDO systemctl is-active --quiet \"\$svc\"; then
       echo \"::error::\$svc failed to start\" >&2
-      $SUDO journalctl -u \"\$svc\" -n 200 --no-pager || true
+      $SUDO journalctl -u \"\$svc\" -n 120 --no-pager || true
       exit 1
     fi
   done
-  curl -fsS \"http://127.0.0.1:\${APP_PORT}/healthz\" >/dev/null
-  curl -fsS \"http://127.0.0.1:\${APP_PORT}/metrics\" >/dev/null || true
+  if ! curl -fsS \"http://127.0.0.1:\${APP_PORT}/healthz\" >/dev/null; then
+    echo \"::error::/healthz failed\" >&2
+    for svc in daymind-api daymind-fava; do
+      $SUDO journalctl -u \"\$svc\" -n 120 --no-pager || true
+    done
+    exit 1
+  fi
+  if curl -fsS \"http://127.0.0.1:\${APP_PORT}/metrics\" >/dev/null; then
+    echo \"✅ /metrics responded\"
+  else
+    echo \"⚠️  /metrics failed\" >&2
+  fi
 "
 
 echo "==> Deployment summary"

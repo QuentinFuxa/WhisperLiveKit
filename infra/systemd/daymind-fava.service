@@ -6,12 +6,14 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/daymind
 EnvironmentFile=/etc/default/daymind
+Environment=PYTHONPATH=/opt/daymind
 ExecStartPre=/usr/bin/test -x /opt/daymind/venv/bin/fava
+ExecStartPre=/usr/bin/test -d /opt/daymind
 User=daymind
 Group=daymind
 ExecStart=/opt/daymind/scripts/start_fava.sh
-Restart=always
-RestartSec=2
+Restart=on-failure
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
 

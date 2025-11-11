@@ -9,7 +9,7 @@ def _read(path: str) -> str:
 
 def test_api_unit_contains_uvicorn_exec():
     contents = _read("infra/systemd/daymind-api.service")
-    assert "ExecStart=/opt/daymind/venv/bin/python -m uvicorn" in contents
+    assert "ExecStart=/opt/daymind/venv/bin/uvicorn src.api.main:app" in contents
 
 
 def test_fava_unit_calls_wrapper():
