@@ -35,6 +35,44 @@ Real-time transcription directly to your browser, with a ready-to-use backend+se
 
 *The backend supports multiple concurrent users. Voice Activity Detection reduces overhead when no voice is detected.*
 
+### DayMind API Bridge
+
+Spin up the FastAPI bridge with `uvicorn src.api.app:app --reload` and call it with an API key:
+
+```bash
+curl -H "X-API-Key: YOUR_KEY" \
+     -F file=@tests/assets/sample_cs.wav \
+     http://localhost:8000/v1/transcribe
+
+curl -H "X-API-Key: YOUR_KEY" \
+     "http://localhost:8000/v1/summary?date=2024-11-01"
+```
+
+Endpoints: `/v1/transcribe`, `/v1/ingest-transcript`, `/v1/ledger`, `/v1/summary`, `/healthz`, `/metrics`.
+
+### Mobile Client (Android)
+
+The Kivy-based DayMind companion app exposes three tabs (Record / Summary / Settings) with an offline queue, exponential retries, and an in-app log window. Highlights:
+
+- **Recording toggle + indicator** – 6 s WAV chunks saved privately, queued, and retried in the background.
+- **Settings** – persists Server URL + API Key; “Test connection” calls `/healthz` and logs the result.
+- **Summary** – fetches `/v1/summary?date=<today>` off the UI thread, with friendly errors and manual refresh.
+- **Privacy controls** – “Clear queue” deletes pending files; nothing runs until the user taps Start.
+
+Desktop preview:
+
+```bash
+python -m mobile.daymind.main
+```
+
+Android build instructions (permissions: `RECORD_AUDIO, INTERNET, ACCESS_NETWORK_STATE, WAKE_LOCK, FOREGROUND_SERVICE`) are documented in `mobile/daymind/README.md`. Quick build:
+
+```bash
+scripts/build_apk.sh   # copies APK to dist/daymind-debug.apk
+```
+
+For manual Buildozer steps, troubleshooting, and acceptance checklist, see [`mobile/daymind/README.md`](mobile/daymind/README.md).
+
 ### Installation & Quick Start
 
 ```bash

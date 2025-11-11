@@ -119,9 +119,7 @@ run_*.sh
 *.pt 
 
 # Debug & testing
-test_*.py
 launch.json
 .DS_Store
-test/*
 nllb-200-distilled-600M-ctranslate2/*
 *.mp3

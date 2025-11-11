@@ -1,0 +1,12 @@
+whisper-livekit>=0.3.1
+pydantic>=2.0
+redis>=5.0.0
+pytest>=7.0.0
+pytest-asyncio>=0.23.0
+openai>=1.40.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+prometheus-client>=0.20.0
+beancount>=2.3.6
+pyyaml>=6.0.0
