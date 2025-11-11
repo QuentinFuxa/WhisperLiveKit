@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Base.Theme.Material3.Dark.DialogWhenLarge" parent="Base.Theme.Material3.Dark.Dialog.FixedSize"/>
-    <style name="Base.Theme.Material3.Light.DialogWhenLarge" parent="Base.Theme.Material3.Light.Dialog.FixedSize"/>
-    <style name="Base.Theme.MaterialComponents.DialogWhenLarge" parent="Base.Theme.MaterialComponents.Dialog.FixedSize"/>
-    <style name="Base.Theme.MaterialComponents.Light.DialogWhenLarge" parent="Base.Theme.MaterialComponents.Light.Dialog.FixedSize"/>
-</resources>

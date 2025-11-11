@@ -1,9 +1,0 @@
-attr fastScrollEnabled
-attr fastScrollHorizontalThumbDrawable
-attr fastScrollHorizontalTrackDrawable
-attr fastScrollVerticalThumbDrawable
-attr fastScrollVerticalTrackDrawable
-attr layoutManager
-attr reverseLayout
-attr spanCount
-attr stackFromEnd

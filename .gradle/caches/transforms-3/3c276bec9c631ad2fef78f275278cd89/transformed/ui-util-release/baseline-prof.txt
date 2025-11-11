@@ -1,4 +1,0 @@
-# Baseline profile rules for androidx.compose.ui.util
-# =============================================
-HSPLandroidx/compose/ui/util/MathHelpersKt;->lerp(FFF)F
-Landroidx/compose/ui/util/MathHelpersKt;

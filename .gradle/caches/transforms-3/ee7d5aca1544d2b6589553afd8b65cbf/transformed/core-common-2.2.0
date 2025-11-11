@@ -1,9 +1,0 @@
-androidx.arch.core.internal.FastSafeIterableMap
-androidx.arch.core.internal.SafeIterableMap
-androidx.arch.core.internal.SafeIterableMap$AscendingIterator
-androidx.arch.core.internal.SafeIterableMap$DescendingIterator
-androidx.arch.core.internal.SafeIterableMap$Entry
-androidx.arch.core.internal.SafeIterableMap$IteratorWithAdditions
-androidx.arch.core.internal.SafeIterableMap$ListIterator
-androidx.arch.core.internal.SafeIterableMap$SupportRemove
-androidx.arch.core.util.Function

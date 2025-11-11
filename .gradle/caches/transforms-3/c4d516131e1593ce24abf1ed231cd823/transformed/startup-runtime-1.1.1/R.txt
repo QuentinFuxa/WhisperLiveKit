@@ -1,1 +1,0 @@
-int string androidx_startup 0x0

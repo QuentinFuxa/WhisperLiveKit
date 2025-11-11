@@ -130,3 +130,12 @@ local.properties
 *.apk
 mobile/android/daymind/.gradle/
 mobile/android/daymind/app/build/
+
+.gradle/
+.idea/
+build/
+*.apk
+*.zip
+*.jar
+local.properties
+mobile/android/daymind/.idea/

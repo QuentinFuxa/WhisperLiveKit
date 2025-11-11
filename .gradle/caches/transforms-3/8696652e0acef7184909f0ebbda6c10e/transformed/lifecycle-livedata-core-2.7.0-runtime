@@ -1,7 +1,0 @@
-androidx.lifecycle.LiveData
-androidx.lifecycle.LiveData$1
-androidx.lifecycle.LiveData$AlwaysActiveObserver
-androidx.lifecycle.LiveData$LifecycleBoundObserver
-androidx.lifecycle.LiveData$ObserverWrapper
-androidx.lifecycle.MutableLiveData
-androidx.lifecycle.Observer

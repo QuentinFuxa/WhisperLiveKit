@@ -1,2 +1,0 @@
-androidx.startup
-string androidx_startup

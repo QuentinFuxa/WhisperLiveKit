@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <item name="report_drawn" type="id"/>
-    <id name="view_tree_on_back_pressed_dispatcher_owner"/>
-</resources>

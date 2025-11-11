@@ -1,4 +1,0 @@
-# Baseline Profile Rules for androidx.startup
-
-Landroidx/startup/AppInitializer;
-HSPLandroidx/startup/AppInitializer;->**(**)**

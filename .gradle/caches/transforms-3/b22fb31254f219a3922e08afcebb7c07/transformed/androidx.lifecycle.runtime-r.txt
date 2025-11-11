@@ -1,2 +1,0 @@
-androidx.lifecycle.runtime
-id view_tree_lifecycle_owner
