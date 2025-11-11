@@ -31,6 +31,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$(pwd)/.." >> $GITHUB_ENV
       - name: Run pytest (API + infra)
         run: |
           pytest -q --ignore-glob='tests/test_mobile_*'
