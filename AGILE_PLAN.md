@@ -1,117 +1,126 @@
 # Symbioza-DayMind Agile Plan
 
 ## Sprint 1 – MVP Foundation
-- **Length:** 2 weeks
-- **Objectives:** Stand up an end-to-end audio → text → structured ledger flow, basic CI/CD, and an Android capture client.
-- **Definition of Done:** Tested components, documented interfaces, and updated Kanban status with links to commits.
-- **Status:** ✅ EPIC-1 (STT Core), ✅ EPIC-2 (GPT pipeline), ✅ EPIC-3 (Infra), ✅ EPIC-4 (API bridge), ✅ EPIC-5 (Android client) — released through tags `v1.0`, `v1.1`, `v1.3`, `v1.4`, and `v1.5-EPIC-5-ANDROID`.
-- **Note:** Continuous transcript sinks (Redis + JSONL), session-aware GPT processing with daily summaries + robustness patch, automated Terraform + CI/CD, FastAPI bridge, and the Android client are all live.
+- **Length:** 2 weeks (now ongoing governance into commercial readiness)
+- **Objectives:** Stand up audio → text → structured ledger, resilience, and commercial deployment.
+- **Definition of Done:** CI/tests green, docs/operational runbooks updated, planning artifacts synchronized.
+- **Status:** ✅ EPIC-1 (STT Core), ✅ EPIC-2 (GPT pipeline), ✅ EPIC-3 (Infra), ✅ EPIC-4 (API bridge), ✅ EPIC-5 (Android client), 🟢 EPIC-6 (Finance track), 🟡 EPIC-11 (server MVP), ✅ EPIC-12 (Commercial readiness), 🟠 EPIC-13 (Android Kotlin integration).
+- **Note:** Redis/JSONL, Text-First GPT, Terraform+CI, FastAPI auth/metrics, Kivy mobile, finance exporter, Fava/UI, systemd + TLS, CLI onboarding, and landing site are live or in motion.
 
-### Milestones
-- `v1.0-EPIC-1-STT_CORE` — WhisperLiveKit integration + STT loop
-- `v1.1-EPIC-2-GPT_POSTPROC` — GPT ledger/summarizer pipeline
-- `v1.3-EPIC-3-INFRA` — Terraform + CI/CD automation
-- `v1.4-EPIC-4-API` — FastAPI bridge (health, metrics, auth)
-- `v1.5-EPIC-5-ANDROID` — Android client MVP (Buildozer APK)
+### System Architecture
+```
+[Android App (Kotlin/Compose)] --HTTPS/API key--> [FastAPI Backend (Python)]
+    |                                             |-> STT (WhisperLiveKit + VAD)
+    |                                             |-> GPT Postproc (session-aware, JSONL ledger)
+    |                                             |-> Finance (Beancount export + Fava dashboard)
+    |                                             '--> Storage: transcripts.jsonl, ledger.jsonl, ledger.beancount, summaries/metadata
+```
 
-### Epics & User Stories
+-### Milestones
+- `v1.0-EPIC-1-STT_CORE` — WhisperLiveKit + VAD streaming foundation
+- `v1.1.x` — GPT postproc, session-aware summaries, `safe_json_parse`
+- `v1.3-EPIC-3-INFRA` — Terraform droplet + CI/CD automation
+- `v1.4-EPIC-4-API` — FastAPI bridge (auth, metrics, ledger/summary)
+- `v1.5-EPIC-5-ANDROID` — Kivy mobile companion with offline queue + Buildozer APK
+- `v1.6.1` / `v1.6.2` — Finance Beancount export + Fava `/finance` bridge
+- `v1.7.0-EPIC-11-MVP_SERVER` — Systemd services, TLS-aware health, LEGAL/NOTICE compliance
+- `v1.8-EPIC-12-COMMERCIAL` — full auth, billing, TLS, onboarding site+docs delivered and pytest verified
+- *To-tag:* `v1.7.0` release pending final deploy verification for EPIC-11 hardening.
+- *Next tag planned:* `v1.9-EPIC-13-ANDROID` on the first Compose build + upload verification.
 
-#### EPIC-1 — Real-Time STT Core (✅ Complete — tag `v1.0-EPIC-1-STT_CORE`)
-Goal: Port WhisperLiveKit fork, wrap VAD, and deliver resilient streaming transcripts.
-- **US-1.1 – Integrate WhisperLiveKit fork & configure base VAD** — ✅ Done (real-time loop + config in `src/stt_core`).
-- **US-1.2 – Add transcript streaming & local buffer** — ✅ Done (Redis Streams publisher + rolling JSONL buffer).
-- **US-1.3 – Unit tests for audio → text → file output** — ✅ Done (pytest assets + CI gating).
-> **Acceptance Gates**
-> - LiveKit runner boots with configured backend/VAD and prints transcript segments.
-> - Redis + buffer sinks persist and are asserted in CI (`tests/test_stt_*`).
+### Design Principles
+- **Text-First Storage** — Every audio capture/transcript/summary/ledger entry persists as human-readable text/JSONL for auditability and inter-agent reuse (gated in EPIC-11). 
+- **API-first Modular Mesh** — Interfaces (FastAPI, `/v1/transcribe`, `/v1/finance`, `/v1/usage`, `/welcome`) define contracts; clients (Mobile Kivy, Kotlin) consume them without sharing binaries.
 
-#### EPIC-2 — GPT-4o-mini Post-Processing (✅ Complete — tag `v1.1-EPIC-2-GPT_POSTPROC`)
-Goal: Transform transcripts into structured knowledge artifacts.
-- **US-2.1 – Send transcripts to GPT-4o-mini via API** — ✅ Done (async OpenAI client + ledger appends).
-- **US-2.2 – Extract structured JSON (transactions, events, notes)** — ✅ Done (session-aware prompts + ledger metadata).
-- **US-2.3 – Store JSONL logs in `data/ledger/`** — ✅ Done (daily summary generator + robustness patch for GPT output).
-> **Acceptance Gates**
-> - `data/ledger.jsonl` grows per transcript with session metadata.
-> - Daily summary generator produces markdown + structured JSON outputs without crashing on malformed GPT output (`safe_json_parse` tests).
+### Kanban Snapshot
 
-#### EPIC-3 — CI/CD + Deployment (✅ Complete — tag `v1.3-EPIC-3-INFRA`)
-Goal: Provide reproducible builds and automated deployment.
-- **US-3.1 – Add Dockerfile + GitHub Actions workflow** — ✅ Done (multi-stage builds + pytest CI).
-- **US-3.2 – Terraform DigitalOcean droplet setup** — ✅ Done (Droplet + Redis + outputs).
-- **US-3.3 – Deploy daily auto-summary job** — ✅ Done (CI trigger calling summarizer, notifications wired).
-> **Acceptance Gates**
-> - `ci_cd.yml` executes lint/tests on every push + PR.
-> - `infra/terraform` applies cleanly with documented variables and outputs (droplet IP + Redis URI).
-
-#### EPIC-4 — API Bridge (FastAPI) (✅ Complete — tag `v1.4-EPIC-4-API`)
-Goal: Ship a versioned API bridge for clients.
-- **US-4.1 – FastAPI skeleton + auth** — ✅ Done (versioned router, API-key guard, error handling).
-- **US-4.2 – `/v1/transcribe` & `/v1/ingest-transcript`** — ✅ Done (audio uploads + JSON ingestion wired to Redis/JSONL sinks).
-- **US-4.3 – `/v1/ledger` & `/v1/summary`** — ✅ Done (daily summaries, ledger pagination, on-demand generation).
-- **US-4.4 – `/healthz` & `/metrics` observability** — ✅ Done (disk + Redis checks, Prometheus counters).
-> **Acceptance Gates**
-> - Auth enforced via `X-API-Key` on every route; 401 tested.
-> - `/metrics` emits Prometheus counters and is scraped in CI smoke tests.
-
-#### EPIC-5 — Android DayMind Companion (✅ Complete — tag `v1.5-EPIC-5-ANDROID`)
-Goal: Provide a background-friendly recorder with offline queue + summaries.
-- **US-5.1 – Recording + chunker** — ✅ Done (Start/Stop toggle, 6 s WAV chunks, visual indicator).
-- **US-5.2 – Settings + summary viewer** — ✅ Done (persisted settings, summary refresh, test connection UX).
-- **US-5.3 – Offline queue + retries** — ✅ Done (durable queue, exponential backoff, Buildozer packaging + README).
-Release recap: Android MVP verified via 24 green pytest suites, manual desktop preview, and Buildozer debug builds (`scripts/build_apk.sh` → `dist/daymind-debug.apk`). Recording indicator, offline queue, summary refresh, “Test connection,” log view, and “Clear queue” all confirmed on emulator.
-> **Acceptance Gates**
-> - `python -m mobile.daymind.main` demonstrates UX parity with Android build.
-> - Buildozer spec + README instructions reproducibly generate a debug APK; queue persistence tested across restarts.
-
-#### EPIC-6 — Finance / Ledger Analytics (Beancount + Fava) (🟡 In Progress)
-Goal: turn GPT ledger events into double-entry books and dashboards.
-- **US-6.1 – JSONL→Beancount exporter** — 🚧 In progress. Produce deterministic mappings of categories/currencies/time into `ledger.beancount`; cron runs daily straight from `data/ledger*.jsonl`. Success: `ledger.beancount` regenerates without manual edits.
-- **US-6.2 – Fava dashboard service** — 🚧 In progress. Fava runner + `/finance` redirect + `/v1/finance` JSON summaries expose spending and income derived from `finance/ledger.beancount`. Success: charts/filters render for current dataset.
-- **US-6.3 – Finance aggregates endpoint** — `GET /v1/finance` surfaces totals grouped by date/category with tests covering edge cases. Success: regression tests assert schema + calculations.
-> **Acceptance Gates**
-> - Exporter CI test compares known JSONL sample to `ledger.beancount`.
-> - Fava health endpoint returns 200 and respects API auth.
-> - `/v1/finance` documented and exercised in pytest (offline fixtures).
-
-#### EPIC-7 — Long-Term Memory / Anki (genanki) (📥 Backlog)
-Goal: capture “remember this” moments into spaced-repetition decks.
-- **US-7.1 – Deck builder from memory commands** — Parse ledger/session directives and emit daily `Memory::DayMind::<YYYY-MM-DD>.apkg`. Success: deck artifact shows expected cards when imported.
-- **US-7.2 – CI artifact export** — Nightly workflow uploads `.apkg` (and optional AnkiConnect note). Success: workflow summary links deck download.
-- **US-7.3 – Schema & QA guard** — Define basic card templates, add smoke tests verifying round-trip (import/export). Success: sample AnkiDroid/Desktop import documented.
-> **Acceptance Gates**
-> - Deck metadata lists date stamp + tag set.
-> - CI run stores `.apkg` artifact and surfaces checksum.
-> - Automated test ensures at least one card renders with both front/back templates.
-
-#### EPIC-8 — Automation & Daily Report (GitHub Actions schedule) (📥 Backlog)
-Goal: autonomously regenerate data products and notify stakeholders each day.
-- **US-8.1 – Daily cron workflow** — GitHub Actions schedule triggers summary refresh, JSONL→Beancount exporter, and ledger rollups. Success: workflow history shows daily success with attached artifacts.
-- **US-8.2 – Apprise notifications** — Send Telegram/email message linking summary markdown + CSV. Success: notifications logged; secrets managed via GH.
-- **US-8.3 – Health/report metrics snapshot** — Capture request counts/errors and publish inline with notification. Success: job output includes metrics JSON snippet.
-> **Acceptance Gates**
-> - Cron run recorded in Actions with retention of artifacts/logs.
-> - Apprise dry-run test executed in CI using mock transports.
-> - Metrics snippet validated via pytest fixture.
-
-#### EPIC-9 — Release Management (Release Please) (📥 Backlog)
-Goal: automate semantic versioning and changelog generation tied to epics.
-- **US-9.1 – Configure Release-Please Action** — Conventional commits trigger version bumps + release PRs. Success: autop-run merges produce GitHub releases with assets.
-- **US-9.2 – EPIC tag integration** — Release Please template references tags like `v1.6-EPIC-6-FINANCE` and groups changes per epic. Success: changelog includes epic headers + links.
-> **Acceptance Gates**
-> - Dry-run release shows correct next version.
-> - Tagging workflow documented; governance notes updated for ReleaseAgent.
-
-#### EPIC-10 — Orchestration (LangGraph) (📥 Backlog)
-Goal: model DayMind as a LangGraph DAG stitched via Redis Streams for observability and retries.
-- **US-10.1 – DAG definition** — Nodes for STT, GPT postproc, Finance exporter, Memory deck, Reporter. Success: runnable mock graph with state transitions logged.
-- **US-10.2 – Redis Streams wiring** — Use XADD/XREADGROUP for events, including metrics on throughput/latency. Success: minimal harness demonstrates event handoffs locally.
-- **US-10.3 – Runbook & contracts** — Document node interfaces, retries, backoff policies, and failure handling for OrchestratorAgent. Success: runbook stored in `docs/`.
-> **Acceptance Gates**
-> - Graph unit test asserts ordering + conditional branching.
-> - Redis stream consumer benchmark recorded with lat/throughput metrics.
-> - Runbook reviewed by Integrator + Automator agents.
-
-### Kanban – Sprint 1
 | Backlog | Next | In Progress | Done |
 |---------|------|-------------|------|
-| US-6.3 – Finance aggregates endpoint<br>US-7.1 – Memory deck builder<br>US-7.2 – CI deck artifact<br>US-7.3 – Schema & QA<br>US-8.1 – Daily cron workflow<br>US-8.2 – Apprise notifications<br>US-8.3 – Health metrics snapshot<br>US-9.1 – Release-Please config<br>US-9.2 – Epic-aware tagging<br>US-10.1 – LangGraph DAG nodes<br>US-10.2 – Redis Streams wiring<br>US-10.3 – Runbook & contracts | — | **US-6.1 – JSONL→Beancount exporter**<br>**US-6.2 – Fava dashboard service** | US-1.1 / 1.2 / 1.3<br>US-2.1 / 2.2 / 2.3<br>US-3.1 / 3.2 / 3.3<br>US-4.1 / 4.2 / 4.3 / 4.4<br>US-5.1 / 5.2 / 5.3 |
+| EPIC-10 – LangGraph DAG + Redis streams<br>EPIC-8 – Automations & notifications backlog<br>EPIC-9 – Release management automation | EPIC-13 – US-13.2 Summary + Finance views<br>EPIC-13 – US-13.3 Settings + diagnostics | EPIC-13 – US-13.1 Recording + chunk uploader (Kotlin client)<br>EPIC-13 – full Android Kotlin client integration | EPIC-1 .. EPIC-6 stories<br>EPIC-11 US-11.1..US-11.4<br>EPIC-12 US-12.1..US-12.3 |
+
+### Epic Tracker
+
+#### EPIC-1 — Real-Time STT Core (✅ Complete — tag `v1.0-EPIC-1-STT_CORE`)
+- **US-1.1** WhisperLiveKit + VAD integration.
+- **US-1.2** Transcript streaming to Redis + JSONL buffer.
+- **US-1.3** STT e2e tests (noise sample, pytest assets).
+> **Acceptance Gates:** Runner prints live transcripts; Redis + buffer verified in CI.
+
+#### EPIC-2 — GPT-4o-mini Post-Processing (✅ Complete — tag `v1.1-EPIC-2-GPT_POSTPROC`)
+- **US-2.1** GPT API pipeline.
+- **US-2.2** Session-aware prompts + JSON extraction.
+- **US-2.3** Daily summaries + safe JSON parser.
+> **Acceptance Gates:** `data/ledger.jsonl` grows per transcript; `summary_<date>.md` + `ledger_<date>.jsonl` produced even when GPT output is malformed.
+
+#### EPIC-3 — CI/CD & Deployment (✅ Complete — tag `v1.3-EPIC-3-INFRA`)
+- **US-3.1** Docker/CI scaffolding.
+- **US-3.2** Terraform droplet + Redis.
+- **US-3.3** Auto summary/deploy workflow.
+> **Acceptance Gates:** `ci_cd.yml` runs pytest + Terraform; infra outputs (IP, Redis URI) documented.
+
+#### EPIC-4 — API Bridge (✅ Complete — tag `v1.4-EPIC-4-API`)
+- **US-4.1** FastAPI skeleton + auth middleware.
+- **US-4.2** `/v1/transcribe` + `/v1/ingest-transcript`.
+- **US-4.3** `/v1/ledger` + `/v1/summary`.
+- **US-4.4** `/healthz` + `/metrics` observability.
+> **Acceptance Gates:** All routes require `X-API-Key`; Prometheus counters scraped in CI smoke tests.
+
+#### EPIC-5 — Android Companion (✅ Complete — tag `v1.5-EPIC-5-ANDROID`)
+- **US-5.1** Recorder + chunk queue.
+- **US-5.2** Summary tab + offline persistence.
+- **US-5.3** Settings/log view + Buildozer path.
+> **Acceptance Gates:** Buildozer debug APK (`scripts/build_apk.sh`) verified; emulator run confirms queue persistence, log view, “Clear queue,” and summary refresh.
+
+#### EPIC-6 — Finance / Ledger Analytics (🟢 Rolling Delivery)
+- **US-6.1 – JSONL→Beancount exporter** — ✅ CLI + helper script generate `finance/ledger.beancount` deterministically from `data/ledger*.jsonl`.
+- **US-6.2 – Fava dashboard service + `/v1/finance`** — ✅ `python -m src.finance.fava_runner` runs externally on port 5000, FastAPI redirect + summary endpoint serve category/date totals (tests in `tests/test_finance_api.py`).
+- **US-6.3 – Finance aggregates API enhancements** — ⏭ (Next) add richer filters, pagination, CSV/endpoint parity; success = `/v1/finance` powers dashboards + automation jobs.
+> **Acceptance Gates:** Daily exporter cron, `/finance` redirect secured, `/v1/finance` validated against golden ledger snapshots, CSV/JSON outputs ready for BI.
+
+#### EPIC-7 — Long-Term Memory / Anki (⏳ Backlog)
+- **US-7.1 – Deck builder from “remember” intents** — Next (daily `.apkg` named `Memory::DayMind::<YYYY-MM-DD>`).
+- **US-7.2 – CI artifact export** — Backlog (scheduled workflow uploads `.apkg`).
+- **US-7.3 – Schema & QA guard** — Backlog (front/back templates validated via genanki + sample import).
+> **Acceptance Gates:** Deck artifacts import on AnkiDesktop/AnkiDroid, CI attaches them, schema tests prevent malformed cards.
+
+#### EPIC-8 — Automation & Daily Report (⏳ Backlog)
+- **US-8.1 – Daily cron workflow** — Next (GH Actions schedule runs exporter + summarizer + ledger refresh; artifacts attached).
+- **US-8.2 – Notifications via Apprise** — Backlog (Telegram/email payload linking summary + CSV).
+- **US-8.3 – Health/report metrics snapshot** — Backlog (daily status JSON with request counts/errors).
+> **Acceptance Gates:** Cron finishes within 15 min, notifications delivered with success/failure flag, artifacts stored for 30 days.
+
+#### EPIC-9 — Release Management (⏳ Backlog)
+- **US-9.1 – Configure Release Please** — Backlog (conventional commits → auto PR + changelog).
+- **US-9.2 – EPIC tag integration** — Backlog (tags `v1.6-EPIC-6-FINANCE` etc. produce per-epic sections).
+> **Acceptance Gates:** Release PR opens on every merge, changelog groups entries by epic, tags pushed automatically on approval.
+
+#### EPIC-10 — LangGraph Orchestration (⏳ Backlog)
+- **US-10.1 – DAG skeleton** — Backlog (nodes for STT, GPT, Finance, Memory, Reporter with mocks/tests).
+- **US-10.2 – Redis Streams wiring** — Backlog (XADD/XREADGROUP flows with metrics + replay instructions).
+- **US-10.3 – Runbook & contracts** — Backlog (document node APIs, retry/backoff, error semantics).
+> **Acceptance Gates:** LangGraph demo runs end-to-end with mocks, Redis streams monitored, runbook published with node contracts.
+
+#### EPIC-11 — Serverized MVP Release (🟡 In Progress — target `v1.7.0-EPIC-11-MVP_SERVER`)
+- **US-11.1 – Legal compliance & external services** — ✅ Fava/Beancount run strictly as HTTP/file-based externals; MIT LICENSE + NOTICE.md committed; README documents compliance + Text-First rule.
+- **US-11.2 – Systemd services & env templates** — ✅ `daymind-api` + `daymind-fava` units share `/etc/daymind/daymind.env`; firewall guidance + reverse-proxy configs documented.
+- **US-11.3 – CI/CD deploy job & docs** — ✅ GitHub Actions `deploy_app` rsyncs code, installs deps, restarts services; `DEPLOY.md` + `API_REFERENCE.md` refreshed.
+- **US-11.4 – Hardening & release tag** — 🚧 TLS field added to `/healthz`, Prometheus counters expanded, release tag `v1.7.0` pending final smoke tests.
+> **Acceptance Gates:** Droplet reboot → services active; `/healthz` fails if disk/redis/openai/tls broken; CI deploy job green; transcription always writes `data/transcript_<day>.jsonl` before GPT/Finance stages; `v1.7.0-EPIC-11-MVP_SERVER` tag cut with verified health + metrics.
+
+#### EPIC-12 — Commercial Readiness (✅ Done — tag `v1.8-EPIC-12-COMMERCIAL`)
+- **US-12.1 – Auth & Billing layer** — ✅ API key metadata store + `/v1/usage`, CLI for create/revoke, Stripe/Paddle stubs, docs in `BILLING.md`.
+- **US-12.2 – Security hardening** — ✅ IP + key rate limiting middleware, TLS proxy configs (Caddy/Nginx), new `/healthz` fields, `SECURITY.md`, `DEPLOY.md` HTTPS guidance.
+- **US-12.3 – Landing + onboarding** — ✅ `landing/` static site deployed via GitHub Pages, `/welcome` onboarding endpoint, `ONBOARDING.md`, `scripts/setup_daymind.sh` helper.
+> **Acceptance Gates:** `/v1/usage` reports live stats, HTTPS enforced via reverse proxy (`infra/caddy/Caddyfile`), firewall docs updated, landing site auto publishes from CI, onboarding doc validated by new operator walkthrough, `v1.5+` customers can self-serve API keys + billing data.
+> **Success:** `v1.8-EPIC-12-COMMERCIAL` release delivered with auth/billing, TLS, onboarding docs, and pytest verification.
+
+#### EPIC-13 — Android Kotlin Client (⏭ Next)
+- **US-13.1 – Recording + Chunk Uploader** — Next (Kotlin/Compose recorder, 5–10 s chunks, Retrofit upload to `/v1/transcribe`, API-key header, background retry/queue). 
+- **US-13.2 – Summary & Finance Views** — Next (summary fetch, category totals chart, offline/refresh states using Compose/MPAndroidChart). 
+- **US-13.3 – Settings & Key Storage** — Next (EncryptedSharedPreferences server URL + API key, diagnostics ping `/healthz`, persistent config survives restarts).
+> **Acceptance Gates:** Kotlin app uploads chunks with exponential retry, summary and finance tabs render real data with errors handled, stored credentials survive reboots, health indicator toggles based on `/healthz` response.
+
+### Operational Gates
+- `/healthz` must expose `redis`, `disk`, `openai`, and `tls`; fail-fast when critical checks fail and return JSON for monitoring.
+- Fava runs strictly as an external HTTP service; FastAPI only redirects/proxies (`/finance`, `FAVA_BASE_URL`) and never embeds GPL binaries.
+- Text-First Storage invariant enforced: every pipeline writes transcripts/summaries/ledger entries to JSONL/MD before downstream processing or UI surfaces data.
