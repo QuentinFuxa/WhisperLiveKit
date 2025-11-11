@@ -31,7 +31,8 @@ async def run_realtime_stt() -> None:
 
     if LiveKit is None:
         raise RuntimeError(
-            "whisper_livekit is not installed. Install project deps to run STT."
+            "whisper_livekit is not installed. Install the optional 'stt_livekit' "
+            "extra or vendor LiveKit before running the realtime STT loop."
         )
 
     live = LiveKit(

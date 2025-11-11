@@ -111,6 +111,7 @@ gh workflow run android_build.yml -f build_type=both -f runner=gh --ref main
 gh workflow run android_build.yml -f build_type=release -f runner=self -f ref=main
 ```
 Artifacts appear as `daymind-android-*` in the run summary; tag builds also upload the APKs to the matching GitHub Release. Provide the optional `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_ALIAS_PASSWORD` secrets to produce a signed `app-release.apk`; otherwise the workflow still publishes debug + unsigned release builds.
+> **Operator note:** WhisperLiveKit STT support is optional; GitHub Actions skips it. Install via `pip install ".[stt_livekit]"` (or vendor your own LiveKit wheel) on production runners before invoking the realtime STT loop.
 - **Observability:** `/healthz` now reports `redis`, `disk`, and `openai` status; `/metrics` exposes Prometheus counters with route/method/status labels.
 
 ### Installation & Quick Start

@@ -42,6 +42,7 @@ dependencies = [
 [project.optional-dependencies]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
+stt_livekit = ["whisper-livekit@git+https://github.com/QuentinFuxa/WhisperLiveKit.git"]
 
 [project.urls]
 Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
