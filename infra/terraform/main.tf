@@ -11,17 +11,11 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-variable "do_token" {}
-variable "project_name" {
-  default = "whisper-budget"
-}
-variable "ssh_fingerprint" {}
-
 resource "digitalocean_droplet" "app" {
-  image  = "debian-12-x64"
-  name   = "${var.project_name}-app"
-  region = var.region
-  size   = "s-1vcpu-1gb"
+  image    = "debian-12-x64"
+  name     = "${var.project_name}-app"
+  region   = var.region
+  size     = "s-1vcpu-1gb"
   ssh_keys = [var.ssh_fingerprint]
 }
 

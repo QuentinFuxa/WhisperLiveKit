@@ -1,17 +1,16 @@
 variable "do_token" {
   description = "DigitalOcean API token"
   type        = string
-  sensitive   = true
 }
 
 variable "project_name" {
-  description = "Base name for resources"
+  description = "Project name"
   type        = string
-  default     = "whisper-budget"
+  default     = "daymind"
 }
 
 variable "ssh_fingerprint" {
-  description = "SSH key fingerprint authorized on DO"
+  description = "SSH key fingerprint"
   type        = string
 }
 
