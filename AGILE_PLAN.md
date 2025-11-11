@@ -115,3 +115,4 @@ Goal: model DayMind as a LangGraph DAG stitched via Redis Streams for observabil
 | Backlog | Next | In Progress | Done |
 |---------|------|-------------|------|
 | US-6.2 – Fava dashboard<br>US-6.3 – Finance aggregates endpoint<br>US-7.1 – Memory deck builder<br>US-7.2 – CI deck artifact<br>US-7.3 – Schema & QA<br>US-8.1 – Daily cron workflow<br>US-8.2 – Apprise notifications<br>US-8.3 – Health metrics snapshot<br>US-9.1 – Release-Please config<br>US-9.2 – Epic-aware tagging<br>US-10.1 – LangGraph DAG nodes<br>US-10.2 – Redis Streams wiring<br>US-10.3 – Runbook & contracts | — | **US-6.1 – JSONL→Beancount exporter** | US-1.1 / 1.2 / 1.3<br>US-2.1 / 2.2 / 2.3<br>US-3.1 / 3.2 / 3.3<br>US-4.1 / 4.2 / 4.3 / 4.4<br>US-5.1 / 5.2 / 5.3 |
+US-6.2 Fava dashboard service — In Progress
