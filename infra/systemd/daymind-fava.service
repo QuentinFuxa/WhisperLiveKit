@@ -3,19 +3,14 @@ Description=DayMind Fava Ledger UI
 After=network.target
 
 [Service]
-Type=simple
+User=daymind
+Group=daymind
 WorkingDirectory=/opt/daymind
 EnvironmentFile=/etc/default/daymind
 Environment=PYTHONPATH=/opt/daymind
-ExecStartPre=/usr/bin/test -x /opt/daymind/venv/bin/fava
-ExecStartPre=/usr/bin/test -d /opt/daymind
-User=daymind
-Group=daymind
-ExecStart=/opt/daymind/scripts/start_fava.sh
+ExecStart=/opt/daymind/venv/bin/fava --host 127.0.0.1 --port ${FAVA_PORT} /opt/daymind/runtime/ledger.beancount
 Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
