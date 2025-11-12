@@ -182,6 +182,16 @@ ssh_exec "
   APP_PORT=\${APP_PORT:-8000}
   API_LOG=/opt/daymind/api.log
   $SUDO systemctl restart daymind-api.service daymind-fava.service || true
+  echo "🔄 Waiting up to 30s for daymind-api to bind port \${APP_PORT}"
+  for i in {1..30}; do
+    if nc -z 127.0.0.1 "\${APP_PORT}"; then
+      echo "✅ daymind-api is listening on port \${APP_PORT}"
+      break
+    fi
+    sleep 1
+  done
+  echo "📝 daymind-api systemd status (for debugging)"
+  $SUDO systemctl status daymind-api.service --no-pager -l || true
   sleep 5
   if ! ss -ltn | grep -q \":\${APP_PORT} \"; then
     echo \"API not listening on \${APP_PORT}, attempting fallback supervisor\" >&2
