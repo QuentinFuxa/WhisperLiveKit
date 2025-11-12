@@ -32,10 +32,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$PYTHONPATH:${{ github.workspace }}" >> $GITHUB_ENV
       - name: Run pytest (API + infra)
         working-directory: ${{ github.workspace }}
-        env:
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest -q --ignore-glob='tests/test_mobile_*'
       - name: Set up Terraform
