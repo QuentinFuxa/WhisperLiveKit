@@ -15,8 +15,8 @@ USAGE
 HOST=""
 USER="root"
 KEY_PATH="${SSH_KEY_PATH:-}"
-REMOTE_PATH="/opt/daymind"
-REPO_URL="${REPO_URL:-https://github.com/noba-dkg-aion/daymind.git}"
+: "${REPO_URL:=https://github.com/noba-dkg-aion/daymind.git}"
+: "${APP_DIR:=/opt/daymind}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,7 +33,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --repo-path)
-      REMOTE_PATH="${2:-}"
+      APP_DIR="${2:-}"
       shift 2
       ;;
     --repo-url)
@@ -80,27 +80,33 @@ if [[ "$USER" != "root" ]]; then
 fi
 
 ssh_exec() {
+# shellcheck disable=SC2029
   ssh "${SSH_OPTS[@]}" "$REMOTE" "$@"
 }
 
 echo "==> Ensuring daymind system account and repo"
 ssh_exec "
   set -euo pipefail
+  if ! command -v git >/dev/null 2>&1; then
+    $SUDO apt-get update -y
+    $SUDO apt-get install -y --no-install-recommends git
+  fi
   if ! getent group daymind >/dev/null 2>&1; then
     $SUDO groupadd --system daymind
   fi
   if ! id -u daymind >/dev/null 2>&1; then
-    $SUDO useradd --system --create-home --home '$REMOTE_PATH' --shell /bin/bash -g daymind daymind
+    $SUDO useradd --system --create-home --home '$APP_DIR' --shell /bin/bash -g daymind daymind
   fi
-  $SUDO mkdir -p '$REMOTE_PATH'
-  if [ ! -d '$REMOTE_PATH/.git' ]; then
-    $SUDO rm -rf '$REMOTE_PATH'
-    $SUDO -u daymind git clone '$REPO_URL' '$REMOTE_PATH'
+  $SUDO mkdir -p '$APP_DIR'
+  if [ -d '$APP_DIR/.git' ]; then
+    $SUDO -u daymind git -C '$APP_DIR' fetch --all -p || true
+    $SUDO -u daymind git -C '$APP_DIR' checkout -f main
+    $SUDO -u daymind git -C '$APP_DIR' reset --hard origin/main
+  else
+    $SUDO rm -rf '$APP_DIR'
+    $SUDO -u daymind git clone '$REPO_URL' '$APP_DIR'
   fi
-  $SUDO -u daymind git -C '$REMOTE_PATH' fetch --all --tags || true
-  $SUDO -u daymind git -C '$REMOTE_PATH' checkout main
-  $SUDO -u daymind git -C '$REMOTE_PATH' pull --rebase origin main
-  $SUDO chown -R daymind:daymind '$REMOTE_PATH'
+  $SUDO chown -R daymind:daymind '$APP_DIR'
 "
 
 echo "==> Rsyncing working tree"
@@ -113,8 +119,8 @@ RSYNC_EXCLUDES=(
   "--exclude=.gradle"
   "--exclude=dist"
 )
-rsync -az --delete "${RSYNC_EXCLUDES[@]}" -e "ssh ${SSH_OPTS[*]}" ./ "$REMOTE:$REMOTE_PATH/"
-ssh_exec "$SUDO chown -R daymind:daymind '$REMOTE_PATH'"
+rsync -az --delete "${RSYNC_EXCLUDES[@]}" -e "ssh ${SSH_OPTS[*]}" ./ "$REMOTE:$APP_DIR/"
+ssh_exec "$SUDO chown -R daymind:daymind '$APP_DIR'"
 
 echo "==> Ensuring Redis, runtime scaffolding, and ledger"
 ssh_exec "
@@ -125,9 +131,9 @@ ssh_exec "
     $SUDO systemctl enable redis-server
   fi
   $SUDO systemctl restart redis-server
-  $SUDO mkdir -p '$REMOTE_PATH/runtime'
-  $SUDO touch '$REMOTE_PATH/runtime/ledger.beancount'
-  $SUDO chown -R daymind:daymind '$REMOTE_PATH/runtime'
+  $SUDO mkdir -p '$APP_DIR/runtime'
+  $SUDO touch '$APP_DIR/runtime/ledger.beancount'
+  $SUDO chown -R daymind:daymind '$APP_DIR/runtime'
 "
 
 echo "==> Rebuilding virtual environment (torch-free runtime)"
@@ -135,8 +141,7 @@ ssh_exec "
   set -euo pipefail
   $SUDO -u daymind bash -lc '
     set -euo pipefail
-    IFS=$'"'"'\n\t'"'"'
-    cd \"$REMOTE_PATH\"
+    cd \"$APP_DIR\"
     rm -rf venv
     python3 -m venv venv
     ./venv/bin/pip install --upgrade pip wheel
@@ -144,18 +149,21 @@ ssh_exec "
     ./venv/bin/pip install -e . --no-deps
     ./venv/bin/python -c \"import src.api.main\"
   '
-  $SUDO chown -R daymind:daymind '$REMOTE_PATH'
+  $SUDO chown -R daymind:daymind '$APP_DIR'
 "
 
 echo "==> Writing /etc/default/daymind"
+DAYMIND_API_KEY_VALUE="${DAYMIND_API_KEY:-}"
 ssh_exec "
   set -euo pipefail
-  $SUDO tee /etc/default/daymind >/dev/null <<'EOF'
+  DAYMIND_API_KEY_VALUE='${DAYMIND_API_KEY_VALUE}'
+  $SUDO tee /etc/default/daymind >/dev/null <<EOF
 APP_HOST=127.0.0.1
 APP_PORT=8000
 FAVA_PORT=8010
 REDIS_URL=redis://127.0.0.1:6379
 PYTHONPATH=/opt/daymind
+DAYMIND_API_KEY=$DAYMIND_API_KEY_VALUE
 # OPENAI_API_KEY is read from environment/CI secrets if present.
 EOF
   $SUDO chmod 640 /etc/default/daymind
@@ -164,13 +172,14 @@ EOF
 echo "==> Installing systemd units"
 ssh_exec "
   set -euo pipefail
-  $SUDO cp '$REMOTE_PATH/infra/systemd/daymind-api.service' /etc/systemd/system/daymind-api.service
-  $SUDO cp '$REMOTE_PATH/infra/systemd/daymind-fava.service' /etc/systemd/system/daymind-fava.service
+  $SUDO cp '$APP_DIR/infra/systemd/daymind-api.service' /etc/systemd/system/daymind-api.service
+  $SUDO cp '$APP_DIR/infra/systemd/daymind-fava.service' /etc/systemd/system/daymind-fava.service
   $SUDO systemctl daemon-reload
   $SUDO systemctl enable daymind-api.service daymind-fava.service
 "
 
 echo "==> Restarting services and verifying health"
+# shellcheck disable=SC1083,SC1078,SC1079
 ssh_exec "
   set -euo pipefail
   ENV_FILE=/etc/default/daymind
@@ -183,32 +192,32 @@ ssh_exec "
   API_LOG=/opt/daymind/api.log
   $SUDO systemctl restart daymind-api.service daymind-fava.service || true
   touch /etc/default/daymind
-  grep -q "^APP_HOST=" /etc/default/daymind || echo "APP_HOST=127.0.0.1" >> /etc/default/daymind
-  grep -q "^APP_PORT=" /etc/default/daymind || echo "APP_PORT=8000" >> /etc/default/daymind
+  grep -q \"^APP_HOST=\" /etc/default/daymind || echo \"APP_HOST=127.0.0.1\" >> /etc/default/daymind
+  grep -q \"^APP_PORT=\" /etc/default/daymind || echo \"APP_PORT=8000\" >> /etc/default/daymind
   set -a
   . /etc/default/daymind
   set +a
-  echo "🔄 Waiting up to 60s for API on \$\{APP_HOST}:\$\{APP_PORT}"
+  echo "🔄 Waiting up to 60s for API on \${APP_HOST}:\${APP_PORT}"
   for n in $(seq 1 60); do
-    if ss -lnt | grep -q ":\$\{APP_PORT} "; then
+    if ss -lnt | grep -q ":\${APP_PORT} "; then
       echo "✅ API socket ready"
       break
     fi
     sleep 1
   done
   API_HEADER=""
-  if [ -n "\$\{DAYMIND_API_KEY:-}" ]; then
-    API_HEADER="-H \"X-API-Key: \$\{DAYMIND_API_KEY}\""
+  if [ -n "\${DAYMIND_API_KEY:-}" ]; then
+    API_HEADER="-H \"X-API-Key: \${DAYMIND_API_KEY}\""
   fi
-  curl -fsS \$\{API_HEADER} "http://\$\{APP_HOST}:\$\{APP_PORT}/healthz" >/dev/null
-  curl -fsS \$\{API_HEADER} "http://\$\{APP_HOST}:\$\{APP_PORT}/metrics" | head -n 3 >/dev/null
+  curl -fsS \${API_HEADER} "http://\${APP_HOST}:\${APP_PORT}/healthz" >/dev/null
+  curl -fsS \${API_HEADER} "http://\${APP_HOST}:\${APP_PORT}/metrics" | head -n 3 >/dev/null
 
 "
 
 echo "==> Deployment summary"
 ssh_exec "
   set -euo pipefail
-  cd '$REMOTE_PATH'
+  cd '$APP_DIR'
   COMMIT_SHA=\$(git rev-parse HEAD 2>/dev/null || echo 'unknown')
   echo \"Deployed commit: \$COMMIT_SHA\"
   API_STATUS=\$($SUDO systemctl is-active daymind-api 2>/dev/null || true)

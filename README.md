@@ -95,7 +95,7 @@ DayMind core is MIT licensed (see [`LICENSE`](LICENSE)); third-party dependencie
 
 ### Run as a Service / Production Notes
 
-- **Systemd-first:** `/opt/daymind` hosts the repo plus `/opt/daymind/venv`; `/opt/daymind/runtime/` stores text artifacts like `ledger.beancount`. `/etc/default/daymind` is rewritten on every deploy with safe defaults (`APP_HOST=127.0.0.1`, `APP_PORT=8000`, `FAVA_PORT=8010`, `REDIS_URL=redis://127.0.0.1:6379`, `PYTHONPATH=/opt/daymind`) so both services stay environment-aware. `scripts/remote_deploy.sh` always runs `pip install -r requirements_runtime.txt && pip install -e . --no-deps` inside a fresh venv to keep the runtime torch/NVIDIA-free while still sanity-checking `uvicorn`/`fava` before reloading units (see `DEPLOY.md` for the full runbook).
+- **Systemd-first:** `/opt/daymind` hosts the repo plus `/opt/daymind/venv`; `/opt/daymind/runtime/` stores text artifacts like `ledger.beancount`. `/etc/default/daymind` is rewritten on every deploy with safe defaults (`APP_HOST=127.0.0.1`, `APP_PORT=8000`, `FAVA_PORT=8010`, `REDIS_URL=redis://127.0.0.1:6379`, `PYTHONPATH=/opt/daymind`, `DAYMIND_API_KEY=${DAYMIND_API_KEY:-}`) so both services stay environment-aware. `scripts/remote_deploy.sh` always runs `pip install -r requirements_runtime.txt && pip install -e . --no-deps` inside a fresh venv to keep the runtime torch/NVIDIA-free while still sanity-checking `uvicorn`/`fava` before reloading units, and it respects a configurable `REPO_URL`/`APP_DIR` (defaulting to `https://github.com/noba-dkg-aion/daymind.git` at `/opt/daymind`) so droplets consistently pull from the canonical repo (see `DEPLOY.md` for the full runbook).
 - **Services:** `daymind-api` runs `/opt/daymind/venv/bin/uvicorn src.api.main:app --host ${APP_HOST:-127.0.0.1} --port ${APP_PORT:-8000}` and `daymind-fava` runs `/opt/daymind/venv/bin/fava --host 127.0.0.1 --port ${FAVA_PORT:-8010} /opt/daymind/runtime/ledger.beancount`. Both units pin `WorkingDirectory=/opt/daymind`, `EnvironmentFile=/etc/default/daymind`, `Environment=PYTHONPATH=/opt/daymind`, and `Restart=on-failure` so reloads inherit the correct module path; `infra/systemd/checks/healthcheck.sh` still prints the last 80 log lines if any unit drops to aid CI/ops triage (`journalctl -u daymind-api -f` / `daymind-fava` remains the go-to live tail).
 - **CI/CD deploys:** `.github/workflows/ci_cd.yml` runs `terraform_apply → deploy_app → verify_services`. The deploy step calls `scripts/remote_deploy.sh`, enforces `systemctl enable --now daymind-api daymind-fava`, ensures Redis is up, and curls `http://127.0.0.1:8000/healthz` + `/metrics` (falling back to a manual supervisor that tails `/opt/daymind/api.log` if the API refuses to listen). The `verify_services` job then executes `infra/systemd/checks/healthcheck.sh` over SSH so CI logs include Redis/API/Fava status plus any recent journal output before declaring the pipeline green.
 
@@ -106,6 +106,14 @@ gh run list
 gh run view --web
 ```
 Omit `--ref` to target `main`. Populate the `DO_TOKEN`, `SSH_FINGERPRINT`, and `DEPLOY_SSH_KEY` repository secrets so Terraform and SSH steps can complete.
+
+Normalize your local git remote before pushing or invoking remote deployments with:
+
+```bash
+make set-origin
+```
+
+This guarantees `origin` points to `https://github.com/noba-dkg-aion/daymind.git`, keeping CI runners and droplets in sync with the canonical repo.
 Android Compose builds use `.github/workflows/android_build.yml` and surface artifacts (debug, release unsigned, and an optional signed release) under the workflow run plus any GitHub Release tied to a tag:
 ```bash
 gh workflow run android_build.yml -f build_type=both -f runner=gh --ref main
@@ -114,6 +122,21 @@ gh workflow run android_build.yml -f build_type=release -f runner=self -f ref=ma
 Artifacts appear as `daymind-android-*` in the run summary; tag builds also upload the APKs to the matching GitHub Release. Provide the optional `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_ALIAS_PASSWORD` secrets to produce a signed `app-release.apk`; otherwise the workflow still publishes debug + unsigned release builds.
 > **Operator note:** WhisperLiveKit STT support is optional; GitHub Actions skips it. Install via `pip install ".[stt_livekit]"` (or vendor your own LiveKit wheel) on production runners before invoking the realtime STT loop.
 - **Observability:** `/healthz` now reports `redis`, `disk`, and `openai` status; `/metrics` exposes Prometheus counters with route/method/status labels.
+
+### Kubernetes Quickstart
+
+Run the API inside Kubernetes without building a container image by letting the Pod clone this repo at startup:
+
+```bash
+kubectl create ns daymind || true
+kubectl -n daymind create secret generic daymind-secrets --from-literal=DAYMIND_API_KEY=your_key
+kubectl -n daymind apply -f k8s/daymind.yaml
+kubectl -n daymind rollout status deploy/daymind-api
+kubectl -n daymind port-forward svc/daymind-api 8000:8000
+curl -H "X-API-Key: your_key" http://127.0.0.1:8000/healthz
+```
+
+The manifest provisions a ConfigMap/Secret, clones `https://github.com/noba-dkg-aion/daymind.git` inside an `emptyDir`, prepares a virtualenv, and starts Uvicorn with the same `/healthz` + `/metrics` semantics (including the `X-API-Key` header) that the droplet/systemd path enforces.
 
 ### Installation & Quick Start
 

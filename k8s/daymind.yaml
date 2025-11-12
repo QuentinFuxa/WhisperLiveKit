@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: daymind
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: daymind-secrets
+  namespace: daymind
+type: Opaque
+stringData:
+  DAYMIND_API_KEY: "replace-with-real-key"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: daymind-config
+  namespace: daymind
+data:
+  APP_HOST: "0.0.0.0"
+  APP_PORT: "8000"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: daymind-api
+  namespace: daymind
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: daymind-api
+  template:
+    metadata:
+      labels:
+        app: daymind-api
+    spec:
+      volumes:
+        - name: code
+          emptyDir: {}
+      initContainers:
+        - name: git-clone
+          image: alpine/git:latest
+          env:
+            - name: REPO_URL
+              value: "https://github.com/noba-dkg-aion/daymind.git"
+          command:
+            - /bin/sh
+            - -lc
+            - git clone --depth=1 "${REPO_URL:-https://github.com/noba-dkg-aion/daymind.git}" /code
+          volumeMounts:
+            - name: code
+              mountPath: /code
+        - name: bootstrap-venv
+          image: python:3.11-slim
+          env:
+            - name: REPO_URL
+              value: "https://github.com/noba-dkg-aion/daymind.git"
+          command:
+            - /bin/sh
+            - -lc
+            - |
+              apt-get update && apt-get install -y --no-install-recommends git && \
+              cd /code && python -m venv /code/venv && . /code/venv/bin/activate && \
+              pip install --upgrade pip && \
+              pip install -r requirements_runtime.txt && \
+              pip install -e . --no-deps
+          volumeMounts:
+            - name: code
+              mountPath: /code
+      containers:
+        - name: daymind-api
+          image: python:3.11-slim
+          envFrom:
+            - secretRef:
+                name: daymind-secrets
+            - configMapRef:
+                name: daymind-config
+          env:
+            - name: REPO_URL
+              value: "https://github.com/noba-dkg-aion/daymind.git"
+          ports:
+            - containerPort: 8000
+          command:
+            - /bin/sh
+            - -lc
+            - |
+              apt-get update && apt-get install -y --no-install-recommends git && \
+              cd /code && . /code/venv/bin/activate && \
+              python -m uvicorn src.api.main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-8000}
+          volumeMounts:
+            - name: code
+              mountPath: /code
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+              httpHeaders:
+                - name: X-API-Key
+                  value: "$(DAYMIND_API_KEY)"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+              httpHeaders:
+                - name: X-API-Key
+                  value: "$(DAYMIND_API_KEY)"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources: {}
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: daymind-api
+  namespace: daymind
+spec:
+  selector:
+    app: daymind-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
