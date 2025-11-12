@@ -1,6 +1,17 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.DayMind" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="android:statusBarColor" tools:targetApi="l">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+<resources>
+    <style name="Theme.DayMind.Base" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/true_black</item>
+        <item name="android:colorBackground">@color/true_black</item>
+        <item name="colorSurface">@color/true_black</item>
+        <item name="colorOnSurface">@android:color/white</item>
+        <item name="colorPrimary">@color/md_theme_primary</item>
+        <item name="colorPrimaryVariant">@color/md_theme_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_onPrimary</item>
+        <item name="android:statusBarColor">@color/true_black</item>
+        <item name="android:navigationBarColor">@color/true_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
+
+    <style name="Theme.DayMind" parent="Theme.DayMind.Base" />
 </resources>

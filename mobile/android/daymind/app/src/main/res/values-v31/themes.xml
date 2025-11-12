@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.DayMind" parent="Theme.DayMind.Base">
+        <item name="android:windowSplashScreenBackground">@color/true_black</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/daymind_logo</item>
+    </style>
+</resources>

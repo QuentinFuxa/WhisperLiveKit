@@ -57,3 +57,8 @@ gh workflow run android_build.yml -f build_type=release -f runner=gh --ref main
 gh workflow run android_build.yml -f build_type=both -f runner=self -f ref=feature/android-ci
 ```
 Artifacts land as `daymind-android-*` on each run; tag builds also attach the APKs to the GitHub Release. Set the optional signing secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_ALIAS_PASSWORD`) or matching `gradle.properties` entries to emit `app-release-signed.apk` in addition to the default debug + unsigned release packages.
+
+### UI — True Black + Logo
+- Backgrounds and surfaces default to `#000000` (true black) for legacy and Android 12+ splash flows.
+- Primary blue (`#375DFB`) remains the accent color for buttons and interactive elements.
+- Splash/icon art lives in `app/src/main/res/drawable/daymind_logo.xml` (vector) with the source SVG mirrored under `mobile/android/daymind/art/`.
