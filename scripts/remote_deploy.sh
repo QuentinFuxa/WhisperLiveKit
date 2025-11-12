@@ -4,7 +4,7 @@ IFS=$'\n\t'
 
 usage() {
   cat <<'USAGE'
-Usage: remote_deploy.sh --host <ip> [--user root] [--key path] [--repo-path /opt/daymind] [--repo-url url]
+Usage: remote_deploy.sh --host <ip> [--user root] [--key path] [--repo-path /opt/daymind] [--repo-url url] [--verify-only]
 
 Deploys the current working tree to the remote host, ensures the git repo exists,
 rebuilds a minimal torch-free runtime, seeds env defaults, enforces systemd units,
@@ -17,6 +17,83 @@ USER="root"
 KEY_PATH="${SSH_KEY_PATH:-}"
 : "${REPO_URL:=https://github.com/noba-dkg-aion/daymind.git}"
 : "${APP_DIR:=/opt/daymind}"
+VERIFY_ONLY=false
+declare -a CURL_HEADER_ARGS=()
+
+wait_for_port() {
+  local port="$1"
+  local attempts=60
+  for attempt in $(seq 1 "$attempts"); do
+    if ss -lntp | grep -q ":${port} "; then
+      echo "✅ Port ${port} is listening"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "::error::Port ${port} failed to open within ${attempts}s" >&2
+  return 1
+}
+
+curl_with_retry() {
+  local url="$1"
+  local label="$2"
+  local mode="${3:-plain}"
+  local attempts=10
+  for attempt in $(seq 1 "$attempts"); do
+    if [ "$mode" = "head" ]; then
+      if curl -fsS "${CURL_HEADER_ARGS[@]}" "$url" | head >/dev/null; then
+        echo "✅ ${label}"
+        return 0
+      fi
+    else
+      if curl -fsS "${CURL_HEADER_ARGS[@]}" "$url" >/dev/null; then
+        echo "✅ ${label}"
+        return 0
+      fi
+    fi
+    echo "Retry ${label} (${attempt}/${attempts})"
+    sleep 2
+  done
+  echo "::error::${label} failed after ${attempts} attempts" >&2
+  return 1
+}
+
+run_local_verify() {
+  local env_file=/etc/default/daymind
+  if [ ! -f "$env_file" ]; then
+    echo "::warning::$env_file missing; creating placeholder"
+    touch "$env_file"
+  fi
+  if [ -f "$env_file" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$env_file"
+    set +a
+  fi
+  local app_host="${APP_HOST:-127.0.0.1}"
+  local app_port="${APP_PORT:-8000}"
+  local api_log="${APP_DIR}/api.log"
+
+  systemctl daemon-reload || true
+  if systemctl list-unit-files daymind-api.service >/dev/null 2>&1; then
+    systemctl restart daymind-api.service || true
+  else
+    echo "daymind-api.service not found; starting uvicorn manually"
+    pkill -f "uvicorn src.api.main" >/dev/null 2>&1 || true
+    nohup "${APP_DIR}/venv/bin/uvicorn" src.api.main:app --host "$app_host" --port "$app_port" >> "$api_log" 2>&1 &
+  fi
+
+  wait_for_port "$app_port"
+
+  CURL_HEADER_ARGS=()
+  if [ -n "${DAYMIND_API_KEY:-}" ]; then
+    CURL_HEADER_ARGS=(-H "X-API-Key: ${DAYMIND_API_KEY}")
+  fi
+
+  curl_with_retry "http://127.0.0.1:${app_port}/healthz" "/healthz"
+  curl_with_retry "http://127.0.0.1:${app_port}/metrics" "/metrics" "head"
+  echo "✅ Remote API verified on ${app_host}:${app_port}"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +117,10 @@ while [[ $# -gt 0 ]]; do
       REPO_URL="${2:-}"
       shift 2
       ;;
+    --verify-only)
+      VERIFY_ONLY=true
+      shift 1
+      ;;
     -h|--help)
       usage
       exit 0
@@ -52,10 +133,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$HOST" ]]; then
+if [[ "$VERIFY_ONLY" == false && -z "$HOST" ]]; then
   echo "Missing required --host." >&2
   usage
   exit 1
+fi
+
+if [[ "$VERIFY_ONLY" == true ]]; then
+  run_local_verify
+  exit 0
 fi
 
 if [[ -z "$KEY_PATH" ]]; then
@@ -82,6 +168,20 @@ fi
 ssh_exec() {
 # shellcheck disable=SC2029
   ssh "${SSH_OPTS[@]}" "$REMOTE" "$@"
+}
+
+run_remote_verify() {
+  echo "==> Restarting services and verifying health"
+  ssh_exec "
+    set -euo pipefail
+    APP_DIR='$APP_DIR'
+    if [ -x \"\$APP_DIR/scripts/remote_deploy.sh\" ]; then
+      APP_DIR='$APP_DIR' \"\$APP_DIR/scripts/remote_deploy.sh\" --verify-only
+    else
+      echo \"remote_deploy.sh not found at \$APP_DIR/scripts\" >&2
+      exit 1
+    fi
+  "
 }
 
 echo "==> Ensuring daymind system account and repo"
@@ -178,42 +278,7 @@ ssh_exec "
   $SUDO systemctl enable daymind-api.service daymind-fava.service
 "
 
-echo "==> Restarting services and verifying health"
-# shellcheck disable=SC1083,SC1078,SC1079
-ssh_exec "
-  set -euo pipefail
-  ENV_FILE=/etc/default/daymind
-  if [ -f \"\$ENV_FILE\" ]; then
-    # shellcheck disable=SC1091
-    source \"\$ENV_FILE\"
-  fi
-  APP_HOST=\${APP_HOST:-127.0.0.1}
-  APP_PORT=\${APP_PORT:-8000}
-  API_LOG=/opt/daymind/api.log
-  $SUDO systemctl restart daymind-api.service daymind-fava.service || true
-  touch /etc/default/daymind
-  grep -q \"^APP_HOST=\" /etc/default/daymind || echo \"APP_HOST=127.0.0.1\" >> /etc/default/daymind
-  grep -q \"^APP_PORT=\" /etc/default/daymind || echo \"APP_PORT=8000\" >> /etc/default/daymind
-  set -a
-  . /etc/default/daymind
-  set +a
-  echo "🔄 Waiting up to 60s for API on \${APP_HOST}:\${APP_PORT}"
-  for n in $(seq 1 60); do
-    if ss -lnt | grep -q ":\${APP_PORT} "; then
-      echo "✅ API socket ready"
-      break
-    fi
-    sleep 1
-  done
-  API_HEADER=""
-  if [ -n "\${DAYMIND_API_KEY:-}" ]; then
-    API_HEADER="-H \"X-API-Key: \${DAYMIND_API_KEY}\""
-  fi
-  curl -fsS \${API_HEADER} "http://\${APP_HOST}:\${APP_PORT}/healthz" >/dev/null
-  curl -fsS \${API_HEADER} "http://\${APP_HOST}:\${APP_PORT}/metrics" | head -n 3 >/dev/null
-
-"
-
+run_remote_verify
 echo "==> Deployment summary"
 ssh_exec "
   set -euo pipefail

@@ -134,7 +134,7 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     env:
       APP_IP: ${{ needs.terraform_apply.outputs.app_ip }}
-      DAYMIND_API_KEY: ${{ secrets.DAYMIND_API_KEY }}
+      DEPLOY_USER: root
     steps:
       - uses: actions/checkout@v4
       - name: Prepare SSH key
@@ -146,28 +146,16 @@ jobs:
           chmod 600 "${RUNNER_TEMP}/deploy_key"
       - name: Run remote healthcheck
         run: |
-          ssh -i "${RUNNER_TEMP}/deploy_key" -o StrictHostKeyChecking=no "root@${APP_IP}" 'bash -s' < infra/systemd/checks/healthcheck.sh
-      - name: Check /healthz endpoint
+          ssh -i "${RUNNER_TEMP}/deploy_key" -o StrictHostKeyChecking=no "${DEPLOY_USER}@${APP_IP}" 'bash -s' < infra/systemd/checks/healthcheck.sh
+      - name: Verify remote services (API /healthz, /metrics)
         run: |
-          HEADER=""
-          if [ -n "${DAYMIND_API_KEY:-}" ]; then
-            HEADER="-H \"X-API-Key: ${DAYMIND_API_KEY}\""
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -i "${RUNNER_TEMP}/deploy_key" "${DEPLOY_USER}@${APP_IP}" 'bash -s' <<'EOF'
+          set -euo pipefail
+          if [ -x /opt/daymind/scripts/remote_deploy.sh ]; then
+            /opt/daymind/scripts/remote_deploy.sh --verify-only
+          else
+            echo "remote_deploy.sh not found at /opt/daymind/scripts; aborting"
+            exit 1
           fi
-          for i in {1..30}; do
-            if curl -fsS $HEADER "http://${APP_IP}/healthz"; then
-              break
-            fi
-            sleep 1
-          done
-      - name: Check /metrics endpoint
-        run: |
-          HEADER=""
-          if [ -n "${DAYMIND_API_KEY:-}" ]; then
-            HEADER="-H \"X-API-Key: ${DAYMIND_API_KEY}\""
-          fi
-          for i in {1..30}; do
-            if curl -fsS $HEADER "http://${APP_IP}/metrics"; then
-              break
-            fi
-            sleep 1
-          done
+          EOF
