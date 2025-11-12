@@ -1,0 +1,10 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+python-multipart>=0.0.9,<0.1
+prometheus_client>=0.20,<1
+openai>=1.40,<2
+redis>=5,<6
+pydantic>=2.7,<3
+pydantic-settings>=2,<3
+beancount>=2.3,<3
+fava>=1.27,<2
