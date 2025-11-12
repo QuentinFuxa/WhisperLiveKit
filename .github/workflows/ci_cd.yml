@@ -47,12 +47,19 @@ jobs:
           mkdir -p "${RUNNER_TEMP}"
           printf '%s\n' "$DEPLOY_SSH_KEY" > "${RUNNER_TEMP}/deploy_key"
           chmod 600 "${RUNNER_TEMP}/deploy_key"
-      - name: Export dummy Terraform vars for non-apply runs
-        if: env.SHOULD_APPLY != 'true'
+      - name: Export Terraform vars
         run: |
-          echo "TF_VAR_do_token=dummy_token" >> $GITHUB_ENV
-          echo "TF_VAR_ssh_fingerprint=dummy_fingerprint" >> $GITHUB_ENV
-          echo "TF_VAR_ssh_private_key_path=/tmp/dummy_terraform_key" >> $GITHUB_ENV
+          if [ "${{ env.SHOULD_APPLY }}" = "true" ]; then
+            echo "TF_VAR_do_token=${{ secrets.DO_TOKEN }}" >> "$GITHUB_ENV"
+            echo "TF_VAR_ssh_fingerprint=${{ secrets.SSH_FINGERPRINT }}" >> "$GITHUB_ENV"
+            echo "TF_VAR_ssh_private_key_path=${RUNNER_TEMP}/deploy_key" >> "$GITHUB_ENV"
+          else
+            echo "TF_VAR_do_token=dummy_token" >> "$GITHUB_ENV"
+            echo "TF_VAR_ssh_fingerprint=dummy_fingerprint" >> "$GITHUB_ENV"
+            echo "TF_VAR_ssh_private_key_path=/tmp/dummy_terraform_key" >> "$GITHUB_ENV"
+          fi
+          echo "TF_VAR_region=sgp1" >> "$GITHUB_ENV"
+          echo "TF_VAR_project_name=daymind" >> "$GITHUB_ENV"
       - name: Terraform Apply
         id: terraform
         if: env.SHOULD_APPLY == 'true'
