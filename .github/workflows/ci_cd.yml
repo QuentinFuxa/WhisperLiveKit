@@ -58,12 +58,14 @@ jobs:
             echo "app_ip=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          terraform -chdir=infra/terraform init
+          terraform -chdir=infra/terraform init -input=false
           terraform -chdir=infra/terraform validate
           terraform -chdir=infra/terraform apply -auto-approve \
             -var "do_token=$DO_TOKEN" \
             -var "ssh_fingerprint=$SSH_FINGERPRINT" \
-            -var "ssh_private_key_path=${RUNNER_TEMP}/deploy_key"
+            -var "ssh_private_key_path=${RUNNER_TEMP}/deploy_key" \
+            -var "region=sgp1" \
+            -var "project_name=daymind"
           APP_IP=$(terraform -chdir=infra/terraform output -raw app_ip)
           echo "app_ip=$APP_IP"
           echo "app_ip=$APP_IP" >> "$GITHUB_OUTPUT"
