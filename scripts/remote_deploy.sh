@@ -182,38 +182,27 @@ ssh_exec "
   APP_PORT=\${APP_PORT:-8000}
   API_LOG=/opt/daymind/api.log
   $SUDO systemctl restart daymind-api.service daymind-fava.service || true
-  echo "🔄 Waiting up to 30s for daymind-api to bind port \${APP_PORT}"
-  for i in {1..30}; do
-    if nc -z 127.0.0.1 "\${APP_PORT}"; then
-      echo "✅ daymind-api is listening on port \${APP_PORT}"
+  touch /etc/default/daymind
+  grep -q "^APP_HOST=" /etc/default/daymind || echo "APP_HOST=127.0.0.1" >> /etc/default/daymind
+  grep -q "^APP_PORT=" /etc/default/daymind || echo "APP_PORT=8000" >> /etc/default/daymind
+  set -a
+  . /etc/default/daymind
+  set +a
+  echo "🔄 Waiting up to 60s for API on \$\{APP_HOST}:\$\{APP_PORT}"
+  for n in $(seq 1 60); do
+    if ss -lnt | grep -q ":\$\{APP_PORT} "; then
+      echo "✅ API socket ready"
       break
     fi
     sleep 1
   done
-  echo "📝 daymind-api systemd status (for debugging)"
-  $SUDO systemctl status daymind-api.service --no-pager -l || true
-  sleep 5
-  if ! ss -ltn | grep -q \":\${APP_PORT} \"; then
-    echo \"API not listening on \${APP_PORT}, attempting fallback supervisor\" >&2
-    $SUDO pkill -f \"uvicorn src.api.main\" >/dev/null 2>&1 || true
-    $SUDO -u daymind APP_HOST=\"\$APP_HOST\" APP_PORT=\"\$APP_PORT\" API_LOG=\"\$API_LOG\" bash -lc '
-      set -euo pipefail
-      cd /opt/daymind
-      source venv/bin/activate
-      nohup ./venv/bin/uvicorn src.api.main:app --host \"$APP_HOST\" --port \"$APP_PORT\" >> \"$API_LOG\" 2>&1 &
-    '
-    sleep 5
+  API_HEADER=""
+  if [ -n "\$\{DAYMIND_API_KEY:-}" ]; then
+    API_HEADER="-H \"X-API-Key: \$\{DAYMIND_API_KEY}\""
   fi
-  if ! curl -fsS \"http://127.0.0.1:\${APP_PORT}/healthz\" >/dev/null; then
-    echo \"::error::/healthz failed\" >&2
-    $SUDO tail -n 200 \"\$API_LOG\" || true
-    exit 1
-  fi
-  if curl -fsS \"http://127.0.0.1:\${APP_PORT}/metrics\" >/dev/null; then
-    echo \"✅ /metrics responded\"
-  else
-    echo \"⚠️  /metrics failed\" >&2
-  fi
+  curl -fsS \$\{API_HEADER} "http://\$\{APP_HOST}:\$\{APP_PORT}/healthz" >/dev/null
+  curl -fsS \$\{API_HEADER} "http://\$\{APP_HOST}:\$\{APP_PORT}/metrics" | head -n 3 >/dev/null
+
 "
 
 echo "==> Deployment summary"

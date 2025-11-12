@@ -134,6 +134,7 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
     env:
       APP_IP: ${{ needs.terraform_apply.outputs.app_ip }}
+      DAYMIND_API_KEY: ${{ secrets.DAYMIND_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Prepare SSH key
@@ -147,6 +148,26 @@ jobs:
         run: |
           ssh -i "${RUNNER_TEMP}/deploy_key" -o StrictHostKeyChecking=no "root@${APP_IP}" 'bash -s' < infra/systemd/checks/healthcheck.sh
       - name: Check /healthz endpoint
-        run: curl -fsS "http://${APP_IP}/healthz"
+        run: |
+          HEADER=""
+          if [ -n "${DAYMIND_API_KEY:-}" ]; then
+            HEADER="-H \"X-API-Key: ${DAYMIND_API_KEY}\""
+          fi
+          for i in {1..30}; do
+            if curl -fsS $HEADER "http://${APP_IP}/healthz"; then
+              break
+            fi
+            sleep 1
+          done
       - name: Check /metrics endpoint
-        run: curl -fsS "http://${APP_IP}/metrics"
+        run: |
+          HEADER=""
+          if [ -n "${DAYMIND_API_KEY:-}" ]; then
+            HEADER="-H \"X-API-Key: ${DAYMIND_API_KEY}\""
+          fi
+          for i in {1..30}; do
+            if curl -fsS $HEADER "http://${APP_IP}/metrics"; then
+              break
+            fi
+            sleep 1
+          done
