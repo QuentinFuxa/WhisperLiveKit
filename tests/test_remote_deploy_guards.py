@@ -5,14 +5,19 @@ REMOTE_DEPLOY = Path("scripts/remote_deploy.sh").read_text(encoding="utf-8")
 
 
 def test_remote_deploy_performs_editable_install():
-    assert "pip install -e ." in REMOTE_DEPLOY
+    assert "pip install -e . --no-deps" in REMOTE_DEPLOY
 
 
 def test_remote_deploy_writes_env_defaults():
-    assert "APP_PORT=8000" in REMOTE_DEPLOY
-    assert "PYTHONPATH=/opt/daymind" in REMOTE_DEPLOY
-    assert "LEDGER_FILE=/opt/daymind/runtime/ledger.beancount" in REMOTE_DEPLOY
+    for needle in (
+        "APP_HOST=127.0.0.1",
+        "APP_PORT=8000",
+        "FAVA_PORT=8010",
+        "REDIS_URL=redis://127.0.0.1:6379",
+        "PYTHONPATH=/opt/daymind",
+    ):
+        assert needle in REMOTE_DEPLOY
 
 
 def test_remote_deploy_enables_services():
-    assert "systemctl enable --now daymind-api daymind-fava" in REMOTE_DEPLOY
+    assert "systemctl enable daymind-api.service daymind-fava.service" in REMOTE_DEPLOY

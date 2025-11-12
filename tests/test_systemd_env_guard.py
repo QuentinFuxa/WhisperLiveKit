@@ -7,17 +7,17 @@ def _contents(path: str) -> str:
     return data.read_text(encoding="utf-8")
 
 
-def test_api_unit_has_env_and_execstartpre():
+def test_api_unit_has_env_and_execstart():
     contents = _contents("infra/systemd/daymind-api.service")
     assert "WorkingDirectory=/opt/daymind" in contents
     assert "EnvironmentFile=/etc/default/daymind" in contents
     assert "Environment=PYTHONPATH=/opt/daymind" in contents
-    assert "ExecStartPre=/usr/bin/test -x /opt/daymind/venv/bin/uvicorn" in contents
+    assert "ExecStart=/opt/daymind/venv/bin/uvicorn src.api.main:app" in contents
 
 
-def test_fava_unit_has_env_and_execstartpre():
+def test_fava_unit_has_env_and_execstart():
     contents = _contents("infra/systemd/daymind-fava.service")
     assert "WorkingDirectory=/opt/daymind" in contents
     assert "EnvironmentFile=/etc/default/daymind" in contents
     assert "Environment=PYTHONPATH=/opt/daymind" in contents
-    assert "ExecStartPre=/usr/bin/test -x /opt/daymind/venv/bin/fava" in contents
+    assert "/opt/daymind/venv/bin/fava --host 127.0.0.1 --port" in contents

@@ -26,4 +26,4 @@ def test_fava_unit_fields_and_execstart():
         "Environment=PYTHONPATH=/opt/daymind",
     ):
         assert needle in contents
-    assert "ExecStart=/opt/daymind/scripts/start_fava.sh" in contents
+    assert "ExecStart=/opt/daymind/venv/bin/fava --host 127.0.0.1 --port ${FAVA_PORT}" in contents

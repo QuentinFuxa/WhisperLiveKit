@@ -14,4 +14,4 @@ def test_api_unit_contains_uvicorn_exec():
 
 def test_fava_unit_calls_wrapper():
     contents = _read("infra/systemd/daymind-fava.service")
-    assert "ExecStart=/opt/daymind/scripts/start_fava.sh" in contents
+    assert "ExecStart=/opt/daymind/venv/bin/fava --host 127.0.0.1 --port ${FAVA_PORT}" in contents
