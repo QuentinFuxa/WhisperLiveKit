@@ -9,17 +9,18 @@
 <p align="center">
 <a href="https://pypi.org/project/whisperlivekit/"><img alt="PyPI Version" src="https://img.shields.io/pypi/v/whisperlivekit?color=g"></a>
 <a href="https://pepy.tech/project/whisperlivekit"><img alt="PyPI Downloads" src="https://static.pepy.tech/personalized-badge/whisperlivekit?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=installations"></a>
-<a href="https://pypi.org/project/whisperlivekit/"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.9--3.13-dark_green"></a>
-<a href="https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT/Dual Licensed-dark_green"></a>
+<a href="https://pypi.org/project/whisperlivekit/"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.9--3.15-dark_green"></a>
+<a href="https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache 2.0-dark_green"></a>
 </p>
 
 
-Real-time speech transcription directly to your browser, with a ready-to-use backend+server and a simple frontend. ✨
+Real-time transcription directly to your browser, with a ready-to-use backend+server and a simple frontend.
 
 #### Powered by Leading Research:
 
-- [SimulStreaming](https://github.com/ufal/SimulStreaming) (SOTA 2025) - Ultra-low latency transcription with AlignAtt policy
-- [WhisperStreaming](https://github.com/ufal/whisper_streaming) (SOTA 2023) - Low latency transcription with LocalAgreement policy
+- Simul-[Whisper](https://github.com/backspacetg/simul_whisper)/[Streaming](https://github.com/ufal/SimulStreaming) (SOTA 2025) - Ultra-low latency transcription using [AlignAtt policy](https://arxiv.org/pdf/2305.11408)
+- [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting) (2025), based on [distilled](https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2) [NLLB](https://arxiv.org/abs/2207.04672) (2022, 2024) - Simulatenous translation from & to 200 languages.
+- [WhisperStreaming](https://github.com/ufal/whisper_streaming) (SOTA 2023) - Low latency transcription using [LocalAgreement policy](https://www.isca-archive.org/interspeech_2020/liu20s_interspeech.pdf)
 - [Streaming Sortformer](https://arxiv.org/abs/2507.18446) (SOTA 2025) - Advanced real-time speaker diarization
 - [Diart](https://github.com/juanmc2005/diart) (SOTA 2021) - Real-time speaker diarization
 - [Silero VAD](https://github.com/snakers4/silero-vad) (2024) - Enterprise-grade Voice Activity Detection
@@ -39,14 +40,7 @@ Real-time speech transcription directly to your browser, with a ready-to-use bac
 ```bash
 pip install whisperlivekit
 ```
-
->  **FFmpeg is required** and must be installed before using WhisperLiveKit
-> 
-> | OS | How to install |
-> |-----------|-------------|
->  | Ubuntu/Debian | `sudo apt install ffmpeg` |
-> | MacOS | `brew install ffmpeg` |
-> | Windows | Download .exe from https://ffmpeg.org/download.html and add to PATH |
+> You can also clone the repo and `pip install -e .` for the latest version.
 
 #### Quick Start
 1. **Start the transcription server:**
@@ -60,17 +54,25 @@ pip install whisperlivekit
 > - See [tokenizer.py](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py) for the list of all available languages.
 > - For HTTPS requirements, see the **Parameters** section for SSL configuration options.
 
- 
+#### Use it to capture audio from web pages.
+
+Go to `chrome-extension` for instructions.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/chrome-extension/demo-extension.png" alt="WhisperLiveKit Demo" width="600">
+</p>
+
+
 
 #### Optional Dependencies
 
 | Optional | `pip install` |
 |-----------|-------------|
-| **Speaker diarization with Sortformer** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
-| Speaker diarization with Diart | `diart` |
-| Original Whisper backend | `whisper` |
-| Improved timestamps backend | `whisper-timestamped` |
-| Apple Silicon optimization backend | `mlx-whisper` |
+| **Speaker diarization** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
+| **Apple Silicon optimizations** | `mlx-whisper` |
+| **Translation** | `nllw` |
+| *[Not recommanded]*  Speaker diarization with Diart | `diart` |
+| *[Not recommanded]*  Improved timestamps backend | `whisper-timestamped` |
 | OpenAI API backend | `openai` |
 
 See  **Parameters & Configuration** below on how to use them.
@@ -82,11 +84,11 @@ See  **Parameters & Configuration** below on how to use them.
 **Command-line Interface**: Start the transcription server with various options:
 
 ```bash
-# Use better model than default (small)
-whisperlivekit-server --model large-v3
+# Large model and translate from french to danish
+whisperlivekit-server --model large-v3 --language fr --target-language da
 
-# Advanced configuration with diarization and language
-whisperlivekit-server --host 0.0.0.0 --port 8000 --model medium --diarization --language fr
+# Diarization and server listening on */80 
+whisperlivekit-server --host 0.0.0.0 --port 80 --model medium --diarization --language fr
 ```
 
 
@@ -133,23 +135,15 @@ async def websocket_endpoint(websocket: WebSocket):
 
 ## Parameters & Configuration
 
-An important list of parameters can be changed. But what *should* you change?
-- the `--model` size. List and recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/available_models.md)
-- the `--language`.  List [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py). If you use `auto`, the model attempts to detect the language automatically, but it tends to bias towards English.
-- the `--backend` ? you can switch to `--backend faster-whisper` if  `simulstreaming` does not work correctly or if you prefer to avoid the dual-license requirements.
-- `--warmup-file`, if you have one
-- `--host`, `--port`, `--ssl-certfile`, `--ssl-keyfile`, if you set up a server
-- `--diarization`, if you want to use it.
-
-The rest I don't recommend. But below are your options.
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `--model` | Whisper model size. | `small` |
-| `--language` | Source language code or `auto` | `auto` |
-| `--task` | `transcribe` or `translate` | `transcribe` |
-| `--backend` | Processing backend | `simulstreaming` |
-| `--min-chunk-size` | Minimum audio chunk size (seconds) | `1.0` |
+| `--model` | Whisper model size. List and recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/available_models.md) | `small` |
+| `--model-path` | .pt file/directory containing whisper model. Overrides `--model`. Recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/models_compatible_formats.md) | `None` |
+| `--language` | List [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py). If you use `auto`, the model attempts to detect the language automatically, but it tends to bias towards English. | `auto` |
+| `--target-language` | If sets, translates using [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting). [200 languages available](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/supported_languages.md). If you want to translate to english, you can also use `--direct-english-translation`. The STT model will try to directly output the translation. | `None` |
+| `--diarization` | Enable speaker identification | `False` |
+| `--backend` | Processing backend. You can switch to `faster-whisper` if  `simulstreaming` does not work correctly | `simulstreaming` |
 | `--no-vac` | Disable Voice Activity Controller | `False` |
 | `--no-vad` | Disable Voice Activity Detection | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
@@ -157,16 +151,26 @@ The rest I don't recommend. But below are your options.
 | `--port` | Server port | `8000` |
 | `--ssl-certfile` | Path to the SSL certificate file (for HTTPS support) | `None` |
 | `--ssl-keyfile` | Path to the SSL private key file (for HTTPS support) | `None` |
+| `--forwarded-allow-ips` | Ip or Ips allowed to reverse proxy the whisperlivekit-server. Supported types are  IP Addresses (e.g. 127.0.0.1), IP Networks (e.g. 10.100.0.0/16), or Literals (e.g. /path/to/socket.sock) | `None` |
+| `--pcm-input` | raw PCM (s16le) data is expected as input and FFmpeg will be bypassed. Frontend will use AudioWorklet instead of MediaRecorder | `False` |
 
-
-| WhisperStreaming backend options | Description | Default |
+| Translation options | Description | Default |
 |-----------|-------------|---------|
-| `--confidence-validation` | Use confidence scores for faster validation | `False` |
-| `--buffer_trimming` | Buffer trimming strategy (`sentence` or `segment`) | `segment` |
+| `--nllb-backend` | `transformers` or `ctranslate2` | `ctranslate2` |
+| `--nllb-size` | `600M` or `1.3B` | `600M` |
 
+| Diarization options | Description | Default |
+|-----------|-------------|---------|
+| `--diarization-backend` |  `diart` or `sortformer` | `sortformer` |
+| `--disable-punctuation-split` |  Disable punctuation based splits. See #214 | `False` |
+| `--segmentation-model` | Hugging Face model ID for Diart segmentation model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/segmentation-3.0` |
+| `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `speechbrain/spkrec-ecapa-voxceleb` |
 
 | SimulStreaming backend options | Description | Default |
 |-----------|-------------|---------|
+| `--disable-fast-encoder` | Disable Faster Whisper or MLX Whisper backends for the encoder (if installed). Inference can be slower but helpful when GPU memory is limited | `False` |
+| `--custom-alignment-heads` | Use your own alignment heads, useful when `--model-dir` is used. Use `scripts/determine_alignment_heads.py` to extract them. <img src="scripts/alignment_heads.png" alt="WhisperLiveKit Demo" width="300">
+ | `None` |
 | `--frame-threshold` | AlignAtt frame threshold (lower = faster, higher = more accurate) | `25` |
 | `--beams` | Number of beams for beam search (1 = greedy decoding) | `1` |
 | `--decoder` | Force decoder type (`beam` or `greedy`) | `auto` |
@@ -177,22 +181,19 @@ The rest I don't recommend. But below are your options.
 | `--init-prompt` | Initial prompt for the model | `None` |
 | `--static-init-prompt` | Static prompt that doesn't scroll | `None` |
 | `--max-context-tokens` | Maximum context tokens | `None` |
-| `--model-path` | Direct path to .pt model file. Download it if not found | `./base.pt` |
-| `--preloaded-model-count` | Optional. Number of models to preload in memory to speed up loading (set up to the expected number of concurrent users) | `1` |
+| `--preload-model-count` | Optional. Number of models to preload in memory to speed up loading (set up to the expected number of concurrent users) | `1` |
 
-| Diarization options | Description | Default |
+
+
+| WhisperStreaming backend options | Description | Default |
 |-----------|-------------|---------|
-| `--diarization` | Enable speaker identification | `False` |
-| `--diarization-backend` |  `diart` or `sortformer` | `sortformer` |
-| `--segmentation-model` | Hugging Face model ID for Diart segmentation model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/segmentation-3.0` |
-| `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `speechbrain/spkrec-ecapa-voxceleb` |
+| `--confidence-validation` | Use confidence scores for faster validation | `False` |
+| `--buffer_trimming` | Buffer trimming strategy (`sentence` or `segment`) | `segment` |
 
 
-> For diarization using Diart, you need access to pyannote.audio models:
-> 1. [Accept user conditions](https://huggingface.co/pyannote/segmentation) for the `pyannote/segmentation` model
-> 2. [Accept user conditions](https://huggingface.co/pyannote/segmentation-3.0) for the `pyannote/segmentation-3.0` model
-> 3. [Accept user conditions](https://huggingface.co/pyannote/embedding) for the `pyannote/embedding` model
->4. Login with HuggingFace: `huggingface-cli login`
+
+
+> For diarization using Diart, you need to accept user conditions [here](https://huggingface.co/pyannote/segmentation) for the `pyannote/segmentation` model, [here](https://huggingface.co/pyannote/segmentation-3.0) for the `pyannote/segmentation-3.0` model and [here](https://huggingface.co/pyannote/embedding) for the `pyannote/embedding` model. **Then**, login to HuggingFace: `huggingface-cli login`
 
 ### 🚀 Deployment Guide
 

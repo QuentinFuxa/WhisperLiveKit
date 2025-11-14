@@ -5,9 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from whisperlivekit import TranscriptionEngine, AudioProcessor, get_inline_ui_html, parse_args
 import asyncio
 import logging
-from starlette.staticfiles import StaticFiles
-import pathlib
-import whisperlivekit.web as webpkg
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger().setLevel(logging.WARNING)
@@ -18,7 +15,7 @@ args = parse_args()
 transcription_engine = None
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):    
     global transcription_engine
     transcription_engine = TranscriptionEngine(
         **vars(args),
@@ -33,8 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-web_dir = pathlib.Path(webpkg.__file__).parent
-app.mount("/web", StaticFiles(directory=str(web_dir)), name="web")
 
 @app.get("/")
 async def get():
@@ -45,7 +40,7 @@ async def handle_websocket_results(websocket, results_generator):
     """Consumes results from the audio processor and sends them via WebSocket."""
     try:
         async for response in results_generator:
-            await websocket.send_json(response)
+            await websocket.send_json(response.to_dict())
         # when the results_generator finishes it means all audio has been processed
         logger.info("Results generator finished. Sending 'ready_to_stop' to client.")
         await websocket.send_json({"type": "ready_to_stop"})
@@ -63,6 +58,11 @@ async def websocket_endpoint(websocket: WebSocket):
     )
     await websocket.accept()
     logger.info("WebSocket connection opened.")
+
+    try:
+        await websocket.send_json({"type": "config", "useAudioWorklet": bool(args.pcm_input)})
+    except Exception as e:
+        logger.warning(f"Failed to send config to client: {e}")
             
     results_generator = await audio_processor.create_tasks()
     websocket_task = asyncio.create_task(handle_websocket_results(websocket, results_generator))
@@ -118,6 +118,8 @@ def main():
 
     if ssl_kwargs:
         uvicorn_kwargs = {**uvicorn_kwargs, **ssl_kwargs}
+    if args.forwarded_allow_ips:
+        uvicorn_kwargs = { **uvicorn_kwargs, "forwarded_allow_ips" : args.forwarded_allow_ips }
 
     uvicorn.run(**uvicorn_kwargs)
 

@@ -20,7 +20,7 @@ def parse_args():
         help="""
         The path to a speech audio wav file to warm up Whisper so that the very first chunk processing is fast.
         If not set, uses https://github.com/ggerganov/whisper.cpp/raw/master/samples/jfk.wav.
-        If False, no warmup is performed.
+        If empty, no warmup is performed.
         """,
     )
 
@@ -73,6 +73,12 @@ def parse_args():
     )
     
     parser.add_argument(
+        "--disable-punctuation-split",
+        action="store_true",
+        help="Disable the split parameter.",
+    )
+    
+    parser.add_argument(
         "--min-chunk-size",
         type=float,
         default=0.5,
@@ -83,6 +89,7 @@ def parse_args():
         "--model",
         type=str,
         default="small",
+        dest='model_size',
         help="Name size of the Whisper model to use (default: tiny). Suggested values: tiny.en,tiny,base.en,base,small.en,small,medium.en,medium,large-v1,large-v2,large-v3,large,large-v3-turbo. The model is automatically downloaded from the model hub if not present in model cache dir.",
     )
     
@@ -103,15 +110,24 @@ def parse_args():
         "--language",
         type=str,
         default="auto",
+        dest='lan',
         help="Source language code, e.g. en,de,cs, or 'auto' for language detection.",
     )
     parser.add_argument(
-        "--task",
-        type=str,
-        default="transcribe",
-        choices=["transcribe", "translate"],
-        help="Transcribe or translate.",
+        "--direct-english-translation",
+        action="store_true",
+        default=False,
+        help="Use Whisper to directly translate to english.",
     )
+    
+    parser.add_argument(
+        "--target-language",
+        type=str,
+        default="",
+        dest="target_language",
+        help="Target language for translation. Not functional yet.",
+    )    
+
     parser.add_argument(
         "--backend",
         type=str,
@@ -158,9 +174,30 @@ def parse_args():
     )
     parser.add_argument("--ssl-certfile", type=str, help="Path to the SSL certificate file.", default=None)
     parser.add_argument("--ssl-keyfile", type=str, help="Path to the SSL private key file.", default=None)
-
+    parser.add_argument("--forwarded-allow-ips", type=str, help="Allowed ips for reverse proxying.", default=None)
+    parser.add_argument(
+        "--pcm-input",
+        action="store_true",
+        default=False,
+        help="If set, raw PCM (s16le) data is expected as input and FFmpeg will be bypassed. Frontend will use AudioWorklet instead of MediaRecorder."
+    )
     # SimulStreaming-specific arguments
     simulstreaming_group = parser.add_argument_group('SimulStreaming arguments (only used with --backend simulstreaming)')
+
+    simulstreaming_group.add_argument(
+        "--disable-fast-encoder",
+        action="store_true",
+        default=False,
+        dest="disable_fast_encoder",
+        help="Disable Faster Whisper or MLX Whisper backends for encoding (if installed). Slower but helpful when GPU memory is limited",
+    )
+
+    simulstreaming_group.add_argument(
+        "--custom-alignment-heads",
+        type=str,
+        default=None,
+        help="Use your own alignment heads, useful when `--model-dir` is used",
+    )
     
     simulstreaming_group.add_argument(
         "--frame-threshold",
@@ -252,11 +289,25 @@ def parse_args():
     )
     
     simulstreaming_group.add_argument(
-        "--preloaded_model_count",
+        "--preload-model-count",
         type=int,
         default=1,
-        dest="preloaded_model_count",
+        dest="preload_model_count",
         help="Optional. Number of models to preload in memory to speed up loading (set up to the expected number of concurrent instances).",
+    )
+
+    simulstreaming_group.add_argument(
+        "--nllb-backend",
+        type=str,
+        default="transformers",
+        help="transformers or ctranslate2",
+    )
+    
+    simulstreaming_group.add_argument(
+        "--nllb-size",
+        type=str,
+        default="600M",
+        help="600M or 1.3B",
     )
 
     args = parser.parse_args()

@@ -18,8 +18,29 @@ Decoder weights: 59110771 bytes
 Encoder weights: 15268874 bytes
 
 
+# 2. Translation: Faster model for each system
 
-# 2. SortFormer Diarization: 4-to-2 Speaker Constraint Algorithm
+## Benchmark Results
+
+Testing on MacBook M3 with NLLB-200-distilled-600M model:
+
+### Standard Transformers vs CTranslate2
+
+| Test Text | Standard Inference Time | CTranslate2 Inference Time | Speedup |
+|-----------|-------------------------|---------------------------|---------|
+| UN Chief says there is no military solution in Syria | 0.9395s | 2.0472s | 0.5x |
+| The rapid advancement of AI technology is transforming various industries | 0.7171s | 1.7516s | 0.4x |
+| Climate change poses a significant threat to global ecosystems | 0.8533s | 1.8323s | 0.5x |
+| International cooperation is essential for addressing global challenges | 0.7209s | 1.3575s | 0.5x |
+| The development of renewable energy sources is crucial for a sustainable future | 0.8760s | 1.5589s | 0.6x |
+
+**Results:**
+- Total Standard time: 4.1068s
+- Total CTranslate2 time: 8.5476s
+- CTranslate2 is slower on this system --> Use Transformers, and ideally we would have an mlx implementation.
+
+
+# 3. SortFormer Diarization: 4-to-2 Speaker Constraint Algorithm
 
 Transform a diarization model that predicts up to 4 speakers into one that predicts up to 2 speakers by mapping the output predictions.
 

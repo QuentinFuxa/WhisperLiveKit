@@ -5,69 +5,75 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WhisperLiveKit</title>
-    <link rel="stylesheet" href="/web/live_transcription.css" />
+    <link rel="stylesheet" href="live_transcription.css" />
 </head>
 
 <body>
-    <div class="settings-container">
-        <button id="recordButton">
-            <div class="shape-container">
-                <div class="shape"></div>
+    <div class="header-container">
+        <div class="settings-container">
+            <div class="buttons-container">
+                <button id="recordButton">
+                    <div class="shape-container">
+                        <div class="shape"></div>
+                    </div>
+                    <div class="recording-info">
+                        <div class="wave-container">
+                            <canvas id="waveCanvas"></canvas>
+                        </div>
+                        <div class="timer">00:00</div>
+                    </div>
+                </button>
+
+                <button id="settingsToggle" class="settings-toggle" title="Show/hide settings">
+                    <img src="web/src/settings.svg" alt="Settings" />
+                </button>
             </div>
-            <div class="recording-info">
-                <div class="wave-container">
-                    <canvas id="waveCanvas"></canvas>
+
+            <div class="settings">
+                <div class="field">
+                    <label for="websocketInput">Websocket URL</label>
+                    <input id="websocketInput" type="text" placeholder="ws://host:port/asr" />
                 </div>
-                <div class="timer">00:00</div>
-            </div>
-        </button>
 
-        <div class="settings">
-            <div class="field">
-                <label for="websocketInput">Websocket URL</label>
-                <input id="websocketInput" type="text" placeholder="ws://host:port/asr" />
-            </div>
+                <div class="field">
+                    <label id="microphoneSelectLabel" for="microphoneSelect">Select Microphone</label>
+                    <select id="microphoneSelect">
+                        <option value="">Default Microphone</option>
+                    </select>
+                </div>
 
-            <div class="field">
-                <label id="microphoneSelectLabel" for="microphoneSelect">Select Microphone</label>
-                <select id="microphoneSelect">
-                    <option value="">Default Microphone</option>
-                </select>
-            </div>
+                <div class="theme-selector-container">
+                    <div class="segmented" role="radiogroup" aria-label="Theme selector">
+                        <input type="radio" id="theme-system" name="theme" value="system" />
+                        <label for="theme-system" title="System">
+                            <img src="/web/src/system_mode.svg" alt="" />
+                            <span>System</span>
+                        </label>
 
-            <div class="theme-selector-container">
-                <div class="segmented" role="radiogroup" aria-label="Theme selector">
-                    <input type="radio" id="theme-system" name="theme" value="system" />
-                    <label for="theme-system" title="System">
-                        <img src="/web/src/system_mode.svg" alt="" />
-                        <span>System</span>
-                    </label>
+                        <input type="radio" id="theme-light" name="theme" value="light" />
+                        <label for="theme-light" title="Light">
+                            <img src="/web/src/light_mode.svg" alt="" />
+                            <span>Light</span>
+                        </label>
 
-                    <input type="radio" id="theme-light" name="theme" value="light" />
-                    <label for="theme-light" title="Light">
-                        <img src="/web/src/light_mode.svg" alt="" />
-                        <span>Light</span>
-                    </label>
-
-                    <input type="radio" id="theme-dark" name="theme" value="dark" />
-                    <label for="theme-dark" title="Dark">
-                        <img src="/web/src/dark_mode.svg" alt="" />
-                        <span>Dark</span>
-                    </label>
+                        <input type="radio" id="theme-dark" name="theme" value="dark" />
+                        <label for="theme-dark" title="Dark">
+                            <img src="/web/src/dark_mode.svg" alt="" />
+                            <span>Dark</span>
+                        </label>
+                    </div>
                 </div>
             </div>
-
         </div>
+        
+        <p id="status"></p>
     </div>
+
+    <div class="transcript-container">
+        <div id="linesTranscript"></div>
     </div>
 
-
-
-    <p id="status"></p>
-
-    <div id="linesTranscript"></div>
-
-    <script src="/web/live_transcription.js"></script>
+    <script src="live_transcription.js"></script>
 </body>
 
 </html>

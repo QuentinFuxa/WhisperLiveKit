@@ -7,6 +7,7 @@ class TokenBuffer:
         self.prefix_token_ids = prefix_token_ids
         self.tokenizer = tokenizer
         self.device = device
+        self.pending_token_ids = []
 
     def as_token_ids(self, tokenizer=None):
 
@@ -64,7 +65,26 @@ class TokenBuffer:
     def append_token_ids(self, token_ids):
         tokenizer = self.tokenizer
         assert tokenizer is not None, "Tokenizer is not set."
-        self.text += self.tokenizer.decode(token_ids)
+
+        all_tokens = self.pending_token_ids + token_ids
+
+        decoded = tokenizer.decode(all_tokens)
+        replacement_char = "\ufffd"
+
+        if replacement_char in decoded:
+            if len(all_tokens) > 1:
+                decoded_partial = tokenizer.decode(all_tokens[:-1])
+
+                if replacement_char not in decoded_partial:
+                    self.text += decoded_partial
+                    self.pending_token_ids = [all_tokens[-1]]
+                else:
+                    self.pending_token_ids = all_tokens
+            else:
+                self.pending_token_ids = all_tokens
+        else:
+            self.text += decoded
+            self.pending_token_ids = []
 
     def as_split_word_tokens(self):
         tokenizer = self.tokenizer

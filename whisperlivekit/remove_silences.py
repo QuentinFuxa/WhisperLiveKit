@@ -1,4 +1,5 @@
 from whisperlivekit.timed_objects import ASRToken
+from time import time
 import re
 
 MIN_SILENCE_DURATION = 4 #in seconds
@@ -39,7 +40,7 @@ def blank_to_silence(tokens):
                         )
                 else:
                     if silence_token: #there was silence but no more
-                        if silence_token.end - silence_token.start >= MIN_SILENCE_DURATION:
+                        if silence_token.duration() >= MIN_SILENCE_DURATION:
                             cleaned_tokens.append(
                                 silence_token
                             )
@@ -77,15 +78,10 @@ def no_token_to_silence(tokens):
             new_tokens.append(token)
     return new_tokens
             
-def ends_with_silence(tokens, buffer_transcription, buffer_diarization, current_time, vac_detected_silence):
-    if not tokens:
-        return [], buffer_transcription, buffer_diarization
+def ends_with_silence(tokens, beg_loop, vac_detected_silence):
+    current_time = time() - (beg_loop if beg_loop else 0.0)
     last_token = tokens[-1]
-    if tokens and current_time and (
-        current_time - last_token.end >= END_SILENCE_DURATION 
-        or 
-        (current_time - last_token.end >= 3 and vac_detected_silence)
-        ):
+    if  vac_detected_silence or (current_time - last_token.end >= END_SILENCE_DURATION):
         if last_token.speaker == -2:
             last_token.end = current_time
         else:
@@ -97,14 +93,14 @@ def ends_with_silence(tokens, buffer_transcription, buffer_diarization, current_
                     probability=0.95
                 )
             )
-        buffer_transcription = "" # for whisperstreaming backend, we should probably validate the buffer has because of the silence
-        buffer_diarization  = ""
-    return tokens, buffer_transcription, buffer_diarization
+    return tokens
     
 
-def handle_silences(tokens, buffer_transcription, buffer_diarization, current_time, vac_detected_silence):
+def handle_silences(tokens, beg_loop, vac_detected_silence):
+    if not tokens:
+        return []
     tokens = blank_to_silence(tokens) #useful for simulstreaming backend which tends to generate [BLANK_AUDIO] text
     tokens = no_token_to_silence(tokens)
-    tokens, buffer_transcription, buffer_diarization = ends_with_silence(tokens, buffer_transcription, buffer_diarization, current_time, vac_detected_silence)
-    return tokens, buffer_transcription, buffer_diarization
+    tokens = ends_with_silence(tokens, beg_loop, vac_detected_silence)
+    return tokens
      

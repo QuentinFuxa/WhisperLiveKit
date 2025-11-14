@@ -3,25 +3,28 @@ import numpy as np
 import logging
 from typing import List, Tuple, Optional
 import logging
-from whisperlivekit.timed_objects import ASRToken, Transcript
+import platform
+from whisperlivekit.timed_objects import ASRToken, Transcript, ChangeSpeaker
 from whisperlivekit.warmup import load_file
-from whisperlivekit.simul_whisper.license_simulstreaming import SIMULSTREAMING_LICENSE
-from .whisper import load_model, tokenizer
-from .whisper.audio import TOKENS_PER_SECOND
-
+from whisperlivekit.whisper import load_model, tokenizer
+from whisperlivekit.whisper.audio import TOKENS_PER_SECOND
 import os
 import gc
-logger = logging.getLogger(__name__)
+from pathlib import Path
 
 import torch
 from whisperlivekit.simul_whisper.config import AlignAttConfig
 from whisperlivekit.simul_whisper.simul_whisper import PaddedAlignAttWhisper
-from whisperlivekit.simul_whisper.whisper import tokenizer
+
+logger = logging.getLogger(__name__)
+
 
 try:
     from .mlx_encoder import mlx_model_mapping, load_mlx_encoder
     HAS_MLX_WHISPER = True
 except ImportError:
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        print(f"""{"="*50}\nMLX Whisper not found but you are on Apple Silicon. Consider installing mlx-whisper for better performance: `pip install mlx-whisper`\n{"="*50}""")
     HAS_MLX_WHISPER = False
 if HAS_MLX_WHISPER:
     HAS_FASTER_WHISPER = False
@@ -30,10 +33,34 @@ else:
         from faster_whisper import WhisperModel
         HAS_FASTER_WHISPER = True
     except ImportError:
+        if platform.system() != "Darwin":
+            print(f"""{"="*50}\nFaster-Whisper not found but. Consider installing faster-whisper for better performance: `pip install faster-whisper`\n{"="*50}`""")
         HAS_FASTER_WHISPER = False
 
+def model_path_and_type(model_path):
+    path = Path(model_path)
+    
+    compatible_whisper_mlx = False
+    compatible_faster_whisper = False
+    pytorch_path = None
+    if path.is_file() and path.suffix.lower() in ['.pt', '.safetensors', '.bin']:
+        pytorch_path = path
+    elif path.is_dir():
+        for file in path.iterdir():
+            if file.is_file():
+                if file.name in ['weights.npz', "weights.safetensors"]:
+                    compatible_whisper_mlx = True
+                elif file.suffix.lower() == '.bin':
+                    compatible_faster_whisper = True
+                elif file.suffix.lower() == '.pt':
+                    pytorch_path = file
+                elif file.suffix.lower() == '.safetensors':
+                    pytorch_path = file
+        if pytorch_path is None:
+            if (model_path / Path("pytorch_model.bin")).exists():
+                pytorch_path = model_path / Path("pytorch_model.bin")
+    return pytorch_path, compatible_whisper_mlx, compatible_faster_whisper
 
-# TOO_MANY_REPETITIONS = 3
 
 class SimulStreamingOnlineProcessor:
     SAMPLING_RATE = 16000
@@ -42,13 +69,11 @@ class SimulStreamingOnlineProcessor:
         self,
         asr,
         logfile=sys.stderr,
-        warmup_file=None
     ):        
         self.asr = asr
         self.logfile = logfile
         self.end = 0.0
-        self.global_time_offset = 0.0
-        
+        self.buffer = []
         self.committed: List[ASRToken] = []
         self.last_result_tokens: List[ASRToken] = []
         self.load_new_backend()
@@ -77,7 +102,7 @@ class SimulStreamingOnlineProcessor:
         else:
             self.process_iter(is_last=True) #we want to totally process what remains in the buffer.
             self.model.refresh_segment(complete=True)
-            self.global_time_offset += silence_duration + offset
+            self.model.global_time_offset = silence_duration + offset
 
 
         
@@ -89,63 +114,15 @@ class SimulStreamingOnlineProcessor:
         self.end = audio_stream_end_time #Only to be aligned with what happens in whisperstreaming backend.
         self.model.insert_audio(audio_tensor)
 
-    def get_buffer(self):
-        return Transcript(
-            start=None, 
-            end=None, 
-            text='', 
-            probability=None
-        )
-
-    def timestamped_text(self, tokens, generation):
-        """
-        generate timestamped text from tokens and generation data.
-        
-        args:
-            tokens: List of tokens to process
-            generation: Dictionary containing generation progress and optionally results
+    def new_speaker(self, change_speaker: ChangeSpeaker):
+            self.process_iter(is_last=True)
+            self.model.refresh_segment(complete=True)
+            self.model.speaker = change_speaker.speaker
+            self.global_time_offset = change_speaker.start
             
-        returns:
-            List of tuples containing (start_time, end_time, word) for each word
-        """
-        FRAME_DURATION = 0.02    
-        if "result" in generation:
-            split_words = generation["result"]["split_words"]
-            split_tokens = generation["result"]["split_tokens"]
-        else:
-            split_words, split_tokens = self.model.tokenizer.split_to_word_tokens(tokens)
-        progress = generation["progress"]
-        frames = [p["most_attended_frames"][0] for p in progress]
-        absolute_timestamps = [p["absolute_timestamps"][0] for p in progress]
-        tokens_queue = tokens.copy()
-        timestamped_words = []
-        
-        for word, word_tokens in zip(split_words, split_tokens):
-            # start_frame = None
-            # end_frame = None
-            for expected_token in word_tokens:
-                if not tokens_queue or not frames:
-                    raise ValueError(f"Insufficient tokens or frames for word '{word}'")
-                    
-                actual_token = tokens_queue.pop(0)
-                current_frame = frames.pop(0)
-                current_timestamp = absolute_timestamps.pop(0)
-                if actual_token != expected_token:
-                    raise ValueError(
-                        f"Token mismatch: expected '{expected_token}', "
-                        f"got '{actual_token}' at frame {current_frame}"
-                    )
-                # if start_frame is None:
-                #     start_frame = current_frame
-                # end_frame = current_frame
-            # start_time = start_frame * FRAME_DURATION
-            # end_time = end_frame * FRAME_DURATION
-            start_time = current_timestamp
-            end_time = current_timestamp + 0.1
-            timestamp_entry = (start_time, end_time, word)
-            timestamped_words.append(timestamp_entry)
-            logger.debug(f"TS-WORD:\t{start_time:.2f}\t{end_time:.2f}\t{word}")
-        return timestamped_words
+    def get_buffer(self):
+        concat_buffer = Transcript.from_tokens(tokens= self.buffer, sep='')
+        return concat_buffer
 
     def process_iter(self, is_last=False) -> Tuple[List[ASRToken], float]:
         """
@@ -154,47 +131,14 @@ class SimulStreamingOnlineProcessor:
         Returns a tuple: (list of committed ASRToken objects, float representing the audio processed up to time).
         """
         try:
-            tokens, generation_progress = self.model.infer(is_last=is_last)
-            ts_words = self.timestamped_text(tokens, generation_progress)
+            timestamped_words = self.model.infer(is_last=is_last)
+            if self.model.cfg.language == "auto" and timestamped_words and timestamped_words[0].detected_language == None:
+                self.buffer.extend(timestamped_words)
+                return [], self.end
             
-            new_tokens = []
-            for ts_word in ts_words:
-                
-                start, end, word = ts_word
-                token = ASRToken(
-                    start=start,
-                    end=end,
-                    text=word,
-                    probability=0.95  # fake prob. Maybe we can extract it from the model?
-                ).with_offset(
-                    self.global_time_offset
-                )
-                new_tokens.append(token)
-                
-            # identical_tokens = 0
-            # n_new_tokens = len(new_tokens)
-            # if n_new_tokens:
-            
-            self.committed.extend(new_tokens)
-            
-            # if token in self.committed:
-            #     pos = len(self.committed) - 1 - self.committed[::-1].index(token)
-            # if pos:
-            #     for i in range(len(self.committed) - n_new_tokens, -1, -n_new_tokens):
-            #         commited_segment = self.committed[i:i+n_new_tokens]
-            #         if commited_segment == new_tokens:
-            #             identical_segments +=1
-            #             if identical_tokens >= TOO_MANY_REPETITIONS:
-            #                 logger.warning('Too many repetition, model is stuck. Load a new one')
-            #                 self.committed = self.committed[:i]
-            #                 self.load_new_backend()
-            #                 return [], self.end
-
-            # pos = self.committed.rindex(token)
-
-            
-            
-            return new_tokens, self.end
+            self.committed.extend(timestamped_words)
+            self.buffer = []
+            return timestamped_words, self.end
 
             
         except Exception as e:
@@ -223,31 +167,23 @@ class SimulStreamingASR():
     """SimulStreaming backend with AlignAtt policy."""
     sep = ""
 
-    def __init__(self, lan, modelsize=None, cache_dir=None, model_dir=None, logfile=sys.stderr, **kwargs):
-        logger.warning(SIMULSTREAMING_LICENSE)
+    def __init__(self, logfile=sys.stderr, **kwargs):
         self.logfile = logfile
         self.transcribe_kargs = {}
-        self.original_language = lan
         
-        self.model_path = kwargs.get('model_path', './large-v3.pt')
-        self.frame_threshold = kwargs.get('frame_threshold', 25)
-        self.audio_max_len = kwargs.get('audio_max_len', 20.0)
-        self.audio_min_len = kwargs.get('audio_min_len', 0.0)
-        self.segment_length = kwargs.get('segment_length', 0.5)
-        self.beams = kwargs.get('beams', 1)
-        self.decoder_type = kwargs.get('decoder_type', 'greedy' if self.beams == 1 else 'beam')
-        self.task = kwargs.get('task', 'transcribe')
-        self.cif_ckpt_path = kwargs.get('cif_ckpt_path', None)
-        self.never_fire = kwargs.get('never_fire', False)
-        self.init_prompt = kwargs.get('init_prompt', None)
-        self.static_init_prompt = kwargs.get('static_init_prompt', None)
-        self.max_context_tokens = kwargs.get('max_context_tokens', None)
-        self.warmup_file = kwargs.get('warmup_file', None)
-        self.preload_model_count = kwargs.get('preload_model_count', 1)
-        
-        if model_dir is not None:
-            self.model_path = model_dir
-        elif modelsize is not None:
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        if self.decoder_type is None:
+            self.decoder_type = 'greedy' if self.beams == 1 else 'beam'
+
+        self.fast_encoder = False
+        self.pytorch_path, compatible_whisper_mlx, compatible_faster_whisper = None, True, True
+        if self.model_path:
+            self.pytorch_path, compatible_whisper_mlx, compatible_faster_whisper = model_path_and_type(self.model_path)
+            self.model_name = self.pytorch_path.stem
+            is_multilingual = not self.model_path.endswith(".en")
+        elif self.model_size is not None:
             model_mapping = {
                 'tiny': './tiny.pt',
                 'base': './base.pt',
@@ -262,19 +198,20 @@ class SimulStreamingASR():
                 'large-v3': './large-v3.pt',
                 'large': './large-v3.pt'
             }
-            self.model_path = model_mapping.get(modelsize, f'./{modelsize}.pt')
-        
+            self.model_name = self.model_size
+            is_multilingual = not self.model_name.endswith(".en")
+                    
         self.cfg = AlignAttConfig(
-                model_path=self.model_path,
-                segment_length=self.segment_length,
+                tokenizer_is_multilingual= is_multilingual,
+                segment_length=self.min_chunk_size,
                 frame_threshold=self.frame_threshold,
-                language=self.original_language,
+                language=self.lan,
                 audio_max_len=self.audio_max_len,
                 audio_min_len=self.audio_min_len,
                 cif_ckpt_path=self.cif_ckpt_path,
                 decoder_type="beam",
                 beam_size=self.beams,
-                task=self.task,
+                task=self.direct_english_translation,
                 never_fire=self.never_fire,
                 init_prompt=self.init_prompt,
                 max_context_tokens=self.max_context_tokens,
@@ -282,32 +219,64 @@ class SimulStreamingASR():
         )  
         
         # Set up tokenizer for translation if needed
-        if self.task == "translate":
+        if self.direct_english_translation:
             self.tokenizer = self.set_translate_task()
         else:
             self.tokenizer = None
         
-        self.model_name = os.path.basename(self.cfg.model_path).replace(".pt", "")
-        self.model_path = os.path.dirname(os.path.abspath(self.cfg.model_path))
-        self.models = [self.load_model() for i in range(self.preload_model_count)]
+        
+            
     
         self.mlx_encoder, self.fw_encoder = None, None
-        if HAS_MLX_WHISPER:
-            print('Simulstreaming will use MLX whisper for a faster encoder.')
-            mlx_model_name = mlx_model_mapping[self.model_name]
-            self.mlx_encoder = load_mlx_encoder(path_or_hf_repo=mlx_model_name)
-        elif HAS_FASTER_WHISPER:
-            print('Simulstreaming will use Faster Whisper for the encoder.')
-            self.fw_encoder = WhisperModel(
-                self.model_name,
-                device='auto',
-                compute_type='auto',
-            )
+        if not self.disable_fast_encoder:
+            if HAS_MLX_WHISPER:
+                print('Simulstreaming will use MLX whisper to increase encoding speed.')
+                if self.model_path and compatible_whisper_mlx:
+                    mlx_model = self.model_path
+                else:
+                    mlx_model = mlx_model_mapping.get(self.model_name)
+                if mlx_model:
+                    self.mlx_encoder = load_mlx_encoder(path_or_hf_repo=mlx_model)
+                    self.fast_encoder = True
+            elif HAS_FASTER_WHISPER and compatible_faster_whisper:
+                print('Simulstreaming will use Faster Whisper for the encoder.')
+                if self.model_path and compatible_faster_whisper:
+                    fw_model = self.model_path
+                else:
+                    fw_model = self.model_name
+                self.fw_encoder = WhisperModel(
+                    fw_model,
+                    device='auto',
+                    compute_type='auto',
+                )
+                self.fast_encoder = True
+
+        self.models = [self.load_model() for i in range(self.preload_model_count)]
+
 
     def load_model(self):
-        whisper_model = load_model(name=self.model_name, download_root=self.model_path)
+        whisper_model = load_model(
+            name=self.pytorch_path if self.pytorch_path else self.model_name,
+            download_root=self.model_path,
+            decoder_only=self.fast_encoder,
+            custom_alignment_heads=self.custom_alignment_heads
+            )
         warmup_audio = load_file(self.warmup_file)
-        whisper_model.transcribe(warmup_audio, language=self.original_language if self.original_language != 'auto' else None)
+        if warmup_audio is not None:
+            warmup_audio = torch.from_numpy(warmup_audio).float()
+            if self.fast_encoder:                
+                temp_model = PaddedAlignAttWhisper(
+                    cfg=self.cfg,
+                    loaded_model=whisper_model,
+                    mlx_encoder=self.mlx_encoder,
+                    fw_encoder=self.fw_encoder,
+                )
+                temp_model.warmup(warmup_audio)
+                temp_model.remove_hooks()
+            else:
+                # For standard encoder, use the original transcribe warmup
+                warmup_audio = load_file(self.warmup_file)
+                whisper_model.transcribe(warmup_audio, language=self.lan if self.lan != 'auto' else None)
         return whisper_model
     
     def get_new_model_instance(self):

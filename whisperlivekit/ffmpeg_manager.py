@@ -7,11 +7,12 @@ import contextlib
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-ERROR_INSTALL_INSTRUCTIONS = """
+ERROR_INSTALL_INSTRUCTIONS = f"""
+{'='*50}
 FFmpeg is not installed or not found in your system's PATH.
-Please install FFmpeg to enable audio processing.
+Alternative Solution: You can still use WhisperLiveKit without FFmpeg by adding the --pcm-input parameter. Note that when using this option, audio will not be compressed between the frontend and backend, which may result in higher bandwidth usage.
 
-Installation instructions:
+If you want to install FFmpeg:
 
 # Ubuntu/Debian:
 sudo apt update && sudo apt install ffmpeg
@@ -25,6 +26,7 @@ brew install ffmpeg
 # 3. Add the 'bin' directory (e.g., C:\\FFmpeg\\bin) to your system's PATH environment variable.
 
 After installation, please restart the application.
+{'='*50}
 """
 
 class FFmpegState(Enum):
@@ -183,6 +185,8 @@ class FFmpegManager:
     async def _drain_stderr(self):
         try:
             while True:
+                if not self.process or not self.process.stderr:
+                    break
                 line = await self.process.stderr.readline()
                 if not line:
                     break
