@@ -14,7 +14,6 @@ from whisperlivekit.whisper.timing import median_filter
 from whisperlivekit.whisper.decoding import GreedyDecoder, BeamSearchDecoder, SuppressTokens, detect_language
 from .beam import BeamPyTorchInference
 from .eow_detection import fire_at_boundary, load_cif
-import os
 from time import time
 from .token_buffer import TokenBuffer
 
