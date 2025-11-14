@@ -138,3 +138,6 @@ test_*.py
 launch.json
 .DS_Store
 test/*
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
