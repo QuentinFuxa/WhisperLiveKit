@@ -129,11 +129,18 @@ def parse_args():
     )    
 
     parser.add_argument(
-        "--backend",
+        "--backend-policy",
         type=str,
         default="simulstreaming",
-        choices=["faster-whisper", "whisper_timestamped", "mlx-whisper", "openai-api", "simulstreaming"],
-        help="Load only this backend for Whisper processing.",
+        choices=["1", "2", "simulstreaming", "localagreement"],
+        help="Select the streaming policy: 1 or 'simulstreaming' for AlignAtt, 2 or 'localagreement' for LocalAgreement.",
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="auto",
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api"],
+        help="Select the Whisper backend implementation (auto: prefer MLX on macOS, otherwise Faster-Whisper, else Whisper). Use 'openai-api' with --backend-policy localagreement to call OpenAI's API.",
     )
     parser.add_argument(
         "--no-vac",
@@ -316,5 +323,10 @@ def parse_args():
     args.vad = not args.no_vad    
     delattr(args, 'no_transcription')
     delattr(args, 'no_vad')
+
+    if args.backend_policy == "1":
+        args.backend_policy = "simulstreaming"
+    elif args.backend_policy == "2":
+        args.backend_policy = "localagreement"
     
     return args

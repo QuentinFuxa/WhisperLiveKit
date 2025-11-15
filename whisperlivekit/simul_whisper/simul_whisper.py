@@ -17,6 +17,10 @@ from .eow_detection import fire_at_boundary, load_cif
 import os
 from time import time
 from .token_buffer import TokenBuffer
+from whisperlivekit.backend_support import (
+    mlx_backend_available,
+    faster_backend_available,
+)
 
 import numpy as np
 from ..timed_objects import PUNCTUATION_MARKS
@@ -26,21 +30,18 @@ DEC_PAD = 50257
 logger = logging.getLogger(__name__)
 
 
-try:
+HAS_MLX_WHISPER = False
+HAS_FASTER_WHISPER = False
+
+if mlx_backend_available():
     from mlx_whisper.audio import log_mel_spectrogram as mlx_log_mel_spectrogram
     from mlx_whisper.transcribe import pad_or_trim as mlx_pad_or_trim
     HAS_MLX_WHISPER = True
-except ImportError:
-    HAS_MLX_WHISPER = False
-if HAS_MLX_WHISPER:
-    HAS_FASTER_WHISPER = False
-else:
-    try:
-        from faster_whisper.audio import pad_or_trim as fw_pad_or_trim
-        from faster_whisper.feature_extractor import FeatureExtractor
-        HAS_FASTER_WHISPER = True
-    except ImportError:
-        HAS_FASTER_WHISPER = False
+
+if faster_backend_available():
+    from faster_whisper.audio import pad_or_trim as fw_pad_or_trim
+    from faster_whisper.feature_extractor import FeatureExtractor
+    HAS_FASTER_WHISPER = True
 
 class PaddedAlignAttWhisper:
     def __init__(

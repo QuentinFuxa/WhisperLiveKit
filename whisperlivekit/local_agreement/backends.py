@@ -6,6 +6,8 @@ import math
 from typing import List
 import numpy as np
 from whisperlivekit.timed_objects import ASRToken
+from whisperlivekit.model_paths import resolve_model_path, model_path_and_type
+from whisperlivekit.whisper.transcribe import transcribe as whisper_transcribe
 logger = logging.getLogger(__name__)
 class ASRBase:
     sep = " "  # join transcribe words with this character (" " for whisper_timestamped,
@@ -37,40 +39,60 @@ class ASRBase:
         raise NotImplementedError("must be implemented in the child class")
 
 
-class WhisperTimestampedASR(ASRBase):
-    """Uses whisper_timestamped as the backend."""
+class WhisperASR(ASRBase):
+    """Uses WhisperLiveKit's built-in Whisper implementation."""
     sep = " "
 
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
-        import whisper
-        import whisper_timestamped
-        from whisper_timestamped import transcribe_timestamped
+        from whisperlivekit.whisper import load_model as load_model
 
-        self.transcribe_timestamped = transcribe_timestamped
         if model_dir is not None:
-            logger.debug("ignoring model_dir, not implemented")
-        return whisper.load_model(model_size, download_root=cache_dir)
+            resolved_path = resolve_model_path(model_dir)
+            if resolved_path.is_dir():
+                pytorch_path, _, _ = model_path_and_type(resolved_path)
+                if pytorch_path is None:
+                    raise FileNotFoundError(
+                        f"No supported PyTorch checkpoint found under {resolved_path}"
+                    )
+                resolved_path = pytorch_path
+            logger.debug(f"Loading Whisper model from custom path {resolved_path}")
+            return load_model(str(resolved_path))
+
+        if model_size is None:
+            raise ValueError("Either model_size or model_dir must be set for WhisperASR")
+
+        return load_model(model_size, download_root=cache_dir)
 
     def transcribe(self, audio, init_prompt=""):
-        result = self.transcribe_timestamped(
+        options = dict(self.transcribe_kargs)
+        options.pop("vad", None)
+        options.pop("vad_filter", None)
+        language = self.original_language if self.original_language else None
+
+        result = whisper_transcribe(
             self.model,
             audio,
-            language=self.original_language,
+            language=language,
             initial_prompt=init_prompt,
-            verbose=None,
             condition_on_previous_text=True,
-            **self.transcribe_kargs,
+            word_timestamps=True,
+            **options,
         )
         return result
 
     def ts_words(self, r) -> List[ASRToken]:
         """
-        Converts the whisper_timestamped result to a list of ASRToken objects.
+        Converts the Whisper result to a list of ASRToken objects.
         """
         tokens = []
         for segment in r["segments"]:
             for word in segment["words"]:
-                token = ASRToken(word["start"], word["end"], word["text"])
+                token = ASRToken(
+                    word["start"],
+                    word["end"],
+                    word["word"],
+                    probability=word.get("probability"),
+                )
                 tokens.append(token)
         return tokens
 
@@ -78,7 +100,7 @@ class WhisperTimestampedASR(ASRBase):
         return [segment["end"] for segment in res["segments"]]
 
     def use_vad(self):
-        self.transcribe_kargs["vad"] = True
+        logger.warning("VAD is not currently supported for WhisperASR backend and will be ignored.")
 
 class FasterWhisperASR(ASRBase):
     """Uses faster-whisper as the backend."""
@@ -88,9 +110,10 @@ class FasterWhisperASR(ASRBase):
         from faster_whisper import WhisperModel
 
         if model_dir is not None:
-            logger.debug(f"Loading whisper model from model_dir {model_dir}. "
+            resolved_path = resolve_model_path(model_dir)
+            logger.debug(f"Loading faster-whisper model from {resolved_path}. "
                          f"model_size and cache_dir parameters are not used.")
-            model_size_or_path = model_dir
+            model_size_or_path = str(resolved_path)
         elif model_size is not None:
             model_size_or_path = model_size
         else:
@@ -146,8 +169,9 @@ class MLXWhisper(ASRBase):
         import mlx.core as mx
 
         if model_dir is not None:
-            logger.debug(f"Loading whisper model from model_dir {model_dir}. model_size parameter is not used.")
-            model_size_or_path = model_dir
+            resolved_path = resolve_model_path(model_dir)
+            logger.debug(f"Loading MLX Whisper model from {resolved_path}. model_size parameter is not used.")
+            model_size_or_path = str(resolved_path)
         elif model_size is not None:
             model_size_or_path = self.translate_model_name(model_size)
             logger.debug(f"Loading whisper model {model_size}. You use mlx whisper, so {model_size_or_path} will be used.")

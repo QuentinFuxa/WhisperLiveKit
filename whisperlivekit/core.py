@@ -3,12 +3,16 @@ from whisperlivekit.simul_whisper import SimulStreamingASR
 from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
 from argparse import Namespace
 import sys
+import logging
 
 def update_with_kwargs(_dict, kwargs):
     _dict.update({
         k: v for k, v in kwargs.items() if k in _dict
     })
     return _dict
+
+
+logger = logging.getLogger(__name__)
 
 class TranscriptionEngine:
     _instance = None
@@ -41,16 +45,18 @@ class TranscriptionEngine:
             "pcm_input": False,
             "disable_punctuation_split" : False,
             "diarization_backend": "sortformer",
+            "backend_policy": "simulstreaming",
+            "backend": "auto",
         }
         global_params = update_with_kwargs(global_params, kwargs)
 
         transcription_common_params = {
-            "backend": "simulstreaming",
             "warmup_file": None,
             "min_chunk_size": 0.5,
             "model_size": "tiny",
             "model_cache_dir": None,
             "model_dir": None,
+            "model_path": None,
             "lan": "auto",
             "direct_english_translation": False,
         }
@@ -78,8 +84,9 @@ class TranscriptionEngine:
             use_onnx = kwargs.get('vac_onnx', False)
             self.vac_model = load_silero_vad(onnx=use_onnx)
         
+        backend_policy = self.args.backend_policy
         if self.args.transcription:
-            if self.args.backend == "simulstreaming":                 
+            if backend_policy == "simulstreaming":                 
                 simulstreaming_params = {
                     "disable_fast_encoder": False,
                     "custom_alignment_heads": None,
@@ -93,14 +100,19 @@ class TranscriptionEngine:
                     "init_prompt": None,
                     "static_init_prompt": None,
                     "max_context_tokens": None,
-                    "model_path": './base.pt',
                     "preload_model_count": 1,
                 }
                 simulstreaming_params = update_with_kwargs(simulstreaming_params, kwargs)
                 
                 self.tokenizer = None        
                 self.asr = SimulStreamingASR(
-                    **transcription_common_params, **simulstreaming_params
+                    **transcription_common_params,
+                    **simulstreaming_params,
+                    backend=self.args.backend,
+                )
+                logger.info(
+                    "Using SimulStreaming policy with %s backend",
+                    getattr(self.asr, "encoder_backend", "whisper"),
                 )
             else:
                 
@@ -112,7 +124,13 @@ class TranscriptionEngine:
                 whisperstreaming_params = update_with_kwargs(whisperstreaming_params, kwargs)
                 
                 self.asr = backend_factory(
-                    **transcription_common_params, **whisperstreaming_params
+                    backend=self.args.backend,
+                    **transcription_common_params,
+                    **whisperstreaming_params,
+                )
+                logger.info(
+                    "Using LocalAgreement policy with %s backend",
+                    getattr(self.asr, "backend_choice", self.asr.__class__.__name__),
                 )
 
         if self.args.diarization:
@@ -133,7 +151,7 @@ class TranscriptionEngine:
         
         self.translation_model = None
         if self.args.target_language:
-            if self.args.lan == 'auto' and self.args.backend != "simulstreaming":
+            if self.args.lan == 'auto' and backend_policy != "simulstreaming":
                 raise Exception('Translation cannot be set with language auto when transcription backend is not simulstreaming')
             else:
                 try:
@@ -150,7 +168,7 @@ class TranscriptionEngine:
 
 
 def online_factory(args, asr):
-    if args.backend == "simulstreaming":    
+    if args.backend_policy == "simulstreaming":    
         from whisperlivekit.simul_whisper import SimulStreamingOnlineProcessor
         online = SimulStreamingOnlineProcessor(asr)
     else:
