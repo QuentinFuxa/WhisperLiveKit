@@ -201,7 +201,8 @@ class RecordingService : Service() {
         private const val CHANNEL_ID = "daymind_recording"
         private const val NOTIFICATION_ID = 42
         private const val SAMPLE_RATE = 16_000
-        private const val CHUNK_SECONDS = 30
+        // API contracts prefer ≤10 s chunks; align with the 6 s Python client.
+        private const val CHUNK_SECONDS = 6
         private const val SAMPLES_PER_CHUNK = SAMPLE_RATE * CHUNK_SECONDS
 
         const val ACTION_START = "com.symbioza.daymind.action.START"

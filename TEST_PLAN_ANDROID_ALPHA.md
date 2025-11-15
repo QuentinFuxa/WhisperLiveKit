@@ -21,7 +21,7 @@ Launch the DayMind Alpha app on the device.
 | # | Action | Expected Result |
 |---|--------|-----------------|
 | 1 | Tap **Record** | Foreground notification “DayMind is recording…” appears and service stays alive. |
-| 2 | Wait ~30 s | A WAV chunk appears under `cacheDir/chunks/` (verify via `adb shell ls /storage/.../cache/chunks`). |
+| 2 | Wait ~6 s | A WAV chunk appears under `cacheDir/chunks/` (verify via `adb shell ls /storage/.../cache/chunks`). |
 | 3 | Ensure network is ON | Chunk upload job runs automatically; status message becomes “Uploaded ...”. |
 | 4 | Toggle network OFF | Chunk file remains; queue shows “Waiting for network”/upload status persists. |
 | 5 | Restore network | WorkManager retries and uploads chunk automatically; file deleted after 200 response. |

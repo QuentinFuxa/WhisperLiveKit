@@ -27,7 +27,7 @@ Foreground-only Kotlin/Compose app that records mono 16 kHz WAV chunks, queues
    ```
 
 ## Runtime behavior
-- The `Record` toggle starts a foreground `AudioRecord` service (PCM 16‑bit, 16 kHz mono) that writes 30 s WAV chunks into `cacheDir/chunks`.
+- The `Record` toggle starts a foreground `AudioRecord` service (PCM 16‑bit, 16 kHz mono) that writes 6 s WAV chunks into `cacheDir/chunks`.
 - Each finalized chunk schedules an `UploadChunkWorker` job with network constraints and exponential backoff.
 - Successful uploads delete the chunk and clear any pause flags. Auth failures (401/403) pause the queue until the operator taps **Retry uploads** and fixes the key.
 - Metadata sent along with the multipart payload: `session_ts`, `device_id`, `sample_rate`, and `format`.
