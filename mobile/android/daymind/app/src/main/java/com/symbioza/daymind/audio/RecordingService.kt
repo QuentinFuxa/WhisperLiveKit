@@ -158,6 +158,21 @@ class RecordingService : Service() {
             container.chunkRepository.refresh()
             return
         }
+        val trimResult = runCatching {
+            SilenceTrimmer.trim(chunk.file, SAMPLE_RATE)
+        }.getOrNull()
+        if (trimResult == null) {
+            container.uploadStatusStore.markRetryableError("Trim failed, sending raw chunk")
+            container.chunkUploadScheduler.scheduleChunkUpload(chunk.file, chunk.sessionStart)
+            return
+        }
+        if (trimResult.segments.isEmpty()) {
+            chunk.file.delete()
+            container.chunkRepository.refresh()
+            container.uploadStatusStore.markSuccess("Silent chunk skipped")
+            return
+        }
+        container.chunkRepository.saveSpeechSegments(chunk.file, trimResult.segments)
         container.chunkUploadScheduler.scheduleChunkUpload(chunk.file, chunk.sessionStart)
     }
 

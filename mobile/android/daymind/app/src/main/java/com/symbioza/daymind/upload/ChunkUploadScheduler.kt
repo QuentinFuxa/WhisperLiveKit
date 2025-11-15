@@ -40,13 +40,15 @@ class ChunkUploadScheduler(
             return
         }
 
-        val data = Data.Builder()
+        val speechSegmentsJson = chunkRepository.loadSpeechSegmentsJson(file)
+        val dataBuilder = Data.Builder()
             .putString(ChunkUploadWorker.KEY_CHUNK_PATH, file.absolutePath)
             .putString(ChunkUploadWorker.KEY_SESSION_TS, DateTimeFormatter.ISO_INSTANT.format(chunkStart))
             .putString(ChunkUploadWorker.KEY_DEVICE_ID, deviceIdProvider.deviceId)
             .putInt(ChunkUploadWorker.KEY_SAMPLE_RATE, ChunkUploadWorker.DEFAULT_SAMPLE_RATE)
             .putString(ChunkUploadWorker.KEY_AUDIO_FORMAT, "wav")
-            .build()
+        speechSegmentsJson?.let { dataBuilder.putString(ChunkUploadWorker.KEY_SPEECH_SEGMENTS, it) }
+        val data = dataBuilder.build()
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)

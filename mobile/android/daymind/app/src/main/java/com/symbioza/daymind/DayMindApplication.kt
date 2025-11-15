@@ -1,6 +1,7 @@
 package com.symbioza.daymind
 
 import android.app.Application
+import com.symbioza.daymind.audio.ChunkPlaybackManager
 import com.symbioza.daymind.config.ConfigRepository
 import com.symbioza.daymind.data.ChunkRepository
 import com.symbioza.daymind.device.DeviceIdProvider
@@ -25,6 +26,7 @@ class AppContainer(private val application: Application) {
     val uploadStatusStore = UploadStatusStore()
     val deviceIdProvider = DeviceIdProvider(application)
     val recordingStateStore = RecordingStateStore()
+    val chunkPlaybackManager = ChunkPlaybackManager(application)
     val chunkUploadScheduler = ChunkUploadScheduler(
         context = application,
         chunkRepository = chunkRepository,

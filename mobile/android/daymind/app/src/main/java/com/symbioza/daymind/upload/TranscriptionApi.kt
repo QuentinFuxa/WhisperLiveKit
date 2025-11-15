@@ -16,6 +16,7 @@ interface TranscriptionApi {
         @Part("session_ts") sessionTs: RequestBody,
         @Part("device_id") deviceId: RequestBody,
         @Part("sample_rate") sampleRate: RequestBody,
-        @Part("format") format: RequestBody
+        @Part("format") format: RequestBody,
+        @Part("speech_segments") speechSegments: RequestBody?
     ): Response<ResponseBody>
 }

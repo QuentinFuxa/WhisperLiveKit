@@ -27,6 +27,7 @@ Prometheus exposition of `api_requests_total{path,method,status}` and `api_reque
 - **Request:** `multipart/form-data`
   - `file`: WAV/FLAC/MP3 chunk (≤10 s ideal)
   - `lang` (optional): override language autodetect
+  - `speech_segments` (optional): JSON array with `{start_ms,end_ms}` windows describing when speech was detected inside the clip; helps GPT summarize pauses vs. active speech.
 - **Response:**
 ```json
 {

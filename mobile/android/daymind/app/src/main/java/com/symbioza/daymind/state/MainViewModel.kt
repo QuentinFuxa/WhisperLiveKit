@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.symbioza.daymind.DayMindApplication
 import com.symbioza.daymind.audio.RecordingService
+import java.io.File
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -15,7 +16,9 @@ data class UiState(
     val isRecording: Boolean = false,
     val pendingChunks: Int = 0,
     val lastUploadMessage: String = "Waiting",
-    val authError: Boolean = false
+    val authError: Boolean = false,
+    val canPlayChunk: Boolean = false,
+    val isPlayingBack: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -24,13 +27,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<UiState> = combine(
         container.recordingStateStore.isRecording,
         container.chunkRepository.pendingCount,
-        container.uploadStatusStore.status
-    ) { recording, pending, uploadStatus ->
+        container.uploadStatusStore.status,
+        container.chunkRepository.latestChunkPath,
+        container.chunkPlaybackManager.isPlaying
+    ) { recording, pending, uploadStatus, latestChunkPath, isPlaying ->
         UiState(
             isRecording = recording,
             pendingChunks = pending,
             lastUploadMessage = uploadStatus.message,
-            authError = uploadStatus.authError
+            authError = uploadStatus.authError,
+            canPlayChunk = !latestChunkPath.isNullOrBlank(),
+            isPlayingBack = isPlaying
         )
     }.stateIn(
         scope = viewModelScope,
@@ -52,5 +59,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             container.chunkRepository.refresh()
             container.chunkUploadScheduler.enqueueAllPending()
         }
+    }
+
+    fun playLatestChunk() {
+        val path = container.chunkRepository.latestChunkPath.value ?: return
+        container.chunkPlaybackManager.play(File(path))
+    }
+
+    fun stopPlayback() {
+        container.chunkPlaybackManager.stop()
     }
 }

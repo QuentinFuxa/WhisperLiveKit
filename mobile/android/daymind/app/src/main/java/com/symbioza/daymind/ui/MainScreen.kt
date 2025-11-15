@@ -19,7 +19,9 @@ import com.symbioza.daymind.state.UiState
 fun DayMindScreen(
     state: UiState,
     onToggleRecording: () -> Unit,
-    onRetryUploads: () -> Unit
+    onRetryUploads: () -> Unit,
+    onPlayLastChunk: () -> Unit,
+    onStopPlayback: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -40,6 +42,13 @@ fun DayMindScreen(
 
             Button(onClick = onToggleRecording) {
                 Text(if (state.isRecording) "Stop Recording" else "Start Recording")
+            }
+
+            Button(
+                onClick = { if (state.isPlayingBack) onStopPlayback() else onPlayLastChunk() },
+                enabled = state.canPlayChunk || state.isPlayingBack
+            ) {
+                Text(if (state.isPlayingBack) "Stop Playback" else "Play Last Chunk")
             }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -27,10 +27,16 @@ Foreground-only Kotlin/Compose app that records mono 16 kHz WAV chunks, queues
    ```
 
 ## Runtime behavior
-- The `Record` toggle starts a foreground `AudioRecord` service (PCM 16‑bit, 16 kHz mono) that writes 6 s WAV chunks into `cacheDir/chunks`.
+- The `Record` toggle starts a foreground `AudioRecord` service (PCM 16‑bit, 16 kHz mono) that writes 6 s WAV chunks into `cacheDir/chunks`, trims trailing/leading silence, and captures speech windows for each clip.
 - Each finalized chunk schedules an `UploadChunkWorker` job with network constraints and exponential backoff.
 - Successful uploads delete the chunk and clear any pause flags. Auth failures (401/403) pause the queue until the operator taps **Retry uploads** and fixes the key.
 - Metadata sent along with the multipart payload: `session_ts`, `device_id`, `sample_rate`, and `format`.
+- Use **Play Last Chunk** to audition the most recent trimmed clip (button becomes **Stop Playback** while audio is playing).
+
+### Speech timeline metadata
+- Silence trimming uses a lightweight amplitude detector; sections shorter than ~250 ms or below the threshold are discarded automatically.
+- Every retained chunk writes `chunk_<timestamp>...wav.segments.json`, which lists `{start_ms,end_ms}` pairs describing when speaking occurred.
+- Uploads include the JSON as the optional `speech_segments` part so `/v1/transcribe` and downstream GPT summarization can tell when speech was active vs. idle.
 
 ## Privacy notes
 - Audio chunks stay on-device (cache directory) until they upload over HTTPS.

@@ -28,6 +28,7 @@ class ChunkUploadWorker(
         val deviceId = inputData.getString(KEY_DEVICE_ID) ?: return Result.failure()
         val sampleRate = inputData.getInt(KEY_SAMPLE_RATE, DEFAULT_SAMPLE_RATE)
         val format = inputData.getString(KEY_AUDIO_FORMAT) ?: "wav"
+        val speechSegments = inputData.getString(KEY_SPEECH_SEGMENTS)
 
         val chunkFile = File(chunkPath)
         if (!chunkFile.exists()) {
@@ -50,13 +51,16 @@ class ChunkUploadWorker(
         )
         val textMediaType = "text/plain".toMediaType()
 
+        val speechBody = speechSegments?.toRequestBody("application/json".toMediaType())
+
         return runCatching {
             api.uploadChunk(
                 file = filePart,
                 sessionTs = sessionTs.toRequestBody(textMediaType),
                 deviceId = deviceId.toRequestBody(textMediaType),
                 sampleRate = sampleRate.toString().toRequestBody(textMediaType),
-                format = format.toRequestBody(textMediaType)
+                format = format.toRequestBody(textMediaType),
+                speechSegments = speechBody
             )
         }.fold(
             onSuccess = { response ->
@@ -119,6 +123,7 @@ class ChunkUploadWorker(
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_SAMPLE_RATE = "sample_rate"
         const val KEY_AUDIO_FORMAT = "audio_format"
+        const val KEY_SPEECH_SEGMENTS = "speech_segments"
         const val DEFAULT_SAMPLE_RATE = 16_000
     }
 }
