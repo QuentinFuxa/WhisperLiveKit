@@ -34,6 +34,7 @@ dependencies = [
     "websockets",
     "torchaudio>=2.0.0",
     "torch>=2.0.0",
+    "huggingface-hub>=0.25.0",
     "tqdm",
     "tiktoken",
     'triton>=2.0.0; platform_machine == "x86_64" and (sys_platform == "linux" or sys_platform == "linux2")'
@@ -48,6 +49,7 @@ Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
 
 [project.scripts]
 whisperlivekit-server = "whisperlivekit.basic_server:main"
+wlk = "whisperlivekit.basic_server:main"
 
 [tool.setuptools]
 packages = [

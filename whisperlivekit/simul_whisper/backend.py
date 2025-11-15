@@ -1,8 +1,7 @@
 import sys
 import numpy as np
 import logging
-from typing import List, Tuple, Optional
-import logging
+from typing import List, Tuple, Optional, Union
 import platform
 from whisperlivekit.timed_objects import ASRToken, Transcript, ChangeSpeaker
 from whisperlivekit.warmup import load_file
@@ -37,7 +36,7 @@ else:
             print(f"""{"="*50}\nFaster-Whisper not found but. Consider installing faster-whisper for better performance: `pip install faster-whisper`\n{"="*50}`""")
         HAS_FASTER_WHISPER = False
 
-def model_path_and_type(model_path):
+def model_path_and_type(model_path: Union[str, Path]):
     path = Path(model_path)
     
     compatible_whisper_mlx = False
@@ -57,9 +56,26 @@ def model_path_and_type(model_path):
                 elif file.suffix.lower() == '.safetensors':
                     pytorch_path = file
         if pytorch_path is None:
-            if (model_path / Path("pytorch_model.bin")).exists():
-                pytorch_path = model_path / Path("pytorch_model.bin")
+            if (path / Path("pytorch_model.bin")).exists():
+                pytorch_path = path / Path("pytorch_model.bin")
     return pytorch_path, compatible_whisper_mlx, compatible_faster_whisper
+
+
+def resolve_model_path(model_path: str) -> Path:
+    path = Path(model_path)
+    if path.exists():
+        return path
+
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:
+        raise FileNotFoundError(
+            f"Model path '{model_path}' does not exist locally and huggingface_hub "
+            "is not installed to download it."
+        ) from exc
+
+    downloaded_path = Path(snapshot_download(repo_id=model_path))
+    return downloaded_path
 
 
 class SimulStreamingOnlineProcessor:
@@ -180,7 +196,9 @@ class SimulStreamingASR():
         self.fast_encoder = False
         self.pytorch_path, compatible_whisper_mlx, compatible_faster_whisper = None, True, True
         if self.model_path:
-            self.pytorch_path, compatible_whisper_mlx, compatible_faster_whisper = model_path_and_type(self.model_path)
+            resolved_model_path = resolve_model_path(self.model_path)
+            self.model_path = str(resolved_model_path)
+            self.pytorch_path, compatible_whisper_mlx, compatible_faster_whisper = model_path_and_type(resolved_model_path)
             self.model_name = self.pytorch_path.stem
             is_multilingual = not self.model_path.endswith(".en")
         elif self.model_size is not None:

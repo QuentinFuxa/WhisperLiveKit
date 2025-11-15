@@ -45,7 +45,7 @@ pip install whisperlivekit
 #### Quick Start
 1. **Start the transcription server:**
    ```bash
-   whisperlivekit-server --model base --language en
+   wlk --model base --language en
    ```
 
 2. **Open your browser** and navigate to `http://localhost:8000`. Start speaking and watch your words appear in real-time!
@@ -53,6 +53,7 @@ pip install whisperlivekit
 
 > - See [tokenizer.py](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py) for the list of all available languages.
 > - For HTTPS requirements, see the **Parameters** section for SSL configuration options.
+> - The CLI entry point is exposed as both `wlk` and `whisperlivekit-server`; they are equivalent.
 
 #### Use it to capture audio from web pages.
 
@@ -85,10 +86,10 @@ See  **Parameters & Configuration** below on how to use them.
 
 ```bash
 # Large model and translate from french to danish
-whisperlivekit-server --model large-v3 --language fr --target-language da
+wlk --model large-v3 --language fr --target-language da
 
 # Diarization and server listening on */80 
-whisperlivekit-server --host 0.0.0.0 --port 80 --model medium --diarization --language fr
+wlk --host 0.0.0.0 --port 80 --model medium --diarization --language fr
 ```
 
 
@@ -139,7 +140,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `--model` | Whisper model size. List and recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/available_models.md) | `small` |
-| `--model-path` | .pt file/directory containing whisper model. Overrides `--model`. Recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/models_compatible_formats.md) | `None` |
+| `--model-path` | Local .pt file/directory **or** Hugging Face repo ID containing the Whisper model. Overrides `--model`. Recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/models_compatible_formats.md) | `None` |
 | `--language` | List [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py). If you use `auto`, the model attempts to detect the language automatically, but it tends to bias towards English. | `auto` |
 | `--target-language` | If sets, translates using [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting). [200 languages available](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/supported_languages.md). If you want to translate to english, you can also use `--direct-english-translation`. The STT model will try to directly output the translation. | `None` |
 | `--diarization` | Enable speaker identification | `False` |
