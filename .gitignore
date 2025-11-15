@@ -149,3 +149,4 @@ mobile/android/daymind/.idea/
 *.zip
 *.jar
 local.properties
+!mobile/daymind/buildozer.spec

@@ -45,6 +45,11 @@ The DayMind mobile app is a lightweight Kivy client that records short audio chu
 - System packages: `build-essential`, `git`, `zip`, `unzip`, `openjdk-17-jdk`, `python3-venv`.
 
 ### Manual Build
+If this is your first Buildozer run on a host, execute `scripts/setup_buildozer_host.sh`
+from the repo root (works locally or on a Terraform-provisioned droplet). It installs
+OpenJDK 17, the Android SDK/NDK helper stack, and a dedicated virtualenv so the build
+command below succeeds.
+
 ```bash
 cd mobile/daymind
 python -m venv .venv
@@ -62,6 +67,12 @@ scripts/build_apk.sh
 ```
 
 This runs Buildozer and copies the newest artifact to `dist/daymind-debug.apk` for easy sharing.
+
+### Terraform Builder
+Need more CPU/RAM for Buildozer? Reuse the DigitalOcean droplet defined under
+`infra/terraform`. See [`docs/buildozer_server.md`](../../docs/buildozer_server.md)
+for the full workflow (Terraform apply → rsync repo → `scripts/setup_buildozer_host.sh`
+→ `scripts/build_apk.sh`).
 
 ### Required Permissions
 Declared in `mobile/daymind/buildozer.spec`:
