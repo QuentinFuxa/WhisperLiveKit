@@ -69,12 +69,12 @@ Go to `chrome-extension` for instructions.
 
 | Optional | `pip install` |
 |-----------|-------------|
-| **Speaker diarization** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
+| **Windows/Linux optimizations** | `faster-whisper` |
 | **Apple Silicon optimizations** | `mlx-whisper` |
 | **Translation** | `nllw` |
+| **Speaker diarization** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
+| OpenAI API | `openai` |
 | *[Not recommanded]*  Speaker diarization with Diart | `diart` |
-| *[Not recommanded]*  Improved timestamps backend | `whisper-timestamped` |
-| OpenAI API backend | `openai` |
 
 See  **Parameters & Configuration** below on how to use them.
 
