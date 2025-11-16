@@ -123,7 +123,9 @@ class Translation(TimedText):
 
 @dataclass
 class Silence():
-    duration: float
+    duration: Optional[float] = None
+    is_starting: bool = False
+    has_ended: bool = False
     
     
 @dataclass

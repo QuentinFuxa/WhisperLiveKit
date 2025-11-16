@@ -151,20 +151,31 @@ class OnlineASRProcessor:
         """Append an audio chunk (a numpy array) to the current audio buffer."""
         self.audio_buffer = np.append(self.audio_buffer, audio)
 
-    def insert_silence(self, silence_duration, offset):
-        """
-        If silences are > 5s, we do a complete context clear. Otherwise, we just insert a small silence and shift the last_attend_frame
-        """
-        # if self.transcript_buffer.buffer:
-        #     self.committed.extend(self.transcript_buffer.buffer)
-        #     self.transcript_buffer.buffer = []
-            
-        if True: #silence_duration < 3: #we want the last audio to be treated to not have a gap. could also be handled in the future in ends_with_silence.
-            gap_silence = np.zeros(int(16000 * silence_duration), dtype=np.int16)
-            self.insert_audio_chunk(gap_silence)
+    def start_silence(self):
+        if self.audio_buffer.size == 0:
+            return [], self.get_audio_buffer_end_time()
+        return self.process_iter()
+
+    def end_silence(self, silence_duration: Optional[float], offset: float):
+        if not silence_duration or silence_duration <= 0:
+            return
+
+        long_silence = silence_duration >= 5
+        if not long_silence:
+            gap_samples = int(self.SAMPLING_RATE * silence_duration)
+            if gap_samples > 0:
+                gap_silence = np.zeros(gap_samples, dtype=np.float32)
+                self.insert_audio_chunk(gap_silence)
         else:
             self.init(offset=silence_duration + offset)
+
         self.global_time_offset += silence_duration
+
+    def insert_silence(self, silence_duration, offset):
+        """
+        Backwards compatibility shim for legacy callers that still use insert_silence.
+        """
+        self.end_silence(silence_duration, offset)
 
     def prompt(self) -> Tuple[str, str]:
         """
