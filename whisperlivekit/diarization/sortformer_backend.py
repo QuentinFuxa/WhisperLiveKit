@@ -160,7 +160,7 @@ class SortformerDiarizationOnline:
         # Initialize total predictions tensor
         self.total_preds = torch.zeros((batch_size, 0, self.diar_model.sortformer_modules.n_spk), device=device)
 
-    def insert_silence(self, silence_duration: float):
+    def insert_silence(self, silence_duration: Optional[float]):
         """
         Insert silence period by adjusting the global time offset.
         

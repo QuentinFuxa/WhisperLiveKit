@@ -63,16 +63,22 @@ class SimulStreamingOnlineProcessor:
             fw_encoder=self.asr.fw_encoder,
             )
 
-    def insert_silence(self, silence_duration, offset):
+    def start_silence(self):
+        tokens, processed_upto = self.process_iter(is_last=True)
+        return tokens, processed_upto
+
+    def end_silence(self, silence_duration, offset):
         """
         If silences are > 5s, we do a complete context clear. Otherwise, we just insert a small silence and shift the last_attend_frame
         """
-        if silence_duration < 5:
-            gap_silence = torch.zeros(int(16000*silence_duration))
-            self.model.insert_audio(gap_silence)
-            # self.global_time_offset += silence_duration
-        else:
-            self.process_iter(is_last=True) #we want to totally process what remains in the buffer.
+        self.end += silence_duration
+        long_silence = silence_duration >= 5
+        if not long_silence:
+            gap_len = int(16000 * silence_duration)
+            if gap_len > 0:
+                gap_silence = torch.zeros(gap_len)
+                self.model.insert_audio(gap_silence)
+        if long_silence:
             self.model.refresh_segment(complete=True)
             self.model.global_time_offset = silence_duration + offset
 
