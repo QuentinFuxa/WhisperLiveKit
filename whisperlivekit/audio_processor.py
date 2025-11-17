@@ -127,6 +127,7 @@ class AudioProcessor:
         self.diarization_queue = asyncio.Queue() if self.args.diarization else None
         self.translation_queue = asyncio.Queue() if self.args.target_language else None
         self.pcm_buffer = bytearray()
+        self.total_pcm_samples = 0
 
         self.transcription_task = None
         self.diarization_task = None
@@ -173,6 +174,26 @@ class AudioProcessor:
         self.silence = False
         self.start_silence = None
         self.last_silence_dispatch_time = None
+
+    async def _enqueue_active_audio(self, pcm_chunk: np.ndarray):
+        if pcm_chunk is None or pcm_chunk.size == 0:
+            return
+        if not self.diarization_before_transcription and self.transcription_queue:
+            await self.transcription_queue.put(pcm_chunk.copy())
+        if self.args.diarization and self.diarization_queue:
+            await self.diarization_queue.put(pcm_chunk.copy())
+        self.silence_duration = 0.0
+
+    def _slice_before_silence(self, pcm_array, chunk_sample_start, silence_sample):
+        if silence_sample is None:
+            return None
+        relative_index = int(silence_sample - chunk_sample_start)
+        if relative_index <= 0:
+            return None
+        split_index = min(relative_index, len(pcm_array))
+        if split_index <= 0:
+            return None
+        return pcm_array[:split_index]
 
     def convert_pcm_to_float(self, pcm_buffer):
         """Convert PCM buffer in s16le format to normalized NumPy array."""
@@ -669,25 +690,30 @@ class AudioProcessor:
         pcm_array = self.convert_pcm_to_float(self.pcm_buffer[:aligned_chunk_size])
         self.pcm_buffer = self.pcm_buffer[aligned_chunk_size:]
 
+        num_samples = len(pcm_array)
+        chunk_sample_start = self.total_pcm_samples
+        chunk_sample_end = chunk_sample_start + num_samples
+
         res = None
         if self.args.vac:
             res = self.vac(pcm_array)
 
         if res is not None:
-            if res.get("end", 0) > res.get("start", 0) and not self.silence:
+            silence_detected = res.get("end", 0) > res.get("start", 0)
+            if silence_detected and not self.silence:
+                pre_silence_chunk = self._slice_before_silence(
+                    pcm_array, chunk_sample_start, res.get("end")
+                )
+                if pre_silence_chunk is not None and pre_silence_chunk.size > 0:
+                    await self._enqueue_active_audio(pre_silence_chunk)
                 await self._begin_silence()
             elif self.silence:
                 await self._end_silence()
 
-
         if not self.silence:
-            if not self.diarization_before_transcription and self.transcription_queue:
-                await self.transcription_queue.put(pcm_array.copy())
+            await self._enqueue_active_audio(pcm_array)
 
-            if self.args.diarization and self.diarization_queue:
-                await self.diarization_queue.put(pcm_array.copy())
-
-            self.silence_duration = 0.0
+        self.total_pcm_samples = chunk_sample_end
 
         if not self.args.transcription and not self.args.diarization:
             await asyncio.sleep(0.1)
