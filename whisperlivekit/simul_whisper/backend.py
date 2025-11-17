@@ -18,7 +18,7 @@ from whisperlivekit.backend_support import (
 
 import torch
 from whisperlivekit.simul_whisper.config import AlignAttConfig
-from whisperlivekit.simul_whisper.simul_whisper import PaddedAlignAttWhisper
+from whisperlivekit.simul_whisper.simul_whisper import AlignAtt
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,8 @@ if HAS_FASTER_WHISPER:
     from faster_whisper import WhisperModel
 else:
     WhisperModel = None
+
+MIN_DURATION_REAL_SILENCE = 5
 
 class SimulStreamingOnlineProcessor:
     SAMPLING_RATE = 16000
@@ -56,7 +58,7 @@ class SimulStreamingOnlineProcessor:
 
     def load_new_backend(self):
         model = self.asr.get_new_model_instance()
-        self.model = PaddedAlignAttWhisper(
+        self.model = AlignAtt(
             cfg=self.asr.cfg,
             loaded_model=model,
             mlx_encoder=self.asr.mlx_encoder,
@@ -69,10 +71,10 @@ class SimulStreamingOnlineProcessor:
 
     def end_silence(self, silence_duration, offset):
         """
-        If silences are > 5s, we do a complete context clear. Otherwise, we just insert a small silence and shift the last_attend_frame
+        If silences are > MIN_DURATION_REAL_SILENCE, we do a complete context clear. Otherwise, we just insert a small silence and shift the last_attend_frame
         """
         self.end += silence_duration
-        long_silence = silence_duration >= 5
+        long_silence = silence_duration >= MIN_DURATION_REAL_SILENCE
         if not long_silence:
             gap_len = int(16000 * silence_duration)
             if gap_len > 0:
@@ -306,7 +308,7 @@ class SimulStreamingASR():
         if warmup_audio is not None:
             warmup_audio = torch.from_numpy(warmup_audio).float()
             if self.fast_encoder:                
-                temp_model = PaddedAlignAttWhisper(
+                temp_model = AlignAtt(
                     cfg=self.cfg,
                     loaded_model=whisper_model,
                     mlx_encoder=self.mlx_encoder,

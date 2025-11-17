@@ -1,17 +1,16 @@
-# This code was originally in simul_whisper/transcriber/simul_whisper.py . It is adapted a lot for SimulStreaming.
-
 import os
 import logging
 
 import torch
 import torch.nn.functional as F
+import numpy as np
 
-from whisperlivekit.whisper import load_model, DecodingOptions, tokenizer
+from whisperlivekit.whisper import DecodingOptions, tokenizer
 from .config import AlignAttConfig
 from whisperlivekit.timed_objects import ASRToken
 from whisperlivekit.whisper.audio import log_mel_spectrogram, TOKENS_PER_SECOND, pad_or_trim, N_SAMPLES, N_FRAMES
 from whisperlivekit.whisper.timing import median_filter
-from whisperlivekit.whisper.decoding import GreedyDecoder, BeamSearchDecoder, SuppressTokens, detect_language
+from whisperlivekit.whisper.decoding import GreedyDecoder, BeamSearchDecoder, SuppressTokens
 from .beam import BeamPyTorchInference
 from .eow_detection import fire_at_boundary, load_cif
 import os
@@ -22,26 +21,18 @@ from whisperlivekit.backend_support import (
     faster_backend_available,
 )
 
-import numpy as np
 from ..timed_objects import PUNCTUATION_MARKS
-from .generation_progress import *
 
 DEC_PAD = 50257
 logger = logging.getLogger(__name__)
 
-
-HAS_MLX_WHISPER = False
-HAS_FASTER_WHISPER = False
-
 if mlx_backend_available():
     from mlx_whisper.audio import log_mel_spectrogram as mlx_log_mel_spectrogram
     from mlx_whisper.transcribe import pad_or_trim as mlx_pad_or_trim
-    HAS_MLX_WHISPER = True
 
 if faster_backend_available():
     from faster_whisper.audio import pad_or_trim as fw_pad_or_trim
     from faster_whisper.feature_extractor import FeatureExtractor
-    HAS_FASTER_WHISPER = True
 
 USE_MLCORE = False
 
@@ -60,7 +51,7 @@ def load_coreml_encoder():
     return _coreml_encoder, _coreml_input_name, _coreml_output_name
 
 
-class PaddedAlignAttWhisper:
+class AlignAtt:
     def __init__(
             self, 
             cfg: AlignAttConfig,
@@ -72,7 +63,7 @@ class PaddedAlignAttWhisper:
         
         self.model = loaded_model
         self.mlx_encoder = mlx_encoder
-        self.fw_encoder = fw_encoder
+        self.fw_encoder = fw_encoder            
         if fw_encoder:
             self.fw_feature_extractor = FeatureExtractor(feature_size=self.model.dims.n_mels)
         self.coreml_encoder_tuple = None
@@ -414,14 +405,6 @@ class PaddedAlignAttWhisper:
         else:
             input_segments = self.segments[0]
 
-        # if self.cfg.language == "auto" and self.reset_tokenizer_to_auto_next_call:
-        #     logger.debug("Resetting tokenizer to auto for new sentence.")
-        #     self.create_tokenizer(None)
-        #     self.detected_language = None
-        #     self.init_tokens()
-        #     self.reset_tokenizer_to_auto_next_call = False
-
-        # NEW : we can use a different encoder, before using standart whisper for cross attention with the hooks on the decoder
         beg_encode = time()
         if self.use_mlcore:
             coreml_encoder, coreml_input_name, coreml_output_name = self.coreml_encoder_tuple
