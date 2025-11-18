@@ -6,7 +6,7 @@ Capture the audio of your current tab, transcribe diarize and translate it using
 <img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/chrome-extension/demo-extension.png" alt="WhisperLiveKit Demo" width="730">
 
 ## Running this extension
-1. Run `python sync_extension.py` to copy frontend files to the `chrome-extension` directory.
+1. Run `python scripts/sync_extension.py` to copy frontend files to the `chrome-extension` directory.
 2. Load the `chrome-extension` directory in Chrome as an unpacked extension.
 
 
