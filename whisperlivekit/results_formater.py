@@ -1,7 +1,9 @@
 
 import logging
+import re
 from whisperlivekit.remove_silences import handle_silences
-from whisperlivekit.timed_objects import Line, format_time
+from whisperlivekit.timed_objects import Line, format_time, SpeakerSegment
+from typing import List
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -44,7 +46,106 @@ def append_token_to_last_line(lines, sep, token):
             lines[-1].end = token.end
         if not lines[-1].detected_language and token.detected_language:
             lines[-1].detected_language = token.detected_language
-            
+
+def extract_number(s) -> int:
+    """Extract number from speaker string (for diart compatibility)."""
+    if isinstance(s, int):
+        return s
+    m = re.search(r'\d+', str(s))
+    return int(m.group()) if m else 0
+
+def concatenate_speakers(segments: List[SpeakerSegment]) -> List[dict]:
+    """Concatenate consecutive segments from the same speaker."""
+    if not segments:
+        return []
+    
+    # Get speaker number from first segment
+    first_speaker = extract_number(segments[0].speaker)
+    segments_concatenated = [{"speaker": first_speaker + 1, "begin": segments[0].start, "end": segments[0].end}]
+    
+    for segment in segments[1:]:
+        speaker = extract_number(segment.speaker) + 1
+        if segments_concatenated[-1]['speaker'] != speaker:
+            segments_concatenated.append({"speaker": speaker, "begin": segment.start, "end": segment.end})
+        else:
+            segments_concatenated[-1]['end'] = segment.end
+    
+    return segments_concatenated
+
+def add_speaker_to_tokens_with_punctuation(segments: List[SpeakerSegment], tokens: list) -> list:
+    """Assign speakers to tokens with punctuation-aware boundary adjustment."""
+    punctuation_marks = {'.', '!', '?'}
+    punctuation_tokens = [token for token in tokens if token.text.strip() in punctuation_marks]
+    segments_concatenated = concatenate_speakers(segments)
+    
+    for ind, segment in enumerate(segments_concatenated):
+        for i, punctuation_token in enumerate(punctuation_tokens):
+            if punctuation_token.start > segment['end']:
+                after_length = punctuation_token.start - segment['end']
+                before_length = segment['end'] - punctuation_tokens[i - 1].end if i > 0 else float('inf')
+                if before_length > after_length:
+                    segment['end'] = punctuation_token.start
+                    if i < len(punctuation_tokens) - 1 and ind + 1 < len(segments_concatenated):
+                        segments_concatenated[ind + 1]['begin'] = punctuation_token.start
+                else:
+                    segment['end'] = punctuation_tokens[i - 1].end if i > 0 else segment['end']
+                    if i < len(punctuation_tokens) - 1 and ind - 1 >= 0:
+                        segments_concatenated[ind - 1]['begin'] = punctuation_tokens[i - 1].end
+                break
+    
+    # Ensure non-overlapping tokens
+    last_end = 0.0
+    for token in tokens:
+        start = max(last_end + 0.01, token.start)
+        token.start = start
+        token.end = max(start, token.end)
+        last_end = token.end
+    
+    # Assign speakers based on adjusted segments
+    ind_last_speaker = 0
+    for segment in segments_concatenated:
+        for i, token in enumerate(tokens[ind_last_speaker:]):
+            if token.end <= segment['end']:
+                token.speaker = segment['speaker']
+                ind_last_speaker = i + 1
+            elif token.start > segment['end']:
+                break
+    
+    return tokens
+
+def assign_speakers_to_tokens(tokens: list, segments: List[SpeakerSegment], use_punctuation_split: bool = False) -> list:
+    """
+    Assign speakers to tokens based on timing overlap with speaker segments.
+    
+    Args:
+        tokens: List of tokens with timing information
+        segments: List of speaker segments
+        use_punctuation_split: Whether to use punctuation for boundary refinement
+        
+    Returns:
+        List of tokens with speaker assignments
+    """
+    if not segments or not tokens:
+        logger.debug("No segments or tokens available for speaker assignment")
+        return tokens
+    
+    logger.debug(f"Assigning speakers to {len(tokens)} tokens using {len(segments)} segments")
+    
+    if not use_punctuation_split:
+        # Simple overlap-based assignment
+        for token in tokens:
+            token.speaker = -1  # Default to no speaker
+            for segment in segments:
+                # Check for timing overlap
+                if not (segment.end <= token.start or segment.start >= token.end):
+                    speaker_num = extract_number(segment.speaker)
+                    token.speaker = speaker_num + 1  # Convert to 1-based indexing
+                    break
+    else:
+        # Use punctuation-aware assignment
+        tokens = add_speaker_to_tokens_with_punctuation(segments, tokens)
+    
+    return tokens
 
 def format_output(state, silence, args, sep):
     diarization = args.diarization
@@ -56,6 +157,11 @@ def format_output(state, silence, args, sep):
     last_speaker = abs(state.last_speaker)
     undiarized_text = []
     tokens = handle_silences(tokens, state.beg_loop, silence)
+    
+    # Assign speakers to tokens based on segments stored in state
+    if diarization and state.speaker_segments:
+        use_punctuation_split = args.punctuation_split if hasattr(args, 'punctuation_split') else False
+        tokens = assign_speakers_to_tokens(tokens, state.speaker_segments, use_punctuation_split=use_punctuation_split)
     for i in range(last_validated_token, len(tokens)):
         token = tokens[i]
         speaker = int(token.speaker)

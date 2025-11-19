@@ -417,14 +417,12 @@ class AudioProcessor:
                             to_transcript, self.cumulative_pcm = cut_at(self.cumulative_pcm, cut_sec)
                             await self.transcription_queue.put(to_transcript)
                             self.last_end = last_segment.end
-                elif not self.diarization_before_transcription:           
+                elif not self.diarization_before_transcription:
+                    segments = diarization_obj.get_segments()
                     async with self.lock:
-                        self.state.tokens = diarization_obj.assign_speakers_to_tokens(
-                            self.state.tokens,
-                            use_punctuation_split=self.args.punctuation_split
-                        )
-                if len(self.state.tokens) > 0:
-                    self.state.end_attributed_speaker = max(self.state.tokens[-1].end, self.state.end_attributed_speaker)
+                        self.state.speaker_segments = segments.copy()
+                        if segments:
+                            self.state.end_attributed_speaker = max(seg.end for seg in segments)
                 
             except Exception as e:
                 logger.warning(f"Exception in diarization_processor: {e}")

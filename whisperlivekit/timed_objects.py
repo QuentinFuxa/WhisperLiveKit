@@ -185,6 +185,7 @@ class State():
     translation_validated_segments: list = field(default_factory=list)
     buffer_translation: str = field(default_factory=Transcript)
     buffer_transcription: str = field(default_factory=Transcript)
+    speaker_segments: list = field(default_factory=list)
     end_buffer: float = 0.0
     end_attributed_speaker: float = 0.0
     remaining_time_transcription: float = 0.0

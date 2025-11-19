@@ -178,7 +178,6 @@ class DiartDiarization:
         
         self.pipeline = SpeakerDiarization(config=config)        
         self.observer = DiarizationObserver()
-        self.lag_diart = None
         
         if use_microphone:
             self.source = MicrophoneAudioSource(block_duration=block_duration)
@@ -217,32 +216,6 @@ class DiartDiarization:
         if self.custom_source:
             self.custom_source.close()
 
-    def assign_speakers_to_tokens(self, tokens: list, use_punctuation_split: bool = False) -> float:
-        """
-        Assign speakers to tokens based on timing overlap with speaker segments.
-        Uses the segments collected by the observer.
-        
-        If use_punctuation_split is True, uses punctuation marks to refine speaker boundaries.
-        """
-        segments = self.observer.get_segments()
-        
-        # Debug logging
-        logger.debug(f"assign_speakers_to_tokens called with {len(tokens)} tokens")
-        logger.debug(f"Available segments: {len(segments)}")
-        for i, seg in enumerate(segments[:5]):  # Show first 5 segments
-            logger.debug(f"  Segment {i}: {seg.speaker} [{seg.start:.2f}-{seg.end:.2f}]")
-        
-        if not self.lag_diart and segments and tokens:
-            self.lag_diart = segments[0].start - tokens[0].start
-        
-        if not use_punctuation_split:
-            for token in tokens:
-                for segment in segments:
-                    if not (segment.end <= token.start + self.lag_diart or segment.start >= token.end + self.lag_diart):
-                        token.speaker = extract_number(segment.speaker) + 1
-        else:
-            tokens = add_speaker_to_tokens(segments, tokens)
-        return tokens
         
 def concatenate_speakers(segments):
     segments_concatenated = [{"speaker": 1, "begin": 0.0, "end": 0.0}]
