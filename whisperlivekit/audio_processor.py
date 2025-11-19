@@ -380,10 +380,10 @@ class AudioProcessor:
                 item = await get_all_from_queue(self.diarization_queue)
                 if item is SENTINEL:
                     logger.debug("Diarization processor received sentinel. Finishing.")
-                    self.diarization_queue.task_done()
                     break
-                elif type(item) is Silence and item.has_ended:
-                    diarization_obj.insert_silence(item.duration)
+                elif type(item) is Silence:
+                    if item.has_ended:
+                        diarization_obj.insert_silence(item.duration)
                     continue
                 elif isinstance(item, np.ndarray):
                     pcm_array = item
@@ -425,13 +425,10 @@ class AudioProcessor:
                         )
                 if len(self.state.tokens) > 0:
                     self.state.end_attributed_speaker = max(self.state.tokens[-1].end, self.state.end_attributed_speaker)
-                self.diarization_queue.task_done()
                 
             except Exception as e:
                 logger.warning(f"Exception in diarization_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")
-                if 'pcm_array' in locals() and pcm_array is not SENTINEL:
-                    self.diarization_queue.task_done()
         logger.info("Diarization processor task finished.")
 
     async def translation_processor(self):

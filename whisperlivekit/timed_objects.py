@@ -180,6 +180,7 @@ class ChangeSpeaker:
 class State():
     tokens: list = field(default_factory=list)
     last_validated_token: int = 0
+    last_speaker: int = 1
     last_punctuation_index: Optional[int] = None
     translation_validated_segments: list = field(default_factory=list)
     buffer_translation: str = field(default_factory=Transcript)
