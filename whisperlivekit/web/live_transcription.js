@@ -391,12 +391,11 @@ function renderLinesWithBuffer(
 
       if (idx === lines.length - 1) {
         if (!isFinalizing && item.speaker !== -2) {
-          if (remaining_time_transcription > 0) {
             speakerLabel += `<span class="label_transcription"><span class="spinner"></span>Transcription lag <span id='timeInfo'><span class="lag-transcription-value">${fmt1(
               remaining_time_transcription
             )}</span>s</span></span>`;
-          }
-          if (buffer_diarization && remaining_time_diarization > 0) {
+
+          if (buffer_diarization && remaining_time_diarization) {
             speakerLabel += `<span class="label_diarization"><span class="spinner"></span>Diarization lag<span id='timeInfo'><span class="lag-diarization-value">${fmt1(
               remaining_time_diarization
             )}</span>s</span></span>`;
