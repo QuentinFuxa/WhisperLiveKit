@@ -81,7 +81,7 @@ class AudioProcessor:
 
         # State management
         self.is_stopping = False
-        self.silence = False
+        self.silence = True
         self.silence_duration = 0.0
         self.start_silence = None
         self.last_silence_dispatch_time = None
@@ -168,7 +168,7 @@ class AudioProcessor:
         if not self.silence:
             return
         now = time()
-        duration = now - self.last_silence_dispatch_time
+        duration = now - (self.last_silence_dispatch_time if self.last_silence_dispatch_time else self.state.beg_loop)
         await self._push_silence_event(Silence(duration=duration, has_ended=True))
         self.last_silence_dispatch_time = now
         self.silence = False
