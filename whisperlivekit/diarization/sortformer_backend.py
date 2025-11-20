@@ -94,11 +94,11 @@ class SortformerDiarizationOnline:
             model_name: Pre-trained model name (default: "nvidia/diar_streaming_sortformer_4spk-v2")
         """
         self.sample_rate = sample_rate
-        self.speaker_segments = []
+        self.diarization_segments = []
+        self.diar_segments = []
         self.buffer_audio = np.array([], dtype=np.float32)
         self.segment_lock = threading.Lock()
         self.global_time_offset = 0.0
-        self.processed_time = 0.0
         self.debug = False
                 
         self.diar_model = shared_model.diar_model
@@ -155,9 +155,7 @@ class SortformerDiarizationOnline:
         )
         self.streaming_state.fifo_lengths = torch.zeros((batch_size,), dtype=torch.long, device=device)
         self.streaming_state.mean_sil_emb = torch.zeros((batch_size, self.diar_model.sortformer_modules.fc_d_model), device=device)
-        self.streaming_state.n_sil_frames = torch.zeros((batch_size,), dtype=torch.long, device=device)
-        
-        # Initialize total predictions tensor
+        self.streaming_state.n_sil_frames = torch.zeros((batch_size,), dtype=torch.long, device=device)        
         self.total_preds = torch.zeros((batch_size, 0, self.diar_model.sortformer_modules.n_spk), device=device)
 
     def insert_silence(self, silence_duration: Optional[float]):
@@ -171,135 +169,111 @@ class SortformerDiarizationOnline:
             self.global_time_offset += silence_duration
         logger.debug(f"Inserted silence of {silence_duration:.2f}s, new offset: {self.global_time_offset:.2f}s")
 
-    async def diarize(self, pcm_array: np.ndarray):
+    def insert_audio_chunk(self, pcm_array: np.ndarray):
+        if self.debug:
+            self.audio_buffer.append(pcm_array.copy())
+        self.buffer_audio = np.concatenate([self.buffer_audio, pcm_array.copy()])
+  
+
+    async def diarize(self):
         """
         Process audio data for diarization in streaming fashion.
         
         Args:
             pcm_array: Audio data as numpy array
         """
-        try:
-            if self.debug:
-                self.audio_buffer.append(pcm_array.copy())
 
-            threshold = int(self.chunk_duration_seconds * self.sample_rate)
+        threshold = int(self.chunk_duration_seconds * self.sample_rate)
+        
+        if not len(self.buffer_audio) >= threshold:
+            return []
+        
+        audio = self.buffer_audio[:threshold]
+        self.buffer_audio = self.buffer_audio[threshold:]
+        
+        device = self.diar_model.device
+        audio_signal_chunk = torch.tensor(audio, device=device).unsqueeze(0)
+        audio_signal_length_chunk = torch.tensor([audio_signal_chunk.shape[1]], device=device)
+        
+        processed_signal_chunk, processed_signal_length_chunk = self.audio2mel.get_features(
+            audio_signal_chunk, audio_signal_length_chunk
+        )
+        processed_signal_chunk = processed_signal_chunk.to(device)
+        processed_signal_length_chunk = processed_signal_length_chunk.to(device)
+        
+        if self._previous_chunk_features is not None:
+            to_add = self._previous_chunk_features[:, :, -99:].to(device)
+            total_features = torch.concat([to_add, processed_signal_chunk], dim=2).to(device)
+        else:
+            total_features = processed_signal_chunk.to(device)
+        
+        self._previous_chunk_features = processed_signal_chunk.to(device)
+        
+        chunk_feat_seq_t = torch.transpose(total_features, 1, 2).to(device)
+        
+        with torch.inference_mode():
+            left_offset = 8 if self._chunk_index > 0 else 0
+            right_offset = 8
             
-            self.buffer_audio = np.concatenate([self.buffer_audio, pcm_array.copy()])
-            if not len(self.buffer_audio) >= threshold:
-                return
-            
-            audio = self.buffer_audio[:threshold]
-            self.buffer_audio = self.buffer_audio[threshold:]
-            
-            device = self.diar_model.device
-            audio_signal_chunk = torch.tensor(audio, device=device).unsqueeze(0)
-            audio_signal_length_chunk = torch.tensor([audio_signal_chunk.shape[1]], device=device)
-            
-            processed_signal_chunk, processed_signal_length_chunk = self.audio2mel.get_features(
-                audio_signal_chunk, audio_signal_length_chunk
-            )
-            processed_signal_chunk = processed_signal_chunk.to(device)
-            processed_signal_length_chunk = processed_signal_length_chunk.to(device)
-            
-            if self._previous_chunk_features is not None:
-                to_add = self._previous_chunk_features[:, :, -99:].to(device)
-                total_features = torch.concat([to_add, processed_signal_chunk], dim=2).to(device)
-            else:
-                total_features = processed_signal_chunk.to(device)
-            
-            self._previous_chunk_features = processed_signal_chunk.to(device)
-            
-            chunk_feat_seq_t = torch.transpose(total_features, 1, 2).to(device)
-            
-            with torch.inference_mode():
-                left_offset = 8 if self._chunk_index > 0 else 0
-                right_offset = 8
-                
-                self.streaming_state, self.total_preds = self.diar_model.forward_streaming_step(
-                    processed_signal=chunk_feat_seq_t,
-                    processed_signal_length=torch.tensor([chunk_feat_seq_t.shape[1]]).to(device),
-                    streaming_state=self.streaming_state,
-                    total_preds=self.total_preds,
-                    left_offset=left_offset,
-                    right_offset=right_offset,
-                )
-                
-            # Convert predictions to speaker segments
-            self._process_predictions()
-            
-            self._chunk_index += 1
-            
-        except Exception as e:
-            logger.error(f"Error in diarize: {e}")
-            raise
-            
-        # TODO: Handle case when stream ends with partial buffer (accumulated_duration > 0 but < chunk_duration_seconds)
+            self.streaming_state, self.total_preds = self.diar_model.forward_streaming_step(
+                processed_signal=chunk_feat_seq_t,
+                processed_signal_length=torch.tensor([chunk_feat_seq_t.shape[1]]).to(device),
+                streaming_state=self.streaming_state,
+                total_preds=self.total_preds,
+                left_offset=left_offset,
+                right_offset=right_offset,
+            )                
+        new_segments = self._process_predictions()
+        
+        self._chunk_index += 1
+        return new_segments
 
     def _process_predictions(self):
         """Process model predictions and convert to speaker segments."""
-        try:
-            preds_np = self.total_preds[0].cpu().numpy()
-            active_speakers = np.argmax(preds_np, axis=1)
-            
-            if self._len_prediction is None:
-                self._len_prediction = len(active_speakers)
-            
-            # Get predictions for current chunk
-            frame_duration = self.chunk_duration_seconds / self._len_prediction
-            current_chunk_preds = active_speakers[-self._len_prediction:]
-            
-            with self.segment_lock:
-                # Process predictions into segments
-                base_time = self._chunk_index * self.chunk_duration_seconds + self.global_time_offset
-                
-                for idx, spk in enumerate(current_chunk_preds):
-                    start_time = base_time + idx * frame_duration
-                    end_time = base_time + (idx + 1) * frame_duration
-                    
-                    # Check if this continues the last segment or starts a new one
-                    if (self.speaker_segments and 
-                        self.speaker_segments[-1].speaker == spk and 
-                        abs(self.speaker_segments[-1].end - start_time) < frame_duration * 0.5):
-                        # Continue existing segment
-                        self.speaker_segments[-1].end = end_time
-                    else:
-                        
-                        # Create new segment
-                        self.speaker_segments.append(SpeakerSegment(
-                            speaker=spk,
-                            start=start_time,
-                            end=end_time
-                        ))
-                
-                # Update processed time
-                self.processed_time = max(self.processed_time, base_time + self.chunk_duration_seconds)
-                
-                logger.debug(f"Processed chunk {self._chunk_index}, total segments: {len(self.speaker_segments)}")
-                
-        except Exception as e:
-            logger.error(f"Error processing predictions: {e}")
+        preds_np = self.total_preds[0].cpu().numpy()
+        active_speakers = np.argmax(preds_np, axis=1)
+        
+        if self._len_prediction is None:
+            self._len_prediction = len(active_speakers) #12
+        
+        frame_duration = self.chunk_duration_seconds / self._len_prediction
+        current_chunk_preds = active_speakers[-self._len_prediction:]
+        
+        new_segments = []
 
-
+        with self.segment_lock:
+            base_time = self._chunk_index * self.chunk_duration_seconds + self.global_time_offset
+            current_spk = current_chunk_preds[0]
+            start_time = round(base_time, 2)
+            for idx, spk in enumerate(current_chunk_preds):
+                current_time = round(base_time + idx * frame_duration, 2)
+                if spk != current_spk:
+                    new_segments.append(SpeakerSegment(
+                        speaker=current_spk,
+                        start=start_time,
+                        end=current_time
+                    ))
+                    start_time = current_time
+                    current_spk = spk
+            new_segments.append(
+                SpeakerSegment(
+                        speaker=current_spk,
+                        start=start_time,
+                        end=current_time
+            )
+            )
+        return new_segments
+                
     def get_segments(self) -> List[SpeakerSegment]:
         """Get a copy of the current speaker segments."""
         with self.segment_lock:
-            return self.speaker_segments.copy()
-
-    def clear_old_segments(self, older_than: float = 30.0):
-        """Clear segments older than the specified time."""
-        with self.segment_lock:
-            current_time = self.processed_time
-            self.speaker_segments = [
-                segment for segment in self.speaker_segments 
-                if current_time - segment.end < older_than
-            ]
-            logger.debug(f"Cleared old segments, remaining: {len(self.speaker_segments)}")
+            return self.diarization_segments.copy()
 
     def close(self):
         """Close the diarization system and clean up resources."""
         logger.info("Closing SortformerDiarization")
         with self.segment_lock:
-            self.speaker_segments.clear()
+            self.diarization_segments.clear()
         
         if self.debug:
             concatenated_audio = np.concatenate(self.audio_buffer)
@@ -325,7 +299,7 @@ if __name__ == '__main__':
     
     async def main():
         """TEST ONLY."""
-        an4_audio = 'audio_test.mp3'
+        an4_audio = 'diarization_audio.wav'
         signal, sr = librosa.load(an4_audio, sr=16000)
         signal = signal[:16000*30]
 
@@ -337,13 +311,15 @@ if __name__ == '__main__':
         print("Speaker 0: 0:25 - 0:30")
         print("=" * 50)
         
-        diarization = SortformerDiarization(sample_rate=16000)        
+        diarization_backend = SortformerDiarization()
+        diarization = SortformerDiarizationOnline(shared_model = diarization_backend)     
         chunk_size = 1600
         
         for i in range(0, len(signal), chunk_size):
             chunk = signal[i:i+chunk_size]
-            await diarization.diarize(chunk)
+            new_segments = await diarization.diarize(chunk)
             print(f"Processed chunk {i // chunk_size + 1}")
+            print(new_segments)
         
         segments = diarization.get_segments()
         print("\nDiarization results:")

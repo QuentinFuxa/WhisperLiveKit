@@ -641,10 +641,9 @@ class AlignAtt:
             timestamp_idx += len(word_tokens)
 
             timestamp_entry = ASRToken(
-                    start=current_timestamp,
-                    end=current_timestamp + 0.1,
+                    start=round(current_timestamp, 2),
+                    end=round(current_timestamp + 0.1, 2),
                     text= word,
-                    probability=0.95,
                     speaker=self.speaker,
                     detected_language=self.detected_language
                 ).with_offset(

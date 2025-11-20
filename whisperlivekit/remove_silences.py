@@ -36,7 +36,6 @@ def blank_to_silence(tokens):
                             start=token.start,
                             end=token.end,
                             speaker=-2,
-                            probability=0.95
                         )
                 else:
                     if silence_token: #there was silence but no more
@@ -70,7 +69,6 @@ def no_token_to_silence(tokens):
                     start=last_end,
                     end=token.start,
                     speaker=-2,
-                    probability=0.95
                     )
                 new_tokens.append(silence_token)
         
@@ -90,7 +88,6 @@ def ends_with_silence(tokens, beg_loop, vac_detected_silence):
                     start=tokens[-1].end,
                     end=current_time,
                     speaker=-2,
-                    probability=0.95
                 )
             )
     return tokens

@@ -26,7 +26,7 @@ class DiarizationObserver(Observer):
     """Observer that logs all data emitted by the diarization pipeline and stores speaker segments."""
     
     def __init__(self):
-        self.speaker_segments = []
+        self.diarization_segments = []
         self.processed_time = 0
         self.segment_lock = threading.Lock()
         self.global_time_offset = 0.0
@@ -48,7 +48,7 @@ class DiarizationObserver(Observer):
                 for speaker, label in annotation._labels.items():
                     for start, end in zip(label.segments_boundaries_[:-1], label.segments_boundaries_[1:]):
                         print(f"  {speaker}: {start:.2f}s-{end:.2f}s")
-                        self.speaker_segments.append(SpeakerSegment(
+                        self.diarization_segments.append(SpeakerSegment(
                             speaker=speaker,
                             start=start + self.global_time_offset,
                             end=end + self.global_time_offset
@@ -59,14 +59,14 @@ class DiarizationObserver(Observer):
     def get_segments(self) -> List[SpeakerSegment]:
         """Get a copy of the current speaker segments."""
         with self.segment_lock:
-            return self.speaker_segments.copy()
+            return self.diarization_segments.copy()
     
     def clear_old_segments(self, older_than: float = 30.0):
         """Clear segments older than the specified time."""
         with self.segment_lock:
             current_time = self.processed_time
-            self.speaker_segments = [
-                segment for segment in self.speaker_segments 
+            self.diarization_segments = [
+                segment for segment in self.diarization_segments 
                 if current_time - segment.end < older_than
             ]
     

@@ -159,14 +159,14 @@ def format_output(state, silence, args, sep):
     tokens = handle_silences(tokens, state.beg_loop, silence)
     
     # Assign speakers to tokens based on segments stored in state
-    if diarization and state.speaker_segments:
+    if False and diarization and state.diarization_segments:
         use_punctuation_split = args.punctuation_split if hasattr(args, 'punctuation_split') else False
-        tokens = assign_speakers_to_tokens(tokens, state.speaker_segments, use_punctuation_split=use_punctuation_split)
+        tokens = assign_speakers_to_tokens(tokens, state.diarization_segments, use_punctuation_split=use_punctuation_split)
     for i in range(last_validated_token, len(tokens)):
         token = tokens[i]
         speaker = int(token.speaker)
         token.corrected_speaker = speaker
-        if not diarization:
+        if True or not diarization:
             if speaker == -1: #Speaker -1 means no attributed by diarization. In the frontend, it should appear under 'Speaker 1'
                 token.corrected_speaker = 1
                 token.validated_speaker = True

@@ -8,15 +8,15 @@ def format_time(seconds: float) -> str:
     """Format seconds as HH:MM:SS."""
     return str(timedelta(seconds=int(seconds)))
 
-
 @dataclass
-class TimedText:
+class Timed:
     start: Optional[float] = 0
     end: Optional[float] = 0
+
+@dataclass
+class TimedText(Timed):
     text: Optional[str] = ''
     speaker: Optional[int] = -1
-    probability: Optional[float] = None
-    is_dummy: Optional[bool] = False
     detected_language: Optional[str] = None
     
     def is_punctuation(self):
@@ -51,7 +51,7 @@ class ASRToken(TimedText):
     
     def with_offset(self, offset: float) -> "ASRToken":
         """Return a new token with the time offset added."""
-        return ASRToken(self.start + offset, self.end + offset, self.text, self.speaker, self.probability, detected_language=self.detected_language)
+        return ASRToken(self.start + offset, self.end + offset, self.text, self.speaker, detected_language=self.detected_language)
 
 @dataclass
 class Sentence(TimedText):
@@ -72,21 +72,21 @@ class Transcript(TimedText):
     ) -> "Transcript":
         sep = sep if sep is not None else ' '
         text = sep.join(token.text for token in tokens)
-        probability = sum(token.probability for token in tokens if token.probability) / len(tokens) if tokens else None
         if tokens:
             start = offset + tokens[0].start
             end = offset + tokens[-1].end
         else:
             start = None
             end = None
-        return cls(start, end, text, probability=probability)
+        return cls(start, end, text)
 
 
 @dataclass
-class SpeakerSegment(TimedText):
+class SpeakerSegment(Timed):
     """Represents a segment of audio attributed to a specific speaker.
     No text nor probability is associated with this segment.
     """
+    speaker: Optional[int] = -1
     pass
 
 @dataclass
@@ -185,9 +185,19 @@ class State():
     translation_validated_segments: list = field(default_factory=list)
     buffer_translation: str = field(default_factory=Transcript)
     buffer_transcription: str = field(default_factory=Transcript)
-    speaker_segments: list = field(default_factory=list)
+    diarization_segments: list = field(default_factory=list)
     end_buffer: float = 0.0
     end_attributed_speaker: float = 0.0
     remaining_time_transcription: float = 0.0
     remaining_time_diarization: float = 0.0
-    beg_loop: Optional[int] = None
+
+
+@dataclass  
+class StateLight():
+    new_tokens: list = field(default_factory=list)
+    new_translation: list = field(default_factory=list)
+    new_diarization: list = field(default_factory=list)
+    new_tokens_buffer: list = field(default_factory=list) #only when local agreement
+    new_tokens_index = 0
+    new_translation_index = 0
+    new_diarization_index = 0
