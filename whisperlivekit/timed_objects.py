@@ -233,4 +233,4 @@ class State():
     new_translation: List[Any] = field(default_factory=list)
     new_diarization: List[Any] = field(default_factory=list)
     new_tokens_buffer: List[Any] = field(default_factory=list)  # only when local agreement
-    new_translation_buffer: str = ''
+    new_translation_buffer= TimedText()

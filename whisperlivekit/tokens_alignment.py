@@ -33,15 +33,13 @@ class TokensAlignment:
 
         self.all_tokens.extend(self.new_tokens)
         self.all_diarization_segments.extend(self.new_diarization)
-        # self.all_translation_segments.extend(self.new_translation) #future
-        self.all_translation_segments = self.new_translation if self.new_translation != [] else self.all_translation_segments
-        self.new_translation_buffer = self.state.new_translation_buffer if self.new_translation else self.new_translation_buffer
-        self.new_translation_buffer = self.new_translation_buffer if type(self.new_translation_buffer) == str else self.new_translation_buffer.text
+        self.all_translation_segments.extend(self.new_translation)
+        self.new_translation_buffer = self.state.new_translation_buffer
 
     def add_translation(self, line: Line) -> None:
         for ts in self.all_translation_segments:
             if ts.is_within(line):
-                line.translation += ts.text + self.sep
+                line.translation += ts.text + (self.sep if ts.text else '')
             elif line.translation:
                 break
 
@@ -175,4 +173,4 @@ class TokensAlignment:
                 ))
         if translation:
             [self.add_translation(line) for line in lines if not type(line) == Silence]
-        return lines, diarization_buffer, self.new_translation_buffer
+        return lines, diarization_buffer, self.new_translation_buffer.text

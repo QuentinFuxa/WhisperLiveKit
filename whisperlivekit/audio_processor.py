@@ -361,21 +361,25 @@ class AudioProcessor:
         # in the future we want to have different languages for each speaker etc, so it will be more complex.
         while True:
             try:
-                tokens_to_process = await get_all_from_queue(self.translation_queue)
-                if tokens_to_process is SENTINEL:
+                item = await get_all_from_queue(self.translation_queue)
+                if item is SENTINEL:
                     logger.debug("Translation processor received sentinel. Finishing.")
-                    self.translation_queue.task_done()
                     break
-                elif type(tokens_to_process) is Silence:
-                    if tokens_to_process.has_ended:
-                        self.translation.insert_silence(tokens_to_process.duration)
-                    continue               
-                if tokens_to_process:
-                    self.translation.insert_tokens(tokens_to_process)
-                    translation_validated_segments, buffer_translation = await asyncio.to_thread(self.translation.process)
-                    async with self.lock:
-                        self.state.new_translation = translation_validated_segments
-                        self.state.new_translation_buffer = buffer_translation
+                elif type(item) is Silence:
+                    if item.is_starting:
+                        new_translation, new_translation_buffer = self.translation.validate_buffer_and_reset()
+                    if item.has_ended:
+                        self.translation.insert_silence(item.duration)
+                        continue
+                elif isinstance(item, ChangeSpeaker):
+                    new_translation, new_translation_buffer = self.translation.validate_buffer_and_reset()
+                    pass
+                else:
+                    self.translation.insert_tokens(item)
+                    new_translation, new_translation_buffer = await asyncio.to_thread(self.translation.process)
+                async with self.lock:
+                    self.state.new_translation.append(new_translation)
+                    self.state.new_translation_buffer = new_translation_buffer
             except Exception as e:
                 logger.warning(f"Exception in translation_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")
