@@ -81,10 +81,7 @@ class AudioProcessor:
 
         # State management
         self.is_stopping = False
-        self.silence = True
-        self.silence_duration = 0.0
-        self.start_silence = None
-        self.last_silence_dispatch_time = None
+        self.current_silence = None
         self.state = State()
         self.state_light = StateLight()
         self.lock = asyncio.Lock()
@@ -142,33 +139,34 @@ class AudioProcessor:
         if models.translation_model:
             self.translation = online_translation_factory(self.args, models.translation_model)
 
-    async def _push_silence_event(self, silence_buffer: Silence):
+    async def _push_silence_event(self):
         if self.transcription_queue:
-            await self.transcription_queue.put(silence_buffer)
+            await self.transcription_queue.put(self.current_silence)
         if self.args.diarization and self.diarization_queue:
-            await self.diarization_queue.put(silence_buffer)
+            await self.diarization_queue.put(self.current_silence)
         if self.translation_queue:
-            await self.translation_queue.put(silence_buffer)
+            await self.translation_queue.put(self.current_silence)
 
     async def _begin_silence(self):
-        if self.silence:
+        if self.current_silence:
             return
-        self.silence = True
-        now = time()
-        self.start_silence = now
-        self.last_silence_dispatch_time = now
-        await self._push_silence_event(Silence(is_starting=True))
+        now = time() - self.beg_loop
+        self.current_silence = Silence(
+            is_starting=True, start=now
+        )
+        await self._push_silence_event()
 
     async def _end_silence(self):
-        if not self.silence:
+        if not self.current_silence:
             return
-        now = time()
-        duration = now - (self.last_silence_dispatch_time if self.last_silence_dispatch_time else self.beg_loop)
-        await self._push_silence_event(Silence(duration=duration, has_ended=True))
-        self.last_silence_dispatch_time = now
-        self.silence = False
-        self.start_silence = None
-        self.last_silence_dispatch_time = None
+        now = time() - self.beg_loop
+        self.current_silence.end = now
+        self.current_silence.is_starting=False
+        self.current_silence.has_ended=True
+        self.current_silence.compute_duration()
+        self.state_light.new_tokens.append(self.current_silence)
+        await self._push_silence_event()
+        self.current_silence = None
 
     async def _enqueue_active_audio(self, pcm_chunk: np.ndarray):
         if pcm_chunk is None or pcm_chunk.size == 0:
@@ -177,7 +175,6 @@ class AudioProcessor:
             await self.transcription_queue.put(pcm_chunk.copy())
         if self.args.diarization and self.diarization_queue:
             await self.diarization_queue.put(pcm_chunk.copy())
-        self.silence_duration = 0.0
 
     def _slice_before_silence(self, pcm_array, chunk_sample_start, silence_sample):
         if silence_sample is None:
@@ -332,8 +329,7 @@ class AudioProcessor:
                     self.state.tokens.extend(new_tokens)
                     self.state.buffer_transcription = _buffer_transcript
                     self.end_buffer = max(candidate_end_times)
-                    self.state_light.new_tokens = new_tokens
-                    self.state_light.new_tokens += 1
+                    self.state_light.new_tokens.extend(new_tokens)
                     self.state_light.new_tokens_buffer = _buffer_transcript
 
                 if self.translation_queue:
@@ -412,14 +408,17 @@ class AudioProcessor:
                     await asyncio.sleep(1)
                     continue
 
+                self.tokens_alignment.update()
+                lines = self.tokens_alignment.create_lines_from_tokens(self.current_silence, self.beg_loop)
+                undiarized_text = ''
                 state = await self.get_current_state()
-                self.tokens_alignment.compute_punctuations_segments()
-                lines, undiarized_text = format_output(
-                    state,
-                    self.silence,
-                    args = self.args,
-                    sep=self.sep
-                )
+                # self.tokens_alignment.compute_punctuations_segments()
+                # lines, undiarized_text = format_output(
+                #     state,
+                #     self.current_silence,
+                #     args = self.args,
+                #     sep=self.sep
+                # )
                 if lines and lines[-1].speaker == -2:
                     buffer_transcription = Transcript()
                 else:
@@ -581,6 +580,7 @@ class AudioProcessor:
 
         if not self.beg_loop:
             self.beg_loop = time()
+            self.current_silence = Silence(start=0.0, is_starting=True)
 
         if not message:
             logger.info("Empty audio message received, initiating stop sequence.")
@@ -642,17 +642,17 @@ class AudioProcessor:
 
         if res is not None:
             silence_detected = res.get("end", 0) > res.get("start", 0)
-            if silence_detected and not self.silence:
+            if silence_detected and not self.current_silence:
                 pre_silence_chunk = self._slice_before_silence(
                     pcm_array, chunk_sample_start, res.get("end")
                 )
                 if pre_silence_chunk is not None and pre_silence_chunk.size > 0:
                     await self._enqueue_active_audio(pre_silence_chunk)
                 await self._begin_silence()
-            elif self.silence:
+            elif self.current_silence:
                 await self._end_silence()
 
-        if not self.silence:
+        if not self.current_silence:
             await self._enqueue_active_audio(pcm_array)
 
         self.total_pcm_samples = chunk_sample_end

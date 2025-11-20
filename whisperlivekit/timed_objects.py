@@ -123,10 +123,16 @@ class Translation(TimedText):
 
 @dataclass
 class Silence():
+    start: Optional[float] = None
+    end: Optional[float] = None
     duration: Optional[float] = None
     is_starting: bool = False
     has_ended: bool = False
-    
+
+    def compute_duration(self) -> float:
+        if self.start is None or self.end is None:
+            return None
+        self.duration = self.end - self.start
     
 @dataclass
 class Line(TimedText):
@@ -144,6 +150,14 @@ class Line(TimedText):
         if self.detected_language:
             _dict['detected_language'] = self.detected_language
         return _dict
+    
+    def build_from_tokens(self, tokens: List[ASRToken]):
+        self.text = ''.join([token.text for token in tokens])
+        self.start = tokens[0].start
+        self.end = tokens[-1].end
+        self.speaker = 1
+        return self
+
     
 
 @dataclass  
@@ -198,6 +212,3 @@ class StateLight():
     new_translation: list = field(default_factory=list)
     new_diarization: list = field(default_factory=list)
     new_tokens_buffer: list = field(default_factory=list) #only when local agreement
-    new_tokens_index = 0
-    new_translation_index = 0
-    new_diarization_index = 0
