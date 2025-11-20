@@ -1,31 +1,31 @@
 from time import time
-from typing import Optional
+from typing import Optional, List, Tuple, Union, Any
 
 from whisperlivekit.timed_objects import Line, SilentLine, ASRToken, SpeakerSegment, Silence, TimedText, Segment
 
 
 class TokensAlignment:
 
-    def __init__(self, state, args, sep):
+    def __init__(self, state: Any, args: Any, sep: Optional[str]) -> None:
         self.state = state
         self.diarization = args.diarization
-        self._tokens_index = 0
-        self._diarization_index = 0
-        self._translation_index = 0
+        self._tokens_index: int = 0
+        self._diarization_index: int = 0
+        self._translation_index: int = 0
 
-        self.all_tokens : list[ASRToken] = []
-        self.all_diarization_segments: list[SpeakerSegment] = []
-        self.all_translation_segments = []
+        self.all_tokens: List[ASRToken] = []
+        self.all_diarization_segments: List[SpeakerSegment] = []
+        self.all_translation_segments: List[Any] = []
 
-        self.new_tokens : list[ASRToken] = []
-        self.new_diarization: list[SpeakerSegment] = []
-        self.new_translation = []
-        self.new_translation_buffer = TimedText()
-        self.new_tokens_buffer = []
-        self.sep = sep if sep is not None else ' '
-        self.beg_loop = None
+        self.new_tokens: List[ASRToken] = []
+        self.new_diarization: List[SpeakerSegment] = []
+        self.new_translation: List[Any] = []
+        self.new_translation_buffer: Union[TimedText, str] = TimedText()
+        self.new_tokens_buffer: List[Any] = []
+        self.sep: str = sep if sep is not None else ' '
+        self.beg_loop: Optional[float] = None
 
-    def update(self):
+    def update(self) -> None:
         self.new_tokens, self.state.new_tokens = self.state.new_tokens, []
         self.new_diarization, self.state.new_diarization = self.state.new_diarization, []
         self.new_translation, self.state.new_translation = self.state.new_translation, []
@@ -38,8 +38,7 @@ class TokensAlignment:
         self.new_translation_buffer = self.state.new_translation_buffer if self.new_translation else self.new_translation_buffer
         self.new_translation_buffer = self.new_translation_buffer if type(self.new_translation_buffer) == str else self.new_translation_buffer.text
 
-    def add_translation(self, line : Line):
-
+    def add_translation(self, line: Line) -> None:
         for ts in self.all_translation_segments:
             if ts.is_within(line):
                 line.translation += ts.text + self.sep
@@ -47,7 +46,7 @@ class TokensAlignment:
                 break
 
 
-    def compute_punctuations_segments(self, tokens: Optional[list[ASRToken]] = None):
+    def compute_punctuations_segments(self, tokens: Optional[List[ASRToken]] = None) -> List[Segment]:
         segments = []
         segment_start_idx = 0
         for i, token in enumerate(self.all_tokens):
@@ -79,7 +78,7 @@ class TokensAlignment:
         return segments
 
 
-    def concatenate_diar_segments(self):
+    def concatenate_diar_segments(self) -> List[SpeakerSegment]:
         if not self.all_diarization_segments:
             return []
         merged = [self.all_diarization_segments[0]]
@@ -92,13 +91,13 @@ class TokensAlignment:
 
 
     @staticmethod
-    def intersection_duration(seg1, seg2):
+    def intersection_duration(seg1: TimedText, seg2: TimedText) -> float:
         start = max(seg1.start, seg2.start)
         end = min(seg1.end, seg2.end)
 
         return max(0, end - start)
 
-    def get_lines_diarization(self):
+    def get_lines_diarization(self) -> Tuple[List[Line], str]:
         """
         use compute_punctuations_segments, concatenate_diar_segments, intersection_duration
         """
@@ -135,10 +134,10 @@ class TokensAlignment:
 
     def get_lines(
             self, 
-            diarization=False,
-            translation=False,
-            current_silence=None
-        ):
+            diarization: bool = False,
+            translation: bool = False,
+            current_silence: Optional[Silence] = None
+        ) -> Tuple[List[Line], str, Union[str, TimedText]]:
         """
         In the case without diarization
         """

@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Optional, Any, List
+from typing import Optional, List, Union, Dict, Any
 from datetime import timedelta
-from typing import Union
 
 PUNCTUATION_MARKS = {'.', '!', '?', '。', '！', '？'}
 
@@ -20,11 +19,8 @@ class TimedText(Timed):
     speaker: Optional[int] = -1
     detected_language: Optional[str] = None
     
-    def is_punctuation(self):
+    def is_punctuation(self) -> bool:
         return self.text.strip() in PUNCTUATION_MARKS
-    
-    def overlaps_with(self, other: 'TimedText') -> bool:
-        return not (self.end <= other.start or other.end <= self.start)
     
     def is_within(self, other: 'TimedText') -> bool:
         return other.contains_timespan(self)
@@ -32,31 +28,23 @@ class TimedText(Timed):
     def duration(self) -> float:
         return self.end - self.start
 
-    def contains_time(self, time: float) -> bool:
-        return self.start <= time <= self.end
-
     def contains_timespan(self, other: 'TimedText') -> bool:
         return self.start <= other.start and self.end >= other.end
     
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self.text)
     
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.text)
 
 @dataclass()
 class ASRToken(TimedText):
     
-    corrected_speaker: Optional[int] = -1
-    validated_speaker: bool = False
-    validated_text: bool = False
-    validated_language: bool = False
-    
     def with_offset(self, offset: float) -> "ASRToken":
         """Return a new token with the time offset added."""
         return ASRToken(self.start + offset, self.end + offset, self.text, self.speaker, detected_language=self.detected_language)
 
-    def is_silence(self):
+    def is_silence(self) -> bool:
         return False
 
 
@@ -100,34 +88,6 @@ class SpeakerSegment(Timed):
 class Translation(TimedText):
     pass
 
-    def approximate_cut_at(self, cut_time):
-        """
-        Each word in text is considered to be of duration (end-start)/len(words in text)
-        """
-        if not self.text or not self.contains_time(cut_time):
-            return self, None
-
-        words = self.text.split()
-        num_words = len(words)
-        if num_words == 0:
-            return self, None
-
-        duration_per_word = self.duration() / num_words
-        
-        cut_word_index = int((cut_time - self.start) / duration_per_word)
-        
-        if cut_word_index >= num_words:
-            cut_word_index = num_words -1
-        
-        text0 = " ".join(words[:cut_word_index])
-        text1 = " ".join(words[cut_word_index:])
-
-        segment0 = Translation(start=self.start, end=cut_time, text=text0)
-        segment1 = Translation(start=cut_time, end=self.end, text=text1)
-
-        return segment0, segment1
-        
-
 @dataclass
 class Silence():
     start: Optional[float] = None
@@ -136,12 +96,13 @@ class Silence():
     is_starting: bool = False
     has_ended: bool = False
 
-    def compute_duration(self) -> float:
+    def compute_duration(self) -> Optional[float]:
         if self.start is None or self.end is None:
             return None
         self.duration = self.end - self.start
+        return self.duration
     
-    def is_silence(self):
+    def is_silence(self) -> bool:
         return True
 
 
@@ -156,8 +117,8 @@ class Segment():
     def from_tokens(
         cls,
         tokens: List[Union[ASRToken, Silence]],
-        is_silence=False
-    ) -> "Segment":
+        is_silence: bool = False
+    ) -> Optional["Segment"]:
         if not tokens:
             return None
         
@@ -177,7 +138,7 @@ class Segment():
                 text=''.join(token.text for token in tokens),
                 speaker = -1
             )
-    def is_silence(self):
+    def is_silence(self) -> bool:
         return self.speaker == -2
 
 
@@ -185,8 +146,8 @@ class Segment():
 class Line(TimedText):
     translation: str = ''
     
-    def to_dict(self):
-        _dict = {
+    def to_dict(self) -> Dict[str, Any]:
+        _dict: Dict[str, Any] = {
             'speaker': int(self.speaker) if self.speaker != -1 else 1,
             'text': self.text,
             'start': format_time(self.start),
@@ -198,14 +159,14 @@ class Line(TimedText):
             _dict['detected_language'] = self.detected_language
         return _dict
     
-    def build_from_tokens(self, tokens: List[ASRToken]):
+    def build_from_tokens(self, tokens: List[ASRToken]) -> "Line":
         self.text = ''.join([token.text for token in tokens])
         self.start = tokens[0].start
         self.end = tokens[-1].end
         self.speaker = 1
         return self
 
-    def build_from_segment(self, segment: Segment):
+    def build_from_segment(self, segment: Segment) -> "Line":
         self.text = segment.text
         self.start = segment.start
         self.end = segment.end
@@ -216,7 +177,7 @@ class Line(TimedText):
         return self.speaker == -2
 
 class SilentLine(Line):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.speaker = -2
         self.text = ''
@@ -233,8 +194,8 @@ class FrontData():
     remaining_time_transcription: float = 0.
     remaining_time_diarization: float = 0.
     
-    def to_dict(self):
-        _dict = {
+    def to_dict(self) -> Dict[str, Any]:
+        _dict: Dict[str, Any] = {
             'status': self.status,
             'lines': [line.to_dict() for line in self.lines if (line.text or line.speaker == -2)],
             'buffer_transcription': self.buffer_transcription,
@@ -254,24 +215,22 @@ class ChangeSpeaker:
 
 @dataclass  
 class State():
-    tokens: list = field(default_factory=list)
-    last_validated_token: int = 0
-    last_speaker: int = 1
-    last_punctuation_index: Optional[int] = None
-    translation_validated_segments: list = field(default_factory=list)
-    buffer_translation: str = field(default_factory=Transcript)
-    buffer_transcription: str = field(default_factory=Transcript)
-    diarization_segments: list = field(default_factory=list)
+    """Unified state class for audio processing.
+    
+    Contains both persistent state (tokens, buffers) and temporary update buffers
+    (new_* fields) that are consumed by TokensAlignment.
+    """
+    # Persistent state
+    tokens: List[ASRToken] = field(default_factory=list)
+    buffer_transcription: Transcript = field(default_factory=Transcript)
     end_buffer: float = 0.0
     end_attributed_speaker: float = 0.0
     remaining_time_transcription: float = 0.0
     remaining_time_diarization: float = 0.0
-
-
-@dataclass  
-class StateLight():
-    new_tokens: list = field(default_factory=list)
-    new_translation: list = field(default_factory=list)
-    new_diarization: list = field(default_factory=list)
-    new_tokens_buffer: list = field(default_factory=list) #only when local agreement
+    
+    # Temporary update buffers (consumed by TokensAlignment.update())
+    new_tokens: List[Union[ASRToken, Silence]] = field(default_factory=list)
+    new_translation: List[Any] = field(default_factory=list)
+    new_diarization: List[Any] = field(default_factory=list)
+    new_tokens_buffer: List[Any] = field(default_factory=list)  # only when local agreement
     new_translation_buffer: str = ''
