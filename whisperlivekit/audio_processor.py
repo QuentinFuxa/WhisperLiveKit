@@ -7,9 +7,8 @@ import traceback
 from whisperlivekit.timed_objects import ASRToken, Silence, Line, FrontData, State, StateLight, Transcript, ChangeSpeaker
 from whisperlivekit.core import TranscriptionEngine, online_factory, online_diarization_factory, online_translation_factory
 from whisperlivekit.silero_vad_iterator import FixedVADIterator
-from whisperlivekit.results_formater import format_output
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
-from whisperlivekit.TokensAlignment import TokensAlignment
+from whisperlivekit.tokens_alignment import TokensAlignment
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -392,8 +391,8 @@ class AudioProcessor:
                     self.translation.insert_tokens(tokens_to_process)
                     translation_validated_segments, buffer_translation = await asyncio.to_thread(self.translation.process)
                     async with self.lock:
-                        self.state.translation_validated_segments = translation_validated_segments
-                        self.state.buffer_translation = buffer_translation
+                        self.state_light.new_translation = translation_validated_segments
+                        self.state_light.new_translation_buffer = buffer_translation
             except Exception as e:
                 logger.warning(f"Exception in translation_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")
@@ -412,11 +411,11 @@ class AudioProcessor:
                 self.tokens_alignment.update()
                 lines, buffer_diarization_text, buffer_translation_text = self.tokens_alignment.get_lines(
                     diarization=self.args.diarization,
-                    translation=self.args.translation
+                    translation=bool(self.translation),
+                    current_silence=self.current_silence
                 )
                 state = await self.get_current_state()
 
-                buffer_translation_text = ''
                 buffer_transcription_text = ''
                 buffer_diarization_text = ''
 

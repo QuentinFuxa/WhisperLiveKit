@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any, List
 from datetime import timedelta
+from typing import Union
 
 PUNCTUATION_MARKS = {'.', '!', '?', '。', '！', '？'}
 
@@ -39,7 +40,9 @@ class TimedText(Timed):
     
     def __bool__(self):
         return bool(self.text)
-
+    
+    def __str__(self):
+        return str(self.text)
 
 @dataclass()
 class ASRToken(TimedText):
@@ -52,6 +55,10 @@ class ASRToken(TimedText):
     def with_offset(self, offset: float) -> "ASRToken":
         """Return a new token with the time offset added."""
         return ASRToken(self.start + offset, self.end + offset, self.text, self.speaker, detected_language=self.detected_language)
+
+    def is_silence(self):
+        return False
+
 
 @dataclass
 class Sentence(TimedText):
@@ -134,6 +141,46 @@ class Silence():
             return None
         self.duration = self.end - self.start
     
+    def is_silence(self):
+        return True
+
+
+@dataclass
+class Segment():
+    start: Optional[float]
+    end: Optional[float]
+    text: Optional[str]
+    speaker: Optional[str]
+
+    @classmethod
+    def from_tokens(
+        cls,
+        tokens: List[Union[ASRToken, Silence]],
+        is_silence=False
+    ) -> "Segment":
+        if not tokens:
+            return None
+        
+        start_token = tokens[0]
+        end_token = tokens[-1]        
+        if is_silence:
+            return cls(
+                start=start_token.start,
+                end=end_token.end,
+                text=None,
+                speaker = -2    
+            )
+        else:
+            return cls(
+                start=start_token.start,
+                end=end_token.end,
+                text=''.join(token.text for token in tokens),
+                speaker = -1
+            )
+    def is_silence(self):
+        return self.speaker == -2
+
+
 @dataclass
 class Line(TimedText):
     translation: str = ''
@@ -156,6 +203,13 @@ class Line(TimedText):
         self.start = tokens[0].start
         self.end = tokens[-1].end
         self.speaker = 1
+        return self
+
+    def build_from_segment(self, segment: Segment):
+        self.text = segment.text
+        self.start = segment.start
+        self.end = segment.end
+        self.speaker = segment.speaker
         return self
 
     def is_silent(self) -> bool:
@@ -193,47 +247,6 @@ class FrontData():
             _dict['error'] = self.error
         return _dict
 
-@dataclass
-class PunctuationSegment():
-    """Represents a segment of text between punctuation marks."""
-    start: Optional[float]
-    end: Optional[float]
-    token_index_start: int
-    token_index_end: int
-    punctuation_token_index: int
-    punctuation_token: ASRToken
-    
-    @classmethod
-    def from_token_range(
-        cls,
-        tokens: List[ASRToken],
-        token_index_start: int,
-        token_index_end: int,
-        punctuation_token_index: int
-    ) -> "PunctuationSegment":
-        """Create a PunctuationSegment from a range of tokens ending at a punctuation mark."""
-        if not tokens or token_index_start < 0 or token_index_end >= len(tokens):
-            raise ValueError("Invalid token indices")
-        
-        start_token = tokens[token_index_start]
-        end_token = tokens[token_index_end]
-        punctuation_token = tokens[punctuation_token_index]
-        
-        # Build text from tokens in the segment
-        segment_tokens = tokens[token_index_start:token_index_end + 1]
-        text = ''.join(token.text for token in segment_tokens)
-        
-        return cls(
-            start=start_token.start,
-            end=end_token.end,
-            text=text,
-            token_index_start=token_index_start,
-            token_index_end=token_index_end,
-            punctuation_token_index=punctuation_token_index,
-            punctuation_token=punctuation_token
-        )
-
-
 @dataclass  
 class ChangeSpeaker:
     speaker: int
@@ -261,3 +274,4 @@ class StateLight():
     new_translation: list = field(default_factory=list)
     new_diarization: list = field(default_factory=list)
     new_tokens_buffer: list = field(default_factory=list) #only when local agreement
+    new_translation_buffer: str = ''
