@@ -162,8 +162,10 @@ class Line(TimedText):
         return self.speaker == -2
 
 class SilentLine(Line):
-    speaker = -2
-    text = ''
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.speaker = -2
+        self.text = ''
 
 
 @dataclass  
@@ -192,8 +194,10 @@ class FrontData():
         return _dict
 
 @dataclass
-class PunctuationSegment(TimedText):
+class PunctuationSegment():
     """Represents a segment of text between punctuation marks."""
+    start: Optional[float]
+    end: Optional[float]
     token_index_start: int
     token_index_end: int
     punctuation_token_index: int

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 SENTINEL = object() # unique sentinel object for end of stream marker
-MILENCE_DURATION = 3
+MIN_DURATION_REAL_SILENCE = 5
 
 def cut_at(cumulative_pcm, cut_sec):
     cumulative_len = 0
@@ -165,7 +165,7 @@ class AudioProcessor:
         self.current_silence.is_starting=False
         self.current_silence.has_ended=True
         self.current_silence.compute_duration()
-        if self.current_silence.duration > MILENCE_DURATION:
+        if self.current_silence.duration > MIN_DURATION_REAL_SILENCE:
             self.state_light.new_tokens.append(self.current_silence)
         await self._push_silence_event()
         self.current_silence = None
@@ -410,57 +410,32 @@ class AudioProcessor:
                     continue
 
                 self.tokens_alignment.update()
-                lines = self.tokens_alignment.create_lines_from_tokens(self.current_silence, self.beg_loop)
-                undiarized_text = ''
+                lines, buffer_diarization_text, buffer_translation_text = self.tokens_alignment.get_lines(
+                    diarization=self.args.diarization,
+                    translation=self.args.translation
+                )
                 state = await self.get_current_state()
-                # self.tokens_alignment.compute_punctuations_segments()
-                # lines, undiarized_text = format_output(
-                #     state,
-                #     self.current_silence,
-                #     args = self.args,
-                #     sep=self.sep
-                # )
-                if lines and lines[-1].speaker == -2:
-                    buffer_transcription = Transcript()
-                else:
-                    buffer_transcription = state.buffer_transcription
-
-                buffer_diarization = ''
-                if undiarized_text:
-                    buffer_diarization = self.sep.join(undiarized_text)
-
-                    async with self.lock:
-                        self.state.end_attributed_speaker = state.end_attributed_speaker
 
                 buffer_translation_text = ''
-                if state.buffer_translation:
-                    raw_buffer_translation = getattr(state.buffer_translation, 'text', state.buffer_translation)
-                    if raw_buffer_translation:
-                        buffer_translation_text = raw_buffer_translation.strip()
-                
+                buffer_transcription_text = ''
+                buffer_diarization_text = ''
+
                 response_status = "active_transcription"
-                if not state.tokens and not buffer_transcription and not buffer_diarization:
+                if not lines and not buffer_transcription_text and not buffer_diarization_text:
                     response_status = "no_audio_detected"
-                    lines = []
-                elif not lines:
-                    lines = [Line(
-                        speaker=1,
-                        start=state.end_buffer,
-                        end=state.end_buffer
-                    )]
-                
+
                 response = FrontData(
                     status=response_status,
                     lines=lines,
-                    buffer_transcription=buffer_transcription.text.strip(),
-                    buffer_diarization=buffer_diarization,
+                    buffer_transcription=buffer_transcription_text,
+                    buffer_diarization=buffer_diarization_text,
                     buffer_translation=buffer_translation_text,
                     remaining_time_transcription=state.remaining_time_transcription,
                     remaining_time_diarization=state.remaining_time_diarization if self.args.diarization else 0
                 )
                                 
                 should_push = (response != self.last_response_content)
-                if should_push and (lines or buffer_transcription or buffer_diarization or response_status == "no_audio_detected"):
+                if should_push:
                     yield response
                     self.last_response_content = response
                 
@@ -582,6 +557,7 @@ class AudioProcessor:
         if not self.beg_loop:
             self.beg_loop = time()
             self.current_silence = Silence(start=0.0, is_starting=True)
+            self.tokens_alignment.beg_loop = self.beg_loop
 
         if not message:
             logger.info("Empty audio message received, initiating stop sequence.")
