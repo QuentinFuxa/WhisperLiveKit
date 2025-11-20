@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 SENTINEL = object() # unique sentinel object for end of stream marker
+MILENCE_DURATION = 3
 
 def cut_at(cumulative_pcm, cut_sec):
     cumulative_len = 0
@@ -164,7 +165,8 @@ class AudioProcessor:
         self.current_silence.is_starting=False
         self.current_silence.has_ended=True
         self.current_silence.compute_duration()
-        self.state_light.new_tokens.append(self.current_silence)
+        if self.current_silence.duration > MILENCE_DURATION:
+            self.state_light.new_tokens.append(self.current_silence)
         await self._push_silence_event()
         self.current_silence = None
 
@@ -365,7 +367,6 @@ class AudioProcessor:
                 self.diarization.insert_audio_chunk(item)
                 diarization_segments = await self.diarization.diarize()
                 self.state_light.new_diarization = diarization_segments
-                self.state_light.new_diarization_index += 1
                 
             except Exception as e:
                 logger.warning(f"Exception in diarization_processor: {e}")

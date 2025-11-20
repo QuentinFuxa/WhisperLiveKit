@@ -158,7 +158,13 @@ class Line(TimedText):
         self.speaker = 1
         return self
 
-    
+    def is_silent(self) -> bool:
+        return self.speaker == -2
+
+class SilentLine(Line):
+    speaker = -2
+    text = ''
+
 
 @dataclass  
 class FrontData():
@@ -184,6 +190,45 @@ class FrontData():
         if self.error:
             _dict['error'] = self.error
         return _dict
+
+@dataclass
+class PunctuationSegment(TimedText):
+    """Represents a segment of text between punctuation marks."""
+    token_index_start: int
+    token_index_end: int
+    punctuation_token_index: int
+    punctuation_token: ASRToken
+    
+    @classmethod
+    def from_token_range(
+        cls,
+        tokens: List[ASRToken],
+        token_index_start: int,
+        token_index_end: int,
+        punctuation_token_index: int
+    ) -> "PunctuationSegment":
+        """Create a PunctuationSegment from a range of tokens ending at a punctuation mark."""
+        if not tokens or token_index_start < 0 or token_index_end >= len(tokens):
+            raise ValueError("Invalid token indices")
+        
+        start_token = tokens[token_index_start]
+        end_token = tokens[token_index_end]
+        punctuation_token = tokens[punctuation_token_index]
+        
+        # Build text from tokens in the segment
+        segment_tokens = tokens[token_index_start:token_index_end + 1]
+        text = ''.join(token.text for token in segment_tokens)
+        
+        return cls(
+            start=start_token.start,
+            end=end_token.end,
+            text=text,
+            token_index_start=token_index_start,
+            token_index_end=token_index_end,
+            punctuation_token_index=punctuation_token_index,
+            punctuation_token=punctuation_token
+        )
+
 
 @dataclass  
 class ChangeSpeaker:
