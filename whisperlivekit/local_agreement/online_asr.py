@@ -411,11 +411,11 @@ class OnlineASRProcessor:
     ) -> Transcript:
         sep = sep if sep is not None else self.asr.sep
         text = sep.join(token.text for token in tokens)
-        probability = sum(token.probability for token in tokens if token.probability) / len(tokens) if tokens else None
+        # probability = sum(token.probability for token in tokens if token.probability) / len(tokens) if tokens else None
         if tokens:
             start = offset + tokens[0].start
             end = offset + tokens[-1].end
         else:
             start = None
             end = None
-        return Transcript(start, end, text, probability=probability)
+        return Transcript(start, end, text)

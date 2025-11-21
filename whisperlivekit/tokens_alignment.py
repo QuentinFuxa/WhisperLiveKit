@@ -26,6 +26,7 @@ class TokensAlignment:
         self.beg_loop: Optional[float] = None
 
     def update(self) -> None:
+        """Drain state buffers into the running alignment context."""
         self.new_tokens, self.state.new_tokens = self.state.new_tokens, []
         self.new_diarization, self.state.new_diarization = self.state.new_diarization, []
         self.new_translation, self.state.new_translation = self.state.new_translation, []
@@ -37,6 +38,7 @@ class TokensAlignment:
         self.new_translation_buffer = self.state.new_translation_buffer
 
     def add_translation(self, line: Line) -> None:
+        """Append translated text segments that overlap with a line."""
         for ts in self.all_translation_segments:
             if ts.is_within(line):
                 line.translation += ts.text + (self.sep if ts.text else '')
@@ -45,6 +47,7 @@ class TokensAlignment:
 
 
     def compute_punctuations_segments(self, tokens: Optional[List[ASRToken]] = None) -> List[Segment]:
+        """Group tokens into segments split by punctuation and explicit silence."""
         segments = []
         segment_start_idx = 0
         for i, token in enumerate(self.all_tokens):
@@ -61,7 +64,7 @@ class TokensAlignment:
                 segments.append(segment)
                 segment_start_idx = i+1
             else:
-                if token.is_punctuation():
+                if token.has_punctuation():
                     segment = Segment.from_tokens(
                         tokens=self.all_tokens[segment_start_idx: i+1],
                     )
@@ -77,6 +80,7 @@ class TokensAlignment:
 
 
     def concatenate_diar_segments(self) -> List[SpeakerSegment]:
+        """Merge consecutive diarization slices that share the same speaker."""
         if not self.all_diarization_segments:
             return []
         merged = [self.all_diarization_segments[0]]
@@ -90,15 +94,14 @@ class TokensAlignment:
 
     @staticmethod
     def intersection_duration(seg1: TimedText, seg2: TimedText) -> float:
+        """Return the overlap duration between two timed segments."""
         start = max(seg1.start, seg2.start)
         end = min(seg1.end, seg2.end)
 
         return max(0, end - start)
 
     def get_lines_diarization(self) -> Tuple[List[Line], str]:
-        """
-        use compute_punctuations_segments, concatenate_diar_segments, intersection_duration
-        """
+        """Build lines when diarization is enabled and track overflow buffer."""
         diarization_buffer = ''
         punctuation_segments = self.compute_punctuations_segments()
         diarization_segments = self.concatenate_diar_segments()
@@ -136,9 +139,7 @@ class TokensAlignment:
             translation: bool = False,
             current_silence: Optional[Silence] = None
         ) -> Tuple[List[Line], str, Union[str, TimedText]]:
-        """
-        In the case without diarization
-        """
+        """Return the formatted lines plus buffers, optionally with diarization/translation."""
         if diarization:
             lines, diarization_buffer = self.get_lines_diarization()
         else:

@@ -4,7 +4,7 @@
 - Example 2: The punctuation from STT comes from prediction `t`, but the speaker change from Diariation come in the prediction `t-1`
 - Example 3: The punctuation from STT comes from prediction `t-1`, but the speaker change from Diariation come in the prediction `t`
 
-> `#` Is the split between the `t-1` prediction and t prediction.  
+> `#` Is the split between the `t-1` prediction and `t` prediction.  
 
 
 ## Example 1:

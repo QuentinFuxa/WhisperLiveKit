@@ -266,7 +266,7 @@ class AlignAtt:
         logger.debug("Refreshing segment:")
         self.init_tokens()
         self.last_attend_frame = -self.cfg.rewind_threshold       
-        self.detected_language = None
+        # self.detected_language = None
         self.cumulative_time_offset = 0.0
         self.init_context()
         logger.debug(f"Context: {self.context}")

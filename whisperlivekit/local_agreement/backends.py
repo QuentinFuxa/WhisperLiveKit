@@ -224,7 +224,8 @@ class MLXWhisper(ASRBase):
             if segment.get("no_speech_prob", 0) > 0.9:
                 continue
             for word in segment.get("words", []):
-                token = ASRToken(word["start"], word["end"], word["word"], probability=word["probability"])
+                probability=word["probability"]
+                token = ASRToken(word["start"], word["end"], word["word"])
                 tokens.append(token)
         return tokens
 

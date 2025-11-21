@@ -19,8 +19,8 @@ class TimedText(Timed):
     speaker: Optional[int] = -1
     detected_language: Optional[str] = None
     
-    def is_punctuation(self) -> bool:
-        return self.text.strip() in PUNCTUATION_MARKS
+    def has_punctuation(self) -> bool:
+        return any(char in PUNCTUATION_MARKS for char in self.text.strip())
     
     def is_within(self, other: 'TimedText') -> bool:
         return other.contains_timespan(self)
@@ -65,6 +65,7 @@ class Transcript(TimedText):
         sep: Optional[str] = None,
         offset: float = 0
     ) -> "Transcript":
+        """Collapse multiple ASR tokens into a single transcript span."""
         sep = sep if sep is not None else ' '
         text = sep.join(token.text for token in tokens)
         if tokens:
@@ -107,18 +108,19 @@ class Silence():
 
 
 @dataclass
-class Segment():
+class Segment(TimedText):
+    """Generic contiguous span built from tokens or silence markers."""
     start: Optional[float]
     end: Optional[float]
     text: Optional[str]
     speaker: Optional[str]
-
     @classmethod
     def from_tokens(
         cls,
         tokens: List[Union[ASRToken, Silence]],
         is_silence: bool = False
     ) -> Optional["Segment"]:
+        """Return a normalized segment representing the provided tokens."""
         if not tokens:
             return None
         
@@ -129,16 +131,18 @@ class Segment():
                 start=start_token.start,
                 end=end_token.end,
                 text=None,
-                speaker = -2    
+                speaker=-2
             )
         else:
             return cls(
                 start=start_token.start,
                 end=end_token.end,
                 text=''.join(token.text for token in tokens),
-                speaker = -1
+                speaker=-1,
+                detected_language=start_token.detected_language
             )
     def is_silence(self) -> bool:
+        """True when this segment represents a silence gap."""
         return self.speaker == -2
 
 
@@ -147,6 +151,7 @@ class Line(TimedText):
     translation: str = ''
     
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize the line for frontend consumption."""
         _dict: Dict[str, Any] = {
             'speaker': int(self.speaker) if self.speaker != -1 else 1,
             'text': self.text,
@@ -160,17 +165,21 @@ class Line(TimedText):
         return _dict
     
     def build_from_tokens(self, tokens: List[ASRToken]) -> "Line":
+        """Populate line attributes from a contiguous token list."""
         self.text = ''.join([token.text for token in tokens])
         self.start = tokens[0].start
         self.end = tokens[-1].end
         self.speaker = 1
+        self.detected_language = tokens[0].detected_language
         return self
 
     def build_from_segment(self, segment: Segment) -> "Line":
+        """Populate the line fields from a pre-built segment."""
         self.text = segment.text
         self.start = segment.start
         self.end = segment.end
         self.speaker = segment.speaker
+        self.detected_language = segment.detected_language
         return self
 
     def is_silent(self) -> bool:
@@ -195,6 +204,7 @@ class FrontData():
     remaining_time_diarization: float = 0.
     
     def to_dict(self) -> Dict[str, Any]:
+        """Serialize the front-end data payload."""
         _dict: Dict[str, Any] = {
             'status': self.status,
             'lines': [line.to_dict() for line in self.lines if (line.text or line.speaker == -2)],
