@@ -61,10 +61,10 @@ packages = [
     "whisperlivekit.whisper.normalizers",
     "whisperlivekit.web",
     "whisperlivekit.local_agreement",
-    "whisperlivekit.vad_models"
+    "whisperlivekit.silero_vad_models"
 ]
 
 [tool.setuptools.package-data]
 whisperlivekit = ["web/*.html", "web/*.css", "web/*.js", "web/src/*.svg"]
 "whisperlivekit.whisper.assets" = ["*.tiktoken", "*.npz"]
-"whisperlivekit.vad_models" = ["*.jit", "*.onnx"]
+"whisperlivekit.silero_vad_models" = ["*.jit", "*.onnx"]
