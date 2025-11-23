@@ -1,33 +1,34 @@
-import os
 import logging
-
-import torch
-import torch.nn.functional as F
-import numpy as np
-
-from whisperlivekit.whisper import DecodingOptions, tokenizer
-from .config import AlignAttConfig
-from whisperlivekit.timed_objects import ASRToken
-from whisperlivekit.whisper.audio import log_mel_spectrogram, TOKENS_PER_SECOND, pad_or_trim, N_SAMPLES, N_FRAMES
-from whisperlivekit.whisper.timing import median_filter
-from whisperlivekit.whisper.decoding import GreedyDecoder, BeamSearchDecoder, SuppressTokens
-from .beam import BeamPyTorchInference
-from .eow_detection import fire_at_boundary, load_cif
 import os
 from time import time
-from .token_buffer import TokenBuffer
-from whisperlivekit.backend_support import (
-    mlx_backend_available,
-    faster_backend_available,
-)
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+from whisperlivekit.backend_support import (faster_backend_available,
+                                            mlx_backend_available)
+from whisperlivekit.timed_objects import ASRToken
+from whisperlivekit.whisper import DecodingOptions, tokenizer
+from whisperlivekit.whisper.audio import (N_FRAMES, N_SAMPLES,
+                                          TOKENS_PER_SECOND,
+                                          log_mel_spectrogram, pad_or_trim)
+from whisperlivekit.whisper.decoding import (BeamSearchDecoder, GreedyDecoder,
+                                             SuppressTokens)
+from whisperlivekit.whisper.timing import median_filter
 
 from ..timed_objects import PUNCTUATION_MARKS
+from .beam import BeamPyTorchInference
+from .config import AlignAttConfig
+from .eow_detection import fire_at_boundary, load_cif
+from .token_buffer import TokenBuffer
 
 DEC_PAD = 50257
 logger = logging.getLogger(__name__)
 
 if mlx_backend_available():
-    from mlx_whisper.audio import log_mel_spectrogram as mlx_log_mel_spectrogram
+    from mlx_whisper.audio import \
+        log_mel_spectrogram as mlx_log_mel_spectrogram
     from mlx_whisper.transcribe import pad_or_trim as mlx_pad_or_trim
 
 if faster_backend_available():

@@ -1,10 +1,13 @@
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from whisperlivekit import TranscriptionEngine, AudioProcessor, get_inline_ui_html, parse_args
 import asyncio
 import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+
+from whisperlivekit import (AudioProcessor, TranscriptionEngine,
+                            get_inline_ui_html, parse_args)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger().setLevel(logging.WARNING)

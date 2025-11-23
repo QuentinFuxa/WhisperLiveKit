@@ -1,7 +1,9 @@
-import sys
-import numpy as np
 import logging
-from typing import List, Tuple, Optional
+import sys
+from typing import List, Optional, Tuple
+
+import numpy as np
+
 from whisperlivekit.timed_objects import ASRToken, Sentence, Transcript
 
 logger = logging.getLogger(__name__)

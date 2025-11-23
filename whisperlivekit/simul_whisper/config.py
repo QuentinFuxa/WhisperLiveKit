@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
+
 @dataclass
 class AlignAttConfig():
     eval_data_path: str = "tmp"

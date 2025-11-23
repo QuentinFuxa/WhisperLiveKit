@@ -1,11 +1,12 @@
-import numpy as np
-import torch
 import logging
 import threading
 import time
 import wave
+from queue import Empty, SimpleQueue
 from typing import List, Optional
-from queue import SimpleQueue, Empty
+
+import numpy as np
+import torch
 
 from whisperlivekit.timed_objects import SpeakerSegment
 
@@ -295,6 +296,7 @@ def extract_number(s: str) -> int:
 
 if __name__ == '__main__':
     import asyncio
+
     import librosa
     
     async def main():

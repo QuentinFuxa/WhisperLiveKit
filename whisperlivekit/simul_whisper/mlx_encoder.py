@@ -5,7 +5,6 @@ import mlx.core as mx
 import mlx.nn as nn
 from huggingface_hub import snapshot_download
 from mlx.utils import tree_unflatten
-
 from mlx_whisper import whisper
 
 mlx_model_mapping = {

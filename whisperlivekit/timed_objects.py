@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Optional, List, Union, Dict, Any
 from datetime import timedelta
+from typing import Any, Dict, List, Optional, Union
 
 PUNCTUATION_MARKS = {'.', '!', '?', '。', '！', '？'}
 

@@ -1,6 +1,6 @@
-import logging
-import importlib.resources as resources
 import base64
+import importlib.resources as resources
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +96,13 @@ def get_inline_ui_html():
 
 if __name__ == '__main__':
     
+    import pathlib
+
+    import uvicorn
     from fastapi import FastAPI
     from fastapi.responses import HTMLResponse
-    import uvicorn
     from starlette.staticfiles import StaticFiles
-    import pathlib
+
     import whisperlivekit.web as webpkg
     
     app = FastAPI()    

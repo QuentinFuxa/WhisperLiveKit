@@ -1,13 +1,16 @@
-import sys
-import logging
 import io
-import soundfile as sf
+import logging
 import math
+import sys
 from typing import List
+
 import numpy as np
+import soundfile as sf
+
+from whisperlivekit.model_paths import model_path_and_type, resolve_model_path
 from whisperlivekit.timed_objects import ASRToken
-from whisperlivekit.model_paths import resolve_model_path, model_path_and_type
 from whisperlivekit.whisper.transcribe import transcribe as whisper_transcribe
+
 logger = logging.getLogger(__name__)
 class ASRBase:
     sep = " "  # join transcribe words with this character (" " for whisper_timestamped,
@@ -165,8 +168,8 @@ class MLXWhisper(ASRBase):
     sep = ""
 
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
-        from mlx_whisper.transcribe import ModelHolder, transcribe
         import mlx.core as mx
+        from mlx_whisper.transcribe import ModelHolder, transcribe
 
         if model_dir is not None:
             resolved_path = resolve_model_path(model_dir)
