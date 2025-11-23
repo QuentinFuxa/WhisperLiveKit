@@ -96,11 +96,13 @@ wlk --host 0.0.0.0 --port 80 --model medium --diarization --language fr
 **Python API Integration**: Check [basic_server](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/basic_server.py) for a more complete example of how to use the functions and classes.
 
 ```python
-from whisperlivekit import TranscriptionEngine, AudioProcessor, parse_args
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-from contextlib import asynccontextmanager
-import asyncio
+
+from whisperlivekit import AudioProcessor, TranscriptionEngine, parse_args
 
 transcription_engine = None
 
@@ -146,8 +148,8 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
 | `--backend` | Whisper implementation selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. You can also force `mlx-whisper`, `faster-whisper`, `whisper`, or `openai-api` (LocalAgreement only) | `auto` |
-| `--no-vac` | Disable Voice Activity Controller | `False` |
-| `--no-vad` | Disable Voice Activity Detection | `False` |
+| `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
+| `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
 | `--host` | Server host address | `localhost` |
 | `--port` | Server port | `8000` |
