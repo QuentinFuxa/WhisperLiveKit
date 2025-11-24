@@ -1,5 +1,8 @@
-import torch
 import sys
+
+import torch
+
+
 class TokenBuffer:
 
     def __init__(self, text="", tokenizer=None, device=None, prefix_token_ids=[]):

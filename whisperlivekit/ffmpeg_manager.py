@@ -1,8 +1,8 @@
 import asyncio
+import contextlib
 import logging
 from enum import Enum
-from typing import Optional, Callable
-import contextlib
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

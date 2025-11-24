@@ -1,14 +1,20 @@
 import asyncio
-import numpy as np
-from time import time
 import logging
 import traceback
-from typing import Optional, Union, List, Any, AsyncGenerator
-from whisperlivekit.timed_objects import ASRToken, Silence, Line, FrontData, State, Transcript, ChangeSpeaker
-from whisperlivekit.core import TranscriptionEngine, online_factory, online_diarization_factory, online_translation_factory
-from whisperlivekit.silero_vad_iterator import FixedVADIterator
+from time import time
+from typing import Any, AsyncGenerator, List, Optional, Union
+
+import numpy as np
+
+from whisperlivekit.core import (TranscriptionEngine,
+                                 online_diarization_factory, online_factory,
+                                 online_translation_factory)
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
+from whisperlivekit.silero_vad_iterator import FixedVADIterator
+from whisperlivekit.timed_objects import (ASRToken, ChangeSpeaker, FrontData,
+                                          Line, Silence, State, Transcript)
 from whisperlivekit.tokens_alignment import TokensAlignment
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

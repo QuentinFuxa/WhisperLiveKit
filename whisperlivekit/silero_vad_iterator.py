@@ -1,7 +1,8 @@
-import torch
-import numpy as np
 import warnings
 from pathlib import Path
+
+import numpy as np
+import torch
 
 """
 Code is adapted from silero-vad v6: https://github.com/snakers4/silero-vad

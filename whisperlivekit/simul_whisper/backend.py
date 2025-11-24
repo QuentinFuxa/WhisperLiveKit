@@ -1,31 +1,30 @@
-import sys
-import numpy as np
+import gc
 import logging
-from typing import List, Tuple, Optional
+import os
 import platform
-from whisperlivekit.timed_objects import ASRToken, Transcript, ChangeSpeaker
+import sys
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+import numpy as np
+import torch
+
+from whisperlivekit.backend_support import (faster_backend_available,
+                                            mlx_backend_available)
+from whisperlivekit.model_paths import model_path_and_type, resolve_model_path
+from whisperlivekit.simul_whisper.config import AlignAttConfig
+from whisperlivekit.simul_whisper.simul_whisper import AlignAtt
+from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, Transcript
 from whisperlivekit.warmup import load_file
 from whisperlivekit.whisper import load_model, tokenizer
 from whisperlivekit.whisper.audio import TOKENS_PER_SECOND
-import os
-import gc
-from pathlib import Path
-from whisperlivekit.model_paths import model_path_and_type, resolve_model_path
-from whisperlivekit.backend_support import (
-    mlx_backend_available,
-    faster_backend_available,
-)
-
-import torch
-from whisperlivekit.simul_whisper.config import AlignAttConfig
-from whisperlivekit.simul_whisper.simul_whisper import AlignAtt
 
 logger = logging.getLogger(__name__)
 
 
 HAS_MLX_WHISPER = mlx_backend_available(warn_on_missing=True)
 if HAS_MLX_WHISPER:
-    from .mlx_encoder import mlx_model_mapping, load_mlx_encoder
+    from .mlx_encoder import load_mlx_encoder, mlx_model_mapping
 else:
     mlx_model_mapping = {}
 HAS_FASTER_WHISPER = faster_backend_available(warn_on_missing=not HAS_MLX_WHISPER)

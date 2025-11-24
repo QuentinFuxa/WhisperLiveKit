@@ -4,15 +4,17 @@ import json
 import os
 import urllib
 import warnings
+from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import torch
-from tqdm import tqdm
-from pathlib import Path
 from torch import Tensor
+from tqdm import tqdm
 
-from whisperlivekit.whisper.audio import load_audio, log_mel_spectrogram, pad_or_trim
-from whisperlivekit.whisper.decoding import DecodingOptions, DecodingResult, decode, detect_language
+from whisperlivekit.whisper.audio import (load_audio, log_mel_spectrogram,
+                                          pad_or_trim)
+from whisperlivekit.whisper.decoding import (DecodingOptions, DecodingResult,
+                                             decode, detect_language)
 from whisperlivekit.whisper.model import ModelDimensions, Whisper
 from whisperlivekit.whisper.transcribe import transcribe
 from whisperlivekit.whisper.version import __version__

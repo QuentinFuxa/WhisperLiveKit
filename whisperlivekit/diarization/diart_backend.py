@@ -1,20 +1,20 @@
 import asyncio
+import logging
 import re
 import threading
-import numpy as np
-import logging
 import time
-from queue import SimpleQueue, Empty
+from queue import Empty, SimpleQueue
+from typing import Any, List, Tuple
 
+import diart.models as m
+import numpy as np
 from diart import SpeakerDiarization, SpeakerDiarizationConfig
 from diart.inference import StreamingInference
-from diart.sources import AudioSource
-from whisperlivekit.timed_objects import SpeakerSegment
-from diart.sources import MicrophoneAudioSource
-from rx.core import Observer
-from typing import Tuple, Any, List
+from diart.sources import AudioSource, MicrophoneAudioSource
 from pyannote.core import Annotation
-import diart.models as m
+from rx.core import Observer
+
+from whisperlivekit.timed_objects import SpeakerSegment
 
 logger = logging.getLogger(__name__)
 

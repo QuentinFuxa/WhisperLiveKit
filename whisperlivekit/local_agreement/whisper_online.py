@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-import sys
-import numpy as np
-import librosa
-from functools import lru_cache
-import time
 import logging
 import platform
-from .backends import FasterWhisperASR, MLXWhisper, WhisperASR, OpenaiApiASR
+import sys
+import time
+from functools import lru_cache
+
+import librosa
+import numpy as np
+
+from whisperlivekit.backend_support import (faster_backend_available,
+                                            mlx_backend_available)
+from whisperlivekit.model_paths import model_path_and_type, resolve_model_path
 from whisperlivekit.warmup import warmup_asr
-from whisperlivekit.model_paths import resolve_model_path, model_path_and_type
-from whisperlivekit.backend_support import (
-    mlx_backend_available,
-    faster_backend_available,
-)
+
+from .backends import FasterWhisperASR, MLXWhisper, OpenaiApiASR, WhisperASR
 
 logger = logging.getLogger(__name__)
 
