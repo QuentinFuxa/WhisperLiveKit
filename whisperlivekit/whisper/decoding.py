@@ -153,15 +153,12 @@ class PyTorchInference(Inference):
         value_modules = [block.attn.value for block in self.model.decoder.blocks]
         self.kv_modules = key_modules + value_modules
 
-    def logits(self, tokens: Tensor, audio_features: Tensor) -> Tensor:
-        if not self.kv_cache:
-            self.kv_cache, self.hooks = self.model.install_kv_cache_hooks()
-
+    def logits(self, tokens: Tensor, audio_features: Tensor, return_attn: bool = False) -> Tensor:
         if tokens.shape[-1] > self.initial_token_length:
             # only need to use the last token except in the first forward pass
             tokens = tokens[:, -1:]
 
-        return self.model.decoder(tokens, audio_features, kv_cache=self.kv_cache)
+        return self.model.decoder(tokens, audio_features, kv_cache=self.kv_cache, return_attn=return_attn)
 
     def cleanup_caching(self):
         for hook in self.hooks:
@@ -173,8 +170,8 @@ class PyTorchInference(Inference):
     def rearrange_kv_cache(self, source_indices):
         if source_indices != list(range(len(source_indices))):
             for module in self.kv_modules:
-                # update the key/value cache to contain the selected sequences
-                self.kv_cache[module] = self.kv_cache[module][source_indices].detach()
+                if module in self.kv_cache:
+                    self.kv_cache[module] = self.kv_cache[module][source_indices].detach()
 
 
 class SequenceRanker:

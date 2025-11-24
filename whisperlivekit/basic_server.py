@@ -8,13 +8,14 @@ from fastapi.responses import HTMLResponse
 
 from whisperlivekit import (AudioProcessor, TranscriptionEngine,
                             get_inline_ui_html, parse_args)
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logging.getLogger().setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from whisperlivekit.logging_config import setup_logging
 
 args = parse_args()
+setup_logging(log_level=args.log_level)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(args.log_level)
+
 transcription_engine = None
 
 @asynccontextmanager

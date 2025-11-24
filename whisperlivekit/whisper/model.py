@@ -98,21 +98,42 @@ class MultiHeadAttention(nn.Module):
         xa: Optional[Tensor] = None,
         mask: Optional[Tensor] = None,
         kv_cache: Optional[dict] = None,
+        return_attn: bool = False,
     ):
         q = self.query(x)
 
-        if kv_cache is None or xa is None or self.key not in kv_cache:
-            # hooks, if installed (i.e. kv_cache is not None), will prepend the cached kv tensors;
-            # otherwise, perform key/value projections for self- or cross-attention as usual.
+        # manage kv cache without hooks
+        if kv_cache is None:
             k = self.key(x if xa is None else xa)
             v = self.value(x if xa is None else xa)
         else:
-            # for cross-attention, calculate keys and values once and reuse in subsequent calls.
-            k = kv_cache[self.key]
-            v = kv_cache[self.value]
+            if xa is None:
+                # self attention: append to cache
+                k_new = self.key(x)
+                v_new = self.value(x)
+                if self.key in kv_cache:
+                    k = torch.cat([kv_cache[self.key], k_new], dim=1).detach()
+                else:
+                    k = k_new
+                if self.value in kv_cache:
+                    v = torch.cat([kv_cache[self.value], v_new], dim=1).detach()
+                else:
+                    v = v_new
+                kv_cache[self.key] = k
+                kv_cache[self.value] = v
+            else:
+                # cross attention: compute once, reuse
+                if self.key not in kv_cache:
+                    kv_cache[self.key] = self.key(xa)
+                    kv_cache[self.value] = self.value(xa)
+                k = kv_cache[self.key]
+                v = kv_cache[self.value]
 
         wv, qk = self.qkv_attention(q, k, v, mask)
-        return self.out(wv), qk
+        out = self.out(wv)
+        if return_attn:
+            return out, qk
+        return out, qk
 
     def qkv_attention(
         self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None
@@ -166,11 +187,16 @@ class ResidualAttentionBlock(nn.Module):
         xa: Optional[Tensor] = None,
         mask: Optional[Tensor] = None,
         kv_cache: Optional[dict] = None,
+        return_attn: bool = False,
     ):
-        x = x + self.attn(self.attn_ln(x), mask=mask, kv_cache=kv_cache)[0]
+        x = x + self.attn(self.attn_ln(x), mask=mask, kv_cache=kv_cache, return_attn=False)[0]
+        cross_qk = None
         if self.cross_attn:
-            x = x + self.cross_attn(self.cross_attn_ln(x), xa, kv_cache=kv_cache)[0]
+            out, cross_qk = self.cross_attn(self.cross_attn_ln(x), xa, kv_cache=kv_cache, return_attn=return_attn)
+            x = x + out
         x = x + self.mlp(self.mlp_ln(x))
+        if return_attn:
+            return x, cross_qk
         return x
 
 
@@ -227,7 +253,7 @@ class TextDecoder(nn.Module):
         mask = torch.empty(n_ctx, n_ctx).fill_(-np.inf).triu_(1)
         self.register_buffer("mask", mask, persistent=False)
 
-    def forward(self, x: Tensor, xa: Tensor, kv_cache: Optional[dict] = None):
+    def forward(self, x: Tensor, xa: Tensor, kv_cache: Optional[dict] = None, return_attn: bool = False, mask: Optional[Tensor] = None):
         """
         x : torch.LongTensor, shape = (batch_size, <= n_ctx)
             the text tokens
@@ -241,14 +267,27 @@ class TextDecoder(nn.Module):
         )
         x = x.to(xa.dtype)
 
+        attn_mats = [] if return_attn else None
         for block in self.blocks:
-            x = block(x, xa, mask=self.mask, kv_cache=kv_cache)
+            if return_attn:
+                x, cross_qk = block(
+                    x,
+                    xa,
+                    mask=self.mask if mask is None else mask,
+                    kv_cache=kv_cache,
+                    return_attn=True,
+                )
+                attn_mats.append(cross_qk)
+            else:
+                x = block(x, xa, mask=self.mask if mask is None else mask, kv_cache=kv_cache)
 
         x = self.ln(x)
         logits = (
             x @ torch.transpose(self.token_embedding.weight.to(x.dtype), 0, 1)
         ).float()
 
+        if return_attn:
+            return logits, attn_mats
         return logits
 
 
@@ -311,39 +350,6 @@ class Whisper(nn.Module):
     @property
     def num_languages(self):
         return self.dims.n_vocab - 51765 - int(self.is_multilingual)
-
-    def install_kv_cache_hooks(self, cache: Optional[dict] = None):
-        """
-        The `MultiHeadAttention` module optionally accepts `kv_cache` which stores the key and value
-        tensors calculated for the previous positions. This method returns a dictionary that stores
-        all caches, and the necessary hooks for the key and value projection modules that save the
-        intermediate tensors to be reused during later calculations.
-
-        Returns
-        -------
-        cache : Dict[nn.Module, torch.Tensor]
-            A dictionary object mapping the key/value projection modules to its cache
-        hooks : List[RemovableHandle]
-            List of PyTorch RemovableHandle objects to stop the hooks to be called
-        """
-        cache = {**cache} if cache is not None else {}
-        hooks = []
-
-        def save_to_cache(module, _, output):
-            if module not in cache or output.shape[1] > self.dims.n_text_ctx:
-                # save as-is, for the first token or cross attention
-                cache[module] = output
-            else:
-                cache[module] = torch.cat([cache[module], output], dim=1).detach()
-            return cache[module]
-
-        def install_hooks(layer: nn.Module):
-            if isinstance(layer, MultiHeadAttention):
-                hooks.append(layer.key.register_forward_hook(save_to_cache))
-                hooks.append(layer.value.register_forward_hook(save_to_cache))
-
-        self.decoder.apply(install_hooks)
-        return cache, hooks
 
     detect_language = detect_language_function
     transcribe = transcribe_function

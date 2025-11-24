@@ -20,6 +20,7 @@ from whisperlivekit.whisper.timing import median_filter
 from ..timed_objects import PUNCTUATION_MARKS
 from .beam import BeamPyTorchInference
 from .config import AlignAttConfig
+from .decoder_state import DecoderState
 from .eow_detection import fire_at_boundary, load_cif
 from .token_buffer import TokenBuffer
 
@@ -60,8 +61,6 @@ class AlignAtt:
             mlx_encoder=None,
             fw_encoder=None,
         ) -> None:
-        self.log_segments = 0
-        
         self.model = loaded_model
         self.mlx_encoder = mlx_encoder
         self.fw_encoder = fw_encoder            
@@ -73,9 +72,9 @@ class AlignAtt:
         self.use_mlcore = self.coreml_encoder_tuple is not None
         
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.decoder_state = DecoderState()
         
         logger.info(f"Model dimensions: {self.model.dims}")
-        self.speaker = -1
         self.decode_options = DecodingOptions(
             language = cfg.language, 
             without_timestamps = True,
@@ -98,37 +97,11 @@ class AlignAtt:
                                                                      n_audio_state=self.model.dims.n_audio_state,
                                                                      device=self.model.device)
 
-        # install hooks to access encoder-decoder attention
-        self.dec_attns = []
-        def layer_hook(module, net_input, net_output):
-            # net_output[1]: B*num_head*token_len*audio_len
-            t = F.softmax(net_output[1], dim=-1)
-            self.dec_attns.append(t.squeeze(0))
-        for b in self.model.decoder.blocks:
-            hook = b.cross_attn.register_forward_hook(layer_hook)
-            self.l_hooks.append(hook)
-        
-        self.kv_cache = {}
-        def kv_hook(module: torch.nn.Linear, _, net_output: torch.Tensor):
-            if module.cache_id not in self.kv_cache or net_output.shape[1] > self.max_text_len:
-                # save as-is, for the first token or cross attention
-                self.kv_cache[module.cache_id] = net_output
-            else:
-                x = self.kv_cache[module.cache_id]
-                self.kv_cache[module.cache_id] = torch.cat([x, net_output], dim=1).detach()
-            return self.kv_cache[module.cache_id] 
+        # kv_cache is managed inside decoder forward without hooks
+        self.decoder_state.kv_cache = self.decoder_state.kv_cache or {}
 
-        for i,b in enumerate(self.model.decoder.blocks):
-            hooks = [
-                b.attn.key.register_forward_hook(kv_hook),
-                b.attn.value.register_forward_hook(kv_hook),
-                b.cross_attn.key.register_forward_hook(kv_hook),
-                b.cross_attn.value.register_forward_hook(kv_hook),
-            ]
-            self.l_hooks.extend(hooks)
-
-        self.align_source = {}
-        self.num_align_heads = 0
+        self.align_source = self.decoder_state.align_source
+        self.num_align_heads = self.decoder_state.num_align_heads
         for layer_rank, head_id in self.model.alignment_heads.indices().T:
             layer_rank = layer_rank.item()
             heads = self.align_source.get(layer_rank, [])
@@ -177,17 +150,224 @@ class AlignAtt:
 
         elif cfg.decoder_type == "beam":
             self.decoder_type = "beam"
-            self.inference = BeamPyTorchInference(self.model, self.initial_token_length)
-            self.inference.kv_cache = self.kv_cache
+            self.inference = BeamPyTorchInference(
+                self.model,
+                self.initial_token_length,
+                decoder_state=self.decoder_state,
+            )
 
             self.token_decoder = BeamSearchDecoder(inference=self.inference, eot=self.tokenizer.eot, beam_size=cfg.beam_size)
 
         # Tokens to carry over to next chunk for incomplete UTF-8 characters
         self.pending_incomplete_tokens = []
 
-    def remove_hooks(self):
-        for hook in self.l_hooks:
-            hook.remove()
+    @property
+    def tokenizer(self):
+        return self.decoder_state.tokenizer
+
+    @tokenizer.setter
+    def tokenizer(self, value):
+        self.decoder_state.tokenizer = value
+
+    @property
+    def tokenizer_is_multilingual(self):
+        return self.decoder_state.tokenizer_is_multilingual
+
+    @tokenizer_is_multilingual.setter
+    def tokenizer_is_multilingual(self, value):
+        self.decoder_state.tokenizer_is_multilingual = value
+
+    @property
+    def detected_language(self):
+        return self.decoder_state.detected_language
+
+    @detected_language.setter
+    def detected_language(self, value):
+        self.decoder_state.detected_language = value
+
+    @property
+    def reset_tokenizer_to_auto_next_call(self):
+        return self.decoder_state.reset_tokenizer_to_auto_next_call
+
+    @reset_tokenizer_to_auto_next_call.setter
+    def reset_tokenizer_to_auto_next_call(self, value):
+        self.decoder_state.reset_tokenizer_to_auto_next_call = value
+
+    @property
+    def speaker(self):
+        return self.decoder_state.speaker
+
+    @speaker.setter
+    def speaker(self, value):
+        self.decoder_state.speaker = value
+
+    @property
+    def log_segments(self):
+        return self.decoder_state.log_segments
+
+    @log_segments.setter
+    def log_segments(self, value):
+        self.decoder_state.log_segments = value
+
+    @property
+    def max_context_tokens(self):
+        return self.decoder_state.max_context_tokens
+
+    @max_context_tokens.setter
+    def max_context_tokens(self, value):
+        self.decoder_state.max_context_tokens = value
+
+    @property
+    def max_text_len(self):
+        return self.decoder_state.max_text_len
+
+    @max_text_len.setter
+    def max_text_len(self, value):
+        self.decoder_state.max_text_len = value
+
+    @property
+    def CIFLinear(self):
+        return self.decoder_state.cif_linear
+
+    @CIFLinear.setter
+    def CIFLinear(self, value):
+        self.decoder_state.cif_linear = value
+
+    @property
+    def always_fire(self):
+        return self.decoder_state.always_fire
+
+    @always_fire.setter
+    def always_fire(self, value):
+        self.decoder_state.always_fire = value
+
+    @property
+    def never_fire(self):
+        return self.decoder_state.never_fire
+
+    @never_fire.setter
+    def never_fire(self, value):
+        self.decoder_state.never_fire = value
+
+    @property
+    def segments(self):
+        return self.decoder_state.segments
+
+    @segments.setter
+    def segments(self, value):
+        self.decoder_state.segments = value
+
+    @property
+    def tokens(self):
+        return self.decoder_state.tokens
+
+    @tokens.setter
+    def tokens(self, value):
+        self.decoder_state.tokens = value
+
+    @property
+    def initial_tokens(self):
+        return self.decoder_state.initial_tokens
+
+    @initial_tokens.setter
+    def initial_tokens(self, value):
+        self.decoder_state.initial_tokens = value
+
+    @property
+    def context(self):
+        return self.decoder_state.context
+
+    @context.setter
+    def context(self, value):
+        self.decoder_state.context = value
+
+    @property
+    def pending_incomplete_tokens(self):
+        return self.decoder_state.pending_incomplete_tokens
+
+    @pending_incomplete_tokens.setter
+    def pending_incomplete_tokens(self, value):
+        self.decoder_state.pending_incomplete_tokens = value
+
+    @property
+    def initial_token_length(self):
+        return self.decoder_state.initial_token_length
+
+    @initial_token_length.setter
+    def initial_token_length(self, value):
+        self.decoder_state.initial_token_length = value
+
+    @property
+    def sot_index(self):
+        return self.decoder_state.sot_index
+
+    @sot_index.setter
+    def sot_index(self, value):
+        self.decoder_state.sot_index = value
+
+    @property
+    def last_attend_frame(self):
+        return self.decoder_state.last_attend_frame
+
+    @last_attend_frame.setter
+    def last_attend_frame(self, value):
+        self.decoder_state.last_attend_frame = value
+
+    @property
+    def cumulative_time_offset(self):
+        return self.decoder_state.cumulative_time_offset
+
+    @cumulative_time_offset.setter
+    def cumulative_time_offset(self, value):
+        self.decoder_state.cumulative_time_offset = value
+
+    @property
+    def first_timestamp(self):
+        return self.decoder_state.first_timestamp
+
+    @first_timestamp.setter
+    def first_timestamp(self, value):
+        self.decoder_state.first_timestamp = value
+
+    @property
+    def global_time_offset(self):
+        return self.decoder_state.global_time_offset
+
+    @global_time_offset.setter
+    def global_time_offset(self, value):
+        self.decoder_state.global_time_offset = value
+
+    @property
+    def align_source(self):
+        return self.decoder_state.align_source
+
+    @align_source.setter
+    def align_source(self, value):
+        self.decoder_state.align_source = value
+
+    @property
+    def num_align_heads(self):
+        return self.decoder_state.num_align_heads
+
+    @num_align_heads.setter
+    def num_align_heads(self, value):
+        self.decoder_state.num_align_heads = value
+
+    @property
+    def token_decoder(self):
+        return self.decoder_state.token_decoder
+
+    @token_decoder.setter
+    def token_decoder(self, value):
+        self.decoder_state.token_decoder = value
+
+    @property
+    def inference(self):
+        return self.decoder_state.inference
+
+    @inference.setter
+    def inference(self, value):
+        self.decoder_state.inference = value
 
     def warmup(self, audio):
         try:
@@ -197,6 +377,9 @@ class AlignAtt:
             logger.info("Model warmed up successfully")
         except Exception as e:
             logger.exception(f"Model warmup failed: {e}")
+        finally:
+            # ensure session state is clean after warmup
+            self.decoder_state.reset_session()
 
     def create_tokenizer(self, language=None):
         self.tokenizer = tokenizer.get_tokenizer(
@@ -225,9 +408,12 @@ class AlignAtt:
             device=self.model.device).unsqueeze(0)
         self.initial_token_length = self.initial_tokens.shape[1]
         self.sot_index = self.tokenizer.sot_sequence.index(self.tokenizer.sot)
-#        self.segments = []
         logger.debug(f"init tokens after, {len(self.segments)}")
-        self.tokens = [self.initial_tokens]
+        if self.tokens is None:
+            self.tokens = []
+        else:
+            self.tokens.clear()
+        self.tokens.append(self.initial_tokens)
 
     def trim_context(self):
         logger.info("Trimming context")
@@ -253,18 +439,25 @@ class AlignAtt:
         logger.info(f"Context after trim: {self.context.text} (len: {l})")
 
 
-    def logits(self, tokens: torch.Tensor, audio_features: torch.Tensor) -> torch.Tensor:
+    def logits(self, tokens: torch.Tensor, audio_features: torch.Tensor, return_attn: bool = False):
         if self.cfg.decoder_type == "greedy":
-            logit = self.model.decoder(tokens, audio_features, kv_cache=self.kv_cache)
+            result = self.model.decoder(
+                tokens, audio_features, kv_cache=self.decoder_state.kv_cache, return_attn=return_attn
+            )
         else:
             logger.debug(f"Logits shape: {tokens.shape}")
-            logit = self.inference.logits(tokens, audio_features)
-        return logit
+            result = self.inference.logits(tokens, audio_features, return_attn=return_attn)
+        if return_attn:
+            logits, attn_list = result
+            return logits, attn_list
+        return result
     
 
     def refresh_segment(self, complete=False):
 
         logger.debug("Refreshing segment:")
+        # reset session buffers and timing
+        self.decoder_state.reset_session()
         self.init_tokens()
         self.last_attend_frame = -self.cfg.rewind_threshold       
         # self.detected_language = None
@@ -272,10 +465,10 @@ class AlignAtt:
         self.init_context()
         logger.debug(f"Context: {self.context}")
         if not complete and len(self.segments) > 2:
-            self.segments = self.segments[-2:]
+            self.segments[:] = self.segments[-2:]
         else:
             logger.debug("removing all segments.")
-            self.segments = []
+            self.segments.clear()
         self.log_segments += 1
 
         self.pending_incomplete_tokens = []
@@ -348,10 +541,9 @@ class AlignAtt:
         '''clean the cache that stores the attention matrices and kv_cache.
         It must be called every time after generation with the model.'''
         # cleaning cache
-        self.dec_attns = []
-        self.kv_cache = {}
+        self.decoder_state.reset_kv_cache()
         if self.decoder_type == "beam":
-            self.inference.kv_cache = self.kv_cache
+            self.inference.attach_state(self.decoder_state)
             self.token_decoder.reset()
 
     @torch.no_grad()
@@ -497,7 +689,7 @@ class AlignAtt:
                 # only need to use the last token except in the first forward pass
                 tokens_for_logits = current_tokens[:,-1:]
 
-            logits = self.logits(tokens_for_logits, encoder_feature) # B, len(tokens), token dict size
+            logits, attn_list = self.logits(tokens_for_logits, encoder_feature, return_attn=True) # B, len(tokens), token dict size
 
             if new_segment and self.tokenizer.no_speech is not None:
                 probs_at_sot = logits[:, self.sot_index, :].float().softmax(dim=-1)
@@ -519,15 +711,20 @@ class AlignAtt:
             self.debug_print_tokens(current_tokens)
 
             attn_of_alignment_heads = [[] for _ in range(self.num_align_heads)]
-            for i, attn_mat in enumerate(self.dec_attns):
+            for i, attn_mat in enumerate(attn_list):
+                if attn_mat is None:
+                    continue
+                attn_mat = F.softmax(attn_mat, dim=-1)
+                # attn_mat: (beam, heads, token_len, audio_len) or (heads, token_len, audio_len)
+                if attn_mat.dim() == 4 and attn_mat.shape[0] == 1:
+                    attn_mat = attn_mat.squeeze(0)
                 layer_rank = int(i % len(self.model.decoder.blocks))
                 align_heads_in_layer = self.align_source.get(layer_rank, [])
                 if len(align_heads_in_layer) == 0:
                     continue
                 for align_head_rank, head_id in align_heads_in_layer:
-                    if self.cfg.beam_size == 1:
-                        a = attn_mat[head_id, :, :]
-                        a = a.unsqueeze(0)
+                    if attn_mat.dim() == 3:
+                        a = attn_mat[head_id, :, :].unsqueeze(0)
                     else:
                         a = attn_mat[:, head_id, :, :]
                     attn_of_alignment_heads[align_head_rank].append(a)

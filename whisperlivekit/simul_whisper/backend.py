@@ -140,7 +140,6 @@ class SimulStreamingOnlineProcessor:
         gc.collect()
         torch.cuda.empty_cache()
         # self.asr.new_model_to_stack()
-        self.model.remove_hooks()
 
 class SimulStreamingASR():
     """SimulStreaming backend with AlignAtt policy."""
@@ -314,7 +313,6 @@ class SimulStreamingASR():
                     fw_encoder=self.fw_encoder,
                 )
                 temp_model.warmup(warmup_audio)
-                temp_model.remove_hooks()
             else:
                 # For standard encoder, use the original transcribe warmup
                 warmup_audio = load_file(self.warmup_file)
