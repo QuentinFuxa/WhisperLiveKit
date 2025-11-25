@@ -1,6 +1,7 @@
 import logging
 import os
 from time import time
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -20,6 +21,7 @@ from whisperlivekit.whisper.timing import median_filter
 from ..timed_objects import PUNCTUATION_MARKS
 from .beam import BeamPyTorchInference
 from .config import AlignAttConfig
+from .decoder_state import DecoderState
 from .eow_detection import fire_at_boundary, load_cif
 from .token_buffer import TokenBuffer
 
@@ -53,6 +55,30 @@ def load_coreml_encoder():
 
 
 class AlignAtt:
+    """
+    Alignment-based Attention decoder for SimulStreaming.
+    
+    This class is now hookless - the model can be shared across multiple
+    sessions, with each session maintaining its own DecoderState.
+    """
+    
+    # Property accessors for backward compatibility
+    @property
+    def speaker(self):
+        return self.state.speaker
+    
+    @speaker.setter
+    def speaker(self, value):
+        self.state.speaker = value
+    
+    @property
+    def global_time_offset(self):
+        return self.state.global_time_offset
+    
+    @global_time_offset.setter
+    def global_time_offset(self, value):
+        self.state.global_time_offset = value
+    
     def __init__(
             self, 
             cfg: AlignAttConfig,
@@ -60,8 +86,7 @@ class AlignAtt:
             mlx_encoder=None,
             fw_encoder=None,
         ) -> None:
-        self.log_segments = 0
-        
+        # Shared model reference (can be shared across sessions)
         self.model = loaded_model
         self.mlx_encoder = mlx_encoder
         self.fw_encoder = fw_encoder            
@@ -75,119 +100,89 @@ class AlignAtt:
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
         logger.info(f"Model dimensions: {self.model.dims}")
-        self.speaker = -1
         self.decode_options = DecodingOptions(
-            language = cfg.language, 
-            without_timestamps = True,
+            language=cfg.language, 
+            without_timestamps=True,
             task=cfg.task
         )
         self.tokenizer_is_multilingual = cfg.tokenizer_is_multilingual
-        self.create_tokenizer(cfg.language if cfg.language != "auto" else None)
-        # self.create_tokenizer('en')
-        self.detected_language = cfg.language if cfg.language != "auto" else None
-        self.global_time_offset = 0.0
-        self.reset_tokenizer_to_auto_next_call = False
         
         self.max_text_len = self.model.dims.n_text_ctx
         self.num_decoder_layers = len(self.model.decoder.blocks)
         self.cfg = cfg
-        self.l_hooks = []
-
-        # model to detect end-of-word boundary at the end of the segment
-        self.CIFLinear, self.always_fire, self.never_fire = load_cif(cfg,
-                                                                     n_audio_state=self.model.dims.n_audio_state,
-                                                                     device=self.model.device)
-
-        # install hooks to access encoder-decoder attention
-        self.dec_attns = []
-        def layer_hook(module, net_input, net_output):
-            # net_output[1]: B*num_head*token_len*audio_len
-            t = F.softmax(net_output[1], dim=-1)
-            self.dec_attns.append(t.squeeze(0))
-        for b in self.model.decoder.blocks:
-            hook = b.cross_attn.register_forward_hook(layer_hook)
-            self.l_hooks.append(hook)
-        
-        self.kv_cache = {}
-        def kv_hook(module: torch.nn.Linear, _, net_output: torch.Tensor):
-            if module.cache_id not in self.kv_cache or net_output.shape[1] > self.max_text_len:
-                # save as-is, for the first token or cross attention
-                self.kv_cache[module.cache_id] = net_output
-            else:
-                x = self.kv_cache[module.cache_id]
-                self.kv_cache[module.cache_id] = torch.cat([x, net_output], dim=1).detach()
-            return self.kv_cache[module.cache_id] 
-
-        for i,b in enumerate(self.model.decoder.blocks):
-            hooks = [
-                b.attn.key.register_forward_hook(kv_hook),
-                b.attn.value.register_forward_hook(kv_hook),
-                b.cross_attn.key.register_forward_hook(kv_hook),
-                b.cross_attn.value.register_forward_hook(kv_hook),
-            ]
-            self.l_hooks.extend(hooks)
-
-        self.align_source = {}
-        self.num_align_heads = 0
-        for layer_rank, head_id in self.model.alignment_heads.indices().T:
-            layer_rank = layer_rank.item()
-            heads = self.align_source.get(layer_rank, [])
-            heads.append((self.num_align_heads, head_id.item()))
-            self.align_source[layer_rank] = heads
-            self.num_align_heads += 1
-
-
-        # tokens to be suppressed from decoding, to prevent hallucinations
-        suppress_tokens = [
-                self.tokenizer.transcribe,
-                self.tokenizer.translate,
-                self.tokenizer.sot,
-                self.tokenizer.sot_prev,
-                self.tokenizer.sot_lm,
-                # self.tokenizer.eot 
-                self.tokenizer.no_timestamps,  # added by DM
-            ] + list(self.tokenizer.all_language_tokens)  # added by DM
-        if self.tokenizer.no_speech is not None:
-            suppress_tokens.append(self.tokenizer.no_speech)
-        suppress_tokens =  tuple(sorted(set(suppress_tokens)))
-        logger.debug(f"Suppress tokens: {suppress_tokens}")
-        sup_tokens = SuppressTokens(suppress_tokens)
-        self.suppress_tokens = lambda logits: sup_tokens.apply(logits, None)
-        # blank tokens are suppresed for new segments near the line 334
-
-        # it's going to be regenerated after lang id
-        self.segments = []
-        self.init_tokens()
-        
-        self.last_attend_frame = -self.cfg.rewind_threshold
-        self.cumulative_time_offset = 0.0
-        self.first_timestamp = None
 
         if self.cfg.max_context_tokens is None:
             self.max_context_tokens = self.max_text_len
         else:
             self.max_context_tokens = self.cfg.max_context_tokens
+
+        # Initialize per-session state
+        self.state = DecoderState()
+        self._init_state(cfg)
+        
+    def _init_state(self, cfg: AlignAttConfig):
+        """Initialize the per-session decoder state."""
+        # Create tokenizer
+        self.create_tokenizer(cfg.language if cfg.language != "auto" else None)
+        self.state.tokenizer = self.tokenizer
+        self.state.detected_language = cfg.language if cfg.language != "auto" else None
+        
+        # Timing state
+        self.state.global_time_offset = 0.0
+        self.state.last_attend_frame = -cfg.rewind_threshold
+        self.state.speaker = -1
+        
+        # CIF helpers for end-of-word boundary detection
+        self.state.CIFLinear, self.state.always_fire, self.state.never_fire = load_cif(
+            cfg,
+            n_audio_state=self.model.dims.n_audio_state,
+            device=self.model.device
+        )
+
+        # Build alignment source mapping from model's alignment_heads
+        self.state.align_source = {}
+        self.state.num_align_heads = 0
+        for layer_rank, head_id in self.model.alignment_heads.indices().T:
+            layer_rank = layer_rank.item()
+            heads = self.state.align_source.get(layer_rank, [])
+            heads.append((self.state.num_align_heads, head_id.item()))
+            self.state.align_source[layer_rank] = heads
+            self.state.num_align_heads += 1
+
+        # Build suppress tokens function
+        suppress_tokens = [
+            self.tokenizer.transcribe,
+            self.tokenizer.translate,
+            self.tokenizer.sot,
+            self.tokenizer.sot_prev,
+            self.tokenizer.sot_lm,
+            self.tokenizer.no_timestamps,
+        ] + list(self.tokenizer.all_language_tokens)
+        if self.tokenizer.no_speech is not None:
+            suppress_tokens.append(self.tokenizer.no_speech)
+        suppress_tokens = tuple(sorted(set(suppress_tokens)))
+        logger.debug(f"Suppress tokens: {suppress_tokens}")
+        sup_tokens = SuppressTokens(suppress_tokens)
+        self.state.suppress_tokens_fn = lambda logits: sup_tokens.apply(logits, None)
+
+        # Initialize tokens
+        self.init_tokens()
         self.init_context()
 
-        # decoder type: greedy or beam
+        # Set up decoder type
+        self.state.decoder_type = cfg.decoder_type
         if cfg.decoder_type == "greedy":
             logger.info("Using greedy decoder")
-            self.token_decoder = GreedyDecoder(0.0, self.tokenizer.eot)
-            self.decoder_type = "greedy"
-
+            self.state.token_decoder = GreedyDecoder(0.0, self.tokenizer.eot)
         elif cfg.decoder_type == "beam":
-            self.decoder_type = "beam"
-            self.inference = BeamPyTorchInference(self.model, self.initial_token_length)
-            self.inference.kv_cache = self.kv_cache
-
-            self.token_decoder = BeamSearchDecoder(inference=self.inference, eot=self.tokenizer.eot, beam_size=cfg.beam_size)
-
-        # Tokens to carry over to next chunk for incomplete UTF-8 characters
-        self.pending_incomplete_tokens = []
-
-    def remove_hooks(self):
-        for hook in self.l_hooks:
-            hook.remove()
+            logger.info("Using beam decoder")
+            self.state.inference = BeamPyTorchInference(self.model, self.state.initial_token_length)
+            self.state.inference.kv_cache = self.state.kv_cache
+            self.state.token_decoder = BeamSearchDecoder(
+                inference=self.state.inference, 
+                eot=self.tokenizer.eot, 
+                beam_size=cfg.beam_size
+            )
 
     def warmup(self, audio):
         try:
@@ -205,96 +200,100 @@ class AlignAtt:
             num_languages=self.model.num_languages,
             task=self.decode_options.task
         )
+        self.state.tokenizer = self.tokenizer
 
     def init_context(self):
         kw = {'tokenizer': self.tokenizer, 
               'device': self.model.device, 
               'prefix_token_ids': [self.tokenizer.sot_prev]}
-        self.context = TokenBuffer.empty(**kw)
+        self.state.context = TokenBuffer.empty(**kw)
         if self.cfg.static_init_prompt is not None:
-            self.context = TokenBuffer.from_text(self.cfg.static_init_prompt, **kw)
+            self.state.context = TokenBuffer.from_text(self.cfg.static_init_prompt, **kw)
         if self.cfg.init_prompt is not None:
-            self.context.text += self.cfg.init_prompt
+            self.state.context.text += self.cfg.init_prompt
 
     def init_tokens(self):
-        logger.debug(f"init tokens, {len(self.segments)}")
+        logger.debug(f"init tokens, {len(self.state.segments)}")
         # init tokens (mandatory prompt)
-        self.initial_tokens = torch.tensor(
+        self.state.initial_tokens = torch.tensor(
             self.tokenizer.sot_sequence_including_notimestamps, 
             dtype=torch.long, 
             device=self.model.device).unsqueeze(0)
-        self.initial_token_length = self.initial_tokens.shape[1]
-        self.sot_index = self.tokenizer.sot_sequence.index(self.tokenizer.sot)
-#        self.segments = []
-        logger.debug(f"init tokens after, {len(self.segments)}")
-        self.tokens = [self.initial_tokens]
+        self.state.initial_token_length = self.state.initial_tokens.shape[1]
+        self.state.sot_index = self.tokenizer.sot_sequence.index(self.tokenizer.sot)
+        logger.debug(f"init tokens after, {len(self.state.segments)}")
+        self.state.tokens = [self.state.initial_tokens]
 
     def trim_context(self):
         logger.info("Trimming context")
-        c = len(self.context.as_token_ids()) - len(self.context.prefix_token_ids)
-#        logger.debug(f"c= {len(self.context.as_token_ids())}, {len(self.context.prefix_token_ids)}")
-        logger.info(f"Context text: {self.context.as_text()}")
-#        logger.debug(f"Context tensor: {self.context.as_tensor()}")
-        l = sum(t.shape[1] for t in self.tokens) + c
-#        logger.debug(f"len {l}, c {c}, max_context_tokens {self.max_context_tokens}")
+        c = len(self.state.context.as_token_ids()) - len(self.state.context.prefix_token_ids)
+        logger.info(f"Context text: {self.state.context.as_text()}")
+        l = sum(t.shape[1] for t in self.state.tokens) + c
         if self.cfg.static_init_prompt is None:
             after = 0
         else:
             after = len(self.cfg.static_init_prompt)
-#        logger.debug(f"len {l}, c {c}, max_context_tokens {self.max_context_tokens}")
         while c > self.max_context_tokens or l > self.max_text_len - 20:
-            t = self.context.trim_words(after=after)
+            t = self.state.context.trim_words(after=after)
             l -= t
             c -= t
             logger.debug(f"len {l}, c {c}, max_context_tokens {self.max_context_tokens}")
             if t == 0:
                 break
-#        logger.debug(f"len {l}, c {c}, max_context_tokens {self.max_context_tokens}")
-        logger.info(f"Context after trim: {self.context.text} (len: {l})")
+        logger.info(f"Context after trim: {self.state.context.text} (len: {l})")
 
 
-    def logits(self, tokens: torch.Tensor, audio_features: torch.Tensor) -> torch.Tensor:
-        if self.cfg.decoder_type == "greedy":
-            logit = self.model.decoder(tokens, audio_features, kv_cache=self.kv_cache)
+    def logits(
+        self, 
+        tokens: torch.Tensor, 
+        audio_features: torch.Tensor,
+        return_cross_attn: bool = False
+    ):
+        """Get logits from decoder, optionally returning cross-attention weights."""
+        if self.state.decoder_type == "greedy":
+            return self.model.decoder(
+                tokens, audio_features, 
+                kv_cache=self.state.kv_cache,
+                return_cross_attn=return_cross_attn
+            )
         else:
             logger.debug(f"Logits shape: {tokens.shape}")
-            logit = self.inference.logits(tokens, audio_features)
-        return logit
+            return self.state.inference.logits(
+                tokens, audio_features,
+                return_cross_attn=return_cross_attn
+            )
     
 
     def refresh_segment(self, complete=False):
-
         logger.debug("Refreshing segment:")
         self.init_tokens()
-        self.last_attend_frame = -self.cfg.rewind_threshold       
-        # self.detected_language = None
-        self.cumulative_time_offset = 0.0
+        self.state.last_attend_frame = -self.cfg.rewind_threshold       
+        self.state.cumulative_time_offset = 0.0
         self.init_context()
-        logger.debug(f"Context: {self.context}")
-        if not complete and len(self.segments) > 2:
-            self.segments = self.segments[-2:]
+        logger.debug(f"Context: {self.state.context}")
+        if not complete and len(self.state.segments) > 2:
+            self.state.segments = self.state.segments[-2:]
         else:
             logger.debug("removing all segments.")
-            self.segments = []
-        self.log_segments += 1
-
-        self.pending_incomplete_tokens = []
+            self.state.segments = []
+        self.state.log_segments += 1
+        self.state.pending_incomplete_tokens = []
 
     def fire_at_boundary(self, chunked_encoder_feature: torch.Tensor):
-        if self.always_fire: return True
-        if self.never_fire: return False
-        return fire_at_boundary(chunked_encoder_feature, self.CIFLinear)
-
+        if self.state.always_fire: 
+            return True
+        if self.state.never_fire: 
+            return False
+        return fire_at_boundary(chunked_encoder_feature, self.state.CIFLinear)
 
     def _current_tokens(self):
-
-        toks = self.tokens
+        toks = self.state.tokens
         # very first infer: duplicate start of seq to beam_size
         if toks[0].shape[0] == 1:
-            toks[0] = toks[0].repeat_interleave(self.cfg.beam_size,dim=0)
+            toks[0] = toks[0].repeat_interleave(self.cfg.beam_size, dim=0)
 
-        if not self.context.is_empty():
-            context_toks = self.context.as_tensor_beam(self.cfg.beam_size, device=self.model.device)
+        if not self.state.context.is_empty():
+            context_toks = self.state.context.as_tensor_beam(self.cfg.beam_size, device=self.model.device)
             toks = [context_toks] + toks
 
         # make it one tensor
@@ -314,7 +313,7 @@ class AlignAtt:
     ### audio buffer 
 
     def segments_len(self):
-        segments_len = sum(s.shape[0] for s in self.segments) / 16000
+        segments_len = sum(s.shape[0] for s in self.state.segments) / 16000
         return segments_len
 
     def _apply_minseglen(self):
@@ -327,42 +326,36 @@ class AlignAtt:
 
     def insert_audio(self, segment=None):
         if segment is not None:
-            self.segments.append(segment)
+            self.state.segments.append(segment)
 
         removed_len = 0
         # len of audio is bigger than buffer_len. Going to remove the first segment
         segments_len = self.segments_len()
-        while len(self.segments) > 1 and segments_len > self.cfg.audio_max_len:
-            removed_len = self.segments[0].shape[0] / 16000
+        while len(self.state.segments) > 1 and segments_len > self.cfg.audio_max_len:
+            removed_len = self.state.segments[0].shape[0] / 16000
             segments_len -= removed_len
-            self.last_attend_frame -= int(TOKENS_PER_SECOND*removed_len)
-            self.cumulative_time_offset += removed_len  # Track cumulative time removed
-            self.segments = self.segments[1:]
-            logger.debug(f"remove segments: {len(self.segments)} {len(self.tokens)}, cumulative offset: {self.cumulative_time_offset:.2f}s")
-            if len(self.tokens) > 1:
-                self.context.append_token_ids(self.tokens[1][0,:].tolist())
-                self.tokens = [self.initial_tokens] + self.tokens[2:]
+            self.state.last_attend_frame -= int(TOKENS_PER_SECOND * removed_len)
+            self.state.cumulative_time_offset += removed_len  # Track cumulative time removed
+            self.state.segments = self.state.segments[1:]
+            logger.debug(f"remove segments: {len(self.state.segments)} {len(self.state.tokens)}, cumulative offset: {self.state.cumulative_time_offset:.2f}s")
+            if len(self.state.tokens) > 1:
+                self.state.context.append_token_ids(self.state.tokens[1][0, :].tolist())
+                self.state.tokens = [self.state.initial_tokens] + self.state.tokens[2:]
         return removed_len
 
     def _clean_cache(self):
-        '''clean the cache that stores the attention matrices and kv_cache.
-        It must be called every time after generation with the model.'''
-        # cleaning cache
-        self.dec_attns = []
-        self.kv_cache = {}
-        if self.decoder_type == "beam":
-            self.inference.kv_cache = self.kv_cache
-            self.token_decoder.reset()
+        """Clean the kv_cache after each inference step."""
+        self.state.clean_cache()
 
     @torch.no_grad()
     def lang_id(self, encoder_features):
         """Language detection from encoder features.
-        This code is trimmed and copy-pasted from whisper.decoding.detect_language .
+        This code is trimmed and copy-pasted from whisper.decoding.detect_language.
         """
-    
         # forward pass using a single token, startoftranscript
         n_audio = encoder_features.shape[0]
         x = torch.tensor([[self.tokenizer.sot]] * n_audio).to(self.model.device)  # [n_audio, 1]
+        # Note: don't use kv_cache for language detection
         logits = self.model.logits(x, encoder_features)[:, 0]
 
         # collect detected languages; suppress all non-language tokens
@@ -392,19 +385,19 @@ class AlignAtt:
     @torch.no_grad()
     def infer(self, is_last=False):
         new_segment = True
-        if len(self.segments) == 0:
+        if len(self.state.segments) == 0:
             logger.debug("No segments, nothing to do")
             return []
         if not self._apply_minseglen():
             logger.debug(f"applied minseglen {self.cfg.audio_min_len} > {self.segments_len()}.")
-            input_segments = torch.cat(self.segments, dim=0)
+            input_segments = torch.cat(self.state.segments, dim=0)
             return []
 
         # input_segments is concatenation of audio, it's one array
-        if len(self.segments) > 1:
-            input_segments = torch.cat(self.segments, dim=0)
+        if len(self.state.segments) > 1:
+            input_segments = torch.cat(self.state.segments, dim=0)
         else:
-            input_segments = self.segments[0]
+            input_segments = self.state.segments[0]
 
         beg_encode = time()
         if self.use_mlcore:
@@ -458,18 +451,18 @@ class AlignAtt:
         end_encode = time()
         # print('Encoder duration:', end_encode-beg_encode)
                 
-        if self.cfg.language == "auto" and self.detected_language is None and self.first_timestamp:
-            seconds_since_start = self.segments_len() - self.first_timestamp
+        if self.cfg.language == "auto" and self.state.detected_language is None and self.state.first_timestamp:
+            seconds_since_start = self.segments_len() - self.state.first_timestamp
             if seconds_since_start >= 2.0:
                 language_tokens, language_probs = self.lang_id(encoder_feature) 
                 top_lan, p = max(language_probs[0].items(), key=lambda x: x[1])
                 print(f"Detected language: {top_lan} with p={p:.4f}")
                 self.create_tokenizer(top_lan)
-                self.last_attend_frame = -self.cfg.rewind_threshold
-                self.cumulative_time_offset = 0.0
+                self.state.last_attend_frame = -self.cfg.rewind_threshold
+                self.state.cumulative_time_offset = 0.0
                 self.init_tokens()
                 self.init_context()
-                self.detected_language = top_lan
+                self.state.detected_language = top_lan
                 logger.info(f"Tokenizer language: {self.tokenizer.language}, {self.tokenizer.sot_sequence_including_notimestamps}")
 
         self.trim_context()
@@ -489,92 +482,80 @@ class AlignAtt:
         
         l_absolute_timestamps = []
         
-        while not completed and current_tokens.shape[1] < self.max_text_len: # bos is 3 tokens
+        accumulated_cross_attns = []
+        
+        while not completed and current_tokens.shape[1] < self.max_text_len:  # bos is 3 tokens
 
             if new_segment:
                 tokens_for_logits = current_tokens
             else:
                 # only need to use the last token except in the first forward pass
-                tokens_for_logits = current_tokens[:,-1:]
+                tokens_for_logits = current_tokens[:, -1:]
 
-            logits = self.logits(tokens_for_logits, encoder_feature) # B, len(tokens), token dict size
+            # Get logits and cross-attention weights from decoder
+            result = self.logits(tokens_for_logits, encoder_feature, return_cross_attn=True)
+            logits, cross_attns = result
+            
+            # Accumulate cross-attention from this forward pass
+            accumulated_cross_attns.append(cross_attns)
 
             if new_segment and self.tokenizer.no_speech is not None:
-                probs_at_sot = logits[:, self.sot_index, :].float().softmax(dim=-1)
+                probs_at_sot = logits[:, self.state.sot_index, :].float().softmax(dim=-1)
                 no_speech_probs = probs_at_sot[:, self.tokenizer.no_speech].tolist()
                 if no_speech_probs[0] > self.cfg.nonspeech_prob:
                     logger.info("no speech, stop")
                     break
 
-            logits = logits[:, -1, :] # logits for the last token
+            logits = logits[:, -1, :]  # logits for the last token
 
-            # supress blank tokens only at the beginning of the segment
+            # suppress blank tokens only at the beginning of the segment
             if new_segment:
                 logits[:, self.tokenizer.encode(" ") + [self.tokenizer.eot]] = -np.inf
             new_segment = False
-            self.suppress_tokens(logits)
-            current_tokens, completed = self.token_decoder.update(current_tokens, logits, sum_logprobs)
+            self.state.suppress_tokens_fn(logits)
+            current_tokens, completed = self.state.token_decoder.update(current_tokens, logits, sum_logprobs)
 
             logger.debug(f"Decoding completed: {completed}, sum_logprobs: {sum_logprobs.tolist()}, tokens: ")
             self.debug_print_tokens(current_tokens)
 
-            attn_of_alignment_heads = [[] for _ in range(self.num_align_heads)]
-            for i, attn_mat in enumerate(self.dec_attns):
-                layer_rank = int(i % len(self.model.decoder.blocks))
-                align_heads_in_layer = self.align_source.get(layer_rank, [])
-                if len(align_heads_in_layer) == 0:
-                    continue
-                for align_head_rank, head_id in align_heads_in_layer:
-                    if self.cfg.beam_size == 1:
-                        a = attn_mat[head_id, :, :]
-                        a = a.unsqueeze(0)
-                    else:
-                        a = attn_mat[:, head_id, :, :]
-                    attn_of_alignment_heads[align_head_rank].append(a)
-            tmp = []
-            for mat in attn_of_alignment_heads:
-                t = torch.cat(mat, dim=1)
-                tmp.append(t) 
-            attn_of_alignment_heads = torch.stack(tmp, dim=1)
-            std, mean = torch.std_mean(attn_of_alignment_heads, dim=-2, keepdim=True, unbiased=False)
-            attn_of_alignment_heads = (attn_of_alignment_heads - mean) / std
-            attn_of_alignment_heads = median_filter(attn_of_alignment_heads, 7) # from whisper.timing
-            attn_of_alignment_heads = attn_of_alignment_heads.mean(dim=1)
-            attn_of_alignment_heads = attn_of_alignment_heads[:,:, :content_mel_len]
+            # Process accumulated cross-attention weights for alignment
+            attn_of_alignment_heads = self._process_cross_attention(accumulated_cross_attns, content_mel_len)
 
             # for each beam, the most attended frame is:
-            most_attended_frames = torch.argmax(attn_of_alignment_heads[:,-1,:], dim=-1)
+            most_attended_frames = torch.argmax(attn_of_alignment_heads[:, -1, :], dim=-1)
             
             # Calculate absolute timestamps accounting for cumulative offset
-            absolute_timestamps = [(frame * 0.02 + self.cumulative_time_offset) for frame in most_attended_frames.tolist()]
+            absolute_timestamps = [
+                (frame * 0.02 + self.state.cumulative_time_offset) 
+                for frame in most_attended_frames.tolist()
+            ]
             
             logger.debug(str(most_attended_frames.tolist()) + " most att frames")
-            logger.debug(f"Absolute timestamps: {absolute_timestamps} (offset: {self.cumulative_time_offset:.2f}s)")
+            logger.debug(f"Absolute timestamps: {absolute_timestamps} (offset: {self.state.cumulative_time_offset:.2f}s)")
 
             most_attended_frame = most_attended_frames[0].item()
             l_absolute_timestamps.append(absolute_timestamps[0])
 
             logger.debug("current tokens" + str(current_tokens.shape))
             if completed:
-            #    # stripping the last token, the eot
+                # stripping the last token, the eot
                 current_tokens = current_tokens[:, :-1]
                 break
             
             # for some rare cases where the attention fails
-            if not is_last and self.last_attend_frame - most_attended_frame > self.cfg.rewind_threshold:
-                # TODO: check this
+            if not is_last and self.state.last_attend_frame - most_attended_frame > self.cfg.rewind_threshold:
                 if current_tokens.shape[1] > 1 and current_tokens[0, -2] >= DEC_PAD:
-                    logger.debug("ommit rewinding from special tokens")
-                    self.last_attend_frame = most_attended_frame
+                    logger.debug("omit rewinding from special tokens")
+                    self.state.last_attend_frame = most_attended_frame
                 else:
                     logger.debug(
                         f"[rewind detected] current attention pos: {most_attended_frame}, "
-                        f"last attention pos: {self.last_attend_frame}; omit this segment")
-                    self.last_attend_frame = -self.cfg.rewind_threshold
-                    current_tokens = torch.cat(self.tokens, dim=1) if len(self.tokens) > 0 else self.tokens[0]
+                        f"last attention pos: {self.state.last_attend_frame}; omit this segment")
+                    self.state.last_attend_frame = -self.cfg.rewind_threshold
+                    current_tokens = torch.cat(self.state.tokens, dim=1) if len(self.state.tokens) > 0 else self.state.tokens[0]
                     break
             else:
-                self.last_attend_frame = most_attended_frame
+                self.state.last_attend_frame = most_attended_frame
 
             if content_mel_len - most_attended_frame <= (4 if is_last else self.cfg.frame_threshold):
                 logger.debug(f"attention reaches the end: {most_attended_frame}/{content_mel_len}")
@@ -594,12 +575,12 @@ class AlignAtt:
         tokens_to_split = current_tokens[0, token_len_before_decoding:]
 
         # Prepend pending tokens from previous chunk if any
-        if self.pending_incomplete_tokens:
-            logger.debug(f"[UTF-8 Fix] Prepending {len(self.pending_incomplete_tokens)} pending tokens: {self.pending_incomplete_tokens}")
-            pending_tensor = torch.tensor(self.pending_incomplete_tokens, dtype=torch.long, device=self.device)
+        if self.state.pending_incomplete_tokens:
+            logger.debug(f"[UTF-8 Fix] Prepending {len(self.state.pending_incomplete_tokens)} pending tokens: {self.state.pending_incomplete_tokens}")
+            pending_tensor = torch.tensor(self.state.pending_incomplete_tokens, dtype=torch.long, device=self.device)
             tokens_to_split = torch.cat([pending_tensor, tokens_to_split])
 
-        if fire_detected or is_last: #or punctuation_stop:
+        if fire_detected or is_last:
             new_hypothesis = tokens_to_split.flatten().tolist()
             split_words, split_tokens = self.tokenizer.split_to_word_tokens(new_hypothesis)
         else:
@@ -610,20 +591,18 @@ class AlignAtt:
             else:
                 new_hypothesis = []
 
-
         logger.debug(f"new_hypothesis: {new_hypothesis}")
         new_tokens = torch.tensor([new_hypothesis], dtype=torch.long).repeat_interleave(self.cfg.beam_size, dim=0).to(
             device=self.device,
         )
-        self.tokens.append(new_tokens)
+        self.state.tokens.append(new_tokens)
 
         logger.info(f"Output: {self.tokenizer.decode(new_hypothesis)}")
         
         self._clean_cache()
 
-        if len(l_absolute_timestamps) >=2 and self.first_timestamp is None:
-            self.first_timestamp = l_absolute_timestamps[0]
-            
+        if len(l_absolute_timestamps) >= 2 and self.state.first_timestamp is None:
+            self.state.first_timestamp = l_absolute_timestamps[0]
 
         timestamped_words = []
         timestamp_idx = 0
@@ -642,20 +621,85 @@ class AlignAtt:
             timestamp_idx += len(word_tokens)
 
             timestamp_entry = ASRToken(
-                    start=round(current_timestamp, 2),
-                    end=round(current_timestamp + 0.1, 2),
-                    text= word,
-                    speaker=self.speaker,
-                    detected_language=self.detected_language
-                ).with_offset(
-                    self.global_time_offset
+                start=round(current_timestamp, 2),
+                end=round(current_timestamp + 0.1, 2),
+                text=word,
+                speaker=self.state.speaker,
+                detected_language=self.state.detected_language
+            ).with_offset(
+                self.state.global_time_offset
             )
             timestamped_words.append(timestamp_entry)
 
         # Hold incomplete tokens for next chunk
-        self.pending_incomplete_tokens = []
+        self.state.pending_incomplete_tokens = []
         if split_words and replacement_char in split_words[-1]:
-            self.pending_incomplete_tokens = split_tokens[-1]
-            logger.warning(f"[UTF-8 Fix] Holding {len(self.pending_incomplete_tokens)} incomplete tokens for next chunk: {self.pending_incomplete_tokens}")
+            self.state.pending_incomplete_tokens = split_tokens[-1]
+            logger.warning(f"[UTF-8 Fix] Holding {len(self.state.pending_incomplete_tokens)} incomplete tokens for next chunk: {self.state.pending_incomplete_tokens}")
 
         return timestamped_words
+
+    def _process_cross_attention(
+        self, 
+        cross_attns: List[torch.Tensor], 
+        content_mel_len: int
+    ) -> torch.Tensor:
+        """
+        Process cross-attention weights from decoder layers for alignment.
+        
+        Args:
+            cross_attns: List of cross-attention tensors from each decoder layer.
+                         Each tensor has shape (batch, n_head, seq_len, audio_len)
+            content_mel_len: Length of actual audio content in mel frames
+            
+        Returns processed attention tensor for alignment, shape (batch, seq_len, content_mel_len)
+        """
+        attn_of_alignment_heads = [[] for _ in range(self.state.num_align_heads)]
+        num_decoder_layers = len(self.model.decoder.blocks)
+
+        if cross_attns and isinstance(cross_attns[0], list):
+            flattened_attns: List[torch.Tensor] = [attn for layer_list in cross_attns for attn in layer_list]
+        else:
+            flattened_attns = cross_attns
+        
+        for idx, attn_mat in enumerate(flattened_attns):
+            layer_rank = idx % num_decoder_layers
+            # attn_mat shape: (batch, n_head, seq_len, audio_len) or (n_head, seq_len, audio_len) for batch=1
+            align_heads_in_layer = self.state.align_source.get(layer_rank, [])
+            if len(align_heads_in_layer) == 0:
+                continue
+            
+            attn_mat = F.softmax(attn_mat, dim=-1)
+            
+            for align_head_rank, head_id in align_heads_in_layer:
+                if self.cfg.beam_size == 1:
+                    # (n_head, seq_len, audio_len) when squeezed
+                    if attn_mat.dim() == 4:
+                        a = attn_mat[0, head_id, :, :]  # (seq_len, audio_len)
+                    else:
+                        a = attn_mat[head_id, :, :]
+                    a = a.unsqueeze(0)  # (1, seq_len, audio_len)
+                else:
+                    # attn_mat: (batch, n_head, seq_len, audio_len)
+                    a = attn_mat[:, head_id, :, :]  # (batch, seq_len, audio_len)
+                attn_of_alignment_heads[align_head_rank].append(a)
+        
+        tmp = []
+        for mat in attn_of_alignment_heads:
+            if mat:
+                t = torch.cat(mat, dim=1)  # (batch, total_seq_len, audio_len)
+                tmp.append(t)
+        
+        if not tmp:
+            return torch.zeros(self.cfg.beam_size, 1, content_mel_len, device=self.device)
+        
+        # stck al heads: (batch, num_align_heads, seq_len, audio_len)
+        attn_of_alignment_heads = torch.stack(tmp, dim=1)
+        
+        std, mean = torch.std_mean(attn_of_alignment_heads, dim=-2, keepdim=True, unbiased=False)
+        attn_of_alignment_heads = (attn_of_alignment_heads - mean) / (std + 1e-8)
+        
+        attn_of_alignment_heads = median_filter(attn_of_alignment_heads, 7)
+        attn_of_alignment_heads = attn_of_alignment_heads.mean(dim=1)
+        attn_of_alignment_heads = attn_of_alignment_heads[:, :, :content_mel_len]
+        return attn_of_alignment_heads

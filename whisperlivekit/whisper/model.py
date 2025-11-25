@@ -79,18 +79,23 @@ def disable_sdpa():
 
 
 class MultiHeadAttention(nn.Module):
-    use_sdpa = False  # Disable SDPA to ensure qk is always computed for hooks
+    use_sdpa = False  # Disable SDPA to ensure qk is always computed when needed
 
-    def __init__(self, n_state: int, n_head: int, cache_id: str = ""):
+    def __init__(self, n_state: int, n_head: int, cache_id: str = "", n_text_ctx: int = 448):
         super().__init__()
         self.n_head = n_head
+        self.n_text_ctx = n_text_ctx
         self.query = Linear(n_state, n_state)
         self.key = Linear(n_state, n_state, bias=False)
         self.value = Linear(n_state, n_state)
         self.out = Linear(n_state, n_state)
         self.cache_id = cache_id
-        self.key.cache_id = f"{cache_id}_key"
-        self.value.cache_id = f"{cache_id}_value"
+        # Cache IDs for key and value (used with dict-based kv_cache)
+        self.key_cache_id = f"{cache_id}_key"
+        self.value_cache_id = f"{cache_id}_value"
+        # Keep these for backward compatibility with hook-based caching
+        self.key.cache_id = self.key_cache_id
+        self.value.cache_id = self.value_cache_id
 
     def forward(
         self,
@@ -101,18 +106,44 @@ class MultiHeadAttention(nn.Module):
     ):
         q = self.query(x)
 
-        if kv_cache is None or xa is None or self.key not in kv_cache:
-            # hooks, if installed (i.e. kv_cache is not None), will prepend the cached kv tensors;
-            # otherwise, perform key/value projections for self- or cross-attention as usual.
-            k = self.key(x if xa is None else xa)
-            v = self.value(x if xa is None else xa)
+        if xa is None:
+            # Self-attention
+            k = self.key(x)
+            v = self.value(x)
+            if kv_cache is not None:
+                k, v = self._update_self_attn_cache(k, v, kv_cache)
         else:
-            # for cross-attention, calculate keys and values once and reuse in subsequent calls.
-            k = kv_cache[self.key]
-            v = kv_cache[self.value]
+            # Cross-attention: compute once and cache, or reuse from cache
+            if kv_cache is not None and self.key_cache_id in kv_cache:
+                k = kv_cache[self.key_cache_id]
+                v = kv_cache[self.value_cache_id]
+            else:
+                k = self.key(xa)
+                v = self.value(xa)
+                if kv_cache is not None:
+                    kv_cache[self.key_cache_id] = k
+                    kv_cache[self.value_cache_id] = v
 
         wv, qk = self.qkv_attention(q, k, v, mask)
         return self.out(wv), qk
+
+    def _update_self_attn_cache(
+        self, k: Tensor, v: Tensor, kv_cache: dict
+    ) -> Tuple[Tensor, Tensor]:
+        """Update self-attention kv cache by concatenating new k,v with cached values."""
+        if self.key_cache_id not in kv_cache or k.shape[1] > self.n_text_ctx:
+            # First token or context overflow: save as-is
+            kv_cache[self.key_cache_id] = k.detach()
+            kv_cache[self.value_cache_id] = v.detach()
+        else:
+            # Concatenate with existing cache
+            cached_k = kv_cache[self.key_cache_id]
+            cached_v = kv_cache[self.value_cache_id]
+            k = torch.cat([cached_k, k], dim=1).detach()
+            v = torch.cat([cached_v, v], dim=1).detach()
+            kv_cache[self.key_cache_id] = k
+            kv_cache[self.value_cache_id] = v
+        return k, v
 
     def qkv_attention(
         self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None
@@ -143,14 +174,21 @@ class MultiHeadAttention(nn.Module):
 
 
 class ResidualAttentionBlock(nn.Module):
-    def __init__(self, n_state: int, n_head: int, cross_attention: bool = False, cache_id: str = ""):
+    def __init__(
+        self, n_state: int, n_head: int, cross_attention: bool = False, 
+        cache_id: str = "", n_text_ctx: int = 448
+    ):
         super().__init__()
 
-        self.attn = MultiHeadAttention(n_state, n_head, cache_id=f"{cache_id}_self_attn")
+        self.attn = MultiHeadAttention(
+            n_state, n_head, cache_id=f"{cache_id}_self_attn", n_text_ctx=n_text_ctx
+        )
         self.attn_ln = LayerNorm(n_state)
 
         self.cross_attn = (
-            MultiHeadAttention(n_state, n_head, cache_id=f"{cache_id}_cross_attn") if cross_attention else None
+            MultiHeadAttention(
+                n_state, n_head, cache_id=f"{cache_id}_cross_attn", n_text_ctx=n_text_ctx
+            ) if cross_attention else None
         )
         self.cross_attn_ln = LayerNorm(n_state) if cross_attention else None
 
@@ -166,12 +204,21 @@ class ResidualAttentionBlock(nn.Module):
         xa: Optional[Tensor] = None,
         mask: Optional[Tensor] = None,
         kv_cache: Optional[dict] = None,
-    ):
+    ) -> Tuple[Tensor, Optional[Tensor]]:
+        """
+        Returns:
+            x: The output tensor
+            cross_attn_qk: Cross-attention weights (if cross_attn exists), else None
+        """
         x = x + self.attn(self.attn_ln(x), mask=mask, kv_cache=kv_cache)[0]
+        cross_attn_qk = None
         if self.cross_attn:
-            x = x + self.cross_attn(self.cross_attn_ln(x), xa, kv_cache=kv_cache)[0]
+            cross_out, cross_attn_qk = self.cross_attn(
+                self.cross_attn_ln(x), xa, kv_cache=kv_cache
+            )
+            x = x + cross_out
         x = x + self.mlp(self.mlp_ln(x))
-        return x
+        return x, cross_attn_qk
 
 
 class AudioEncoder(nn.Module):
@@ -201,7 +248,7 @@ class AudioEncoder(nn.Module):
         x = (x + self.positional_embedding).to(x.dtype)
 
         for block in self.blocks:
-            x = block(x)
+            x, _ = block(x)  # Encoder blocks don't have cross-attention
 
         x = self.ln_post(x)
         return x
@@ -212,13 +259,17 @@ class TextDecoder(nn.Module):
         self, n_vocab: int, n_ctx: int, n_state: int, n_head: int, n_layer: int
     ):
         super().__init__()
+        self.n_ctx = n_ctx
 
         self.token_embedding = nn.Embedding(n_vocab, n_state)
         self.positional_embedding = nn.Parameter(torch.empty(n_ctx, n_state))
 
         self.blocks: Iterable[ResidualAttentionBlock] = nn.ModuleList(
             [
-                ResidualAttentionBlock(n_state, n_head, cross_attention=True, cache_id=f"dec_layer{i}")
+                ResidualAttentionBlock(
+                    n_state, n_head, cross_attention=True, 
+                    cache_id=f"dec_layer{i}", n_text_ctx=n_ctx
+                )
                 for i in range(n_layer)
             ]
         )
@@ -227,28 +278,57 @@ class TextDecoder(nn.Module):
         mask = torch.empty(n_ctx, n_ctx).fill_(-np.inf).triu_(1)
         self.register_buffer("mask", mask, persistent=False)
 
-    def forward(self, x: Tensor, xa: Tensor, kv_cache: Optional[dict] = None):
+    def forward(
+        self, 
+        x: Tensor, 
+        xa: Tensor, 
+        kv_cache: Optional[dict] = None,
+        return_cross_attn: bool = False,
+    ):
         """
         x : torch.LongTensor, shape = (batch_size, <= n_ctx)
             the text tokens
         xa : torch.Tensor, shape = (batch_size, n_audio_ctx, n_audio_state)
             the encoded audio features to be attended on
+        kv_cache : Optional[dict]
+            Dictionary to store/retrieve key-value cache for efficient decoding
+        return_cross_attn : bool
+            If True, return cross-attention weights from all decoder layers
+            
+        Returns
+        -------
+        logits : Tensor
+            The output logits
+        cross_attns : Optional[List[Tensor]]
+            List of cross-attention weights per layer (only if return_cross_attn=True)
         """
-        offset = next(iter(kv_cache.values())).shape[1] if kv_cache else 0
+        # Calculate offset from self-attention cache (not cross-attention which has audio length)
+        offset = 0
+        if kv_cache:
+            # Use the first decoder block's self-attention key cache to get token position
+            first_self_attn_key = self.blocks[0].attn.key_cache_id
+            if first_self_attn_key in kv_cache:
+                offset = kv_cache[first_self_attn_key].shape[1]
+        
         x = (
             self.token_embedding(x)
             + self.positional_embedding[offset : offset + x.shape[-1]]
         )
         x = x.to(xa.dtype)
 
+        cross_attns = [] if return_cross_attn else None
         for block in self.blocks:
-            x = block(x, xa, mask=self.mask, kv_cache=kv_cache)
+            x, cross_attn_qk = block(x, xa, mask=self.mask, kv_cache=kv_cache)
+            if return_cross_attn and cross_attn_qk is not None:
+                cross_attns.append(cross_attn_qk)
 
         x = self.ln(x)
         logits = (
             x @ torch.transpose(self.token_embedding.weight.to(x.dtype), 0, 1)
         ).float()
 
+        if return_cross_attn:
+            return logits, cross_attns
         return logits
 
 
@@ -292,8 +372,18 @@ class Whisper(nn.Module):
     def embed_audio(self, mel: torch.Tensor):
         return self.encoder(mel)
 
-    def logits(self, tokens: torch.Tensor, audio_features: torch.Tensor):
-        return self.decoder(tokens, audio_features)
+    def logits(
+        self, 
+        tokens: torch.Tensor, 
+        audio_features: torch.Tensor,
+        kv_cache: Optional[dict] = None,
+        return_cross_attn: bool = False,
+    ):
+        return self.decoder(
+            tokens, audio_features, 
+            kv_cache=kv_cache, 
+            return_cross_attn=return_cross_attn
+        )
 
     def forward(
         self, mel: torch.Tensor, tokens: torch.Tensor
@@ -311,39 +401,6 @@ class Whisper(nn.Module):
     @property
     def num_languages(self):
         return self.dims.n_vocab - 51765 - int(self.is_multilingual)
-
-    def install_kv_cache_hooks(self, cache: Optional[dict] = None):
-        """
-        The `MultiHeadAttention` module optionally accepts `kv_cache` which stores the key and value
-        tensors calculated for the previous positions. This method returns a dictionary that stores
-        all caches, and the necessary hooks for the key and value projection modules that save the
-        intermediate tensors to be reused during later calculations.
-
-        Returns
-        -------
-        cache : Dict[nn.Module, torch.Tensor]
-            A dictionary object mapping the key/value projection modules to its cache
-        hooks : List[RemovableHandle]
-            List of PyTorch RemovableHandle objects to stop the hooks to be called
-        """
-        cache = {**cache} if cache is not None else {}
-        hooks = []
-
-        def save_to_cache(module, _, output):
-            if module not in cache or output.shape[1] > self.dims.n_text_ctx:
-                # save as-is, for the first token or cross attention
-                cache[module] = output
-            else:
-                cache[module] = torch.cat([cache[module], output], dim=1).detach()
-            return cache[module]
-
-        def install_hooks(layer: nn.Module):
-            if isinstance(layer, MultiHeadAttention):
-                hooks.append(layer.key.register_forward_hook(save_to_cache))
-                hooks.append(layer.value.register_forward_hook(save_to_cache))
-
-        self.decoder.apply(install_hooks)
-        return cache, hooks
 
     detect_language = detect_language_function
     transcribe = transcribe_function

@@ -185,7 +185,6 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--init-prompt` | Initial prompt for the model | `None` |
 | `--static-init-prompt` | Static prompt that doesn't scroll | `None` |
 | `--max-context-tokens` | Maximum context tokens | `None` |
-| `--preload-model-count` | Optional. Number of models to preload in memory to speed up loading (set up to the expected number of concurrent users) | `1` |
 
 
 
