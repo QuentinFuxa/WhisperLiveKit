@@ -5,16 +5,18 @@ import argparse
 import base64
 import gzip
 import io
+import math
 import pathlib
 import sys
-import math
 from typing import List, Optional, Sequence, Tuple, Union
 
-import numpy as np
-import torch
-from datasets import Audio as DatasetAudio, load_dataset
-import soundfile as sf
 import matplotlib.pyplot as plt
+import numpy as np
+import soundfile as sf
+import torch
+from datasets import Audio as DatasetAudio
+from datasets import load_dataset
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 WHISPER_ROOT = REPO_ROOT / "whisper"
 

@@ -609,16 +609,16 @@ class AudioProcessor:
             res = self.vac(pcm_array)
 
         if res is not None:
-            silence_detected = res.get("end", 0) > res.get("start", 0)
-            if silence_detected and not self.current_silence:
+            if "start" in res and self.current_silence:
+                await self._end_silence()
+            
+            if "end" in res and not self.current_silence:
                 pre_silence_chunk = self._slice_before_silence(
                     pcm_array, chunk_sample_start, res.get("end")
                 )
                 if pre_silence_chunk is not None and pre_silence_chunk.size > 0:
                     await self._enqueue_active_audio(pre_silence_chunk)
                 await self._begin_silence()
-            elif self.current_silence:
-                await self._end_silence()
 
         if not self.current_silence:
             await self._enqueue_active_audio(pcm_array)
