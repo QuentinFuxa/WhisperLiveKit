@@ -168,7 +168,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | Diarization options | Description | Default |
 |-----------|-------------|---------|
 | `--diarization-backend` |  `diart` or `sortformer` | `sortformer` |
-| `--disable-punctuation-split` |  Disable punctuation based splits. See #214 | `False` |
+| `--disable-punctuation-split` | [NOT FUNCTIONAL IN 0.2.15 / 0.2.16] Disable punctuation based splits. See #214 | `False` |
 | `--segmentation-model` | Hugging Face model ID for Diart segmentation model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/segmentation-3.0` |
 | `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `speechbrain/spkrec-ecapa-voxceleb` |
 
@@ -186,7 +186,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--never-fire` | Never truncate incomplete words | `False` |
 | `--init-prompt` | Initial prompt for the model | `None` |
 | `--static-init-prompt` | Static prompt that doesn't scroll | `None` |
-| `--max-context-tokens` | Maximum context tokens | `None` |
+| `--max-context-tokens` | Maximum context tokens | Depends on model used, but usually 448. |
 
 
 
