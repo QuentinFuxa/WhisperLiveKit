@@ -1,10 +1,11 @@
-<h1 align="center">WhisperLiveKit</h1>
+<h1 align="center">WLK</h1>
+<p align="center"><b>WhisperLiveKit: Ultra-low-latency, self-hosted speech-to-text with speaker identification</b></p>
+
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/demo.png" alt="WhisperLiveKit Demo" width="730">
 </p>
 
-<p align="center"><b>Real-time, Fully Local Speech-to-Text with Speaker Identification</b></p>
 
 <p align="center">
 <a href="https://pypi.org/project/whisperlivekit/"><img alt="PyPI Version" src="https://img.shields.io/pypi/v/whisperlivekit?color=g"></a>
@@ -13,8 +14,6 @@
 <a href="https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache 2.0-dark_green"></a>
 </p>
 
-
-Real-time transcription directly to your browser, with a ready-to-use backend+server and a simple frontend.
 
 #### Powered by Leading Research:
 
