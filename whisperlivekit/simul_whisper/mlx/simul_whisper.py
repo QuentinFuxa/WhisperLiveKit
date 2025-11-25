@@ -23,7 +23,7 @@ DEC_PAD = 50257
 logger = logging.getLogger(__name__)
 
 
-class MLXTokenBuffer:
+class MLXTokenBuffer: #should try to make it heritate from classic simul whisper class
     """Token buffer for MLX-based decoding."""
 
     def __init__(self, text="", tokenizer=None, prefix_token_ids=None):
