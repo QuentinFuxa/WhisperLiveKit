@@ -176,12 +176,10 @@ class TranscriptionEngine:
 
 
 def online_factory(args, asr):
-    if args.backend_policy == "simulstreaming":    
+    if args.backend_policy == "simulstreaming":
         from whisperlivekit.simul_whisper import SimulStreamingOnlineProcessor
-        online = SimulStreamingOnlineProcessor(asr)
-    else:
-        online = OnlineASRProcessor(asr)
-    return online
+        return SimulStreamingOnlineProcessor(asr)
+    return OnlineASRProcessor(asr)
   
   
 def online_diarization_factory(args, diarization_backend):
