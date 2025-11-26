@@ -819,14 +819,14 @@ if (isExtension) {
 // Edit name of speakers
 function openSpeakerNameEditor(speakerId) {
     const container = document.getElementById('speakerNamesContainer');
-    if (! container. classList.contains('visible')) {
+    if (!container.classList.contains('visible')) {
         container.classList.add('visible');
         loadSpeakerNames();
     }
 
     // Focus on the input for this speaker
     setTimeout(() => {
-        const input = document. querySelector(`.speaker-name-input[data-speaker-id="${speakerId}"]`);
+        const input = document.querySelector(`.speaker-name-input[data-speaker-id="${speakerId}"]`);
         if (input) {
             input.focus();
             input.select();

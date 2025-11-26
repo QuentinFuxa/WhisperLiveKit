@@ -20,14 +20,14 @@
             display: block;
         }
 
-        . speaker-names-header {
+        .speaker-names-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 12px;
         }
 
-        . speaker-names-header h3 {
+        .speaker-names-header h3 {
             margin: 0;
             font-size: 14px;
             font-weight: 600;
@@ -88,7 +88,7 @@
             opacity: 0.8;
         }
 
-        .speaker-name-btn. save {
+        .speaker-name-btn.save {
             background: var(--accent-color, #4a90d9);
             color: white;
         }
@@ -116,7 +116,7 @@
             border-color: var(--accent-color, #4a90d9);
         }
 
-        . speaker-names-toggle {
+        .speaker-names-toggle {
             display: flex;
             align-items: center;
             gap: 6px;
@@ -130,17 +130,17 @@
             margin-left: 8px;
         }
 
-        . speaker-names-toggle:hover {
+        .speaker-names-toggle:hover {
             background: var(--bg-hover, #eee);
         }
 
         /* Make speaker badges in transcript clickable */
-        .speaker-badge. editable {
+        .speaker-badge.editable {
             cursor: pointer;
             transition: transform 0.1s;
         }
 
-        . speaker-badge.editable:hover {
+        .speaker-badge.editable:hover {
             transform: scale(1.1);
         }
     </style>
@@ -236,8 +236,8 @@
         // Toggle speaker names panel
         document.getElementById('speakerNamesToggle').addEventListener('click', () => {
             const container = document.getElementById('speakerNamesContainer');
-            container. classList.toggle('visible');
-            if (container.classList. contains('visible')) {
+            container.classList.toggle('visible');
+            if (container.classList.contains('visible')) {
                 loadSpeakerNames();
             }
         });
@@ -247,7 +247,7 @@
             try {
                 const response = await fetch('/api/speakers');
                 const data = await response.json();
-                Object.assign(speakerNamesCache, data. speakers);
+                Object.assign(speakerNamesCache, data.speakers);
                 renderSpeakerNamesList();
             } catch (error) {
                 console.error('Failed to load speaker names:', error);
@@ -257,10 +257,10 @@
         // Render the speaker names list
         function renderSpeakerNamesList() {
             const list = document.getElementById('speakerNamesList');
-            list. innerHTML = '';
+            list.innerHTML = '';
 
             // Get all unique speaker IDs (from cache + any detected in transcript)
-            const speakerIds = new Set(Object.keys(speakerNamesCache). map(Number));
+            const speakerIds = new Set(Object.keys(speakerNamesCache).map(Number));
 
             // Add default speakers 1-4 if none exist
             if (speakerIds.size === 0) {
@@ -293,7 +293,7 @@
             const input = row.querySelector('input');
             input.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
-                    saveSpeakerName(speakerId, row. querySelector('.save'));
+                    saveSpeakerName(speakerId, row.querySelector('.save'));
                 }
             });
 
@@ -310,9 +310,9 @@
 
         // Save speaker name to server
         async function saveSpeakerName(speakerId, button) {
-            const row = button.closest('. speaker-name-row');
-            const input = row.querySelector('. speaker-name-input');
-            const name = input.value. trim();
+            const row = button.closest('.speaker-name-row');
+            const input = row.querySelector('.speaker-name-input');
+            const name = input.value.trim();
 
             if (!name) {
                 alert('Please enter a name');
@@ -323,10 +323,10 @@
                 const response = await fetch('/api/speakers', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON. stringify({ speaker_id: speakerId, name: name })
+                    body: JSON.stringify({ speaker_id: speakerId, name: name })
                 });
 
-                if (response. ok) {
+                if (response.ok) {
                     speakerNamesCache[speakerId] = name;
                     button.textContent = '✓';
                     setTimeout(() => { button.textContent = 'Save'; }, 1000);
@@ -345,18 +345,18 @@
                 await fetch(`/api/speakers/${speakerId}`, { method: 'DELETE' });
                 delete speakerNamesCache[speakerId];
 
-                const row = button.closest('. speaker-name-row');
+                const row = button.closest('.speaker-name-row');
                 row.querySelector('.speaker-name-input').value = '';
 
                 updateTranscriptSpeakerNames();
             } catch (error) {
-                console. error('Failed to remove speaker name:', error);
+                console.error('Failed to remove speaker name:', error);
             }
         }
 
         // Clear all speaker names
         async function clearAllSpeakerNames() {
-            if (! confirm('Clear all speaker names?')) return;
+            if (!confirm('Clear all speaker names?')) return;
 
             try {
                 await fetch('/api/speakers', { method: 'DELETE' });
@@ -370,8 +370,8 @@
 
         // Update speaker badges in the transcript
         function updateTranscriptSpeakerNames() {
-            document.querySelectorAll('.speaker-badge'). forEach(badge => {
-                const speakerId = parseInt(badge.dataset. speakerId || badge.textContent);
+            document.querySelectorAll('.speaker-badge').forEach(badge => {
+                const speakerId = parseInt(badge.dataset.speakerId || badge.textContent);
                 if (speakerNamesCache[speakerId]) {
                     badge.textContent = speakerNamesCache[speakerId];
                     badge.title = `Speaker ${speakerId}`;
