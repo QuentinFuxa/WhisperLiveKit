@@ -8,8 +8,10 @@ from functools import lru_cache
 import librosa
 import numpy as np
 
-from whisperlivekit.backend_support import (faster_backend_available,
-                                            mlx_backend_available)
+from whisperlivekit.backend_support import (
+    faster_backend_available,
+    mlx_backend_available,
+)
 from whisperlivekit.model_paths import model_path_and_type, resolve_model_path
 from whisperlivekit.warmup import warmup_asr
 
@@ -44,7 +46,7 @@ def create_tokenizer(lan):
         lan
         in "as bn ca cs de el en es et fi fr ga gu hi hu is it kn lt lv ml mni mr nl or pa pl pt ro ru sk sl sv ta te yue zh".split()
     ):
-        from mosestokenizer import MosesSentenceSplitter        
+        from mosestokenizer import MosesSentenceSplitter
 
         return MosesSentenceSplitter(lan)
 
@@ -71,19 +73,19 @@ def create_tokenizer(lan):
 
 
 def backend_factory(
-            backend,
-            lan,
-            model_size,
-            model_cache_dir,
-            model_dir,
-            model_path,
-            direct_english_translation,
-            buffer_trimming,
-            buffer_trimming_sec,
-            confidence_validation,
-            warmup_file=None,
-            min_chunk_size=None,
-        ):
+    backend,
+    lan,
+    model_size,
+    model_cache_dir,
+    model_dir,
+    model_path,
+    direct_english_translation,
+    buffer_trimming,
+    buffer_trimming_sec,
+    confidence_validation,
+    warmup_file=None,
+    min_chunk_size=None,
+):
     backend_choice = backend
     custom_reference = model_path or model_dir
     resolved_root = None
@@ -94,7 +96,9 @@ def backend_factory(
     if custom_reference:
         resolved_root = resolve_model_path(custom_reference)
         if resolved_root.is_dir():
-            pytorch_checkpoint, has_mlx_weights, has_fw_weights = model_path_and_type(resolved_root)
+            pytorch_checkpoint, has_mlx_weights, has_fw_weights = model_path_and_type(
+                resolved_root
+            )
         else:
             pytorch_checkpoint = resolved_root
 
@@ -112,23 +116,31 @@ def backend_factory(
         if backend_choice == "faster-whisper":
             asr_cls = FasterWhisperASR
             if resolved_root is not None and not resolved_root.is_dir():
-                raise ValueError("Faster-Whisper backend expects a directory with CTranslate2 weights.")
+                raise ValueError(
+                    "Faster-Whisper backend expects a directory with CTranslate2 weights."
+                )
             model_override = str(resolved_root) if resolved_root is not None else None
         elif backend_choice == "mlx-whisper":
             asr_cls = MLXWhisper
             if resolved_root is not None and not resolved_root.is_dir():
-                raise ValueError("MLX Whisper backend expects a directory containing MLX weights.")
+                raise ValueError(
+                    "MLX Whisper backend expects a directory containing MLX weights."
+                )
             model_override = str(resolved_root) if resolved_root is not None else None
         else:
             asr_cls = WhisperASR
-            model_override = str(pytorch_checkpoint) if pytorch_checkpoint is not None else None
+            model_override = (
+                str(pytorch_checkpoint) if pytorch_checkpoint is not None else None
+            )
             if custom_reference and model_override is None:
                 raise FileNotFoundError(
                     f"No PyTorch checkpoint found under {resolved_root or custom_reference}"
                 )
 
         t = time.time()
-        logger.info(f"Loading Whisper {model_size} model for language {lan} using backend {backend_choice}...")
+        logger.info(
+            f"Loading Whisper {model_size} model for language {lan} using backend {backend_choice}..."
+        )
         asr = asr_cls(
             model_size=model_size,
             lan=lan,
@@ -148,9 +160,9 @@ def backend_factory(
         tokenizer = create_tokenizer(tgt_language)
     else:
         tokenizer = None
-    
+
     warmup_asr(asr, warmup_file)
-    
+
     asr.confidence_validation = confidence_validation
     asr.tokenizer = tokenizer
     asr.buffer_trimming = buffer_trimming
@@ -168,26 +180,36 @@ def _normalize_backend_choice(
     backend_choice = preferred_backend
 
     if backend_choice == "auto":
-        if mlx_backend_available(warn_on_missing=True) and (resolved_root is None or has_mlx_weights):
+        if mlx_backend_available(warn_on_missing=True) and (
+            resolved_root is None or has_mlx_weights
+        ):
             return "mlx-whisper"
-        if faster_backend_available(warn_on_missing=True) and (resolved_root is None or has_fw_weights):
+        if faster_backend_available(warn_on_missing=True) and (
+            resolved_root is None or has_fw_weights
+        ):
             return "faster-whisper"
         return "whisper"
 
     if backend_choice == "mlx-whisper":
         if not mlx_backend_available():
-            raise RuntimeError("mlx-whisper backend requested but mlx-whisper is not installed.")
+            raise RuntimeError(
+                "mlx-whisper backend requested but mlx-whisper is not installed."
+            )
         if resolved_root is not None and not has_mlx_weights:
             raise FileNotFoundError(
                 f"mlx-whisper backend requested but no MLX weights were found under {resolved_root}"
             )
         if platform.system() != "Darwin":
-            logger.warning("mlx-whisper backend requested on a non-macOS system; this may fail.")
+            logger.warning(
+                "mlx-whisper backend requested on a non-macOS system; this may fail."
+            )
         return backend_choice
 
     if backend_choice == "faster-whisper":
         if not faster_backend_available():
-            raise RuntimeError("faster-whisper backend requested but faster-whisper is not installed.")
+            raise RuntimeError(
+                "faster-whisper backend requested but faster-whisper is not installed."
+            )
         if resolved_root is not None and not has_fw_weights:
             raise FileNotFoundError(
                 f"faster-whisper backend requested but no Faster-Whisper weights were found under {resolved_root}"

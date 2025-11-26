@@ -8,14 +8,15 @@ import torch
 Code is adapted from silero-vad v6: https://github.com/snakers4/silero-vad
 """
 
-def init_jit_model(model_path: str, device=torch.device('cpu')):
+
+def init_jit_model(model_path: str, device=torch.device("cpu")):
     """Load a JIT model from file."""
     model = torch.jit.load(model_path, map_location=device)
     model.eval()
     return model
 
 
-class OnnxWrapper():
+class OnnxWrapper:
     """ONNX Runtime wrapper for Silero VAD model."""
 
     def __init__(self, path, force_onnx_cpu=False):
@@ -27,14 +28,19 @@ class OnnxWrapper():
         opts.inter_op_num_threads = 1
         opts.intra_op_num_threads = 1
 
-        if force_onnx_cpu and 'CPUExecutionProvider' in onnxruntime.get_available_providers():
-            self.session = onnxruntime.InferenceSession(path, providers=['CPUExecutionProvider'], sess_options=opts)
+        if (
+            force_onnx_cpu
+            and "CPUExecutionProvider" in onnxruntime.get_available_providers()
+        ):
+            self.session = onnxruntime.InferenceSession(
+                path, providers=["CPUExecutionProvider"], sess_options=opts
+            )
         else:
             self.session = onnxruntime.InferenceSession(path, sess_options=opts)
 
         self.reset_states()
-        if '16k' in path:
-            warnings.warn('This model support only 16000 sampling rate!')
+        if "16k" in path:
+            warnings.warn("This model support only 16000 sampling rate!")
             self.sample_rates = [16000]
         else:
             self.sample_rates = [8000, 16000]
@@ -47,11 +53,13 @@ class OnnxWrapper():
 
         if sr != 16000 and (sr % 16000 == 0):
             step = sr // 16000
-            x = x[:,::step]
+            x = x[:, ::step]
             sr = 16000
 
         if sr not in self.sample_rates:
-            raise ValueError(f"Supported sampling rates: {self.sample_rates} (or multiply of 16000)")
+            raise ValueError(
+                f"Supported sampling rates: {self.sample_rates} (or multiply of 16000)"
+            )
         if sr / x.shape[1] > 31.25:
             raise ValueError("Input audio chunk is too short")
 
@@ -69,7 +77,9 @@ class OnnxWrapper():
         num_samples = 512 if sr == 16000 else 256
 
         if x.shape[-1] != num_samples:
-            raise ValueError(f"Provided number of samples is {x.shape[-1]} (Supported values: 256 for 8000 sample rate, 512 for 16000)")
+            raise ValueError(
+                f"Provided number of samples is {x.shape[-1]} (Supported values: 256 for 8000 sample rate, 512 for 16000)"
+            )
 
         batch_size = x.shape[0]
         context_size = 64 if sr == 16000 else 32
@@ -86,7 +96,11 @@ class OnnxWrapper():
 
         x = torch.cat([self._context, x], dim=1)
         if sr in [8000, 16000]:
-            ort_inputs = {'input': x.numpy(), 'state': self._state.numpy(), 'sr': np.array(sr, dtype='int64')}
+            ort_inputs = {
+                "input": x.numpy(),
+                "state": self._state.numpy(),
+                "sr": np.array(sr, dtype="int64"),
+            }
             ort_outs = self.session.run(None, ort_inputs)
             out, state = ort_outs
             self._state = torch.from_numpy(state)
@@ -101,10 +115,12 @@ class OnnxWrapper():
         return out
 
 
-def load_silero_vad(model_path: str = None, onnx: bool = False, opset_version: int = 16):
+def load_silero_vad(
+    model_path: str = None, onnx: bool = False, opset_version: int = 16
+):
     """
     Load Silero VAD model (JIT or ONNX).
-    
+
     Parameters
     ----------
     model_path : str, optional
@@ -113,7 +129,7 @@ def load_silero_vad(model_path: str = None, onnx: bool = False, opset_version: i
         Whether to use ONNX runtime (requires onnxruntime package).
     opset_version : int, default 16
         ONNX opset version (15 or 16). Only used if onnx=True.
-    
+
     Returns
     -------
     model
@@ -121,21 +137,21 @@ def load_silero_vad(model_path: str = None, onnx: bool = False, opset_version: i
     """
     available_ops = [15, 16]
     if onnx and opset_version not in available_ops:
-        raise Exception(f'Available ONNX opset_version: {available_ops}')
+        raise Exception(f"Available ONNX opset_version: {available_ops}")
     if model_path is None:
         current_dir = Path(__file__).parent
-        data_dir = current_dir / 'silero_vad_models'
-        
+        data_dir = current_dir / "silero_vad_models"
+
         if onnx:
             if opset_version == 16:
-                model_name = 'silero_vad.onnx'
+                model_name = "silero_vad.onnx"
             else:
-                model_name = f'silero_vad_16k_op{opset_version}.onnx'
+                model_name = f"silero_vad_16k_op{opset_version}.onnx"
         else:
-            model_name = 'silero_vad.jit'
-        
+            model_name = "silero_vad.jit"
+
         model_path = data_dir / model_name
-        
+
         if not model_path.exists():
             raise FileNotFoundError(
                 f"Model file not found: {model_path}\n"
@@ -160,18 +176,18 @@ def load_silero_vad(model_path: str = None, onnx: bool = False, opset_version: i
 class VADIterator:
     """
     Voice Activity Detection iterator for streaming audio.
-    
+
     This is the Silero VAD v6 implementation.
     """
-    
-    def __init__(self,
-                 model,
-                 threshold: float = 0.5,
-                 sampling_rate: int = 16000,
-                 min_silence_duration_ms: int = 100,
-                 speech_pad_ms: int = 30
-                 ):
 
+    def __init__(
+        self,
+        model,
+        threshold: float = 0.5,
+        sampling_rate: int = 16000,
+        min_silence_duration_ms: int = 100,
+        speech_pad_ms: int = 30,
+    ):
         """
         Class for stream imitation
 
@@ -198,7 +214,9 @@ class VADIterator:
         self.sampling_rate = sampling_rate
 
         if sampling_rate not in [8000, 16000]:
-            raise ValueError('VADIterator does not support sampling rates other than [8000, 16000]')
+            raise ValueError(
+                "VADIterator does not support sampling rates other than [8000, 16000]"
+            )
 
         self.min_silence_samples = sampling_rate * min_silence_duration_ms / 1000
         self.speech_pad_samples = sampling_rate * speech_pad_ms / 1000
@@ -240,8 +258,16 @@ class VADIterator:
 
         if (speech_prob >= self.threshold) and not self.triggered:
             self.triggered = True
-            speech_start = max(0, self.current_sample - self.speech_pad_samples - window_size_samples)
-            return {'start': int(speech_start) if not return_seconds else round(speech_start / self.sampling_rate, time_resolution)}
+            speech_start = max(
+                0, self.current_sample - self.speech_pad_samples - window_size_samples
+            )
+            return {
+                "start": (
+                    int(speech_start)
+                    if not return_seconds
+                    else round(speech_start / self.sampling_rate, time_resolution)
+                )
+            }
 
         if (speech_prob < self.threshold - 0.15) and self.triggered:
             if not self.temp_end:
@@ -249,10 +275,18 @@ class VADIterator:
             if self.current_sample - self.temp_end < self.min_silence_samples:
                 return None
             else:
-                speech_end = self.temp_end + self.speech_pad_samples - window_size_samples
+                speech_end = (
+                    self.temp_end + self.speech_pad_samples - window_size_samples
+                )
                 self.temp_end = 0
                 self.triggered = False
-                return {'end': int(speech_end) if not return_seconds else round(speech_end / self.sampling_rate, time_resolution)}
+                return {
+                    "end": (
+                        int(speech_end)
+                        if not return_seconds
+                        else round(speech_end / self.sampling_rate, time_resolution)
+                    )
+                }
 
         return None
 
@@ -287,11 +321,11 @@ class FixedVADIterator(VADIterator):
 if __name__ == "__main__":
     model = load_silero_vad(onnx=False)
     vad = FixedVADIterator(model)
-    
+
     audio_buffer = np.array([0] * 512, dtype=np.float32)
     result = vad(audio_buffer)
     print(f"   512 samples: {result}")
-    
+
     # test with 511 samples
     audio_buffer = np.array([0] * 511, dtype=np.float32)
     result = vad(audio_buffer)

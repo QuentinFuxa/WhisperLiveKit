@@ -23,6 +23,7 @@ mlx_model_mapping = {
     "large": "mlx-community/whisper-large-mlx",
 }
 
+
 def load_mlx_encoder(
     path_or_hf_repo: str,
     dtype: mx.Dtype = mx.float32,
@@ -53,18 +54,15 @@ def load_mlx_encoder(
         nn.quantize(model, **quantization, class_predicate=class_predicate)
 
     weights = tree_unflatten(list(weights.items()))
-    
+
     # we only want to load the encoder weights here.
-    # Size examples: for tiny.en, 
+    # Size examples: for tiny.en,
     # Decoder weights: 59110771 bytes
     # Encoder weights: 15268874 bytes
 
-    
     encoder_weights = {}
-    encoder_weights['encoder'] = weights['encoder']
-    del(weights)
-    
-
+    encoder_weights["encoder"] = weights["encoder"]
+    del weights
 
     model.update(encoder_weights)
     mx.eval(model.parameters())

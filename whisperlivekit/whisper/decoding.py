@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field, replace
-from typing import (TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence,
-                    Tuple, Union)
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -168,7 +167,9 @@ class PyTorchInference(Inference):
             for cache_id in self.kv_cache_ids:
                 if cache_id in self.kv_cache:
                     # update the key/value cache to contain the selected sequences
-                    self.kv_cache[cache_id] = self.kv_cache[cache_id][source_indices].detach()
+                    self.kv_cache[cache_id] = self.kv_cache[cache_id][
+                        source_indices
+                    ].detach()
 
 
 class SequenceRanker:

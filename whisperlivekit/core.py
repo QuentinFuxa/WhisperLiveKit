@@ -8,23 +8,22 @@ from whisperlivekit.simul_whisper import SimulStreamingASR
 
 
 def update_with_kwargs(_dict, kwargs):
-    _dict.update({
-        k: v for k, v in kwargs.items() if k in _dict
-    })
+    _dict.update({k: v for k, v in kwargs.items() if k in _dict})
     return _dict
 
 
 logger = logging.getLogger(__name__)
 
+
 class TranscriptionEngine:
     _instance = None
     _initialized = False
-    
+
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def __init__(self, **kwargs):
         if TranscriptionEngine._initialized:
             return
@@ -45,7 +44,7 @@ class TranscriptionEngine:
             "transcription": True,
             "vad": True,
             "pcm_input": False,
-            "disable_punctuation_split" : False,
+            "disable_punctuation_split": False,
             "diarization_backend": "sortformer",
             "backend_policy": "simulstreaming",
             "backend": "auto",
@@ -62,34 +61,36 @@ class TranscriptionEngine:
             "lan": "auto",
             "direct_english_translation": False,
         }
-        transcription_common_params = update_with_kwargs(transcription_common_params, kwargs)                                            
+        transcription_common_params = update_with_kwargs(
+            transcription_common_params, kwargs
+        )
 
-        if transcription_common_params['model_size'].endswith(".en"):
+        if transcription_common_params["model_size"].endswith(".en"):
             transcription_common_params["lan"] = "en"
-        if 'no_transcription' in kwargs:
-            global_params['transcription'] = not global_params['no_transcription']
-        if 'no_vad' in kwargs:
-            global_params['vad'] = not kwargs['no_vad']
-        if 'no_vac' in kwargs:
-            global_params['vac'] = not kwargs['no_vac']
+        if "no_transcription" in kwargs:
+            global_params["transcription"] = not global_params["no_transcription"]
+        if "no_vad" in kwargs:
+            global_params["vad"] = not kwargs["no_vad"]
+        if "no_vac" in kwargs:
+            global_params["vac"] = not kwargs["no_vac"]
 
         self.args = Namespace(**{**global_params, **transcription_common_params})
-        
+
         self.asr = None
         self.tokenizer = None
         self.diarization = None
         self.vac_model = None
-        
+
         if self.args.vac:
             from whisperlivekit.silero_vad_iterator import load_silero_vad
 
             # Use ONNX if specified, otherwise use JIT (default)
-            use_onnx = kwargs.get('vac_onnx', False)
+            use_onnx = kwargs.get("vac_onnx", False)
             self.vac_model = load_silero_vad(onnx=use_onnx)
-        
+
         backend_policy = self.args.backend_policy
         if self.args.transcription:
-            if backend_policy == "simulstreaming":                 
+            if backend_policy == "simulstreaming":
                 simulstreaming_params = {
                     "disable_fast_encoder": False,
                     "custom_alignment_heads": None,
@@ -104,9 +105,11 @@ class TranscriptionEngine:
                     "static_init_prompt": None,
                     "max_context_tokens": None,
                 }
-                simulstreaming_params = update_with_kwargs(simulstreaming_params, kwargs)
-                
-                self.tokenizer = None        
+                simulstreaming_params = update_with_kwargs(
+                    simulstreaming_params, kwargs
+                )
+
+                self.tokenizer = None
                 self.asr = SimulStreamingASR(
                     **transcription_common_params,
                     **simulstreaming_params,
@@ -117,14 +120,16 @@ class TranscriptionEngine:
                     getattr(self.asr, "encoder_backend", "whisper"),
                 )
             else:
-                
+
                 whisperstreaming_params = {
                     "buffer_trimming": "segment",
                     "confidence_validation": False,
                     "buffer_trimming_sec": 15,
                 }
-                whisperstreaming_params = update_with_kwargs(whisperstreaming_params, kwargs)
-                
+                whisperstreaming_params = update_with_kwargs(
+                    whisperstreaming_params, kwargs
+                )
+
                 self.asr = backend_factory(
                     backend=self.args.backend,
                     **transcription_common_params,
@@ -137,64 +142,75 @@ class TranscriptionEngine:
 
         if self.args.diarization:
             if self.args.diarization_backend == "diart":
-                from whisperlivekit.diarization.diart_backend import \
-                    DiartDiarization
+                from whisperlivekit.diarization.diart_backend import DiartDiarization
+
                 diart_params = {
                     "segmentation_model": "pyannote/segmentation-3.0",
                     "embedding_model": "pyannote/embedding",
                 }
                 diart_params = update_with_kwargs(diart_params, kwargs)
                 self.diarization_model = DiartDiarization(
-                    block_duration=self.args.min_chunk_size,
-                    **diart_params
+                    block_duration=self.args.min_chunk_size, **diart_params
                 )
             elif self.args.diarization_backend == "sortformer":
-                from whisperlivekit.diarization.sortformer_backend import \
-                    SortformerDiarization
+                from whisperlivekit.diarization.sortformer_backend import (
+                    SortformerDiarization,
+                )
+
                 self.diarization_model = SortformerDiarization()
-        
+
         self.translation_model = None
         if self.args.target_language:
-            if self.args.lan == 'auto' and backend_policy != "simulstreaming":
-                raise Exception('Translation cannot be set with language auto when transcription backend is not simulstreaming')
+            if self.args.lan == "auto" and backend_policy != "simulstreaming":
+                raise Exception(
+                    "Translation cannot be set with language auto when transcription backend is not simulstreaming"
+                )
             else:
                 try:
                     from nllw import load_model
                 except:
-                    raise Exception('To use translation, you must install nllw: `pip install nllw`')
-                translation_params = { 
+                    raise Exception(
+                        "To use translation, you must install nllw: `pip install nllw`"
+                    )
+                translation_params = {
                     "nllb_backend": "transformers",
-                    "nllb_size": "600M"
+                    "nllb_size": "600M",
                 }
                 translation_params = update_with_kwargs(translation_params, kwargs)
-                self.translation_model = load_model([self.args.lan], **translation_params) #in the future we want to handle different languages for different speakers
+                self.translation_model = load_model(
+                    [self.args.lan], **translation_params
+                )  # in the future we want to handle different languages for different speakers
         TranscriptionEngine._initialized = True
 
 
 def online_factory(args, asr):
-    if args.backend_policy == "simulstreaming":    
+    if args.backend_policy == "simulstreaming":
         from whisperlivekit.simul_whisper import SimulStreamingOnlineProcessor
+
         online = SimulStreamingOnlineProcessor(asr)
     else:
         online = OnlineASRProcessor(asr)
     return online
-  
-  
+
+
 def online_diarization_factory(args, diarization_backend):
     if args.diarization_backend == "diart":
         online = diarization_backend
         # Not the best here, since several user/instances will share the same backend, but diart is not SOTA anymore and sortformer is recommended
-    
+
     if args.diarization_backend == "sortformer":
-        from whisperlivekit.diarization.sortformer_backend import \
-            SortformerDiarizationOnline
+        from whisperlivekit.diarization.sortformer_backend import (
+            SortformerDiarizationOnline,
+        )
+
         online = SortformerDiarizationOnline(shared_model=diarization_backend)
     return online
 
 
 def online_translation_factory(args, translation_model):
-    #should be at speaker level in the future:
-    #one shared nllb model for all speaker
-    #one tokenizer per speaker/language
+    # should be at speaker level in the future:
+    # one shared nllb model for all speaker
+    # one tokenizer per speaker/language
     from nllw import OnlineTranslation
+
     return OnlineTranslation(translation_model, [args.lan], [args.target_language])

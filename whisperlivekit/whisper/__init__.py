@@ -11,10 +11,13 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
-from whisperlivekit.whisper.audio import (load_audio, log_mel_spectrogram,
-                                          pad_or_trim)
-from whisperlivekit.whisper.decoding import (DecodingOptions, DecodingResult,
-                                             decode, detect_language)
+from whisperlivekit.whisper.audio import load_audio, log_mel_spectrogram, pad_or_trim
+from whisperlivekit.whisper.decoding import (
+    DecodingOptions,
+    DecodingResult,
+    decode,
+    detect_language,
+)
 from whisperlivekit.whisper.model import ModelDimensions, Whisper
 from whisperlivekit.whisper.transcribe import transcribe
 from whisperlivekit.whisper.version import __version__
@@ -143,7 +146,9 @@ def _infer_dims_from_config(path: str) -> Optional[ModelDimensions]:
     return None
 
 
-def _convert_hf_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+def _convert_hf_state_dict(
+    state_dict: Dict[str, torch.Tensor],
+) -> Dict[str, torch.Tensor]:
     """
     converts a HF checkpoint state_dict into the naming convention used by
     default whisper
@@ -307,7 +312,9 @@ def _apply_lora_adapter(state_dict: Dict[str, Tensor], lora_path: Optional[str])
 
         converted = _convert_hf_state_dict({hf_weight_key: delta})
         if not converted:
-            raise KeyError(f"Failed to map LoRA module '{module}' into Whisper state dict.")
+            raise KeyError(
+                f"Failed to map LoRA module '{module}' into Whisper state dict."
+            )
         target_name, delta_tensor = next(iter(converted.items()))
         if target_name not in state_dict:
             raise KeyError(
@@ -357,23 +364,25 @@ def load_model(
         default = os.path.join(os.path.expanduser("~"), ".cache")
         download_root = os.path.join(os.getenv("XDG_CACHE_HOME", default), "whisper")
     if name in _MODELS:
-        checkpoint_file = _download(_MODELS[name], download_root, in_memory)        
+        checkpoint_file = _download(_MODELS[name], download_root, in_memory)
     elif os.path.isfile(name):
         checkpoint_file = open(name, "rb").read() if in_memory else name
     else:
         raise RuntimeError(
             f"Model {name} not found; available models = {available_models()}"
         )
-        
+
     alignment_heads = _ALIGNMENT_HEADS.get(name, None)
     if custom_alignment_heads:
         alignment_heads = custom_alignment_heads.encode()
 
-    if isinstance(checkpoint_file, Path) and checkpoint_file.suffix == '.safetensors':
+    if isinstance(checkpoint_file, Path) and checkpoint_file.suffix == ".safetensors":
         try:
             from safetensors.torch import load_file
         except ImportError:
-            raise ImportError("Please install safetensors to load .safetensors model files: `pip install safetensors`")
+            raise ImportError(
+                "Please install safetensors to load .safetensors model files: `pip install safetensors`"
+            )
         if in_memory:
             checkpoint = load_file(checkpoint_file, device=device)
         else:
@@ -406,12 +415,9 @@ def load_model(
             state_dict = checkpoint
 
     model = Whisper(dims, decoder_only=decoder_only)
-    
+
     if decoder_only:
-        state_dict = {
-            k: v for k, v in state_dict.items() 
-            if 'encoder' not in k
-        }
+        state_dict = {k: v for k, v in state_dict.items() if "encoder" not in k}
 
     model.load_state_dict(state_dict)
 
@@ -422,13 +428,14 @@ def load_model(
 
 
 def convert_encoder_to_coreml(
-    model_name = "base",
-    output_path= "whisper_encoder.mlpackage",
-    dummy_frames = 3000, #Number of time frames to use for the dummy mel input during tracing
-    precision = "float16",
+    model_name="base",
+    output_path="whisper_encoder.mlpackage",
+    dummy_frames=3000,  # Number of time frames to use for the dummy mel input during tracing
+    precision="float16",
 ):
-   
+
     import coremltools as ct
+
     model = load_model(model_name, device="cpu", decoder_only=False)
     encoder = model.encoder.eval().cpu()
 
@@ -453,13 +460,14 @@ def convert_encoder_to_coreml(
     mlmodel = ct.convert(
         traced_encoder,
         inputs=[ct.TensorType(name="mel", shape=dummy_input.shape)],
-        convert_to= "mlprogram",
+        convert_to="mlprogram",
         compute_precision=coreml_precision,
     )
 
     output_path = Path(output_path)
     mlmodel.save(str(output_path))
     return output_path
+
 
 # if __name__ == "__main__":
 #     convert_encoder_to_coreml(model_name="tiny", output_path="whisper_encoder.mlpackage", dummy_frames=3000, precision="float16", convert_to="mlprogram")
