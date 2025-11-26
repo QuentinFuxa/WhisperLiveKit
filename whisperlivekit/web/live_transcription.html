@@ -23,6 +23,7 @@
         .speaker-names-header {
             display: flex;
             justify-content: space-between;
+            flex-direction: column;
             align-items: center;
             margin-bottom: 12px;
         }
@@ -33,7 +34,12 @@
             font-weight: 600;
             color: var(--text-primary, #333);
         }
-
+        .speaker-names-header h4 {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary, #333);
+}
         .speaker-names-list {
             display: flex;
             flex-direction: column;
@@ -211,6 +217,7 @@
             <div id="speakerNamesContainer" class="speaker-names-container">
                 <div class="speaker-names-header">
                     <h3>Speaker Names</h3>
+                    <h4>This is intended for use with --diarization. Without it, only the name of 1 will change!</h4>
                     <button class="speaker-name-btn clear" onclick="clearAllSpeakerNames()">Clear All</button>
                 </div>
                 <div id="speakerNamesList" class="speaker-names-list">
