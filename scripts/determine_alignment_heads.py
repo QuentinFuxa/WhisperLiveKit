@@ -1,4 +1,5 @@
 """Determine alignment heads for a variants, such as distilled model"""
+
 from __future__ import annotations
 
 import argparse
@@ -77,16 +78,8 @@ def _parse_args():
         default="cuda" if torch.cuda.is_available() else "cpu",
         help="Torch device to run on",
     )
-    parser.add_argument(
-        "--dataset",
-        type=str,
-        default="librispeech_asr"
-    )
-    parser.add_argument(
-        "--dataset-config",
-        type=str,
-        default="clean" 
-    )
+    parser.add_argument("--dataset", type=str, default="librispeech_asr")
+    parser.add_argument("--dataset-config", type=str, default="clean")
     parser.add_argument(
         "--dataset-split",
         type=str,
@@ -190,6 +183,7 @@ def _select_heads_for_visualization(selection, strengths, top_k):
     entries.sort(key=lambda item: item[2], reverse=True)
     return entries[:top_k]
 
+
 def _extract_heatmaps(
     model,
     tokenizer,
@@ -242,8 +236,7 @@ def _extract_heatmaps(
     return heatmaps
 
 
-def _plot_heatmaps(
-    heads, heatmaps, output_path):
+def _plot_heatmaps(heads, heatmaps, output_path):
     cols = min(3, len(heads))
     rows = math.ceil(len(heads) / cols)
     fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 3.2 * rows), squeeze=False)
@@ -286,9 +279,12 @@ def main():
     selection = strengths > 0.05
     _dump_mask(selection.cpu(), args.output)
 
-    viz_heads = _select_heads_for_visualization(selection, strengths, args.visualize_top_k)
+    viz_heads = _select_heads_for_visualization(
+        selection, strengths, args.visualize_top_k
+    )
     heatmaps = _extract_heatmaps(model, tokenizer, clips[0], viz_heads)
     _plot_heatmaps(viz_heads, heatmaps, "alignment_heads.png")
+
 
 if __name__ == "__main__":
     main()

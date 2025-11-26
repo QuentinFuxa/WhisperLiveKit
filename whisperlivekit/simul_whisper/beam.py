@@ -16,17 +16,20 @@ class BeamPyTorchInference(PyTorchInference):
         if source_indices != list(range(len(source_indices))):
             for cache_id in self._kv_cache_ids():
                 if cache_id in self.kv_cache:
-                    self.kv_cache[cache_id] = self.kv_cache[cache_id][source_indices].detach()
+                    self.kv_cache[cache_id] = self.kv_cache[cache_id][
+                        source_indices
+                    ].detach()
 
     def logits(
-        self, 
-        tokens: Tensor, 
+        self,
+        tokens: Tensor,
         audio_features: Tensor,
         return_cross_attn: bool = False,
     ):
         """Get logits, optionally returning cross-attention weights."""
         return self.model.decoder(
-            tokens, audio_features, 
+            tokens,
+            audio_features,
             kv_cache=self.kv_cache,
             return_cross_attn=return_cross_attn,
         )

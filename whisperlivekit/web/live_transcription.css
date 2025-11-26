@@ -619,12 +619,14 @@ label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 1px 5px;
   margin-left: -5px;
-  border-radius: 50%;
-  font-size: 11px;
+  border-radius: 10px;
+  font-size: 12px;
   line-height: 1;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
 }

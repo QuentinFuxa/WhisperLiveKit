@@ -12,11 +12,15 @@ from whisperlivekit.timed_objects import ASRToken
 from whisperlivekit.whisper.transcribe import transcribe as whisper_transcribe
 
 logger = logging.getLogger(__name__)
+
+
 class ASRBase:
     sep = " "  # join transcribe words with this character (" " for whisper_timestamped,
-              # "" for faster-whisper because it emits the spaces when needed)
+    # "" for faster-whisper because it emits the spaces when needed)
 
-    def __init__(self, lan, model_size=None, cache_dir=None, model_dir=None, logfile=sys.stderr):
+    def __init__(
+        self, lan, model_size=None, cache_dir=None, model_dir=None, logfile=sys.stderr
+    ):
         self.logfile = logfile
         self.transcribe_kargs = {}
         if lan == "auto":
@@ -30,7 +34,9 @@ class ASRBase:
         return ASRToken(self.start + offset, self.end + offset, self.text)
 
     def __repr__(self):
-        return f"ASRToken(start={self.start:.2f}, end={self.end:.2f}, text={self.text!r})"
+        return (
+            f"ASRToken(start={self.start:.2f}, end={self.end:.2f}, text={self.text!r})"
+        )
 
     def load_model(self, model_size, cache_dir, model_dir):
         raise NotImplementedError("must be implemented in the child class")
@@ -44,6 +50,7 @@ class ASRBase:
 
 class WhisperASR(ASRBase):
     """Uses WhisperLiveKit's built-in Whisper implementation."""
+
     sep = " "
 
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
@@ -62,7 +69,9 @@ class WhisperASR(ASRBase):
             return load_model(str(resolved_path))
 
         if model_size is None:
-            raise ValueError("Either model_size or model_dir must be set for WhisperASR")
+            raise ValueError(
+                "Either model_size or model_dir must be set for WhisperASR"
+            )
 
         return load_model(model_size, download_root=cache_dir)
 
@@ -103,10 +112,14 @@ class WhisperASR(ASRBase):
         return [segment["end"] for segment in res["segments"]]
 
     def use_vad(self):
-        logger.warning("VAD is not currently supported for WhisperASR backend and will be ignored.")
+        logger.warning(
+            "VAD is not currently supported for WhisperASR backend and will be ignored."
+        )
+
 
 class FasterWhisperASR(ASRBase):
     """Uses faster-whisper as the backend."""
+
     sep = ""
 
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
@@ -114,16 +127,17 @@ class FasterWhisperASR(ASRBase):
 
         if model_dir is not None:
             resolved_path = resolve_model_path(model_dir)
-            logger.debug(f"Loading faster-whisper model from {resolved_path}. "
-                         f"model_size and cache_dir parameters are not used.")
+            logger.debug(
+                f"Loading faster-whisper model from {resolved_path}. "
+                f"model_size and cache_dir parameters are not used."
+            )
             model_size_or_path = str(resolved_path)
         elif model_size is not None:
             model_size_or_path = model_size
         else:
             raise ValueError("Either model_size or model_dir must be set")
-        device = "auto" # Allow CTranslate2 to decide available device
-        compute_type = "auto" # Allow CTranslate2 to decide faster compute type
-                              
+        device = "auto"  # Allow CTranslate2 to decide available device
+        compute_type = "auto"  # Allow CTranslate2 to decide faster compute type
 
         model = WhisperModel(
             model_size_or_path,
@@ -151,7 +165,9 @@ class FasterWhisperASR(ASRBase):
             if segment.no_speech_prob > 0.9:
                 continue
             for word in segment.words:
-                token = ASRToken(word.start, word.end, word.word, probability=word.probability)
+                token = ASRToken(
+                    word.start, word.end, word.word, probability=word.probability
+                )
                 tokens.append(token)
         return tokens
 
@@ -161,10 +177,12 @@ class FasterWhisperASR(ASRBase):
     def use_vad(self):
         self.transcribe_kargs["vad_filter"] = True
 
+
 class MLXWhisper(ASRBase):
     """
     Uses MLX Whisper optimized for Apple Silicon.
     """
+
     sep = ""
 
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
@@ -173,11 +191,15 @@ class MLXWhisper(ASRBase):
 
         if model_dir is not None:
             resolved_path = resolve_model_path(model_dir)
-            logger.debug(f"Loading MLX Whisper model from {resolved_path}. model_size parameter is not used.")
+            logger.debug(
+                f"Loading MLX Whisper model from {resolved_path}. model_size parameter is not used."
+            )
             model_size_or_path = str(resolved_path)
         elif model_size is not None:
             model_size_or_path = self.translate_model_name(model_size)
-            logger.debug(f"Loading whisper model {model_size}. You use mlx whisper, so {model_size_or_path} will be used.")
+            logger.debug(
+                f"Loading whisper model {model_size}. You use mlx whisper, so {model_size_or_path} will be used."
+            )
         else:
             raise ValueError("Either model_size or model_dir must be set")
 
@@ -206,11 +228,15 @@ class MLXWhisper(ASRBase):
         if mlx_model_path:
             return mlx_model_path
         else:
-            raise ValueError(f"Model name '{model_name}' is not recognized or not supported.")
+            raise ValueError(
+                f"Model name '{model_name}' is not recognized or not supported."
+            )
 
     def transcribe(self, audio, init_prompt=""):
         if self.transcribe_kargs:
-            logger.warning("Transcribe kwargs (vad, task) are not compatible with MLX Whisper and will be ignored.")
+            logger.warning(
+                "Transcribe kwargs (vad, task) are not compatible with MLX Whisper and will be ignored."
+            )
         segments = self.model(
             audio,
             language=self.original_language,
@@ -227,7 +253,7 @@ class MLXWhisper(ASRBase):
             if segment.get("no_speech_prob", 0) > 0.9:
                 continue
             for word in segment.get("words", []):
-                probability=word["probability"]
+                probability = word["probability"]
                 token = ASRToken(word["start"], word["end"], word["word"])
                 tokens.append(token)
         return tokens
@@ -238,8 +264,10 @@ class MLXWhisper(ASRBase):
     def use_vad(self):
         self.transcribe_kargs["vad_filter"] = True
 
+
 class OpenaiApiASR(ASRBase):
     """Uses OpenAI's Whisper API for transcription."""
+
     def __init__(self, lan=None, temperature=0, logfile=sys.stderr):
         self.logfile = logfile
         self.modelname = "whisper-1"
@@ -252,6 +280,7 @@ class OpenaiApiASR(ASRBase):
 
     def load_model(self, *args, **kwargs):
         from openai import OpenAI
+
         self.client = OpenAI()
         self.transcribed_seconds = 0
 
@@ -294,9 +323,15 @@ class OpenaiApiASR(ASRBase):
             params["language"] = self.original_language
         if prompt:
             params["prompt"] = prompt
-        proc = self.client.audio.translations if self.task == "translate" else self.client.audio.transcriptions
+        proc = (
+            self.client.audio.translations
+            if self.task == "translate"
+            else self.client.audio.transcriptions
+        )
         transcript = proc.create(**params)
-        logger.debug(f"OpenAI API processed accumulated {self.transcribed_seconds} seconds")
+        logger.debug(
+            f"OpenAI API processed accumulated {self.transcribed_seconds} seconds"
+        )
         return transcript
 
     def use_vad(self):

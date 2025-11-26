@@ -6,6 +6,150 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WhisperLiveKit</title>
     <link rel="stylesheet" href="live_transcription.css" />
+    <style>
+        /* Speaker Name Editor Styles */
+        .speaker-names-container {
+            margin-top: 16px;
+            padding: 12px;
+            background: var(--bg-secondary, #f5f5f5);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .speaker-names-container.visible {
+            display: block;
+        }
+
+        .speaker-names-header {
+            display: flex;
+            justify-content: space-between;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .speaker-names-header h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary, #333);
+        }
+        .speaker-names-header h4 {
+            margin: 0;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary, #333);
+}
+        .speaker-names-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .speaker-name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .speaker-badge-edit {
+            min-width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent-color, #4a90d9);
+            color: white;
+            border-radius: 50%;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .speaker-name-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color, #ddd);
+            border-radius: 6px;
+            font-size: 14px;
+            background: var(--bg-primary, white);
+            color: var(--text-primary, #333);
+        }
+
+        .speaker-name-input:focus {
+            outline: none;
+            border-color: var(--accent-color, #4a90d9);
+        }
+
+        .speaker-name-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+
+        .speaker-name-btn:hover {
+            opacity: 0.8;
+        }
+
+        .speaker-name-btn.save {
+            background: var(--accent-color, #4a90d9);
+            color: white;
+        }
+
+        .speaker-name-btn.clear {
+            background: var(--danger-color, #e74c3c);
+            color: white;
+        }
+
+        .add-speaker-btn {
+            margin-top: 8px;
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px dashed var(--border-color, #ddd);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-secondary, #666);
+            width: 100%;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .add-speaker-btn:hover {
+            background: var(--bg-hover, #eee);
+            border-color: var(--accent-color, #4a90d9);
+        }
+
+        .speaker-names-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: transparent;
+            border: 1px solid var(--border-color, #ddd);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-secondary, #666);
+            margin-left: 8px;
+        }
+
+        .speaker-names-toggle:hover {
+            background: var(--bg-hover, #eee);
+        }
+
+        /* Make speaker badges in transcript clickable */
+        .speaker-badge.editable {
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .speaker-badge.editable:hover {
+            transform: scale(1.1);
+        }
+    </style>
 </head>
 
 <body>
@@ -26,6 +170,10 @@
 
                 <button id="settingsToggle" class="settings-toggle" title="Show/hide settings">
                     <img src="web/src/settings.svg" alt="Settings" />
+                </button>
+
+                <button id="speakerNamesToggle" class="speaker-names-toggle" title="Edit speaker names">
+                    👤 Speakers
                 </button>
             </div>
 
@@ -64,8 +212,21 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Speaker Names Editor Panel -->
+            <div id="speakerNamesContainer" class="speaker-names-container">
+                <div class="speaker-names-header">
+                    <h3>Speaker Names</h3>
+                    <h4>This is intended for use with --diarization. Without it, only the name of 1 will change!</h4>
+                    <button class="speaker-name-btn clear" onclick="clearAllSpeakerNames()">Clear All</button>
+                </div>
+                <div id="speakerNamesList" class="speaker-names-list">
+                    <!-- Speaker rows will be dynamically added here -->
+                </div>
+                <button class="add-speaker-btn" onclick="addSpeakerRow()">+ Add Speaker</button>
+            </div>
         </div>
-        
+
         <p id="status"></p>
     </div>
 
@@ -74,6 +235,163 @@
     </div>
 
     <script src="live_transcription.js"></script>
+    <script>
+        // ============ Speaker Name Management ============
+        const speakerNamesCache = {};
+        let speakerRowCount = 0;
+
+        // Toggle speaker names panel
+        document.getElementById('speakerNamesToggle').addEventListener('click', () => {
+            const container = document.getElementById('speakerNamesContainer');
+            container.classList.toggle('visible');
+            if (container.classList.contains('visible')) {
+                loadSpeakerNames();
+            }
+        });
+
+        // Load existing speaker names from server
+        async function loadSpeakerNames() {
+            try {
+                const response = await fetch('/api/speakers');
+                const data = await response.json();
+                Object.assign(speakerNamesCache, data.speakers);
+                renderSpeakerNamesList();
+            } catch (error) {
+                console.error('Failed to load speaker names:', error);
+            }
+        }
+
+        // Render the speaker names list
+        function renderSpeakerNamesList() {
+            const list = document.getElementById('speakerNamesList');
+            list.innerHTML = '';
+
+            // Get all unique speaker IDs (from cache + any detected in transcript)
+            const speakerIds = new Set(Object.keys(speakerNamesCache).map(Number));
+
+            // Add default speakers 1-4 if none exist
+            if (speakerIds.size === 0) {
+                [1, 2, 3, 4].forEach(id => speakerIds.add(id));
+            }
+
+            Array.from(speakerIds).sort((a, b) => a - b).forEach(speakerId => {
+                addSpeakerRowElement(speakerId, speakerNamesCache[speakerId] || '');
+            });
+        }
+
+        // Add a speaker row element
+        function addSpeakerRowElement(speakerId, name = '') {
+            const list = document.getElementById('speakerNamesList');
+            const row = document.createElement('div');
+            row.className = 'speaker-name-row';
+            row.dataset.speakerId = speakerId;
+
+            row.innerHTML = `
+                <div class="speaker-badge-edit">${speakerId}</div>
+                <input type="text" class="speaker-name-input"
+                       placeholder="Enter name (e.g., Alice)"
+                       value="${name}"
+                       data-speaker-id="${speakerId}">
+                <button class="speaker-name-btn save" onclick="saveSpeakerName(${speakerId}, this)">Save</button>
+                <button class="speaker-name-btn clear" onclick="removeSpeakerName(${speakerId}, this)">✕</button>
+            `;
+
+            // Save on Enter key
+            const input = row.querySelector('input');
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    saveSpeakerName(speakerId, row.querySelector('.save'));
+                }
+            });
+
+            list.appendChild(row);
+        }
+
+        // Add a new speaker row
+        function addSpeakerRow() {
+            const existingIds = Array.from(document.querySelectorAll('.speaker-name-row'))
+                .map(row => parseInt(row.dataset.speakerId));
+            const newId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+            addSpeakerRowElement(newId, '');
+        }
+
+        // Save speaker name to server
+        async function saveSpeakerName(speakerId, button) {
+            const row = button.closest('.speaker-name-row');
+            const input = row.querySelector('.speaker-name-input');
+            const name = input.value.trim();
+
+            if (!name) {
+                alert('Please enter a name');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/speakers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ speaker_id: speakerId, name: name })
+                });
+
+                if (response.ok) {
+                    speakerNamesCache[speakerId] = name;
+                    button.textContent = '✓';
+                    setTimeout(() => { button.textContent = 'Save'; }, 1000);
+
+                    // Update any visible speaker badges in transcript
+                    updateTranscriptSpeakerNames();
+                }
+            } catch (error) {
+                console.error('Failed to save speaker name:', error);
+            }
+        }
+
+        // Remove speaker name
+        async function removeSpeakerName(speakerId, button) {
+            try {
+                await fetch(`/api/speakers/${speakerId}`, { method: 'DELETE' });
+                delete speakerNamesCache[speakerId];
+
+                const row = button.closest('.speaker-name-row');
+                row.querySelector('.speaker-name-input').value = '';
+
+                updateTranscriptSpeakerNames();
+            } catch (error) {
+                console.error('Failed to remove speaker name:', error);
+            }
+        }
+
+        // Clear all speaker names
+        async function clearAllSpeakerNames() {
+            if (!confirm('Clear all speaker names?')) return;
+
+            try {
+                await fetch('/api/speakers', { method: 'DELETE' });
+                Object.keys(speakerNamesCache).forEach(key => delete speakerNamesCache[key]);
+                renderSpeakerNamesList();
+                updateTranscriptSpeakerNames();
+            } catch (error) {
+                console.error('Failed to clear speaker names:', error);
+            }
+        }
+
+        // Update speaker badges in the transcript
+        function updateTranscriptSpeakerNames() {
+            document.querySelectorAll('.speaker-badge').forEach(badge => {
+                const speakerId = parseInt(badge.dataset.speakerId || badge.textContent);
+                if (speakerNamesCache[speakerId]) {
+                    badge.textContent = speakerNamesCache[speakerId];
+                    badge.title = `Speaker ${speakerId}`;
+                } else {
+                    badge.textContent = speakerId;
+                    badge.title = '';
+                }
+            });
+        }
+
+        // Initialize on page load
+        loadSpeakerNames();
+    </script>
 </body>
 
 </html>

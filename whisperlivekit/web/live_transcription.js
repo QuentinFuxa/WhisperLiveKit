@@ -379,8 +379,9 @@ function renderLinesWithBuffer(
           remaining_time_diarization
         )}</span> second(s) of audio are undergoing diarization</span></span>`;
       } else if (item.speaker !== 0) {
-        const speakerNum = `<span class="speaker-badge">${item.speaker}</span>`;
-        speakerLabel = `<span id="speaker">${speakerIcon}${speakerNum}<span id='timeInfo'>${timeInfo}</span></span>`;
+            const speakerDisplay = item.speaker_name || item.speaker;
+            const speakerNum = `<span class="speaker-badge">${speakerDisplay}</span>`;
+            speakerLabel = `<span id="speaker">${speakerIcon}${speakerNum}<span id='timeInfo'>${timeInfo}</span></span>`;
 
         if (item.detected_language) {
           speakerLabel += `<span class="label_language">${languageIcon}<span>${item.detected_language}</span></span>`;
@@ -814,4 +815,21 @@ if (isExtension) {
   }
 
   void checkAndRequestPermissions();
+}
+// Edit name of speakers
+function openSpeakerNameEditor(speakerId) {
+    const container = document.getElementById('speakerNamesContainer');
+    if (!container.classList.contains('visible')) {
+        container.classList.add('visible');
+        loadSpeakerNames();
+    }
+
+    // Focus on the input for this speaker
+    setTimeout(() => {
+        const input = document.querySelector(`.speaker-name-input[data-speaker-id="${speakerId}"]`);
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }, 100);
 }

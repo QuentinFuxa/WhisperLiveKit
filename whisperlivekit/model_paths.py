@@ -2,7 +2,9 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 
-def model_path_and_type(model_path: Union[str, Path]) -> Tuple[Optional[Path], bool, bool]:
+def model_path_and_type(
+    model_path: Union[str, Path],
+) -> Tuple[Optional[Path], bool, bool]:
     """
     Inspect the provided path and determine which model formats are available.
 

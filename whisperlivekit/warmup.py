@@ -1,7 +1,7 @@
-
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 def load_file(warmup_file=None, timeout=5):
     import os
@@ -22,7 +22,10 @@ def load_file(warmup_file=None, timeout=5):
         if not os.path.exists(warmup_file) or os.path.getsize(warmup_file) == 0:
             try:
                 logger.debug(f"Downloading warmup file from {jfk_url}")
-                with urllib.request.urlopen(jfk_url, timeout=timeout) as r, open(warmup_file, "wb") as f:
+                with (
+                    urllib.request.urlopen(jfk_url, timeout=timeout) as r,
+                    open(warmup_file, "wb") as f,
+                ):
                     f.write(r.read())
             except Exception as e:
                 logger.warning(f"Warmup file download failed: {e}.")
@@ -39,6 +42,7 @@ def load_file(warmup_file=None, timeout=5):
     except Exception as e:
         logger.warning(f"Failed to load warmup file: {e}")
         return None
+
 
 def warmup_asr(asr, warmup_file=None, timeout=5):
     """
