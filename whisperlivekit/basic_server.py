@@ -26,7 +26,7 @@ args = parse_args()
 transcription_engine = None
 
 
-# ============ NEW: Speaker Name Manager ============
+# NEW: Manage the Names of Speaker (SpeakerNameManager)
 class SpeakerNameManager:
     """Manages mapping between numeric speaker IDs and custom names."""
 
@@ -42,7 +42,7 @@ class SpeakerNameManager:
         return self._names.get(speaker_id, str(speaker_id))
 
     def remove_name(self, speaker_id: int) -> None:
-        """Remove custom name, reverting to numeric display."""
+        """Remove custom name, revert to numeric display."""
         self._names.pop(speaker_id, None)
 
     def get_all_mappings(self) -> Dict[int, str]:
@@ -95,7 +95,7 @@ async def get():
     return HTMLResponse(get_inline_ui_html())
 
 
-# ============ NEW: Speaker Name API Endpoints ============
+# NEW: Add Speaker Name API Endpoint
 @app.get("/api/speakers")
 async def get_speaker_names():
     """Get all speaker name mappings."""
