@@ -114,6 +114,9 @@ class Segment(TimedText):
     end: Optional[float]
     text: Optional[str]
     speaker: Optional[str]
+    tokens: Optional[ASRToken] = None
+    translation: Optional[Translation] = None
+
     @classmethod
     def from_tokens(
         cls,
@@ -141,17 +144,13 @@ class Segment(TimedText):
                 speaker=-1,
                 detected_language=start_token.detected_language
             )
+
     def is_silence(self) -> bool:
         """True when this segment represents a silence gap."""
         return self.speaker == -2
 
-
-@dataclass
-class Line(TimedText):
-    translation: str = ''
-    
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize the line for frontend consumption."""
+        """Serialize the segment for frontend consumption."""
         _dict: Dict[str, Any] = {
             'speaker': int(self.speaker) if self.speaker != -1 else 1,
             'text': self.text,
@@ -163,29 +162,13 @@ class Line(TimedText):
         if self.detected_language:
             _dict['detected_language'] = self.detected_language
         return _dict
-    
-    def build_from_tokens(self, tokens: List[ASRToken]) -> "Line":
-        """Populate line attributes from a contiguous token list."""
-        self.text = ''.join([token.text for token in tokens])
-        self.start = tokens[0].start
-        self.end = tokens[-1].end
-        self.speaker = 1
-        self.detected_language = tokens[0].detected_language
-        return self
 
-    def build_from_segment(self, segment: Segment) -> "Line":
-        """Populate the line fields from a pre-built segment."""
-        self.text = segment.text
-        self.start = segment.start
-        self.end = segment.end
-        self.speaker = segment.speaker
-        self.detected_language = segment.detected_language
-        return self
 
-    def is_silent(self) -> bool:
-        return self.speaker == -2
+@dataclass
+class PuncSegment(Segment):
+    pass
 
-class SilentLine(Line):
+class SilentSegment(Segment):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.speaker = -2
@@ -196,7 +179,7 @@ class SilentLine(Line):
 class FrontData():
     status: str = ''
     error: str = ''
-    lines: list[Line] = field(default_factory=list)
+    lines: list[Segment] = field(default_factory=list)
     buffer_transcription: str = ''
     buffer_diarization: str = ''
     buffer_translation: str = ''

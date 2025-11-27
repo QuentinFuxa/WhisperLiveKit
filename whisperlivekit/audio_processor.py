@@ -12,7 +12,7 @@ from whisperlivekit.core import (TranscriptionEngine,
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
 from whisperlivekit.silero_vad_iterator import FixedVADIterator
 from whisperlivekit.timed_objects import (ASRToken, ChangeSpeaker, FrontData,
-                                          Line, Silence, State, Transcript)
+                                          Segment, Silence, State, Transcript)
 from whisperlivekit.tokens_alignment import TokensAlignment
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
