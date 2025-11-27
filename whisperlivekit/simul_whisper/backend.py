@@ -11,7 +11,7 @@ import torch
 
 from whisperlivekit.backend_support import (faster_backend_available,
                                             mlx_backend_available)
-from whisperlivekit.model_paths import model_path_and_type, resolve_model_path
+from whisperlivekit.model_paths import detect_model_format, resolve_model_path
 from whisperlivekit.simul_whisper.config import AlignAttConfig
 from whisperlivekit.simul_whisper.simul_whisper import AlignAtt
 from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, Transcript
@@ -159,34 +159,23 @@ class SimulStreamingASR():
         self._resolved_model_path = None
         self.encoder_backend = "whisper"
         preferred_backend = getattr(self, "backend", "auto")
-        self.pytorch_path, compatible_whisper_mlx, compatible_faster_whisper = None, True, True
+        compatible_whisper_mlx, compatible_faster_whisper = True, True
+        
         if self.model_path:
             resolved_model_path = resolve_model_path(self.model_path)
             self._resolved_model_path = resolved_model_path
             self.model_path = str(resolved_model_path)
-            self.pytorch_path, compatible_whisper_mlx, compatible_faster_whisper = model_path_and_type(resolved_model_path)
-            if self.pytorch_path:
-                self.model_name = self.pytorch_path.stem
-            else:
-                self.model_name = Path(self.model_path).stem
+            
+            model_info = detect_model_format(resolved_model_path)
+            compatible_whisper_mlx = model_info.compatible_whisper_mlx
+            compatible_faster_whisper = model_info.compatible_faster_whisper
+            
+            if not model_info.has_pytorch:
                 raise FileNotFoundError(
                     f"No PyTorch checkpoint (.pt/.bin/.safetensors) found under {self.model_path}"
-                )
+                )            
+            self.model_name = resolved_model_path.name if resolved_model_path.is_dir() else resolved_model_path.stem
         elif self.model_size is not None:
-            model_mapping = {
-                'tiny': './tiny.pt',
-                'base': './base.pt',
-                'small': './small.pt',
-                'medium': './medium.pt',
-                'medium.en': './medium.en.pt',
-                'large-v1': './large-v1.pt',
-                'base.en': './base.en.pt',
-                'small.en': './small.en.pt',
-                'tiny.en': './tiny.en.pt',
-                'large-v2': './large-v2.pt',
-                'large-v3': './large-v3.pt',
-                'large': './large-v3.pt'
-            }
             self.model_name = self.model_size
         else:
             raise ValueError("Either model_size or model_path must be specified for SimulStreaming.")
@@ -292,9 +281,10 @@ class SimulStreamingASR():
         return True
 
     def load_model(self):
+        model_ref = str(self._resolved_model_path) if self._resolved_model_path else self.model_name
         whisper_model = load_model(
-            name=self.pytorch_path if self.pytorch_path else self.model_name,
-            download_root=self.model_path,
+            name=model_ref,
+            download_root=None,
             decoder_only=self.fast_encoder,
             custom_alignment_heads=self.custom_alignment_heads
         )

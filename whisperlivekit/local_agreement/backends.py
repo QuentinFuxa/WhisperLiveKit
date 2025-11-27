@@ -7,7 +7,7 @@ from typing import List
 import numpy as np
 import soundfile as sf
 
-from whisperlivekit.model_paths import model_path_and_type, resolve_model_path
+from whisperlivekit.model_paths import detect_model_format, resolve_model_path
 from whisperlivekit.timed_objects import ASRToken
 from whisperlivekit.whisper.transcribe import transcribe as whisper_transcribe
 
@@ -47,24 +47,23 @@ class WhisperASR(ASRBase):
     sep = " "
 
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
-        from whisperlivekit.whisper import load_model as load_model
+        from whisperlivekit.whisper import load_model as load_whisper_model
 
         if model_dir is not None:
-            resolved_path = resolve_model_path(model_dir)
+            resolved_path = resolve_model_path(model_dir)            
             if resolved_path.is_dir():
-                pytorch_path, _, _ = model_path_and_type(resolved_path)
-                if pytorch_path is None:
+                model_info = detect_model_format(resolved_path)
+                if not model_info.has_pytorch:
                     raise FileNotFoundError(
                         f"No supported PyTorch checkpoint found under {resolved_path}"
-                    )
-                resolved_path = pytorch_path
+                    )            
             logger.debug(f"Loading Whisper model from custom path {resolved_path}")
-            return load_model(str(resolved_path))
+            return load_whisper_model(str(resolved_path))
 
         if model_size is None:
             raise ValueError("Either model_size or model_dir must be set for WhisperASR")
 
-        return load_model(model_size, download_root=cache_dir)
+        return load_whisper_model(model_size, download_root=cache_dir)
 
     def transcribe(self, audio, init_prompt=""):
         options = dict(self.transcribe_kargs)

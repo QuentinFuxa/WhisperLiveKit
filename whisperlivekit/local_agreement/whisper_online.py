@@ -10,7 +10,7 @@ import numpy as np
 
 from whisperlivekit.backend_support import (faster_backend_available,
                                             mlx_backend_available)
-from whisperlivekit.model_paths import model_path_and_type, resolve_model_path
+from whisperlivekit.model_paths import detect_model_format, resolve_model_path
 from whisperlivekit.warmup import warmup_asr
 
 from .backends import FasterWhisperASR, MLXWhisper, OpenaiApiASR, WhisperASR
@@ -87,16 +87,20 @@ def backend_factory(
     backend_choice = backend
     custom_reference = model_path or model_dir
     resolved_root = None
-    pytorch_checkpoint = None
     has_mlx_weights = False
     has_fw_weights = False
+    has_pytorch = False
 
     if custom_reference:
         resolved_root = resolve_model_path(custom_reference)
         if resolved_root.is_dir():
-            pytorch_checkpoint, has_mlx_weights, has_fw_weights = model_path_and_type(resolved_root)
+            model_info = detect_model_format(resolved_root)
+            has_mlx_weights = model_info.compatible_whisper_mlx
+            has_fw_weights = model_info.compatible_faster_whisper
+            has_pytorch = model_info.has_pytorch
         else:
-            pytorch_checkpoint = resolved_root
+            # Single file provided
+            has_pytorch = True
 
     if backend_choice == "openai-api":
         logger.debug("Using OpenAI API.")
@@ -121,8 +125,8 @@ def backend_factory(
             model_override = str(resolved_root) if resolved_root is not None else None
         else:
             asr_cls = WhisperASR
-            model_override = str(pytorch_checkpoint) if pytorch_checkpoint is not None else None
-            if custom_reference and model_override is None:
+            model_override = str(resolved_root) if resolved_root is not None else None
+            if custom_reference and not has_pytorch:
                 raise FileNotFoundError(
                     f"No PyTorch checkpoint found under {resolved_root or custom_reference}"
                 )

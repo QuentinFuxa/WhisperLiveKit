@@ -319,6 +319,75 @@ def _apply_lora_adapter(state_dict: Dict[str, Tensor], lora_path: Optional[str])
         )
 
 
+def _load_checkpoint(
+    file_path: Union[str, Path],
+    device: str,
+    in_memory: bool = False,
+    checkpoint_bytes: Optional[bytes] = None,
+) -> Dict[str, torch.Tensor]:
+    """
+    Load a checkpoint from a single file.
+    
+    Handles .pt, .bin, and .safetensors formats.
+    """
+    if checkpoint_bytes is not None:
+        with io.BytesIO(checkpoint_bytes) as fp:
+            return torch.load(fp, map_location=device)
+    
+    file_path = Path(file_path)
+    suffix = file_path.suffix.lower()
+    
+    if suffix == '.safetensors':
+        try:
+            from safetensors.torch import load_file
+        except ImportError:
+            raise ImportError(
+                "Please install safetensors to load .safetensors model files: `pip install safetensors`"
+            )
+        return load_file(str(file_path), device=device)
+    else:
+        if in_memory:
+            with open(file_path, "rb") as f:
+                checkpoint_bytes = f.read()
+            with io.BytesIO(checkpoint_bytes) as fp:
+                return torch.load(fp, map_location=device)
+        else:
+            with open(file_path, "rb") as fp:
+                return torch.load(fp, map_location=device)
+
+
+def _load_sharded_checkpoint(
+    shard_files: List[Path],
+    device: str,
+) -> Dict[str, torch.Tensor]:
+    """
+    Load a sharded checkpoint (multiple .safetensors or .bin files).
+    
+    Merges all shards into a single state dict.
+    """
+    merged_state_dict = {}
+    first_suffix = shard_files[0].suffix.lower()
+    
+    if first_suffix == '.safetensors':
+        try:
+            from safetensors.torch import load_file
+        except ImportError:
+            raise ImportError(
+                "Please install safetensors to load sharded .safetensors model: `pip install safetensors`"
+            )
+        for shard_path in shard_files:
+            shard_dict = load_file(str(shard_path), device=device)
+            merged_state_dict.update(shard_dict)
+    else:
+        for shard_path in shard_files:
+            with open(shard_path, "rb") as fp:
+                shard_dict = torch.load(fp, map_location=device)
+            if isinstance(shard_dict, dict):
+                merged_state_dict.update(shard_dict)
+    
+    return merged_state_dict
+
+
 def load_model(
     name: str,
     device: Optional[Union[str, torch.device]] = None,
@@ -336,6 +405,8 @@ def load_model(
     name : str
         one of the official model names listed by `whisper.available_models()`, or
         path to a model checkpoint containing the model dimensions and the model state_dict.
+        Can be a single file (.pt, .bin, .safetensors), a directory containing model files,
+        or a sharded model directory with files like model-00001-of-00002.safetensors.
     device : Union[str, torch.device]
         the PyTorch device to put the model into
     download_root: str
@@ -350,16 +421,51 @@ def load_model(
     model : Whisper
         The Whisper ASR model instance
     """
+    from whisperlivekit.model_paths import detect_model_format
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     if download_root is None:
         default = os.path.join(os.path.expanduser("~"), ".cache")
         download_root = os.path.join(os.getenv("XDG_CACHE_HOME", default), "whisper")
+    
+    checkpoint = None
+    model_path_for_config = name  # Used to find config.json for dims inference
+    
     if name in _MODELS:
-        checkpoint_file = _download(_MODELS[name], download_root, in_memory)        
+        checkpoint_file = _download(_MODELS[name], download_root, in_memory)
+        if in_memory:
+            checkpoint = _load_checkpoint(None, device, checkpoint_bytes=checkpoint_file)
+        else:
+            checkpoint = _load_checkpoint(checkpoint_file, device)
     elif os.path.isfile(name):
-        checkpoint_file = open(name, "rb").read() if in_memory else name
+        if in_memory:
+            with open(name, "rb") as f:
+                checkpoint_bytes = f.read()
+            checkpoint = _load_checkpoint(None, device, checkpoint_bytes=checkpoint_bytes)
+        else:
+            checkpoint = _load_checkpoint(name, device)
+        model_path_for_config = name
+    elif os.path.isdir(name):
+        model_info = detect_model_format(name)
+        
+        if not model_info.has_pytorch:
+            raise RuntimeError(
+                f"No PyTorch checkpoint found in directory {name}. "
+                f"Expected .pt, .bin, or .safetensors file(s)."
+            )
+        
+        if model_info.is_sharded:
+            checkpoint = _load_sharded_checkpoint(model_info.pytorch_files, device)
+        else:
+            single_file = model_info.pytorch_files[0]
+            if in_memory:
+                with open(single_file, "rb") as f:
+                    checkpoint_bytes = f.read()
+                checkpoint = _load_checkpoint(None, device, checkpoint_bytes=checkpoint_bytes)
+            else:
+                checkpoint = _load_checkpoint(single_file, device)
+        model_path_for_config = name
     else:
         raise RuntimeError(
             f"Model {name} not found; available models = {available_models()}"
@@ -368,22 +474,6 @@ def load_model(
     alignment_heads = _ALIGNMENT_HEADS.get(name, None)
     if custom_alignment_heads:
         alignment_heads = custom_alignment_heads.encode()
-
-    if isinstance(checkpoint_file, Path) and checkpoint_file.suffix == '.safetensors':
-        try:
-            from safetensors.torch import load_file
-        except ImportError:
-            raise ImportError("Please install safetensors to load .safetensors model files: `pip install safetensors`")
-        if in_memory:
-            checkpoint = load_file(checkpoint_file, device=device)
-        else:
-            checkpoint = load_file(checkpoint_file, device=device)
-    else:
-        with (
-            io.BytesIO(checkpoint_file) if in_memory else open(checkpoint_file, "rb")
-        ) as fp:
-            checkpoint = torch.load(fp, map_location=device)
-    del checkpoint_file
 
     dims_cfg = checkpoint.get("dims") if isinstance(checkpoint, dict) else None
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
@@ -396,7 +486,7 @@ def load_model(
     if dims_cfg is not None:
         dims = ModelDimensions(**dims_cfg)
     else:
-        dims = _infer_dims_from_config(name)
+        dims = _infer_dims_from_config(model_path_for_config)
         if dims is None:
             raise RuntimeError(
                 "Could not determine model dimensions. "
