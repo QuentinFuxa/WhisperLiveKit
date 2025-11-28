@@ -82,16 +82,43 @@ print(torch.cuda.is_available(), torch.cuda.get_device_name())
    ```python
    import ctranslate2
    print("CUDA devices:", ctranslate2.get_cuda_device_count())
+   print("CUDA compute types:", ctranslate2.get_supported_compute_types("cuda", 0))
    ```
+
+**Note for aarch64 systems (e.g., NVIDIA DGX Spark):** Pre-built CUDA wheels may not be available for all CUDA versions on ARM architectures. If the wheel installation fails, you may need to compile CTranslate2 from source with CUDA support enabled.
 
 If you intentionally want CPU inference, run `wlk --backend whisper` to avoid mixing CPU-only CTranslate2 with a GPU Torch build.
 
 ---
 
 ## Hopper / Blackwell (`sm_121a`) systems
-> Reported in issue #276 (NVIDIA DGX Spark)
+> Reported in issues #276 and #284 (NVIDIA DGX Spark)
 
-CUDA 12.1a GPUs ship before some toolchains know about the architecture ID, so Triton/PTXAS need manual hints:
+CUDA 12.1a GPUs (e.g., NVIDIA GB10 on DGX Spark) ship before some toolchains know about the architecture ID, so Triton/PTXAS need manual configuration.
+
+### Error: `ptxas fatal : Value 'sm_121a' is not defined for option 'gpu-name'`
+
+If you encounter this error after compiling CTranslate2 from source on aarch64 systems, Triton's bundled `ptxas` may not support the `sm_121a` architecture. The solution is to replace Triton's `ptxas` with the system's CUDA `ptxas`:
+
+```bash
+# Find your Python environment's Triton directory
+python -c "import triton; import os; print(os.path.dirname(triton.__file__))"
+
+# Copy the system ptxas to Triton's backend directory
+# Replace <triton_path> with the output above
+cp /usr/local/cuda/bin/ptxas <triton_path>/backends/nvidia/bin/ptxas
+```
+
+For example, in a virtual environment:
+```bash
+cp /usr/local/cuda/bin/ptxas ~/wlk/lib/python3.12/site-packages/triton/backends/nvidia/bin/ptxas
+```
+
+**Note:** On DGX Spark systems, CUDA is typically already in `PATH` (`/usr/local/cuda/bin`), so explicit `CUDA_HOME` and `PATH` exports may not be necessary. Verify with `which ptxas` before copying.
+
+### Alternative: Environment variable approach
+
+If the above doesn't work, you can try setting environment variables (though this may not resolve the `sm_121a` issue on all systems):
 
 ```bash
 export CUDA_HOME="/usr/local/cuda-13.0"
@@ -105,7 +132,7 @@ export TRITON_PTXAS_PATH="$CUDA_HOME/bin/ptxas"
 export TORCH_CUDA_ARCH_LIST="8.0 9.0 10.0 12.0 12.1a"
 ```
 
-After exporting those variables (or adding them to your systemd service / shell profile), restart `wlk`. Incoming streams will now compile kernels targeting `sm_121a` without crashing.
+After applying the fix, restart `wlk`. Incoming streams will now compile kernels targeting `sm_121a` without crashing.
 
 ---
 
