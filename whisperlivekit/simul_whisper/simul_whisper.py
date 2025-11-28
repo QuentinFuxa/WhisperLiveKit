@@ -484,7 +484,17 @@ class AlignAtt:
         
         accumulated_cross_attns = []
         
+        audio_duration_s = self.segments_len()
+        max_tokens_per_chunk = max(50, int(audio_duration_s * TOKENS_PER_SECOND * 2.0))  # 2x margin, min 50
+        tokens_produced_this_chunk = 0
+        
         while not completed and current_tokens.shape[1] < self.max_text_len:  # bos is 3 tokens
+            tokens_produced_this_chunk += 1
+            
+            if tokens_produced_this_chunk > max_tokens_per_chunk:
+                logger.warning(f"[Loop Detection] Too many tokens ({tokens_produced_this_chunk}) for {audio_duration_s:.2f}s audio. Breaking.")
+                current_tokens = current_tokens[:, :token_len_before_decoding]  # Discard all new tokens
+                break
 
             if new_segment:
                 tokens_for_logits = current_tokens
@@ -631,11 +641,15 @@ class AlignAtt:
             )
             timestamped_words.append(timestamp_entry)
 
-        # Hold incomplete tokens for next chunk
+        # Hold incomplete tokens for next chunk (with limit to prevent hallucination accumulation)
         self.state.pending_incomplete_tokens = []
+        MAX_PENDING_TOKENS = 10  # Real incomplete UTF-8 chars are at most a few tokens
         if split_words and replacement_char in split_words[-1]:
-            self.state.pending_incomplete_tokens = split_tokens[-1]
-            logger.warning(f"[UTF-8 Fix] Holding {len(self.state.pending_incomplete_tokens)} incomplete tokens for next chunk: {self.state.pending_incomplete_tokens}")
+            if len(split_tokens[-1]) <= MAX_PENDING_TOKENS:
+                self.state.pending_incomplete_tokens = split_tokens[-1]
+                logger.debug(f"[UTF-8 Fix] Holding {len(self.state.pending_incomplete_tokens)} incomplete tokens for next chunk")
+            else:
+                logger.warning(f"[UTF-8 Fix] Skipping {len(split_tokens[-1])} tokens (exceeds limit of {MAX_PENDING_TOKENS}, likely hallucination)")
 
         return timestamped_words
 
