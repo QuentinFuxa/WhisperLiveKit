@@ -264,7 +264,47 @@ def _collapse_hf_module_name(module: str):
     return module
 
 
+def _resolve_lora_path(lora_path: Optional[str]) -> Optional[str]:
+    """
+    Resolve LoRA adapter path - handles both local paths and HuggingFace repo IDs.
+    
+    If lora_path is a local directory containing adapter files, returns it as-is.
+    If lora_path looks like a HuggingFace repo ID (contains '/'), downloads and caches it.
+    """
+    if not lora_path:
+        return None
+    
+    # Check if it's already a valid local path
+    if os.path.isdir(lora_path):
+        config_path = os.path.join(lora_path, "adapter_config.json")
+        if os.path.isfile(config_path):
+            return lora_path
+    
+    # Try to download from HuggingFace Hub
+    if "/" in lora_path:
+        try:
+            from huggingface_hub import snapshot_download
+            local_path = snapshot_download(
+                repo_id=lora_path,
+                allow_patterns=["adapter_config.json", "adapter_model.*"],
+            )
+            return local_path
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Could not find LoRA adapter at local path or HuggingFace Hub: {lora_path}. Error: {e}"
+            )
+    
+    raise FileNotFoundError(
+        f"LoRA path '{lora_path}' is not a valid local directory or HuggingFace repo ID."
+    )
+
+
 def _apply_lora_adapter(state_dict: Dict[str, Tensor], lora_path: Optional[str]):
+    if not lora_path:
+        return
+    
+    # Resolve path (handles HuggingFace Hub download)
+    lora_path = _resolve_lora_path(lora_path)
     if not lora_path:
         return
 

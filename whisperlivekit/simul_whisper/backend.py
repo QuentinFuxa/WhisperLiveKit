@@ -282,11 +282,13 @@ class SimulStreamingASR():
 
     def load_model(self):
         model_ref = str(self._resolved_model_path) if self._resolved_model_path else self.model_name
+        lora_path = getattr(self, 'lora_path', None)
         whisper_model = load_model(
             name=model_ref,
             download_root=None,
             decoder_only=self.fast_encoder,
-            custom_alignment_heads=self.custom_alignment_heads
+            custom_alignment_heads=self.custom_alignment_heads,
+            lora_path=lora_path,
         )
         warmup_audio = load_file(self.warmup_file)
         if warmup_audio is not None:

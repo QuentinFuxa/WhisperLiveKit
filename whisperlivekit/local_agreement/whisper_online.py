@@ -77,6 +77,7 @@ def backend_factory(
             model_cache_dir,
             model_dir,
             model_path,
+            lora_path,
             direct_english_translation,
             buffer_trimming,
             buffer_trimming_sec,
@@ -138,6 +139,7 @@ def backend_factory(
             lan=lan,
             cache_dir=model_cache_dir,
             model_dir=model_override,
+            lora_path=lora_path if backend_choice == "whisper" else None,
         )
         e = time.time()
         logger.info(f"done. It took {round(e-t,2)} seconds.")

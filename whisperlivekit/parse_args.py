@@ -107,6 +107,13 @@ def parse_args():
         help="Dir where Whisper model.bin and other files are saved. This option overrides --model and --model_cache_dir parameter.",
     )
     parser.add_argument(
+        "--lora-path",
+        type=str,
+        default=None,
+        dest="lora_path",
+        help="Path or Hugging Face repo ID for LoRA adapter weights (e.g., QuentinFuxa/whisper-base-french-lora). Only works with native Whisper backend.",
+    )
+    parser.add_argument(
         "--lan",
         "--language",
         type=str,

@@ -16,9 +16,10 @@ class ASRBase:
     sep = " "  # join transcribe words with this character (" " for whisper_timestamped,
               # "" for faster-whisper because it emits the spaces when needed)
 
-    def __init__(self, lan, model_size=None, cache_dir=None, model_dir=None, logfile=sys.stderr):
+    def __init__(self, lan, model_size=None, cache_dir=None, model_dir=None, lora_path=None, logfile=sys.stderr):
         self.logfile = logfile
         self.transcribe_kargs = {}
+        self.lora_path = lora_path
         if lan == "auto":
             self.original_language = None
         else:
@@ -58,12 +59,12 @@ class WhisperASR(ASRBase):
                         f"No supported PyTorch checkpoint found under {resolved_path}"
                     )            
             logger.debug(f"Loading Whisper model from custom path {resolved_path}")
-            return load_whisper_model(str(resolved_path))
+            return load_whisper_model(str(resolved_path), lora_path=self.lora_path)
 
         if model_size is None:
             raise ValueError("Either model_size or model_dir must be set for WhisperASR")
 
-        return load_whisper_model(model_size, download_root=cache_dir)
+        return load_whisper_model(model_size, download_root=cache_dir, lora_path=self.lora_path)
 
     def transcribe(self, audio, init_prompt=""):
         options = dict(self.transcribe_kargs)
