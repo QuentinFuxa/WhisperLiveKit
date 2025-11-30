@@ -33,7 +33,8 @@ class TokensAlignment:
 
         self.last_punctuation = None
         self.last_uncompleted_punc_segment: PuncSegment = None
-        self.unvalidated_tokens: PuncSegment = []
+        self.tokens_after_last_punctuation: PuncSegment = []
+        self.all_validated_segments = []
 
     def update(self) -> None:
         """Drain state buffers into the running alignment context."""
@@ -91,11 +92,11 @@ class TokensAlignment:
     def compute_new_punctuations_segments(self) -> List[PuncSegment]:
         new_punc_segments = []
         segment_start_idx = 0
-        self.unvalidated_tokens += self.new_tokens
-        for i, token in enumerate(self.unvalidated_tokens):
+        self.tokens_after_last_punctuation += self.new_tokens
+        for i, token in enumerate(self.tokens_after_last_punctuation):
             if token.is_silence():
                 previous_segment = PuncSegment.from_tokens(
-                        tokens=self.unvalidated_tokens[segment_start_idx: i],
+                        tokens=self.tokens_after_last_punctuation[segment_start_idx: i],
                     )
                 if previous_segment:
                     new_punc_segments.append(previous_segment)
@@ -108,12 +109,12 @@ class TokensAlignment:
             else:
                 if token.has_punctuation():
                     segment = PuncSegment.from_tokens(
-                        tokens=self.unvalidated_tokens[segment_start_idx: i+1],
+                        tokens=self.tokens_after_last_punctuation[segment_start_idx: i+1],
                     )
                     new_punc_segments.append(segment)
                     segment_start_idx = i+1
 
-        self.unvalidated_tokens = self.unvalidated_tokens[segment_start_idx:]
+        self.tokens_after_last_punctuation = self.tokens_after_last_punctuation[segment_start_idx:]
         return new_punc_segments
 
 
@@ -140,35 +141,39 @@ class TokensAlignment:
 
     def get_lines_diarization(self) -> Tuple[List[Segment], str]:
         """Build segments when diarization is enabled and track overflow buffer."""
-        diarization_buffer = ''
-        punctuation_segments = self.compute_punctuations_segments()
+        # diarization_buffer = ''
+        unvalidated_segments = []
+        # punctuation_segments = self.compute_punctuations_segments()
+        new_punc_segments = self.compute_new_punctuations_segments()
         diarization_segments = self.concatenate_diar_segments()
-        for punctuation_segment in punctuation_segments:
-            if not punctuation_segment.is_silence():
-                if diarization_segments and punctuation_segment.start >= diarization_segments[-1].end:
-                    diarization_buffer += punctuation_segment.text
+
+        for new_punctuation_segment in new_punc_segments:
+            if not new_punctuation_segment.is_silence():
+                if diarization_segments and new_punctuation_segment.start >= diarization_segments[-1].end:
+                    unvalidated_segments.append(new_punctuation_segment)
                 else:
                     max_overlap = 0.0
                     max_overlap_speaker = 1
                     for diarization_segment in diarization_segments:
-                        intersec = self.intersection_duration(punctuation_segment, diarization_segment)
+                        intersec = self.intersection_duration(new_punctuation_segment, diarization_segment)
                         if intersec > max_overlap:
                             max_overlap = intersec
                             max_overlap_speaker = diarization_segment.speaker + 1
-                    punctuation_segment.speaker = max_overlap_speaker
-        
-        segments = []
-        if punctuation_segments:
-            segments = [punctuation_segments[0]]
-            for segment in punctuation_segments[1:]:
-                if segment.speaker == segments[-1].speaker:
-                    if segments[-1].text:
-                        segments[-1].text += segment.text
-                    segments[-1].end = segment.end
-                else:
-                    segments.append(segment)
+                    new_punctuation_segment.speaker = max_overlap_speaker
 
-        return segments, diarization_buffer
+        for new_punctuation_segment in new_punc_segments:
+            if self.all_validated_segments and new_punctuation_segment.speaker == self.all_validated_segments[-1].speaker:
+                if not new_punctuation_segment.is_silence():
+                    self.all_validated_segments[-1].text += new_punctuation_segment.text
+                self.all_validated_segments[-1].end = new_punctuation_segment.end
+            else:
+                self.all_validated_segments.append(new_punctuation_segment)
+
+        last_partial_segment = PuncSegment.from_tokens(self.tokens_after_last_punctuation)
+        if last_partial_segment:
+            unvalidated_segments.append(last_partial_segment)
+
+        return self.all_validated_segments, ''.join([seg.text for seg in unvalidated_segments])
 
 
     def get_lines(
