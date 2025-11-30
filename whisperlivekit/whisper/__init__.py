@@ -18,6 +18,8 @@ from whisperlivekit.whisper.decoding import (DecodingOptions, DecodingResult,
 from whisperlivekit.whisper.model import ModelDimensions, Whisper
 from whisperlivekit.whisper.transcribe import transcribe
 from whisperlivekit.whisper.version import __version__
+from whisperlivekit.whisper.lora import (LoRAAdapter, LoRAAdapterManager,
+                                          LoRAConfig, LoRALinear)
 
 _MODELS = {
     "tiny.en": "https://openaipublic.azureedge.net/main/whisper/models/d3dd57d32accea0b295c96e26691aa14d8822fac7d9d27d5dc00b4ca2826dd03/tiny.en.pt",
@@ -549,6 +551,94 @@ def load_model(
         model.set_alignment_heads(alignment_heads)
 
     return model.to(device)
+
+
+def load_model_with_lora_manager(
+    name: str,
+    device: Optional[Union[str, torch.device]] = None,
+    download_root: str = None,
+    in_memory: bool = False,
+    decoder_only: bool = False,
+    custom_alignment_heads: Optional[str] = None,
+    adapters: Optional[Dict[str, str]] = None,
+) -> tuple:
+    """
+    Load a Whisper model with a LoRA adapter manager for dynamic adapter swapping.
+    
+    This allows you to load multiple LoRA adapters and switch between them at runtime
+    without keeping multiple full models in memory.
+    
+    Parameters
+    ----------
+    name : str
+        Model name or path (same as load_model)
+    device : Union[str, torch.device]
+        Device to load model on
+    download_root : str
+        Download directory for model files
+    in_memory : bool
+        Whether to preload model weights into host memory
+    decoder_only : bool
+        If True, only load the decoder (no encoder)
+    custom_alignment_heads : str
+        Custom alignment heads configuration
+    adapters : Dict[str, str]
+        Optional dict mapping adapter names to paths/HuggingFace repo IDs.
+        Example: {"french": "path/to/french-lora", "spanish": "user/spanish-whisper-lora"}
+        
+    Returns
+    -------
+    model : Whisper
+        The base Whisper model (without any LoRA baked in)
+    manager : LoRAAdapterManager
+        The adapter manager for loading/switching adapters
+        
+    Example
+    -------
+    >>> model, manager = load_model_with_lora_manager(
+    ...     "large-v3",
+    ...     adapters={
+    ...         "french": "path/to/french-lora",
+    ...         "spanish": "path/to/spanish-lora"
+    ...     }
+    ... )
+    >>> 
+    >>> # Switch to French adapter
+    >>> manager.set_adapter("french")
+    >>> result_fr = model.transcribe(audio_fr)
+    >>> 
+    >>> # Switch to Spanish adapter
+    >>> manager.set_adapter("spanish")
+    >>> result_es = model.transcribe(audio_es)
+    >>> 
+    >>> # Use base model without LoRA
+    >>> manager.set_adapter(None)
+    >>> result_base = model.transcribe(audio)
+    >>> 
+    >>> # Check memory usage
+    >>> print(manager.get_memory_usage())
+    {'french': 12.5, 'spanish': 12.5}  # MB per adapter
+    """
+    # Load the base model WITHOUT any LoRA baked in
+    model = load_model(
+        name=name,
+        device=device,
+        download_root=download_root,
+        in_memory=in_memory,
+        decoder_only=decoder_only,
+        custom_alignment_heads=custom_alignment_heads,
+        lora_path=None,  # Important: no baked-in LoRA
+    )
+    
+    # Create the adapter manager
+    manager = LoRAAdapterManager(model)
+    
+    # Load any provided adapters
+    if adapters:
+        for adapter_name, adapter_path in adapters.items():
+            manager.load_adapter(adapter_name, adapter_path)
+    
+    return model, manager
 
 
 def convert_encoder_to_coreml(
