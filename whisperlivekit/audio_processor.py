@@ -393,6 +393,10 @@ class AudioProcessor:
 
     async def results_formatter(self) -> AsyncGenerator[FrontData, None]:
         """Format processing results for output."""
+        # Update intervals
+        ACTIVE_INTERVAL = 0.05   # 20 updates/sec during active transcription
+        SILENCE_INTERVAL = 0.5  # 2 updates/sec during silence
+        
         while True:
             try:
                 if self._ffmpeg_error:
@@ -402,25 +406,35 @@ class AudioProcessor:
                     continue
 
                 self.tokens_alignment.update()
-                lines, buffer_diarization_text, buffer_translation_text = self.tokens_alignment.get_lines(
+                state = await self.get_current_state()
+                
+                # Get transcription buffer text to pass to get_lines
+                buffer_transcription_text = state.buffer_transcription.text if state.buffer_transcription else ''
+                
+                # get_lines now returns segments with per-segment buffers
+                segments = self.tokens_alignment.get_lines(
                     diarization=self.args.diarization,
                     translation=bool(self.translation),
-                    current_silence=self.current_silence
+                    current_silence=self.current_silence,
+                    buffer_transcription=buffer_transcription_text
                 )
-                state = await self.get_current_state()
-
-                buffer_transcription_text = state.buffer_transcription.text if state.buffer_transcription else ''
 
                 response_status = "active_transcription"
-                if not lines and not buffer_transcription_text and not buffer_diarization_text:
+                # Check if there's any content (segments with text or buffers)
+                has_active_content = any(
+                    seg.buffer and (seg.buffer.transcription or seg.buffer.diarization)
+                    for seg in segments if not seg.is_silence()
+                )
+                has_any_content = any(
+                    seg.text or (seg.buffer and (seg.buffer.transcription or seg.buffer.diarization))
+                    for seg in segments if not seg.is_silence()
+                )
+                if not segments or not has_any_content:
                     response_status = "no_audio_detected"
 
                 response = FrontData(
                     status=response_status,
-                    lines=lines,
-                    buffer_transcription=buffer_transcription_text,
-                    buffer_diarization=buffer_diarization_text,
-                    buffer_translation=buffer_translation_text,
+                    segments=segments,
                     remaining_time_transcription=state.remaining_time_transcription,
                     remaining_time_diarization=state.remaining_time_diarization if self.args.diarization else 0
                 )
@@ -434,7 +448,15 @@ class AudioProcessor:
                     logger.info("Results formatter: All upstream processors are done and in stopping state. Terminating.")
                     return
                 
-                await asyncio.sleep(0.05)
+                # Throttle updates during silence: use slower interval when in silence mode
+                # with no pending buffers (nothing actively being processed)
+                is_in_silence = self.current_silence is not None
+                has_pending_work = has_active_content or state.remaining_time_transcription > 0.5
+                
+                if is_in_silence and not has_pending_work:
+                    await asyncio.sleep(SILENCE_INTERVAL)
+                else:
+                    await asyncio.sleep(ACTIVE_INTERVAL)
                 
             except Exception as e:
                 logger.warning(f"Exception in results_formatter. Traceback: {traceback.format_exc()}")

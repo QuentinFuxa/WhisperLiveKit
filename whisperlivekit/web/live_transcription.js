@@ -232,11 +232,8 @@ function setupWebSocket() {
         if (waitingForStop) {
           statusText.textContent = "Processing finalized or connection closed.";
           if (lastReceivedData) {
-          renderLinesWithBuffer(
-              lastReceivedData.lines || [],
-              lastReceivedData.buffer_diarization || "",
-              lastReceivedData.buffer_transcription || "",
-              lastReceivedData.buffer_translation || "",
+            renderSegments(
+              lastReceivedData.segments || [],
               0,
               0,
               true
@@ -278,11 +275,8 @@ function setupWebSocket() {
         waitingForStop = false;
 
         if (lastReceivedData) {
-          renderLinesWithBuffer(
-            lastReceivedData.lines || [],
-            lastReceivedData.buffer_diarization || "",
-            lastReceivedData.buffer_transcription || "",
-            lastReceivedData.buffer_translation || "",
+          renderSegments(
+            lastReceivedData.segments || [],
             0,
             0,
             true
@@ -299,21 +293,20 @@ function setupWebSocket() {
 
       lastReceivedData = data;
 
+      // New API format: segments with per-segment buffers, metadata wrapper
       const {
-        lines = [],
-        buffer_transcription = "",
-        buffer_diarization = "",
-        buffer_translation = "",
-        remaining_time_transcription = 0,
-        remaining_time_diarization = 0,
+        segments = [],
+        metadata = {},
         status = "active_transcription",
       } = data;
+      
+      const {
+        remaining_time_transcription = 0,
+        remaining_time_diarization = 0,
+      } = metadata;
 
-      renderLinesWithBuffer(
-        lines,
-        buffer_diarization,
-        buffer_transcription,
-        buffer_translation,
+      renderSegments(
+        segments,
         remaining_time_diarization,
         remaining_time_transcription,
         false,
@@ -323,11 +316,8 @@ function setupWebSocket() {
   });
 }
 
-function renderLinesWithBuffer(
-  lines,
-  buffer_diarization,
-  buffer_transcription,
-  buffer_translation,
+function renderSegments(
+  segments,
   remaining_time_diarization,
   remaining_time_transcription,
   isFinalizing = false,
@@ -339,33 +329,38 @@ function renderLinesWithBuffer(
     return;
   }
 
-  const showLoading = !isFinalizing && (lines || []).some((it) => it.speaker == 0);
-  const showTransLag = !isFinalizing && remaining_time_transcription > 0;
-  const showDiaLag = !isFinalizing && !!buffer_diarization && remaining_time_diarization > 0;
+  // Build signature for change detection
   const signature = JSON.stringify({
-    lines: (lines || []).map((it) => ({ speaker: it.speaker, text: it.text, start: it.start, end: it.end, detected_language: it.detected_language })),
-    buffer_transcription: buffer_transcription || "",
-    buffer_diarization: buffer_diarization || "",
-    buffer_translation: buffer_translation,
+    segments: (segments || []).map((it) => ({ 
+      id: it.id,
+      speaker: it.speaker, 
+      text: it.text, 
+      start: it.start, 
+      end: it.end, 
+      language: it.language,
+      buffer: it.buffer || {}
+    })),
     status: current_status,
-    showLoading,
-    showTransLag,
-    showDiaLag,
     isFinalizing: !!isFinalizing,
   });
+  
+  // Only update lag values if signature unchanged
   if (lastSignature === signature) {
     const t = document.querySelector(".lag-transcription-value");
     if (t) t.textContent = fmt1(remaining_time_transcription);
     const d = document.querySelector(".lag-diarization-value");
     if (d) d.textContent = fmt1(remaining_time_diarization);
-    const ld = document.querySelector(".loading-diarization-value");
-    if (ld) ld.textContent = fmt1(remaining_time_diarization);
     return;
   }
   lastSignature = signature;
 
-  const linesHtml = (lines || [])
+  const segmentsHtml = (segments || [])
     .map((item, idx) => {
+      const buffer = item.buffer || {};
+      const buffer_transcription = buffer.transcription || "";
+      const buffer_diarization = buffer.diarization || "";
+      const buffer_translation = buffer.translation || "";
+      
       let timeInfo = "";
       if (item.start !== undefined && item.end !== undefined) {
         timeInfo = ` ${item.start} - ${item.end}`;
@@ -373,80 +368,78 @@ function renderLinesWithBuffer(
 
       let speakerLabel = "";
       if (item.speaker === -2) {
+        // Silence segment
         speakerLabel = `<span class="silence">${silenceIcon}<span id='timeInfo'>${timeInfo}</span></span>`;
-      } else if (item.speaker == 0 && !isFinalizing) {
-        speakerLabel = `<span class='loading'><span class="spinner"></span><span id='timeInfo'><span class="loading-diarization-value">${fmt1(
-          remaining_time_diarization
-        )}</span> second(s) of audio are undergoing diarization</span></span>`;
       } else if (item.speaker !== 0) {
+        // Normal speaker segment
         const speakerNum = `<span class="speaker-badge">${item.speaker}</span>`;
         speakerLabel = `<span id="speaker">${speakerIcon}${speakerNum}<span id='timeInfo'>${timeInfo}</span></span>`;
 
-        if (item.detected_language) {
-          speakerLabel += `<span class="label_language">${languageIcon}<span>${item.detected_language}</span></span>`;
+        if (item.language) {
+          speakerLabel += `<span class="label_language">${languageIcon}<span>${item.language}</span></span>`;
         }
       }
 
       let currentLineText = item.text || "";
-
-      if (idx === lines.length - 1) {
-        if (!isFinalizing && item.speaker !== -2) {
-            speakerLabel += `<span class="label_transcription"><span class="spinner"></span>Transcription lag <span id='timeInfo'><span class="lag-transcription-value">${fmt1(
-              remaining_time_transcription
-            )}</span>s</span></span>`;
-
-          if (buffer_diarization && remaining_time_diarization) {
-            speakerLabel += `<span class="label_diarization"><span class="spinner"></span>Diarization lag<span id='timeInfo'><span class="lag-diarization-value">${fmt1(
-              remaining_time_diarization
-            )}</span>s</span></span>`;
-          }
+      const isLastSegment = idx === segments.length - 1;
+      const hasBufferContent = buffer_diarization || buffer_transcription;
+      
+      // Show lag indicators on last non-silent segment (without spinners)
+      if (isLastSegment && item.speaker !== -2 && !isFinalizing) {
+        if (remaining_time_transcription > 0) {
+          speakerLabel += `<span class="label_transcription">Transcription lag: <span class="lag-transcription-value">${fmt1(remaining_time_transcription)}</span>s</span>`;
         }
+        if (buffer_diarization && remaining_time_diarization > 0) {
+          speakerLabel += `<span class="label_diarization">Diarization lag: <span class="lag-diarization-value">${fmt1(remaining_time_diarization)}</span>s</span>`;
+        }
+      }
 
+      // Render buffers
+      if (hasBufferContent && item.speaker !== -2) {
         if (buffer_diarization) {
           if (isFinalizing) {
-            currentLineText +=
-              (currentLineText.length > 0 && buffer_diarization.trim().length > 0 ? " " : "") + buffer_diarization.trim();
+            currentLineText += (currentLineText.length > 0 ? " " : "") + buffer_diarization.trim();
           } else {
             currentLineText += `<span class="buffer_diarization">${buffer_diarization}</span>`;
           }
         }
         if (buffer_transcription) {
           if (isFinalizing) {
-            currentLineText +=
-              (currentLineText.length > 0 && buffer_transcription.trim().length > 0 ? " " : "") +
-              buffer_transcription.trim();
+            currentLineText += (currentLineText.length > 0 ? " " : "") + buffer_transcription.trim();
           } else {
             currentLineText += `<span class="buffer_transcription">${buffer_transcription}</span>`;
           }
         }
       }
+      
+      // Translation
       let translationContent = "";
       if (item.translation) {
         translationContent += item.translation.trim();
       }
-      if (idx === lines.length - 1 && buffer_translation) {
+      if (buffer_translation) {
         const bufferPiece = isFinalizing
           ? buffer_translation
           : `<span class="buffer_translation">${buffer_translation}</span>`;
-        translationContent += translationContent ? `${bufferPiece}` : bufferPiece;
+        translationContent += translationContent ? bufferPiece : bufferPiece;
       }
       if (translationContent.trim().length > 0) {
         currentLineText += `
-            <div>
-                <div class="label_translation">
-                    ${translationIcon}
-                    <span class="translation_text">${translationContent}</span>
-                </div>
-            </div>`;
+          <div class="label_translation">
+            ${translationIcon}
+            <span class="translation_text">${translationContent}</span>
+          </div>`;
       }
 
-      return currentLineText.trim().length > 0 || speakerLabel.length > 0
-        ? `<p>${speakerLabel}<br/><div class='textcontent'>${currentLineText}</div></p>`
-        : `<p>${speakerLabel}<br/></p>`;
+      if (currentLineText.trim().length > 0 || speakerLabel.length > 0) {
+        return `<p>${speakerLabel}<br/><div class='textcontent'>${currentLineText}</div></p>`;
+      }
+      return speakerLabel ? `<p>${speakerLabel}</p>` : "";
     })
+    .filter(html => html.length > 0)
     .join("");
 
-  linesTranscriptDiv.innerHTML = linesHtml;
+  linesTranscriptDiv.innerHTML = segmentsHtml;
   const transcriptContainer = document.querySelector('.transcript-container');
   if (transcriptContainer) {
     transcriptContainer.scrollTo({ top: transcriptContainer.scrollHeight, behavior: "smooth" });

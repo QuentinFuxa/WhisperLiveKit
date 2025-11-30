@@ -108,20 +108,39 @@ class Silence():
 
 
 @dataclass
+class SegmentBuffer:
+    """Per-segment buffer for ephemeral/unvalidated content."""
+    transcription: str = ''
+    diarization: str = ''
+    translation: str = ''
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            'transcription': self.transcription,
+            'diarization': self.diarization,
+            'translation': self.translation
+        }
+
+
+@dataclass
 class Segment(TimedText):
     """Generic contiguous span built from tokens or silence markers."""
     start: Optional[float]
     end: Optional[float]
     text: Optional[str]
     speaker: Optional[str]
+    id: Optional[int] = None
+    start_speaker: Optional[float] = None
     tokens: Optional[ASRToken] = None
     translation: Optional[Translation] = None
+    buffer: Optional[SegmentBuffer] = None
 
     @classmethod
     def from_tokens(
         cls,
         tokens: List[Union[ASRToken, Silence]],
-        is_silence: bool = False
+        is_silence: bool = False,
+        segment_id: Optional[int] = None
     ) -> Optional["Segment"]:
         """Return a normalized segment representing the provided tokens."""
         if not tokens:
@@ -134,7 +153,9 @@ class Segment(TimedText):
                 start=start_token.start,
                 end=end_token.end,
                 text=None,
-                speaker=-2
+                speaker=-2,
+                id=segment_id,
+                start_speaker=start_token.start
             )
         else:
             return cls(
@@ -142,6 +163,8 @@ class Segment(TimedText):
                 end=end_token.end,
                 text=''.join(token.text for token in tokens),
                 speaker=-1,
+                id=segment_id,
+                start_speaker=start_token.start,
                 detected_language=start_token.detected_language
             )
 
@@ -150,17 +173,18 @@ class Segment(TimedText):
         return self.speaker == -2
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize the segment for frontend consumption."""
+        """Serialize the segment for frontend consumption (new API format)."""
         _dict: Dict[str, Any] = {
+            'id': self.id if self.id is not None else 0,
             'speaker': int(self.speaker) if self.speaker != -1 else 1,
-            'text': self.text,
+            'text': self.text or '',
+            'start_speaker': format_time(self.start_speaker) if self.start_speaker is not None else format_time(self.start),
             'start': format_time(self.start),
             'end': format_time(self.end),
+            'language': self.detected_language,
+            'translation': self.translation or '',
+            'buffer': self.buffer.to_dict() if self.buffer else SegmentBuffer().to_dict()
         }
-        if self.translation:
-            _dict['translation'] = self.translation
-        if self.detected_language:
-            _dict['detected_language'] = self.detected_language
         return _dict
 
 
@@ -179,23 +203,20 @@ class SilentSegment(Segment):
 class FrontData():
     status: str = ''
     error: str = ''
-    lines: list[Segment] = field(default_factory=list)
-    buffer_transcription: str = ''
-    buffer_diarization: str = ''
-    buffer_translation: str = ''
+    segments: list[Segment] = field(default_factory=list)
     remaining_time_transcription: float = 0.
     remaining_time_diarization: float = 0.
     
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize the front-end data payload."""
+        """Serialize the front-end data payload (new API format)."""
         _dict: Dict[str, Any] = {
+            'type': 'transcript_update',
             'status': self.status,
-            'lines': [line.to_dict() for line in self.lines if (line.text or line.speaker == -2)],
-            'buffer_transcription': self.buffer_transcription,
-            'buffer_diarization': self.buffer_diarization,
-            'buffer_translation': self.buffer_translation,
-            'remaining_time_transcription': self.remaining_time_transcription,
-            'remaining_time_diarization': self.remaining_time_diarization,
+            'segments': [seg.to_dict() for seg in self.segments if (seg.text or seg.speaker == -2)],
+            'metadata': {
+                'remaining_time_transcription': self.remaining_time_transcription,
+                'remaining_time_diarization': self.remaining_time_diarization,
+            }
         }
         if self.error:
             _dict['error'] = self.error

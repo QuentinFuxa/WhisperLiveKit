@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhisperLiveKit Transcript</title>
+  <style>
+    :root {
+      --bg: #111;
+      --text: #ddd;
+      --dim: #666;
+      --border: #333;
+      --active: #e74c3c;
+    }
+    body {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 2rem;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .nav {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 3rem;
+      font-size: 12px;
+    }
+    button, input, select {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: inherit;
+      border-radius: 4px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    button:hover, input:hover, input:focus, select:hover, select:focus {
+      border-color: var(--text);
+      color: var(--text);
+      cursor: pointer;
+    }
+    select {
+      cursor: pointer;
+      appearance: none; /* Minimalist look */
+      background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%), linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+      background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      padding-right: 25px;
+    }
+    select:hover, select:focus {
+      background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%);
+    }
+    button.recording {
+      border-color: var(--active);
+      color: var(--active);
+    }
+    input {
+      width: 150px;
+      cursor: text;
+    }
+    #status {
+      margin-left: auto;
+      color: var(--dim);
+    }
+    #transcript {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      max-width: 800px;
+      margin: 0 auto;
+      outline: none;
+    }
+    /* Minimal scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #333; }
+  </style>
+</head>
+<body>
+  <div class="nav">
+    <button id="recordBtn">Record</button>
+    <button id="copyBtn">Copy</button>
+    <select id="microphoneSelect"></select>
+    <input type="text" id="wsUrl" placeholder="WebSocket URL">
+    <div id="status">Ready</div>
+  </div>
+
+  <div id="transcript"></div>
+
+  <script>
+    const recordBtn = document.getElementById('recordBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const wsUrlInput = document.getElementById('wsUrl');
+    const statusEl = document.getElementById('status');
+    const transcriptEl = document.getElementById('transcript');
+    const microphoneSelect = document.getElementById('microphoneSelect');
+
+    // Default WebSocket URL
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = window.location.hostname || 'localhost';
+    const port = window.location.port;
+    const defaultUrl = `${protocol}://${host}${port ? ':' + port : ''}/asr`;
+    wsUrlInput.value = defaultUrl;
+
+    let websocket = null;
+    let isRecording = false;
+    let audioContext = null;
+    let workletNode = null;
+    let recorderWorker = null;
+    let microphone = null;
+    let useAudioWorklet = false;
+    let recorder = null;
+    let availableMicrophones = [];
+    let selectedMicrophoneId = null;
+
+    async function enumerateMicrophones() {
+      try {
+        // Request permission first to get labels
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        availableMicrophones = devices.filter(device => device.kind === 'audioinput');
+
+        populateMicrophoneSelect();
+      } catch (error) {
+        console.error('Error enumerating microphones:', error);
+        statusEl.textContent = "Mic permission needed";
+      }
+    }
+
+    function populateMicrophoneSelect() {
+      microphoneSelect.innerHTML = '<option value="">Default Microphone</option>';
+
+      availableMicrophones.forEach((device, index) => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.textContent = device.label || `Microphone ${index + 1}`;
+        microphoneSelect.appendChild(option);
+      });
+
+      const savedMicId = localStorage.getItem('selectedMicrophone');
+      if (savedMicId && availableMicrophones.some(mic => mic.deviceId === savedMicId)) {
+        microphoneSelect.value = savedMicId;
+        selectedMicrophoneId = savedMicId;
+      }
+    }
+
+    function handleMicrophoneChange() {
+      selectedMicrophoneId = microphoneSelect.value || null;
+      localStorage.setItem('selectedMicrophone', selectedMicrophoneId || '');
+
+      if (isRecording) {
+        stopRecording();
+        setTimeout(() => {
+          startRecording();
+        }, 500);
+      }
+    }
+    
+    microphoneSelect.addEventListener('change', handleMicrophoneChange);
+
+    // Initial enumeration
+    enumerateMicrophones();
+    navigator.mediaDevices.addEventListener('devicechange', enumerateMicrophones);
+
+    function formatSegment(segment) {
+      const speaker = segment.speaker;
+      const text = segment.text || '';
+      const buffer = segment.buffer || {};
+      const start = segment.start || '';
+      const end = segment.end || '';
+      const language = segment.language || '';
+      
+      let output = '';
+      
+      // Silence marker
+      if (speaker === -2) {
+        output += `[SILENCE ${start} - ${end}]\n`;
+        return output;
+      }
+      
+      // Speaker header
+      output += `[SPEAKER ${speaker}]`;
+      if (start && end) output += ` ${start} - ${end}`;
+      if (language) output += ` [LANG: ${language}]`;
+      output += '\n';
+      
+      // Main text
+      if (text) {
+        output += text;
+      }
+      
+      // Diarization buffer (text waiting for speaker assignment)
+      if (buffer.diarization) {
+        output += `[DIAR_BUFFER]${buffer.diarization}[/DIAR_BUFFER]`;
+      }
+      
+      // Transcription buffer (text waiting for validation)
+      if (buffer.transcription) {
+        output += `[TRANS_BUFFER]${buffer.transcription}[/TRANS_BUFFER]`;
+      }
+      
+      output += '\n';
+      
+      // Translation
+      if (segment.translation) {
+        output += `[TRANSLATION]${segment.translation}`;
+        if (buffer.translation) {
+          output += `[TRANS_BUFFER]${buffer.translation}[/TRANS_BUFFER]`;
+        }
+        output += `[/TRANSLATION]\n`;
+      } else if (buffer.translation) {
+        output += `[TRANSLATION][TRANS_BUFFER]${buffer.translation}[/TRANS_BUFFER][/TRANSLATION]\n`;
+      }
+      
+      return output;
+    }
+
+    function renderTranscript(data) {
+      const { segments = [], metadata = {}, status: msgStatus } = data;
+      
+      if (msgStatus === 'no_audio_detected') {
+        // transcriptEl.textContent = '[NO AUDIO DETECTED]'; 
+        // Minimalist: maybe just don't show anything or show status
+        statusEl.textContent = 'No audio detected';
+        return;
+      }
+      
+      let output = '';
+      
+      // Metadata header
+      const remainingTrans = metadata.remaining_time_transcription || 0;
+      const remainingDiar = metadata.remaining_time_diarization || 0;
+      if (remainingTrans > 0 || remainingDiar > 0) {
+        output += `[LAG: trans=${remainingTrans.toFixed(1)}s diar=${remainingDiar.toFixed(1)}s]\n\n`;
+      }
+      
+      // All segments
+      for (const segment of segments) {
+        output += formatSegment(segment);
+        output += '\n';
+      }
+      
+      transcriptEl.textContent = output;
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    }
+
+    async function startRecording() {
+      try {
+        websocket = new WebSocket(wsUrlInput.value);
+        
+        websocket.onopen = async () => {
+          statusEl.textContent = 'Connecting...';
+        };
+        
+        websocket.onmessage = async (event) => {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'config') {
+            useAudioWorklet = !!data.useAudioWorklet;
+            statusEl.textContent = 'Recording';
+            await initAudio();
+            return;
+          }
+          
+          if (data.type === 'ready_to_stop') {
+            statusEl.textContent = 'Done';
+            return;
+          }
+          
+          // transcript_update
+          renderTranscript(data);
+        };
+        
+        websocket.onclose = () => {
+          statusEl.textContent = 'Disconnected';
+          stopRecording(false);
+        };
+        
+        websocket.onerror = () => {
+          statusEl.textContent = 'Error';
+        };
+        
+      } catch (err) {
+        statusEl.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    async function initAudio() {
+      const audioConstraints = selectedMicrophoneId 
+          ? { audio: { deviceId: { exact: selectedMicrophoneId } } } 
+          : { audio: true };
+
+      const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      microphone = audioContext.createMediaStreamSource(stream);
+      
+      if (useAudioWorklet) {
+        await audioContext.audioWorklet.addModule('/web/pcm_worklet.js');
+        workletNode = new AudioWorkletNode(audioContext, 'pcm-forwarder', {
+          numberOfInputs: 1, numberOfOutputs: 0, channelCount: 1
+        });
+        microphone.connect(workletNode);
+        
+        recorderWorker = new Worker('/web/recorder_worker.js');
+        recorderWorker.postMessage({ command: 'init', config: { sampleRate: audioContext.sampleRate } });
+        
+        recorderWorker.onmessage = (e) => {
+          if (websocket?.readyState === WebSocket.OPEN) {
+            websocket.send(e.data.buffer);
+          }
+        };
+        
+        workletNode.port.onmessage = (e) => {
+          const ab = e.data instanceof ArrayBuffer ? e.data : e.data.buffer;
+          recorderWorker.postMessage({ command: 'record', buffer: ab }, [ab]);
+        };
+      } else {
+        try {
+          recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        } catch {
+          recorder = new MediaRecorder(stream);
+        }
+        recorder.ondataavailable = (e) => {
+          if (websocket?.readyState === WebSocket.OPEN && e.data?.size > 0) {
+            websocket.send(e.data);
+          }
+        };
+        recorder.start(100);
+      }
+      
+      isRecording = true;
+      recordBtn.textContent = 'Stop';
+      recordBtn.classList.add('recording');
+    }
+
+    function stopRecording(sendStop = true) {
+      if (sendStop && websocket?.readyState === WebSocket.OPEN) {
+        websocket.send(new Blob([], { type: 'audio/webm' }));
+      }
+      
+      if (recorder) { try { recorder.stop(); } catch {} recorder = null; }
+      if (recorderWorker) { recorderWorker.terminate(); recorderWorker = null; }
+      if (workletNode) { workletNode.disconnect(); workletNode = null; }
+      if (microphone) { microphone.disconnect(); microphone = null; }
+      if (audioContext) { audioContext.close(); audioContext = null; }
+      
+      isRecording = false;
+      recordBtn.textContent = 'Record';
+      recordBtn.classList.remove('recording');
+    }
+
+    recordBtn.addEventListener('click', () => {
+      if (!isRecording) {
+        startRecording();
+      } else {
+        stopRecording();
+      }
+    });
+
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(transcriptEl.textContent).then(() => {
+        const original = copyBtn.textContent;
+        copyBtn.textContent = 'Copied';
+        setTimeout(() => { copyBtn.textContent = original; }, 1500);
+      });
+    });
+  </script>
+</body>
+</html>

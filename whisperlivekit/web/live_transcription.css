@@ -454,8 +454,9 @@ label {
   gap: 4px;
 }
 
-.lag-diarization-value {
-    margin-left: 10px;
+.lag-diarization-value,
+.lag-transcription-value {
+  font-weight: 600;
 }
 
 .label_translation img {

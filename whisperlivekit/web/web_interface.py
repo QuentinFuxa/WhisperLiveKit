@@ -13,6 +13,37 @@ def get_web_interface_html():
         logger.error(f"Error loading web interface HTML: {e}")
         return "<html><body><h1>Error loading interface</h1></body></html>"
 
+
+def get_text_transcript_html():
+    """Loads the simple text-based transcript HTML for easy copy/paste."""
+    try:
+        with resources.files('whisperlivekit.web').joinpath('text_transcript.html').open('r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Inline the worker scripts
+        with resources.files('whisperlivekit.web').joinpath('pcm_worklet.js').open('r', encoding='utf-8') as f:
+            worklet_code = f.read()
+        with resources.files('whisperlivekit.web').joinpath('recorder_worker.js').open('r', encoding='utf-8') as f:
+            worker_code = f.read()
+        
+        html_content = html_content.replace(
+            "await audioContext.audioWorklet.addModule('/web/pcm_worklet.js');",
+            'const workletBlob = new Blob([`' + worklet_code + '`], { type: "application/javascript" });\n' +
+            'const workletUrl = URL.createObjectURL(workletBlob);\n' +
+            'await audioContext.audioWorklet.addModule(workletUrl);'
+        )
+        html_content = html_content.replace(
+            "recorderWorker = new Worker('/web/recorder_worker.js');",
+            'const workerBlob = new Blob([`' + worker_code + '`], { type: "application/javascript" });\n' +
+            'const workerUrl = URL.createObjectURL(workerBlob);\n' +
+            'recorderWorker = new Worker(workerUrl);'
+        )
+        
+        return html_content
+    except Exception as e:
+        logger.error(f"Error loading text transcript HTML: {e}")
+        return "<html><body><h1>Error loading text interface</h1></body></html>"
+
 def get_inline_ui_html():
     """Returns the complete web interface HTML with all assets embedded in a single call."""
     try:

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from whisperlivekit import (AudioProcessor, TranscriptionEngine,
-                            get_inline_ui_html, parse_args)
+                            get_inline_ui_html, get_text_transcript_html, parse_args)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger().setLevel(logging.WARNING)
@@ -37,6 +37,12 @@ app.add_middleware(
 @app.get("/")
 async def get():
     return HTMLResponse(get_inline_ui_html())
+
+
+@app.get("/text")
+async def get_text():
+    """Simple text-based transcript view for easy copy/paste."""
+    return HTMLResponse(get_text_transcript_html())
 
 
 async def handle_websocket_results(websocket, results_generator):

@@ -1,53 +1,22 @@
 # WhisperLiveKit WebSocket API Documentation
 
-> !! **Note**: The new API structure described in this document is currently under deployment. 
-This documentation is intended for devs who want to build custom frontends.
-
-WLK provides real-time speech transcription, speaker diarization, and translation through a WebSocket API. The server sends incremental updates as audio is processed, allowing clients to display live transcription results with minimal latency.
+WLK provides real-time speech transcription, speaker diarization, and translation through a WebSocket API. The server sends updates as audio is processed, allowing clients to display live transcription results with minimal latency.
 
 ---
 
-## Legacy API (Current)
+## Endpoints
 
-### Message Structure
-
-The current API sends complete state snapshots on each update (several time per second)
-
-```typescript
-{
-  "type": str,
-  "status": str,
-  "lines": [
-    {
-      "speaker": int,
-      "text": str,
-      "start": float,
-      "end": float,
-      "translation": str | null,
-      "detected_language": str
-    }
-  ],
-  "buffer_transcription": str,
-  "buffer_diarization": str,
-  "remaining_time_transcription": float,
-  "remaining_time_diarization": float
-}
-```
+| Endpoint | Description |
+|----------|-------------|
+| `/` | Main web interface with visual styling |
+| `/text` | Simple text-based interface for easy copy/paste (debug/development) |
+| `/asr` | WebSocket endpoint for audio streaming |
 
 ---
-
-## New API (Under Development)
-
-### Philosophy
-
-Principles:
-
-- **Incremental Updates**: Only updates and new segments are sent
-- **Ephemeral Buffers**: Temporary, unvalidated data displayed in real-time but overwritten on next update, at speaker level
-
 
 ## Message Format
 
+### Transcript Update (Server → Client)
 
 ```typescript
 {
@@ -58,22 +27,11 @@ Principles:
       "id": number,
       "speaker": number,
       "text": string,
-      "start_speaker": float,
-      "start": float,
-      "end": float,
+      "start_speaker": string,    // HH:MM:SS format
+      "start": string,            // HH:MM:SS format  
+      "end": string,              // HH:MM:SS format
       "language": string | null,
       "translation": string,
-      "words": [
-        {
-          "text": string,
-          "start": float,
-          "end": float,
-          "validated": {
-            "text": boolean,
-            "speaker": boolean,
-          }
-        }
-      ],
       "buffer": {
         "transcription": string,
         "diarization": string,
@@ -94,9 +52,10 @@ Principles:
 ```json
 {
   "type": "config",
-  "useAudioWorklet": true / false
+  "useAudioWorklet": true
 }
 ```
+- `useAudioWorklet`: If `true`, client should use AudioWorklet for PCM streaming. If `false`, use MediaRecorder for WebM.
 
 #### Ready to Stop Message (sent after processing complete)
 ```json
@@ -104,6 +63,7 @@ Principles:
   "type": "ready_to_stop"
 }
 ```
+Indicates all audio has been processed and the client can safely close the connection.
 
 ---
 
@@ -113,152 +73,179 @@ Principles:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | `number` | Unique identifier for this segment. Used by clients to update specific segments efficiently. |
+| `id` | `number` | Unique identifier for this segment. |
 | `speaker` | `number` | Speaker ID (1, 2, 3...). Special value `-2` indicates silence. |
-| `text` | `string` | Validated transcription text for this update. Should be **appended** to the segment's text on the client side.  |
-| `start_speaker` | `float` | Timestamp (seconds) when this speaker segment began. |
-| `start` | `float` | Timestamp (seconds) of the first word in this update. |
-| `end` | `float` | Timestamp (seconds) of the last word in this update. |
-| `language` | `string \| null` | ISO language code (e.g., "en", "fr"). `null` until language is detected. |
-| `translation` | `string` | Validated translation text for this update. Should be **appended** to the segment's translation on the client side. |
-| `words` | `Array` | Array of word-level objects with timing and validation information. |
-| `buffer` | `Object` | Per-segment temporary buffers, see below |
-
-### Word Object
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `text` | `string` | The word text. |
-| `start` | `number` | Start timestamp (seconds) of this word. |
-| `end` | `number` | End timestamp (seconds) of this word. |
-| `validated.text` | `boolean` | Whether the transcription text has been validated. if false, word is also in buffer: transcription |
-| `validated.speaker` | `boolean` | Whether the speaker assignment has been validated. if false, word is also in buffer: diarization |
-| `validated.language` | `boolean` | Whether the language detection has been validated. if false, word is also in buffer: translation |
+| `text` | `string` | Validated transcription text. |
+| `start_speaker` | `string` | Timestamp (HH:MM:SS) when this speaker segment began. |
+| `start` | `string` | Timestamp (HH:MM:SS) of the first word. |
+| `end` | `string` | Timestamp (HH:MM:SS) of the last word. |
+| `language` | `string \| null` | ISO language code (e.g., "en", "fr"). `null` until detected. |
+| `translation` | `string` | Validated translation text. |
+| `buffer` | `Object` | Per-segment temporary buffers (see below). |
 
 ### Buffer Object (Per-Segment)
 
-Buffers are **ephemeral**. They should be displayed to the user but not stored permanently in the frontend. Each update may contain a completely different buffer value, and previous buffer is likely to be in the next validated text.
+Buffers are **ephemeral**. They should be displayed to the user but are overwritten on each update. Only the **last non-silent segment** contains buffer content.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `transcription` | `string` | Pending transcription text. Displayed immediately but **overwritten** on next update. |
-| `diarization` | `string` | Pending diarization text (text waiting for speaker assignment). Displayed immediately but **overwritten** on next update. |
-| `translation` | `string` | Pending translation text. Displayed immediately but **overwritten** on next update. |
-
+| `transcription` | `string` | Text pending validation (waiting for more context). |
+| `diarization` | `string` | Text pending speaker assignment (diarization hasn't caught up). |
+| `translation` | `string` | Translation pending validation. |
 
 ### Metadata Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `remaining_time_transcription` | `float` | Seconds of audio waiting for transcription processing. |
-| `remaining_time_diarization` | `float` | Seconds of audio waiting for speaker diarization. |
+| `remaining_time_transcription` | `float` | Seconds of audio waiting for transcription. |
+| `remaining_time_diarization` | `float` | Seconds of audio waiting for diarization. |
 
 ### Status Values
 
 | Status | Description |
 |--------|-------------|
 | `active_transcription` | Normal operation, transcription is active. |
-| `no_audio_detected` | No audio has been detected yet. |
+| `no_audio_detected` | No audio/speech has been detected yet. |
 
 ---
 
-## Update Behavior
+## Behavior Notes
 
-### Incremental Updates
+### Silence Handling
 
-The API sends **only changed or new segments**. Clients should:
+- **Short silences (< 2 seconds)** are filtered out and not displayed.
+- Only significant pauses appear as silence segments with `speaker: -2`.
+- Consecutive same-speaker segments are merged even across short silences.
 
-1. Maintain a local map of segments by ID
-2. When receiving an update, merge/update segments by ID
-3. Render only the changed segments
+### Update Frequency
 
-### Language Detection
+- **Active transcription**: ~20 updates/second (every 50ms)
+- **During silence**: ~2 updates/second (every 500ms) to reduce bandwidth
 
-When language is detected for a segment:
+### Token-by-Token Validation (Diarization Mode)
 
-```jsonc
-// Update 1: No language yet
+When diarization is enabled, text is validated **token-by-token** as soon as diarization covers each token, rather than waiting for punctuation. This provides:
+- Faster text validation
+- More responsive speaker attribution
+- Buffer only contains tokens that diarization hasn't processed yet
+
+---
+
+## Example Messages
+
+### Normal Transcription
+
+```json
 {
-  "segments": [
-    {"id": 1, "speaker": 1, "text": "May see", "language": null}
-  ]
-}
-
-// Update 2: Same segment ID, language now detected
-{
-  "segments": [
-    {"id": 1, "speaker": 1, "text": "Merci", "language": "fr"}
-  ]
-}
-```
-
-**Client behavior**: **Replace** the existing segment with the same ID.
-
-### Buffer Behavior
-
-Buffers are **per-segment** to handle multi-speaker scenarios correctly.
-
-#### Example: Translation with diarization and translation
-
-```jsonc
-// Update 1
-{
+  "type": "transcript_update",
+  "status": "active_transcription",
   "segments": [
     {
       "id": 1,
       "speaker": 1,
-      "text": "Hello world, how are",
+      "text": "Hello, how are you today?",
+      "start_speaker": "0:00:02",
+      "start": "0:00:02",
+      "end": "0:00:05",
+      "language": "en",
+      "translation": "",
+      "buffer": {
+        "transcription": " I'm doing",
+        "diarization": "",
+        "translation": ""
+      }
+    }
+  ],
+  "metadata": {
+    "remaining_time_transcription": 0.5,
+    "remaining_time_diarization": 0
+  }
+}
+```
+
+### With Diarization Buffer
+
+```json
+{
+  "type": "transcript_update",
+  "status": "active_transcription",
+  "segments": [
+    {
+      "id": 1,
+      "speaker": 1,
+      "text": "The meeting starts at nine.",
+      "start_speaker": "0:00:03",
+      "start": "0:00:03",
+      "end": "0:00:06",
+      "language": "en",
       "translation": "",
       "buffer": {
         "transcription": "",
-        "diarization": " you on",
-        "translation": "Bonjour le monde"
+        "diarization": " Let me check my calendar",
+        "translation": ""
       }
     }
-  ]
+  ],
+  "metadata": {
+    "remaining_time_transcription": 0.3,
+    "remaining_time_diarization": 2.1
+  }
 }
-
-
-// ==== Frontend ====
-// <SPEAKER>1</SPEAKER>
-// <TRANSCRIPTION>Hello world, how are <DIARIZATION BUFFER> you on</DIARIZATION BUFFER></TRANSCRIPTION>
-// <TRANSLATION><TRANSLATION BUFFER>Bonjour le monde</TRANSLATION BUFFER></TRANSLATION>
-
-
-// Update 2
-{
-  "segments": [
-    {
-      "id": 1,
-      "speaker": 1,
-      "text": " you on this",
-      "translation": "Bonjour tout le monde",
-      "buffer": {
-        "transcription": "",
-        "diarization": " beautiful day",
-        "translation": ",comment"
-      }
-    },
-  ]
-}
-
-
-// ==== Frontend ====
-// <SPEAKER>1</SPEAKER>
-// <TRANSCRIPTION>Hello world, how are you on this<DIARIZATION BUFFER>  beautiful day</DIARIZATION BUFFER></TRANSCRIPTION>
-// <TRANSLATION>Bonjour tout le monde<TRANSLATION BUFFER>, comment</TRANSLATION BUFFER><TRANSLATION>
 ```
 
-### Silence Segments
+### Silence Segment
 
-Silence is represented with the speaker id = `-2`:
-
-```jsonc
+```json
 {
   "id": 5,
   "speaker": -2,
   "text": "",
-  "start": 10.5,
-  "end": 12.3
+  "start_speaker": "0:00:10",
+  "start": "0:00:10",
+  "end": "0:00:15",
+  "language": null,
+  "translation": "",
+  "buffer": {
+    "transcription": "",
+    "diarization": "",
+    "translation": ""
+  }
 }
 ```
+
+---
+
+## Text Transcript Endpoint (`/text`)
+
+The `/text` endpoint provides a simple, monospace text interface designed for:
+- Easy copy/paste of transcripts
+- Debugging and development
+- Integration testing
+
+Output uses text markers instead of HTML styling:
+
+```
+[METADATA transcription_lag=0.5s diarization_lag=1.2s]
+
+[SPEAKER 1] 0:00:03 - 0:00:11 [LANG: en]
+Hello world, how are you doing today?[DIAR_BUFFER] I'm doing fine[/DIAR_BUFFER]
+
+[SILENCE 0:00:15 - 0:00:18]
+
+[SPEAKER 2] 0:00:18 - 0:00:22 [LANG: en]
+That's great to hear!
+[TRANSLATION]C'est super à entendre![/TRANSLATION]
+```
+
+### Markers
+
+| Marker | Description |
+|--------|-------------|
+| `[SPEAKER N]` | Speaker label with ID |
+| `[SILENCE start - end]` | Silence segment |
+| `[LANG: xx]` | Detected language code |
+| `[DIAR_BUFFER]...[/DIAR_BUFFER]` | Text pending speaker assignment |
+| `[TRANS_BUFFER]...[/TRANS_BUFFER]` | Text pending validation |
+| `[TRANSLATION]...[/TRANSLATION]` | Translation content |
+| `[METADATA ...]` | Lag/timing information |
+
