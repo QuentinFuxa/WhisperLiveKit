@@ -10,7 +10,8 @@ from whisperlivekit.core import (TranscriptionEngine,
                                  online_diarization_factory, online_factory,
                                  online_translation_factory)
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
-from whisperlivekit.silero_vad_iterator import FixedVADIterator
+from whisperlivekit.silero_vad_iterator import (FixedVADIterator,
+                                                load_silero_vad)
 from whisperlivekit.timed_objects import (ASRToken, ChangeSpeaker, FrontData,
                                           Segment, Silence, State, Transcript)
 from whisperlivekit.tokens_alignment import TokensAlignment
@@ -87,11 +88,11 @@ class AudioProcessor:
 
         # Models and processing
         self.asr: Any = models.asr
-        self.vac_model: Any = models.vac_model
+        self.vac: Optional[FixedVADIterator] = None
         if self.args.vac:
-            self.vac: Optional[FixedVADIterator] = FixedVADIterator(models.vac_model)
-        else:
-            self.vac: Optional[FixedVADIterator] = None
+            # Give each processor its own VAD model to avoid shared state across clients.
+            vac_model_instance = load_silero_vad(onnx=self.args.vac_onnx)
+            self.vac = FixedVADIterator(vac_model_instance)
 
         self.ffmpeg_manager: Optional[FFmpegManager] = None
         self.ffmpeg_reader_task: Optional[asyncio.Task] = None
