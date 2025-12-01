@@ -53,7 +53,7 @@ pip install whisperlivekit
 2. **Open your browser** and navigate to `http://localhost:8000`. Start speaking and watch your words appear in real-time!
 
 
-> - See [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py) for the list of all available languages.
+> - See [here](whisperlivekit/whisper/tokenizer.py#L10) for the list of all available languages.
 > - Check the [troubleshooting guide](docs/troubleshooting.md) for step-by-step fixes collected from recent GPU setup/env issues.
 > - The CLI entry point is exposed as both `wlk` and `whisperlivekit-server`; they are equivalent.
 > - For HTTPS requirements, see the **Parameters** section for SSL configuration options.
