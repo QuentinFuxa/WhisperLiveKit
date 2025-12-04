@@ -151,7 +151,7 @@ class FasterWhisperASR(ASRBase):
             if segment.no_speech_prob > 0.9:
                 continue
             for word in segment.words:
-                token = ASRToken(word.start, word.end, word.word, probability=word.probability)
+                token = ASRToken(word.start, word.end, word.word)
                 tokens.append(token)
         return tokens
 
