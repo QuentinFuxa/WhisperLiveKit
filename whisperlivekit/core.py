@@ -36,7 +36,6 @@ class TranscriptionEngine:
             "punctuation_split": False,
             "target_language": "",
             "vac": True,
-            "vac_onnx": False,
             "vac_chunk_size": 0.04,
             "log_level": "DEBUG",
             "ssl_certfile": None,
@@ -79,15 +78,19 @@ class TranscriptionEngine:
         self.asr = None
         self.tokenizer = None
         self.diarization = None
-        self.vac_model = None
+        self.vac_session = None
         
         if self.args.vac:
-            from whisperlivekit.silero_vad_iterator import load_silero_vad
-
-            # Use ONNX if specified, otherwise use JIT (default)
-            use_onnx = kwargs.get('vac_onnx', False)
-            self.vac_model = load_silero_vad(onnx=use_onnx)
-        
+            from whisperlivekit.silero_vad_iterator import is_onnx_available
+            
+            if is_onnx_available():
+                from whisperlivekit.silero_vad_iterator import load_onnx_session
+                self.vac_session = load_onnx_session()
+            else:
+                logger.warning(
+                    "onnxruntime not installed. VAC will use JIT model which is loaded per-session. "
+                    "For multi-user scenarios, install onnxruntime: pip install onnxruntime"
+                )
         backend_policy = self.args.backend_policy
         if self.args.transcription:
             if backend_policy == "simulstreaming":                 

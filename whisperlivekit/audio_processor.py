@@ -10,7 +10,7 @@ from whisperlivekit.core import (TranscriptionEngine,
                                  online_diarization_factory, online_factory,
                                  online_translation_factory)
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
-from whisperlivekit.silero_vad_iterator import FixedVADIterator
+from whisperlivekit.silero_vad_iterator import FixedVADIterator, OnnxWrapper, load_jit_vad
 from whisperlivekit.timed_objects import (ASRToken, ChangeSpeaker, FrontData,
                                           Segment, Silence, State, Transcript)
 from whisperlivekit.tokens_alignment import TokensAlignment
@@ -85,12 +85,14 @@ class AudioProcessor:
 
         # Models and processing
         self.asr: Any = models.asr
-        self.vac_model: Any = models.vac_model
+        self.vac: Optional[FixedVADIterator] = None
+        
         if self.args.vac:
-            self.vac: Optional[FixedVADIterator] = FixedVADIterator(models.vac_model)
-        else:
-            self.vac: Optional[FixedVADIterator] = None
-                         
+            if models.vac_session is not None:
+                vac_model = OnnxWrapper(session=models.vac_session)
+                self.vac = FixedVADIterator(vac_model)
+            else:
+                self.vac = FixedVADIterator(load_jit_vad())    
         self.ffmpeg_manager: Optional[FFmpegManager] = None
         self.ffmpeg_reader_task: Optional[asyncio.Task] = None
         self._ffmpeg_error: Optional[str] = None
