@@ -49,6 +49,8 @@ class TokensAlignment:
 
     def add_translation(self, segment: Segment) -> None:
         """Append translated text segments that overlap with a segment."""
+        if segment.translation is None:
+            segment.translation = ''
         for ts in self.all_translation_segments:
             if ts.is_within(segment):
                 segment.translation += ts.text + (self.sep if ts.text else '')
