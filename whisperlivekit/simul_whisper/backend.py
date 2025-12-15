@@ -64,6 +64,7 @@ class SimulStreamingOnlineProcessor:
                 loaded_model=self.asr.shared_model,
                 mlx_encoder=self.asr.mlx_encoder,
                 fw_encoder=self.asr.fw_encoder,
+                encoder_batcher=getattr(self.asr, 'encoder_batcher', None),
             )
 
     def start_silence(self):
@@ -109,24 +110,50 @@ class SimulStreamingOnlineProcessor:
     def process_iter(self, is_last=False) -> Tuple[List[ASRToken], float]:
         """
         Process accumulated audio chunks using SimulStreaming.
-        
+
         Returns a tuple: (list of committed ASRToken objects, float representing the audio processed up to time).
         """
         try:
             timestamped_words = self.model.infer(is_last=is_last)
-            
+
             if not timestamped_words:
                 return [], self.end
-            
+
             if self.model.cfg.language == "auto" and timestamped_words[0].detected_language is None:
                 self.buffer.extend(timestamped_words)
                 return [], self.end
-            
+
             self.committed.extend(timestamped_words)
             self.buffer = []
             return timestamped_words, self.end
         except Exception as e:
             logger.exception(f"SimulStreaming processing error: {e}")
+            return [], self.end
+
+    async def process_iter_async(self, is_last=False) -> Tuple[List[ASRToken], float]:
+        """
+        Async version of process_iter that uses batched encoding.
+
+        Use this method when encoder_batcher is configured to batch encoder
+        passes across multiple client sessions for GPU efficiency.
+
+        Returns a tuple: (list of committed ASRToken objects, float representing the audio processed up to time).
+        """
+        try:
+            timestamped_words = await self.model.infer_async(is_last=is_last)
+
+            if not timestamped_words:
+                return [], self.end
+
+            if self.model.cfg.language == "auto" and timestamped_words[0].detected_language is None:
+                self.buffer.extend(timestamped_words)
+                return [], self.end
+
+            self.committed.extend(timestamped_words)
+            self.buffer = []
+            return timestamped_words, self.end
+        except Exception as e:
+            logger.exception(f"SimulStreaming async processing error: {e}")
             return [], self.end
 
     def warmup(self, audio, init_prompt=""):
@@ -159,9 +186,13 @@ class SimulStreamingASR:
     def __init__(self, logfile=sys.stderr, **kwargs):
         self.logfile = logfile
         self.transcribe_kargs = {}
-        
+
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+        # Log encoder batcher status early
+        use_encoder_batcher = getattr(self, 'use_encoder_batcher', False)
+        logger.info(f"SimulStreamingASR init: use_encoder_batcher={use_encoder_batcher}")
 
         if self.decoder_type is None:
             self.decoder_type = 'greedy' if self.beams == 1 else 'beam'
@@ -203,9 +234,19 @@ class SimulStreamingASR:
         if self.encoder_backend == "whisper":
             self.disable_fast_encoder = True
         
+        logger.info(f"Resolved encoder_backend={self.encoder_backend}, platform={platform.system()}")
+
         if self.encoder_backend == "mlx-whisper" and platform.system() == "Darwin":
-            if not hasattr(self, '_full_mlx_disabled'):
+            # Don't use full MLX if encoder batcher is requested (batcher needs PyTorch model)
+            use_encoder_batcher = getattr(self, 'use_encoder_batcher', False)
+            logger.info(f"MLX backend detected: use_encoder_batcher={use_encoder_batcher}, use_full_mlx={self.use_full_mlx}")
+            if use_encoder_batcher:
+                # Force hybrid mode (MLX encoder + PyTorch decoder) to have shared_model available
+                self.use_full_mlx = False
+                logger.info("Encoder batcher requested - forcing hybrid MLX encoder + PyTorch decoder mode")
+            elif not hasattr(self, '_full_mlx_disabled'):
                 self.use_full_mlx = True
+                logger.info("No encoder batcher - using full MLX mode")
                     
         self.cfg = AlignAttConfig(
                 tokenizer_is_multilingual= is_multilingual,

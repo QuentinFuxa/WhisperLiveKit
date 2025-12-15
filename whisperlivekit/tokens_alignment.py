@@ -1,9 +1,9 @@
 from time import time
 from typing import Any, List, Optional, Tuple, Union
 
-from whisperlivekit.timed_objects import (ASRToken, Segment, PuncSegment, Silence,
-                                          SilentSegment, SpeakerSegment,
-                                          TimedText)
+from whisperlivekit.timed_objects import (ASRToken, PuncSegment, Segment,
+                                          Silence, SilentSegment,
+                                          SpeakerSegment, TimedText)
 
 
 class TokensAlignment:

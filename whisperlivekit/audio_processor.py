@@ -5,12 +5,12 @@ from time import time
 from typing import Any, AsyncGenerator, List, Optional, Union
 
 import numpy as np
-
 from whisperlivekit.core import (TranscriptionEngine,
                                  online_diarization_factory, online_factory,
                                  online_translation_factory)
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
-from whisperlivekit.silero_vad_iterator import FixedVADIterator, OnnxWrapper, load_jit_vad
+from whisperlivekit.silero_vad_iterator import (FixedVADIterator, OnnxWrapper,
+                                                load_jit_vad)
 from whisperlivekit.timed_objects import (ASRToken, ChangeSpeaker, FrontData,
                                           Segment, Silence, State, Transcript)
 from whisperlivekit.tokens_alignment import TokensAlignment
