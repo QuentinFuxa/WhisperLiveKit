@@ -9,12 +9,17 @@ from fastapi.responses import HTMLResponse
 from whisperlivekit import (AudioProcessor, TranscriptionEngine,
                             get_inline_ui_html, parse_args)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logging.getLogger().setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
 args = parse_args()
+
+# Configure logging based on --log-level argument
+log_level = getattr(logging, args.log_level.upper(), logging.DEBUG)
+logging.basicConfig(level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.getLogger().setLevel(log_level)
+
+# Set specific loggers
+logger = logging.getLogger(__name__)
+logger.setLevel(log_level)
+logging.getLogger("whisperlivekit").setLevel(log_level)
 transcription_engine = None
 
 @asynccontextmanager

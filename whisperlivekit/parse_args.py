@@ -317,6 +317,35 @@ def parse_args():
         help="600M or 1.3B",
     )
 
+    # Encoder batching arguments (for multi-client GPU optimization)
+    batcher_group = parser.add_argument_group('Encoder Batching (multi-client optimization)')
+
+    batcher_group.add_argument(
+        "--use-encoder-batcher",
+        action="store_true",
+        default=False,
+        dest="use_encoder_batcher",
+        help="Enable encoder batching to optimize GPU utilization when multiple clients connect simultaneously. "
+             "Batches encoder forward passes across sessions for better throughput.",
+    )
+
+    batcher_group.add_argument(
+        "--batcher-max-batch",
+        type=int,
+        default=32,
+        dest="batcher_max_batch",
+        help="Maximum number of encoder requests to batch together (default: 32).",
+    )
+
+    batcher_group.add_argument(
+        "--batcher-max-delay-ms",
+        type=float,
+        default=5.0,
+        dest="batcher_max_delay_ms",
+        help="Maximum time in milliseconds to wait for collecting batch requests (default: 5.0). "
+             "Lower values reduce latency, higher values improve batching efficiency.",
+    )
+
     args = parser.parse_args()
     
     args.transcription = not args.no_transcription

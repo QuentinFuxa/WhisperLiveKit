@@ -4,6 +4,7 @@ from argparse import Namespace
 
 from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
 from whisperlivekit.local_agreement.whisper_online import backend_factory
+
 from whisperlivekit.simul_whisper import SimulStreamingASR
 
 
@@ -84,7 +85,8 @@ class TranscriptionEngine:
             from whisperlivekit.silero_vad_iterator import is_onnx_available
             
             if is_onnx_available():
-                from whisperlivekit.silero_vad_iterator import load_onnx_session
+                from whisperlivekit.silero_vad_iterator import \
+                    load_onnx_session
                 self.vac_session = load_onnx_session()
             else:
                 logger.warning(
@@ -93,7 +95,7 @@ class TranscriptionEngine:
                 )
         backend_policy = self.args.backend_policy
         if self.args.transcription:
-            if backend_policy == "simulstreaming":                 
+            if backend_policy == "simulstreaming":
                 simulstreaming_params = {
                     "disable_fast_encoder": False,
                     "custom_alignment_heads": None,
@@ -107,10 +109,11 @@ class TranscriptionEngine:
                     "init_prompt": None,
                     "static_init_prompt": None,
                     "max_context_tokens": None,
+                    "use_encoder_batcher": False,
                 }
                 simulstreaming_params = update_with_kwargs(simulstreaming_params, kwargs)
-                
-                self.tokenizer = None        
+
+                self.tokenizer = None
                 self.asr = SimulStreamingASR(
                     **transcription_common_params,
                     **simulstreaming_params,
@@ -120,6 +123,33 @@ class TranscriptionEngine:
                     "Using SimulStreaming policy with %s backend",
                     getattr(self.asr, "encoder_backend", "whisper"),
                 )
+
+                # Initialize encoder batcher if enabled (for multi-client GPU optimization)
+                if kwargs.get('use_encoder_batcher', False):
+                    # Encoder batcher requires PyTorch shared_model (works with pure PyTorch
+                    # or hybrid MLX/FasterWhisper encoder + PyTorch decoder)
+                    if self.asr.shared_model is not None and not self.asr.use_full_mlx:
+                        from whisperlivekit.simul_whisper.encoder_batcher import \
+                            EncoderBatcher
+                        self.asr.encoder_batcher = EncoderBatcher(
+                            shared_model=self.asr.shared_model,
+                            device=self.asr.shared_model.device,
+                            n_mels=self.asr.shared_model.dims.n_mels,
+                            max_batch=kwargs.get('batcher_max_batch', 32),
+                            max_delay_ms=kwargs.get('batcher_max_delay_ms', 5.0),
+                        )
+                        logger.info(
+                            "EncoderBatcher enabled: max_batch=%d, max_delay_ms=%.1f",
+                            kwargs.get('batcher_max_batch', 32),
+                            kwargs.get('batcher_max_delay_ms', 5.0),
+                        )
+                    else:
+                        backend_info = f"use_full_mlx={getattr(self.asr, 'use_full_mlx', 'N/A')}, " \
+                                       f"shared_model={'present' if self.asr.shared_model else 'None'}"
+                        logger.warning(
+                            "EncoderBatcher requested but not available for current backend "
+                            f"(requires PyTorch backend with shared_model). Current: {backend_info}"
+                        )
             else:
                 
                 whisperstreaming_params = {
