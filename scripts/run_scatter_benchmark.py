@@ -266,6 +266,8 @@ def generate_scatter(results, system_info, output_path, n_samples, lang="en",
         "mlx SS small":   (-55, -5),
         "voxtral mlx":    (10, -14),
         "qwen3 0.6B":     (10, 8),
+        "qwen3-mlx 0.6B": (10, -14),
+        "qwen3-mlx 1.7B": (10, 8),
         "fw LA large-v3": (8, -5),
         "fw SS large-v3": (8, 5),
     }
