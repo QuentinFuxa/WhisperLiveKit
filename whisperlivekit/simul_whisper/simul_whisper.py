@@ -6,13 +6,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from whisperlivekit.backend_support import (faster_backend_available,
-                                            mlx_backend_available)
-from whisperlivekit.whisper.audio import (N_FRAMES, N_SAMPLES,
-                                          TOKENS_PER_SECOND,
-                                          log_mel_spectrogram, pad_or_trim)
-from whisperlivekit.whisper.decoding import (BeamSearchDecoder, GreedyDecoder,
-                                             SuppressTokens)
+from whisperlivekit.backend_support import faster_backend_available, mlx_backend_available
+from whisperlivekit.whisper.audio import N_FRAMES, N_SAMPLES, TOKENS_PER_SECOND, log_mel_spectrogram, pad_or_trim
+from whisperlivekit.whisper.decoding import BeamSearchDecoder, GreedyDecoder, SuppressTokens
 from whisperlivekit.whisper.timing import median_filter
 
 from .align_att_base import DEC_PAD, AlignAttBase
@@ -25,8 +21,7 @@ from .token_buffer import TokenBuffer
 logger = logging.getLogger(__name__)
 
 if mlx_backend_available():
-    from mlx_whisper.audio import \
-        log_mel_spectrogram as mlx_log_mel_spectrogram
+    from mlx_whisper.audio import log_mel_spectrogram as mlx_log_mel_spectrogram
     from mlx_whisper.transcribe import pad_or_trim as mlx_pad_or_trim
 
 if faster_backend_available():

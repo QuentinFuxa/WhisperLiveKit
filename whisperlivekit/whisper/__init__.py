@@ -11,10 +11,8 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
-from whisperlivekit.whisper.audio import (load_audio, log_mel_spectrogram,
-                                          pad_or_trim)
-from whisperlivekit.whisper.decoding import (DecodingOptions, DecodingResult,
-                                             decode, detect_language)
+from whisperlivekit.whisper.audio import load_audio, log_mel_spectrogram, pad_or_trim
+from whisperlivekit.whisper.decoding import DecodingOptions, DecodingResult, decode, detect_language
 from whisperlivekit.whisper.model import ModelDimensions, Whisper
 from whisperlivekit.whisper.transcribe import transcribe
 from whisperlivekit.whisper.version import __version__
@@ -266,7 +264,7 @@ def _convert_mlx_state_dict(state_dict: Dict[str, torch.Tensor]) -> Dict[str, to
     for key, value in state_dict.items():
         if key == "alignment_heads":
             continue
-        
+
         new_key = key.replace(".mlp1.", ".mlp.0.").replace(".mlp2.", ".mlp.2.")
         converted[new_key] = value
 
@@ -310,13 +308,13 @@ def _resolve_lora_path(lora_path: Optional[str]) -> Optional[str]:
     """
     if not lora_path:
         return None
-    
+
     # Check if it's already a valid local path
     if os.path.isdir(lora_path):
         config_path = os.path.join(lora_path, "adapter_config.json")
         if os.path.isfile(config_path):
             return lora_path
-    
+
     # Try to download from HuggingFace Hub
     if "/" in lora_path:
         try:
@@ -330,7 +328,7 @@ def _resolve_lora_path(lora_path: Optional[str]) -> Optional[str]:
             raise FileNotFoundError(
                 f"Could not find LoRA adapter at local path or HuggingFace Hub: {lora_path}. Error: {e}"
             )
-    
+
     raise FileNotFoundError(
         f"LoRA path '{lora_path}' is not a valid local directory or HuggingFace repo ID."
     )
@@ -339,7 +337,7 @@ def _resolve_lora_path(lora_path: Optional[str]) -> Optional[str]:
 def _apply_lora_adapter(state_dict: Dict[str, Tensor], lora_path: Optional[str]):
     if not lora_path:
         return
-    
+
     # Resolve path (handles HuggingFace Hub download)
     lora_path = _resolve_lora_path(lora_path)
     if not lora_path:
@@ -410,10 +408,10 @@ def _load_checkpoint(
     if checkpoint_bytes is not None:
         with io.BytesIO(checkpoint_bytes) as fp:
             return torch.load(fp, map_location=device)
-    
+
     file_path = Path(file_path)
     suffix = file_path.suffix.lower()
-    
+
     if suffix == '.safetensors':
         try:
             from safetensors.torch import load_file
@@ -444,7 +442,7 @@ def _load_sharded_checkpoint(
     """
     merged_state_dict = {}
     first_suffix = shard_files[0].suffix.lower()
-    
+
     if first_suffix == '.safetensors':
         try:
             from safetensors.torch import load_file
@@ -461,7 +459,7 @@ def _load_sharded_checkpoint(
                 shard_dict = torch.load(fp, map_location=device)
             if isinstance(shard_dict, dict):
                 merged_state_dict.update(shard_dict)
-    
+
     return merged_state_dict
 
 
@@ -505,10 +503,10 @@ def load_model(
     if download_root is None:
         default = os.path.join(os.path.expanduser("~"), ".cache")
         download_root = os.path.join(os.getenv("XDG_CACHE_HOME", default), "whisper")
-    
+
     checkpoint = None
     model_path_for_config = name  # Used to find config.json for dims inference
-    
+
     if name in _MODELS:
         checkpoint_file = _download(_MODELS[name], download_root, in_memory)
         if in_memory:
@@ -525,13 +523,13 @@ def load_model(
         model_path_for_config = name
     elif os.path.isdir(name):
         model_info = detect_model_format(name)
-        
+
         if not model_info.has_pytorch:
             raise RuntimeError(
                 f"No PyTorch checkpoint found in directory {name}. "
                 f"Expected .pt, .bin, or .safetensors file(s)."
             )
-        
+
         if model_info.is_sharded:
             checkpoint = _load_sharded_checkpoint(model_info.pytorch_files, device)
         else:
@@ -547,7 +545,7 @@ def load_model(
         raise RuntimeError(
             f"Model {name} not found; available models = {available_models()}"
         )
-        
+
     alignment_heads = _ALIGNMENT_HEADS.get(name, None)
     if custom_alignment_heads:
         alignment_heads = custom_alignment_heads.encode()
@@ -557,10 +555,10 @@ def load_model(
         state_dict = checkpoint["model_state_dict"]
     else:
         state_dict = checkpoint
-    
+
     if alignment_heads is None and "alignment_heads" in state_dict:
         alignment_heads = state_dict["alignment_heads"]
-    
+
     state_dict = _convert_hf_state_dict(state_dict)
     state_dict = _convert_mlx_state_dict(state_dict)
     _apply_lora_adapter(state_dict, lora_path)
@@ -578,10 +576,10 @@ def load_model(
             state_dict = checkpoint
 
     model = Whisper(dims, decoder_only=decoder_only)
-    
+
     if decoder_only:
         state_dict = {
-            k: v for k, v in state_dict.items() 
+            k: v for k, v in state_dict.items()
             if 'encoder' not in k
         }
 
@@ -604,7 +602,7 @@ def convert_encoder_to_coreml(
     dummy_frames = 3000, #Number of time frames to use for the dummy mel input during tracing
     precision = "float16",
 ):
-   
+
     import coremltools as ct
     model = load_model(model_name, device="cpu", decoder_only=False)
     encoder = model.encoder.eval().cpu()

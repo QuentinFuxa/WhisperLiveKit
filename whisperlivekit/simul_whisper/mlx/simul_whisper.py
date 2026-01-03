@@ -4,7 +4,6 @@ from typing import Any, List, Tuple
 
 import mlx.core as mx
 import numpy as np
-
 from mlx_whisper.audio import log_mel_spectrogram as mlx_log_mel_spectrogram
 from mlx_whisper.transcribe import pad_or_trim as mlx_pad_or_trim
 
@@ -14,7 +13,6 @@ from ..align_att_base import DEC_PAD, AlignAttBase
 from ..config import AlignAttConfig
 from .decoder_state import MLXDecoderState
 from .decoders import MLXBeamSearchDecoder, MLXGreedyDecoder, MLXInference
-
 
 logger = logging.getLogger(__name__)
 

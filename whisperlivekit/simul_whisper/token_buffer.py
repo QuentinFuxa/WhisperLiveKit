@@ -1,4 +1,3 @@
-import sys
 
 import torch
 
@@ -17,7 +16,7 @@ class TokenBuffer:
         if tokenizer is None:
             tokenizer = self.tokenizer
         if tokenizer is None:
-            raise ValueError("Tokenizer is not set.") 
+            raise ValueError("Tokenizer is not set.")
         return self.prefix_token_ids + tokenizer.encode(self.text)
 
     def as_tensor(self, device=None):
@@ -26,7 +25,7 @@ class TokenBuffer:
         if device is None:
             raise ValueError("Device is not set.")
         tok_ids = self.as_token_ids()
-        return torch.tensor(tok_ids, 
+        return torch.tensor(tok_ids,
                      dtype=torch.long, device=device).unsqueeze(0)
 
     def as_tensor_beam(self, beam, device=None):
@@ -44,7 +43,7 @@ class TokenBuffer:
     @staticmethod
     def from_text(text, *a, **kw):
         return TokenBuffer(*a, text=text, **kw)
-    
+
     def is_empty(self):
         return self.text is None or self.text == ""
 

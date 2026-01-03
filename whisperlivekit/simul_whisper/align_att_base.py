@@ -1,7 +1,6 @@
 """Abstract base class for AlignAtt streaming decoders (PyTorch & MLX)."""
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Tuple
 
 from whisperlivekit.timed_objects import ASRToken
 from whisperlivekit.whisper import DecodingOptions, tokenizer
@@ -151,7 +150,7 @@ class AlignAttBase(ABC):
             if seconds_since_start >= 2.0:
                 language_tokens, language_probs = self.lang_id(encoder_feature)
                 top_lan, p = max(language_probs[0].items(), key=lambda x: x[1])
-                print(f"Detected language: {top_lan} with p={p:.4f}")
+                logger.info(f"Detected language: {top_lan} with p={p:.4f}")
                 self.create_tokenizer(top_lan)
                 self.state.last_attend_frame = -self.cfg.rewind_threshold
                 self.state.cumulative_time_offset = 0.0

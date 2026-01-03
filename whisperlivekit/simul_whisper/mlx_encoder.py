@@ -41,17 +41,17 @@ def load_mlx_encoder(
         nn.quantize(model, **quantization, class_predicate=class_predicate)
 
     weights = tree_unflatten(list(weights.items()))
-    
+
     # we only want to load the encoder weights here.
-    # Size examples: for tiny.en, 
+    # Size examples: for tiny.en,
     # Decoder weights: 59110771 bytes
     # Encoder weights: 15268874 bytes
 
-    
+
     encoder_weights = {}
     encoder_weights['encoder'] = weights['encoder']
     del(weights)
-    
+
 
 
     model.update(encoder_weights)
@@ -89,7 +89,7 @@ def load_mlx_model(
         nn.quantize(model, **quantization, class_predicate=class_predicate)
 
     weights = tree_unflatten(list(weights.items()))
-    
+
     model.update(weights)
     mx.eval(model.parameters())
     return model

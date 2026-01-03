@@ -46,7 +46,7 @@ def resize(alphas, target_lengths, threshold=0.999):
                 _alphas[x] = _alphas[x] * 0.5 + mean * mask
 
     return _alphas, _num
- 
+
 def fire_at_boundary(chunked_encoder_feature: torch.Tensor, cif_linear):
     content_mel_len = chunked_encoder_feature.shape[1] # B, T, D
     alphas = cif_linear(chunked_encoder_feature).squeeze(dim=2) # B, T

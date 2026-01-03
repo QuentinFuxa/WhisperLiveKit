@@ -175,7 +175,7 @@ class MultiHeadAttention(nn.Module):
 
 class ResidualAttentionBlock(nn.Module):
     def __init__(
-        self, n_state: int, n_head: int, cross_attention: bool = False, 
+        self, n_state: int, n_head: int, cross_attention: bool = False,
         cache_id: str = "", n_text_ctx: int = 448
     ):
         super().__init__()
@@ -267,7 +267,7 @@ class TextDecoder(nn.Module):
         self.blocks: Iterable[ResidualAttentionBlock] = nn.ModuleList(
             [
                 ResidualAttentionBlock(
-                    n_state, n_head, cross_attention=True, 
+                    n_state, n_head, cross_attention=True,
                     cache_id=f"dec_layer{i}", n_text_ctx=n_ctx
                 )
                 for i in range(n_layer)
@@ -279,9 +279,9 @@ class TextDecoder(nn.Module):
         self.register_buffer("mask", mask, persistent=False)
 
     def forward(
-        self, 
-        x: Tensor, 
-        xa: Tensor, 
+        self,
+        x: Tensor,
+        xa: Tensor,
         kv_cache: Optional[dict] = None,
         return_cross_attn: bool = False,
     ):
@@ -309,7 +309,7 @@ class TextDecoder(nn.Module):
             first_self_attn_key = self.blocks[0].attn.key_cache_id
             if first_self_attn_key in kv_cache:
                 offset = kv_cache[first_self_attn_key].shape[1]
-        
+
         x = (
             self.token_embedding(x)
             + self.positional_embedding[offset : offset + x.shape[-1]]
@@ -336,7 +336,7 @@ class Whisper(nn.Module):
     def __init__(self, dims: ModelDimensions, decoder_only: bool = False):
         super().__init__()
         self.dims = dims
-        
+
         if not decoder_only:
             self.encoder = AudioEncoder(
                 self.dims.n_mels,
@@ -373,15 +373,15 @@ class Whisper(nn.Module):
         return self.encoder(mel)
 
     def logits(
-        self, 
-        tokens: torch.Tensor, 
+        self,
+        tokens: torch.Tensor,
         audio_features: torch.Tensor,
         kv_cache: Optional[dict] = None,
         return_cross_attn: bool = False,
     ):
         return self.decoder(
-            tokens, audio_features, 
-            kv_cache=kv_cache, 
+            tokens, audio_features,
+            kv_cache=kv_cache,
             return_cross_attn=return_cross_attn
         )
 

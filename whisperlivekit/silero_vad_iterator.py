@@ -130,18 +130,18 @@ def _get_onnx_model_path(model_path: str = None, opset_version: int = 16) -> Pat
     available_ops = [15, 16]
     if opset_version not in available_ops:
         raise ValueError(f'Unsupported ONNX opset_version: {opset_version}. Available: {available_ops}')
-    
+
     if model_path is None:
         current_dir = Path(__file__).parent
         data_dir = current_dir / 'silero_vad_models'
-        
+
         if opset_version == 16:
             model_name = 'silero_vad.onnx'
         else:
             model_name = f'silero_vad_16k_op{opset_version}.onnx'
-        
+
         model_path = data_dir / model_name
-        
+
         if not model_path.exists():
             raise FileNotFoundError(
                 f"Model file not found: {model_path}\n"
@@ -149,7 +149,7 @@ def _get_onnx_model_path(model_path: str = None, opset_version: int = 16) -> Pat
             )
     else:
         model_path = Path(model_path)
-    
+
     return model_path
 
 
@@ -169,9 +169,9 @@ def load_jit_vad(model_path: str = None):
         current_dir = Path(__file__).parent
         data_dir = current_dir / 'silero_vad_models'
         model_name = 'silero_vad.jit'
-        
+
         model_path = data_dir / model_name
-        
+
         if not model_path.exists():
             raise FileNotFoundError(
                 f"Model file not found: {model_path}\n"
@@ -181,17 +181,17 @@ def load_jit_vad(model_path: str = None):
         model_path = Path(model_path)
 
     model = init_jit_model(str(model_path))
- 
+
     return model
 
 
 class VADIterator:
     """
     Voice Activity Detection iterator for streaming audio.
-    
+
     This is the Silero VAD v6 implementation.
     """
-    
+
     def __init__(self,
                  model,
                  threshold: float = 0.5,
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     audio_buffer = np.array([0] * 512, dtype=np.float32)
     result = vad(audio_buffer)
     print(f"   512 samples: {result}")
-    
+
     # test with 511 samples
     audio_buffer = np.array([0] * 511, dtype=np.float32)
     result = vad(audio_buffer)

@@ -6,9 +6,10 @@ Everything else is just efficiency.
 @karpathy
 """
 
-import os       # os.path.exists
-import math     # math.log, math.exp
-import random   # random.seed, random.choices, random.gauss, random.shuffle
+import math  # math.log, math.exp
+import os  # os.path.exists
+import random  # random.seed, random.choices, random.gauss, random.shuffle
+
 random.seed(42) # Let there be order among chaos
 
 # Let there be an input dataset `docs`: list[str] of documents (e.g. a dataset of names)

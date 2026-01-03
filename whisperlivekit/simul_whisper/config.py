@@ -21,4 +21,3 @@ class AlignAttConfig():
     init_prompt: str = field(default=None)
     static_init_prompt: str = field(default=None)
     max_context_tokens: int = field(default=None)
-    

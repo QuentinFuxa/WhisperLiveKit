@@ -1,31 +1,27 @@
 import gc
 import logging
-import os
 import platform
 import sys
-from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 import torch
 
-from whisperlivekit.backend_support import (faster_backend_available,
-                                            mlx_backend_available)
+from whisperlivekit.backend_support import faster_backend_available, mlx_backend_available
 from whisperlivekit.model_paths import detect_model_format, resolve_model_path
 from whisperlivekit.simul_whisper.config import AlignAttConfig
 from whisperlivekit.simul_whisper.simul_whisper import AlignAtt
 from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, Transcript
 from whisperlivekit.warmup import load_file
 from whisperlivekit.whisper import load_model, tokenizer
-from whisperlivekit.whisper.audio import TOKENS_PER_SECOND
 
 logger = logging.getLogger(__name__)
 
 
 HAS_MLX_WHISPER = mlx_backend_available(warn_on_missing=True)
 if HAS_MLX_WHISPER:
-    from .mlx_encoder import load_mlx_encoder, load_mlx_model, mlx_model_mapping
     from .mlx import MLXAlignAtt
+    from .mlx_encoder import load_mlx_encoder, load_mlx_model, mlx_model_mapping
 else:
     mlx_model_mapping = {}
     MLXAlignAtt = None
@@ -47,7 +43,7 @@ class SimulStreamingOnlineProcessor:
         self.end = 0.0
         self.buffer = []
         self.model = self._create_alignatt()
-        
+
         if asr.tokenizer:
             self.model.tokenizer = asr.tokenizer
             self.model.state.tokenizer = asr.tokenizer
@@ -99,7 +95,7 @@ class SimulStreamingOnlineProcessor:
         self.model.refresh_segment(complete=True)
         self.model.speaker = change_speaker.speaker
         self.model.global_time_offset = change_speaker.start
-            
+
     def get_buffer(self):
         concat_buffer = Transcript.from_tokens(tokens= self.buffer, sep='')
         return concat_buffer
@@ -107,19 +103,19 @@ class SimulStreamingOnlineProcessor:
     def process_iter(self, is_last=False) -> Tuple[List[ASRToken], float]:
         """
         Process accumulated audio chunks using SimulStreaming.
-        
+
         Returns a tuple: (list of committed ASRToken objects, float representing the audio processed up to time).
         """
         try:
             timestamped_words = self.model.infer(is_last=is_last)
-            
+
             if not timestamped_words:
                 return [], self.end
-            
+
             if self.model.cfg.language == "auto" and timestamped_words[0].detected_language is None:
                 self.buffer.extend(timestamped_words)
                 return [], self.end
-            
+
             self.buffer = []
             return timestamped_words, self.end
         except Exception as e:
@@ -156,7 +152,7 @@ class SimulStreamingASR:
     def __init__(self, logfile=sys.stderr, **kwargs):
         self.logfile = logfile
         self.transcribe_kargs = {}
-        
+
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -169,20 +165,20 @@ class SimulStreamingASR:
         self.use_full_mlx = getattr(self, "use_full_mlx", False)
         preferred_backend = getattr(self, "backend", "auto")
         compatible_whisper_mlx, compatible_faster_whisper = True, True
-        
+
         if self.model_path:
             resolved_model_path = resolve_model_path(self.model_path)
             self._resolved_model_path = resolved_model_path
             self.model_path = str(resolved_model_path)
-            
+
             model_info = detect_model_format(resolved_model_path)
             compatible_whisper_mlx = model_info.compatible_whisper_mlx
             compatible_faster_whisper = model_info.compatible_faster_whisper
-            
+
             if not self.use_full_mlx and not model_info.has_pytorch:
                 raise FileNotFoundError(
                     f"No PyTorch checkpoint (.pt/.bin/.safetensors) found under {self.model_path}"
-                )            
+                )
             self.model_name = resolved_model_path.name if resolved_model_path.is_dir() else resolved_model_path.stem
         elif self.model_size is not None:
             self.model_name = self.model_size
@@ -199,14 +195,14 @@ class SimulStreamingASR:
         self.fast_encoder = self.encoder_backend in ("mlx-whisper", "faster-whisper")
         if self.encoder_backend == "whisper":
             self.disable_fast_encoder = True
-        
+
         # MLX full decoder disabled by default — MLXAlignAtt has known issues
         # with token generation after punctuation. Users can opt-in with
         # --use-full-mlx if they want to test it.
         # if self.encoder_backend == "mlx-whisper" and platform.system() == "Darwin":
         #     if not hasattr(self, '_full_mlx_disabled'):
         #         self.use_full_mlx = True
-                    
+
         self.cfg = AlignAttConfig(
                 tokenizer_is_multilingual= is_multilingual,
                 segment_length=self.min_chunk_size,
@@ -222,8 +218,8 @@ class SimulStreamingASR:
                 init_prompt=self.init_prompt,
                 max_context_tokens=self.max_context_tokens,
                 static_init_prompt=self.static_init_prompt,
-        )  
-        
+        )
+
         # Set up tokenizer for translation if needed
         if self.direct_english_translation:
             self.tokenizer = self.set_translate_task()
@@ -232,7 +228,7 @@ class SimulStreamingASR:
 
         self.mlx_encoder, self.fw_encoder, self.mlx_model = None, None, None
         self.shared_model = None
-        
+
         if self.use_full_mlx and HAS_MLX_WHISPER:
             logger.info('MLX Whisper backend used.')
             if self._resolved_model_path is not None:
@@ -259,7 +255,7 @@ class SimulStreamingASR:
             self.mlx_encoder = load_mlx_encoder(path_or_hf_repo=mlx_model_path)
             self.shared_model = self.load_model()
         elif self.encoder_backend == "faster-whisper":
-            print('SimulStreaming will use Faster Whisper for the encoder.')
+            logger.info('SimulStreaming will use Faster Whisper for the encoder.')
             if self._resolved_model_path is not None:
                 fw_model = str(self._resolved_model_path)
             else:
@@ -272,7 +268,7 @@ class SimulStreamingASR:
             self.shared_model = self.load_model()
         else:
             self.shared_model = self.load_model()
-    
+
     def _warmup_mlx_model(self):
         """Warmup the full MLX model."""
         warmup_audio = load_file(self.warmup_file)
