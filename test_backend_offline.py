@@ -36,8 +36,8 @@ import logging
 import sys
 import time
 import urllib.request
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from dataclasses import dataclass, asdict, field
 from typing import List, Optional
 
 import numpy as np
@@ -157,6 +157,7 @@ def create_engine(
 ):
     """Create a TranscriptionEngine with the given backend config."""
     import gc
+
     from whisperlivekit.core import TranscriptionEngine
 
     # Reset singleton so we get a fresh instance
@@ -320,7 +321,7 @@ async def run_test(
         transcription = _extract_text_from_response(last)
 
     # --- Compute WER and timestamp accuracy against ground truth ---
-    from whisperlivekit.metrics import compute_wer, compute_timestamp_accuracy
+    from whisperlivekit.metrics import compute_timestamp_accuracy, compute_wer
 
     wer_val = None
     wer_details = None
@@ -434,7 +435,7 @@ async def run_all_tests(
         file_lan = lan
         if "french" in audio_path.name.lower() and lan == "en":
             file_lan = "fr"
-            logger.info(f"Auto-detected language 'fr' from filename")
+            logger.info("Auto-detected language 'fr' from filename")
 
         audio = load_audio(str(audio_path))
 
@@ -495,7 +496,7 @@ def print_benchmark_summary(results: List[TestResult]):
     print(f"{'=' * 110}")
 
     # Print transcription excerpts
-    print(f"\nTRANSCRIPTIONS:")
+    print("\nTRANSCRIPTIONS:")
     print(f"{'-' * 110}")
     for r in results:
         excerpt = r.transcription[:120] + "..." if len(r.transcription) > 120 else r.transcription

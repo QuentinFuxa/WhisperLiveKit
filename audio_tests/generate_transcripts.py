@@ -6,6 +6,7 @@ Produces one JSON file per audio with: [{word, start, end}, ...]
 
 import json
 import os
+
 from faster_whisper import WhisperModel
 
 AUDIO_DIR = os.path.dirname(os.path.abspath(__file__))

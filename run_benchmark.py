@@ -33,7 +33,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from test_backend_offline import (
     AUDIO_TESTS_DIR,
     SAMPLE_RATE,
-    TestResult,
     create_engine,
     discover_audio_files,
     download_sample_audio,

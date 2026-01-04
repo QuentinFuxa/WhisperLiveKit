@@ -8,7 +8,7 @@ import io
 import math
 import pathlib
 import sys
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,7 +24,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(WHISPER_ROOT))
 
 from whisper import load_model
-from whisper.audio import load_audio, log_mel_spectrogram, pad_or_trim
+from whisper.audio import log_mel_spectrogram, pad_or_trim
 from whisper.tokenizer import get_tokenizer
 
 AudioInput = Union[str, pathlib.Path, np.ndarray, torch.Tensor]
@@ -85,7 +85,7 @@ def _parse_args():
     parser.add_argument(
         "--dataset-config",
         type=str,
-        default="clean" 
+        default="clean"
     )
     parser.add_argument(
         "--dataset-split",
