@@ -626,8 +626,10 @@ class AlignAtt:
 
             try:
                 current_timestamp = l_absolute_timestamps[timestamp_idx]
-            except:
-                pass
+            except IndexError:
+                # Use last timestamp if index out of range
+                logger.warning(f"Timestamp index {timestamp_idx} out of range, using last timestamp")
+                current_timestamp = l_absolute_timestamps[-1] if l_absolute_timestamps else 0.0
             timestamp_idx += len(word_tokens)
 
             timestamp_entry = ASRToken(

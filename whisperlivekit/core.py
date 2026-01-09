@@ -1,5 +1,6 @@
 import logging
 import sys
+import threading
 from argparse import Namespace
 
 from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
@@ -19,16 +20,26 @@ logger = logging.getLogger(__name__)
 class TranscriptionEngine:
     _instance = None
     _initialized = False
+    _lock = threading.Lock()  # Thread-safe singleton lock
     
     def __new__(cls, *args, **kwargs):
+        # Double-checked locking pattern for thread-safe singleton
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with cls._lock:
+                # Check again inside lock to prevent race condition
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
         return cls._instance
     
     def __init__(self, **kwargs):
-        if TranscriptionEngine._initialized:
-            return
+        # Thread-safe initialization check
+        with TranscriptionEngine._lock:
+            if TranscriptionEngine._initialized:
+                return
+            # Set flag immediately to prevent re-initialization
+            TranscriptionEngine._initialized = True
 
+        # Perform initialization outside lock to avoid holding lock during slow operations
         global_params = {
             "host": "localhost",
             "port": 8000,
@@ -172,7 +183,6 @@ class TranscriptionEngine:
                 }
                 translation_params = update_with_kwargs(translation_params, kwargs)
                 self.translation_model = load_model([self.args.lan], **translation_params) #in the future we want to handle different languages for different speakers
-        TranscriptionEngine._initialized = True
 
 
 def online_factory(args, asr):
