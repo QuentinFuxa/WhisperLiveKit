@@ -47,9 +47,24 @@ class DecoderState:
     
     def clean_cache(self):
         """Clean the kv_cache after each inference step."""
-        self.kv_cache = {}
+        # Explicitly delete tensor references to free GPU memory
+        if self.kv_cache:
+            for key in list(self.kv_cache.keys()):
+                tensor = self.kv_cache.pop(key, None)
+                if tensor is not None:
+                    del tensor
+
+        # Clear the dict
+        self.kv_cache.clear()
+
+        # Force GPU cache cleanup (only if CUDA is available)
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         if self.decoder_type == "beam" and self.inference is not None:
-            self.inference.kv_cache = self.kv_cache
+            # Create NEW dict instead of sharing reference
+            self.inference.kv_cache = {}
             if self.token_decoder is not None:
                 self.token_decoder.reset()
     
