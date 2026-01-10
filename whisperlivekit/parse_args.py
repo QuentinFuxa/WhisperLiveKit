@@ -72,20 +72,20 @@ def parse_args():
         action="store_true",
         help="Disable transcription to only see live diarization results.",
     )
-    
+
     parser.add_argument(
         "--disable-punctuation-split",
         action="store_true",
         help="Disable the split parameter.",
     )
-    
+
     parser.add_argument(
         "--min-chunk-size",
         type=float,
         default=0.1,
         help="Minimum audio chunk size in seconds. It waits up to this time to do processing. If the processing takes shorter time, it waits, otherwise it processes the whole segment that was received by this time.",
     )
-    
+
     parser.add_argument(
         "--model",
         type=str,
@@ -93,7 +93,7 @@ def parse_args():
         dest='model_size',
         help="Name size of the Whisper model to use (default: tiny). Suggested values: tiny.en,tiny,base.en,base,small.en,small,medium.en,medium,large-v1,large-v2,large-v3,large,large-v3-turbo. The model is automatically downloaded from the model hub if not present in model cache dir.",
     )
-    
+
     parser.add_argument(
         "--model_cache_dir",
         type=str,
@@ -127,14 +127,14 @@ def parse_args():
         default=False,
         help="Use Whisper to directly translate to english.",
     )
-    
+
     parser.add_argument(
         "--target-language",
         type=str,
         default="",
         dest="target_language",
         help="Target language for translation. Not functional yet.",
-    )    
+    )
 
     parser.add_argument(
         "--backend-policy",
@@ -147,8 +147,8 @@ def parse_args():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx"],
-        help="Select the ASR backend implementation (auto: prefer MLX on macOS, otherwise Faster-Whisper, else Whisper). Use 'voxtral' for HF Transformers Voxtral (CUDA/CPU/MPS). Use 'voxtral-mlx' for native MLX Voxtral on Apple Silicon.",
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3"],
+        help="Select the ASR backend implementation (auto: prefer MLX on macOS, otherwise Faster-Whisper, else Whisper). Use 'voxtral' for HF Transformers Voxtral (CUDA/CPU/MPS). Use 'voxtral-mlx' for native MLX Voxtral on Apple Silicon. Use 'qwen3' for Qwen3-ASR.",
     )
     parser.add_argument(
         "--no-vac",
@@ -165,7 +165,7 @@ def parse_args():
         action="store_true",
         help="Disable VAD (voice activity detection).",
     )
-    
+
     parser.add_argument(
         "--buffer_trimming",
         type=str,
@@ -213,7 +213,7 @@ def parse_args():
         default=None,
         help="Use your own alignment heads, useful when `--model-dir` is used",
     )
-    
+
     simulstreaming_group.add_argument(
         "--frame-threshold",
         type=int,
@@ -221,7 +221,7 @@ def parse_args():
         dest="frame_threshold",
         help="Threshold for the attention-guided decoding. The AlignAtt policy will decode only until this number of frames from the end of audio. In frames: one frame is 0.02 seconds for large-v3 model.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--beams",
         "-b",
@@ -229,7 +229,7 @@ def parse_args():
         default=1,
         help="Number of beams for beam search decoding. If 1, GreedyDecoder is used.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--decoder",
         type=str,
@@ -238,7 +238,7 @@ def parse_args():
         choices=["beam", "greedy"],
         help="Override automatic selection of beam or greedy decoder. If beams > 1 and greedy: invalid.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--audio-max-len",
         type=float,
@@ -246,7 +246,7 @@ def parse_args():
         dest="audio_max_len",
         help="Max length of the audio buffer, in seconds.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--audio-min-len",
         type=float,
@@ -254,7 +254,7 @@ def parse_args():
         dest="audio_min_len",
         help="Skip processing if the audio buffer is shorter than this length, in seconds. Useful when the --min-chunk-size is small.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--cif-ckpt-path",
         type=str,
@@ -262,7 +262,7 @@ def parse_args():
         dest="cif_ckpt_path",
         help="The file path to the Simul-Whisper's CIF model checkpoint that detects whether there is end of word at the end of the chunk. If not, the last decoded space-separated word is truncated because it is often wrong -- transcribing a word in the middle. The CIF model adapted for the Whisper model version should be used. Find the models in https://github.com/backspacetg/simul_whisper/tree/main/cif_models . Note that there is no model for large-v3.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--never-fire",
         action="store_true",
@@ -270,7 +270,7 @@ def parse_args():
         dest="never_fire",
         help="Override the CIF model. If True, the last word is NEVER truncated, no matter what the CIF model detects. If False: if CIF model path is set, the last word is SOMETIMES truncated, depending on the CIF detection. Otherwise, if the CIF model path is not set, the last word is ALWAYS trimmed.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--init-prompt",
         type=str,
@@ -278,7 +278,7 @@ def parse_args():
         dest="init_prompt",
         help="Init prompt for the model. It should be in the target language.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--static-init-prompt",
         type=str,
@@ -286,7 +286,7 @@ def parse_args():
         dest="static_init_prompt",
         help="Do not scroll over this text. It can contain terminology that should be relevant over all document.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--max-context-tokens",
         type=int,
@@ -294,7 +294,7 @@ def parse_args():
         dest="max_context_tokens",
         help="Max context tokens for the model. Default is 0.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--model-path",
         type=str,
@@ -302,14 +302,14 @@ def parse_args():
         dest="model_path",
         help="Direct path to the SimulStreaming Whisper .pt model file. Overrides --model for SimulStreaming backend.",
     )
-    
+
     simulstreaming_group.add_argument(
         "--nllb-backend",
         type=str,
         default="transformers",
         help="transformers or ctranslate2",
     )
-    
+
     simulstreaming_group.add_argument(
         "--nllb-size",
         type=str,

@@ -1,6 +1,6 @@
 """Typed configuration for the WhisperLiveKit pipeline."""
 import logging
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class WhisperLiveKitConfig:
     frame_threshold: int = 25
     beams: int = 1
     decoder_type: Optional[str] = None
-    audio_max_len: float = 20.0
+    audio_max_len: float = 30.0
     audio_min_len: float = 0.0
     cif_ckpt_path: Optional[str] = None
     never_fire: bool = False
