@@ -6,7 +6,7 @@ text normalization, and word-level timestamp accuracy metrics with greedy alignm
 
 import re
 import unicodedata
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 def normalize_text(text: str) -> str:

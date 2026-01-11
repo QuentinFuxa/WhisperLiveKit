@@ -20,8 +20,8 @@ Usage:
     export WHISPERLIVEKIT_LOCK_TIMEOUT=60
 """
 
-import os
 import logging
+import os
 import threading
 
 logger = logging.getLogger(__name__)
