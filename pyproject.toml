@@ -57,6 +57,7 @@ packages = [
     "whisperlivekit",
     "whisperlivekit.diarization",
     "whisperlivekit.simul_whisper",
+    "whisperlivekit.simul_whisper.mlx",
     "whisperlivekit.whisper",
     "whisperlivekit.whisper.assets",
     "whisperlivekit.whisper.normalizers",
