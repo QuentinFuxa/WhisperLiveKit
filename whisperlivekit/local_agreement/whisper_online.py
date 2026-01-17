@@ -3,8 +3,7 @@ import logging
 import platform
 import time
 
-from whisperlivekit.backend_support import (faster_backend_available,
-                                            mlx_backend_available)
+from whisperlivekit.backend_support import faster_backend_available, mlx_backend_available
 from whisperlivekit.model_paths import detect_model_format, resolve_model_path
 from whisperlivekit.warmup import warmup_asr
 
@@ -39,7 +38,7 @@ def create_tokenizer(lan):
         lan
         in "as bn ca cs de el en es et fi fr ga gu hi hu is it kn lt lv ml mni mr nl or pa pl pt ro ru sk sl sv ta te yue zh".split()
     ):
-        from mosestokenizer import MosesSentenceSplitter        
+        from mosestokenizer import MosesSentenceSplitter
 
         return MosesSentenceSplitter(lan)
 

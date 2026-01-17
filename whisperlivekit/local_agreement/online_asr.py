@@ -28,8 +28,8 @@ class HypothesisBuffer:
 
     def insert(self, new_tokens: List[ASRToken], offset: float):
         """
-        Insert new tokens (after applying a time offset) and compare them with the 
-        already committed tokens. Only tokens that extend the committed hypothesis 
+        Insert new tokens (after applying a time offset) and compare them with the
+        already committed tokens. Only tokens that extend the committed hypothesis
         are added.
         """
         # Apply the offset to each token.
@@ -98,7 +98,7 @@ class OnlineASRProcessor:
     """
     Processes incoming audio in a streaming fashion, calling the ASR system
     periodically, and uses a hypothesis buffer to commit and trim recognized text.
-    
+
     The processor supports two types of buffer trimming:
       - "sentence": trims at sentence boundaries (using a sentence tokenizer)
       - "segment": trims at fixed segment durations.
@@ -187,7 +187,7 @@ class OnlineASRProcessor:
     def prompt(self) -> Tuple[str, str]:
         """
         Returns a tuple: (prompt, context), where:
-          - prompt is a 200-character suffix of committed text that falls 
+          - prompt is a 200-character suffix of committed text that falls
             outside the current audio buffer.
           - context is the committed text within the current audio buffer.
         """
@@ -213,7 +213,7 @@ class OnlineASRProcessor:
         Get the unvalidated buffer in string format.
         """
         return self.concatenate_tokens(self.transcript_buffer.buffer)
-        
+
 
     def process_iter(self) -> Tuple[List[ASRToken], float]:
         """
@@ -262,9 +262,6 @@ class OnlineASRProcessor:
         logger.debug(
             f"Length of audio buffer now: {len(self.audio_buffer)/self.SAMPLING_RATE:.2f} seconds"
         )
-        if self.global_time_offset:
-            for token in committed_tokens:
-                token = token.with_offset(self.global_time_offset)
         return committed_tokens, current_audio_processed_upto
 
     def chunk_completed_sentence(self):
@@ -273,19 +270,19 @@ class OnlineASRProcessor:
         buffer at the end time of the penultimate sentence.
         Also ensures chunking happens if audio buffer exceeds a time limit.
         """
-        buffer_duration = len(self.audio_buffer) / self.SAMPLING_RATE        
+        buffer_duration = len(self.audio_buffer) / self.SAMPLING_RATE
         if not self.committed:
             if buffer_duration > self.buffer_trimming_sec:
                 chunk_time = self.buffer_time_offset + (buffer_duration / 2)
                 logger.debug(f"--- No speech detected, forced chunking at {chunk_time:.2f}")
                 self.chunk_at(chunk_time)
             return
-        
+
         logger.debug("COMPLETED SENTENCE: " + " ".join(token.text for token in self.committed))
         sentences = self.words_to_sentences(self.committed)
         for sentence in sentences:
             logger.debug(f"\tSentence: {sentence.text}")
-        
+
         chunk_done = False
         if len(sentences) >= 2:
             while len(sentences) > 2:
@@ -294,7 +291,7 @@ class OnlineASRProcessor:
             logger.debug(f"--- Sentence chunked at {chunk_time:.2f}")
             self.chunk_at(chunk_time)
             chunk_done = True
-        
+
         if not chunk_done and buffer_duration > self.buffer_trimming_sec:
             last_committed_time = self.committed[-1].end
             logger.debug(f"--- Not enough sentences, chunking at last committed time {last_committed_time:.2f}")
@@ -305,17 +302,17 @@ class OnlineASRProcessor:
         Chunk the audio buffer based on segment-end timestamps reported by the ASR.
         Also ensures chunking happens if audio buffer exceeds a time limit.
         """
-        buffer_duration = len(self.audio_buffer) / self.SAMPLING_RATE        
+        buffer_duration = len(self.audio_buffer) / self.SAMPLING_RATE
         if not self.committed:
             if buffer_duration > self.buffer_trimming_sec:
                 chunk_time = self.buffer_time_offset + (buffer_duration / 2)
                 logger.debug(f"--- No speech detected, forced chunking at {chunk_time:.2f}")
                 self.chunk_at(chunk_time)
             return
-        
+
         logger.debug("Processing committed tokens for segmenting")
         ends = self.asr.segments_end_ts(res)
-        last_committed_time = self.committed[-1].end        
+        last_committed_time = self.committed[-1].end
         chunk_done = False
         if len(ends) > 1:
             logger.debug("Multiple segments available for chunking")
@@ -331,13 +328,13 @@ class OnlineASRProcessor:
                 logger.debug("--- Last segment not within committed area")
         else:
             logger.debug("--- Not enough segments to chunk")
-        
+
         if not chunk_done and buffer_duration > self.buffer_trimming_sec:
             logger.debug(f"--- Buffer too large, chunking at last committed time {last_committed_time:.2f}")
             self.chunk_at(last_committed_time)
-        
+
         logger.debug("Segment chunking complete")
-        
+
     def chunk_at(self, time: float):
         """
         Trim both the hypothesis and audio buffer at the given time.
@@ -367,7 +364,7 @@ class OnlineASRProcessor:
         if self.tokenize:
             try:
                 sentence_texts = self.tokenize(full_text)
-            except Exception as e:
+            except Exception:
                 # Some tokenizers (e.g., MosesSentenceSplitter) expect a list input.
                 try:
                     sentence_texts = self.tokenize([full_text])
@@ -398,7 +395,7 @@ class OnlineASRProcessor:
                 )
                 sentences.append(sentence)
         return sentences
-    
+
     def finish(self) -> Tuple[List[ASRToken], float]:
         """
         Flush the remaining transcript when processing ends.

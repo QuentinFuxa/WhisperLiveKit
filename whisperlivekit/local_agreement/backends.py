@@ -44,13 +44,13 @@ class WhisperASR(ASRBase):
         from whisperlivekit.whisper import load_model as load_whisper_model
 
         if model_dir is not None:
-            resolved_path = resolve_model_path(model_dir)            
+            resolved_path = resolve_model_path(model_dir)
             if resolved_path.is_dir():
                 model_info = detect_model_format(resolved_path)
                 if not model_info.has_pytorch:
                     raise FileNotFoundError(
                         f"No supported PyTorch checkpoint found under {resolved_path}"
-                    )            
+                    )
             logger.debug(f"Loading Whisper model from custom path {resolved_path}")
             return load_whisper_model(str(resolved_path), lora_path=self.lora_path)
 
@@ -116,7 +116,7 @@ class FasterWhisperASR(ASRBase):
             raise ValueError("Either model_size or model_dir must be set")
         device = "auto" # Allow CTranslate2 to decide available device
         compute_type = "auto" # Allow CTranslate2 to decide faster compute type
-                              
+
 
         model = WhisperModel(
             model_size_or_path,
