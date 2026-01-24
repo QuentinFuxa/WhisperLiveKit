@@ -1,9 +1,15 @@
 from time import time
 from typing import Any, List, Optional, Tuple, Union
 
-from whisperlivekit.timed_objects import (ASRToken, Segment, PuncSegment, Silence,
-                                          SilentSegment, SpeakerSegment,
-                                          TimedText)
+from whisperlivekit.timed_objects import (
+    ASRToken,
+    PuncSegment,
+    Segment,
+    Silence,
+    SilentSegment,
+    SpeakerSegment,
+    TimedText,
+)
 
 _DEFAULT_RETENTION_SECONDS: float = 300.0
 
@@ -193,7 +199,7 @@ class TokensAlignment:
                             max_overlap = intersec
                             max_overlap_speaker = diarization_segment.speaker + 1
                     punctuation_segment.speaker = max_overlap_speaker
-        
+
         segments = []
         if punctuation_segments:
             segments = [punctuation_segments[0]]
@@ -209,12 +215,22 @@ class TokensAlignment:
 
 
     def get_lines(
-            self, 
+            self,
             diarization: bool = False,
             translation: bool = False,
-            current_silence: Optional[Silence] = None
+            current_silence: Optional[Silence] = None,
+            audio_time: Optional[float] = None,
         ) -> Tuple[List[Segment], str, Union[str, TimedText]]:
-        """Return the formatted segments plus buffers, optionally with diarization/translation."""
+        """Return the formatted segments plus buffers, optionally with diarization/translation.
+
+        Args:
+            audio_time: Current audio stream position in seconds. Used as fallback
+                for ongoing silence end time instead of wall-clock (which breaks
+                when audio is fed faster or slower than real-time).
+        """
+        # Fallback for ongoing silence: prefer audio stream time over wall-clock
+        _silence_now = audio_time if audio_time is not None else (time() - self.beg_loop)
+
         if diarization:
             segments, diarization_buffer = self.get_lines_diarization()
         else:
@@ -225,7 +241,7 @@ class TokensAlignment:
                         self.validated_segments.append(Segment.from_tokens(self.current_line_tokens))
                         self.current_line_tokens = []
 
-                    end_silence = token.end if token.has_ended else time() - self.beg_loop
+                    end_silence = token.end if token.has_ended else _silence_now
                     if self.validated_segments and self.validated_segments[-1].is_silence():
                         self.validated_segments[-1].end = end_silence
                     else:
@@ -235,13 +251,13 @@ class TokensAlignment:
                         ))
                 else:
                     self.current_line_tokens.append(token)
-            
+
             segments = list(self.validated_segments)
             if self.current_line_tokens:
                 segments.append(Segment.from_tokens(self.current_line_tokens))
 
         if current_silence:
-            end_silence = current_silence.end if current_silence.has_ended else time() - self.beg_loop
+            end_silence = current_silence.end if current_silence.has_ended else _silence_now
             if segments and segments[-1].is_silence():
                 segments[-1] = SilentSegment(start=segments[-1].start, end=end_silence)
             else:
