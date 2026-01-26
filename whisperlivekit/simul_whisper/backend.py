@@ -117,7 +117,23 @@ class SimulStreamingOnlineProcessor:
             
             if not timestamped_words:
                 return [], self.end
+
+            # Hallucinated words fill up timestamped_words list when degradation happens 
+            # This sanity check is a heuristic to reset segment and break the loop
+            TIMESTAMPED_WORDS_SANITY_CHECK_THRESHOLD = 5
             
+            if len(timestamped_words) > TIMESTAMPED_WORDS_SANITY_CHECK_THRESHOLD:
+                logger.warning(f"Sanity check failed. Length of timestamped_words: {len(timestamped_words)} > {TIMESTAMPED_WORDS_SANITY_CHECK_THRESHOLD}. Forcing segment reset.")
+
+                # 1. Force the model to finalize the current segment and clear context
+                self.model.refresh_segment(complete=True)
+
+                # 2. Clear the internal buffer just in case
+                self.buffer = []
+
+                # 3. Return empty list to discard the looping words so they don't appear on screen
+                return [], self.end
+
             if self.model.cfg.language == "auto" and timestamped_words[0].detected_language is None:
                 self.buffer.extend(timestamped_words)
                 return [], self.end
