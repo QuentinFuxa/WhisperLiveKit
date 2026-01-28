@@ -89,8 +89,8 @@ class DecodingOptions:
     # sampling-related options
     temperature: float = 0.0
     sample_len: Optional[int] = None  # maximum number of tokens to sample
-    best_of: Optional[int] = None  # number of independent sample trajectories, if t > 0
-    beam_size: Optional[int] = None  # number of beams in beam search, if t == 0
+    best_of: Optional[int] = 5  # number of independent sample trajectories, if t > 0
+    beam_size: Optional[int] = 5  # number of beams in beam search, if t == 0
     patience: Optional[float] = None  # patience in beam search (arxiv:2204.05424)
 
     # "alpha" in Google NMT, or None for length norm, when ranking generations
@@ -519,7 +519,7 @@ class DecodingTask:
         self.tokenizer: Tokenizer = tokenizer
         self.options: DecodingOptions = self._verify_options(options)
 
-        self.n_group: int = options.beam_size or options.best_of or 1
+        self.n_group: int = options.beam_size or options.best_of or 5
         self.n_ctx: int = model.dims.n_text_ctx
         self.sample_len: int = options.sample_len or model.dims.n_text_ctx // 2
 

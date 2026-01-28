@@ -26,10 +26,10 @@ def transcribe(
     *,
     verbose: Optional[bool] = None,
     temperature: Union[float, Tuple[float, ...]] = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
-    compression_ratio_threshold: Optional[float] = 2.4,
+    compression_ratio_threshold: Optional[float] = 1.8,
     logprob_threshold: Optional[float] = -1.0,
     no_speech_threshold: Optional[float] = 0.6,
-    condition_on_previous_text: bool = True,
+    condition_on_previous_text: bool = False,
     initial_prompt: Optional[str] = None,
     carry_initial_prompt: bool = False,
     word_timestamps: bool = False,
@@ -532,7 +532,7 @@ def cli():
     parser.add_argument("--initial_prompt", type=str, default=None, help="optional text to provide as a prompt for the first window.")
     parser.add_argument("--carry_initial_prompt", type=str2bool, default=False, help="if True, prepend initial_prompt to every internal decode() call. May reduce the effectiveness of condition_on_previous_text")
 
-    parser.add_argument("--condition_on_previous_text", type=str2bool, default=True, help="if True, provide the previous output of the model as a prompt for the next window; disabling may make the text inconsistent across windows, but the model becomes less prone to getting stuck in a failure loop")
+    parser.add_argument("--condition_on_previous_text", type=str2bool, default=False, help="if True, provide the previous output of the model as a prompt for the next window; disabling may make the text inconsistent across windows, but the model becomes less prone to getting stuck in a failure loop")
     parser.add_argument("--fp16", type=str2bool, default=True, help="whether to perform inference in fp16; True by default")
 
     parser.add_argument("--temperature_increment_on_fallback", type=optional_float, default=0.2, help="temperature to increase when falling back when the decoding fails to meet either of the thresholds below")
