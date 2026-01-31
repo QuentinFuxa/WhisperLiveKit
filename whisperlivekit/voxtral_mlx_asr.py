@@ -20,12 +20,12 @@ import numpy as np
 from mistral_common.tokens.tokenizers.base import SpecialTokenPolicy
 
 from whisperlivekit.timed_objects import ASRToken, Transcript
-from whisperlivekit.voxtral_mlx.loader import load_voxtral_model, DEFAULT_MODEL_ID
+from whisperlivekit.voxtral_mlx.loader import DEFAULT_MODEL_ID, load_voxtral_model
 from whisperlivekit.voxtral_mlx.model import SlidingKVCache
 from whisperlivekit.voxtral_mlx.spectrogram import (
-    SAMPLES_PER_TOKEN,
     LEFT_PAD_TOKENS,
     RIGHT_PAD_TOKENS,
+    SAMPLES_PER_TOKEN,
     compute_mel_streaming,
 )
 
