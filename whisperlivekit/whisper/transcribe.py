@@ -29,7 +29,7 @@ def transcribe(
     compression_ratio_threshold: Optional[float] = 1.8,
     logprob_threshold: Optional[float] = -1.0,
     no_speech_threshold: Optional[float] = 0.6,
-    condition_on_previous_text: bool = False,
+    condition_on_previous_text: bool = True,
     initial_prompt: Optional[str] = None,
     carry_initial_prompt: bool = False,
     word_timestamps: bool = False,

@@ -77,7 +77,7 @@ class WhisperASR(ASRBase):
             audio,
             language=language,
             initial_prompt=init_prompt,
-            condition_on_previous_text=False,
+            condition_on_previous_text=True,
             word_timestamps=True,
             **options,
         )
@@ -140,7 +140,7 @@ class FasterWhisperASR(ASRBase):
             initial_prompt=init_prompt,
             beam_size=5,
             word_timestamps=True,
-            condition_on_previous_text=False,
+            condition_on_previous_text=True,
             **self.transcribe_kargs,
         )
         return list(segments)
@@ -216,7 +216,7 @@ class MLXWhisper(ASRBase):
             language=self.original_language,
             initial_prompt=init_prompt,
             word_timestamps=True,
-            condition_on_previous_text=False,
+            condition_on_previous_text=True,
             path_or_hf_repo=self.model_size_or_path,
         )
         return segments.get("segments", [])
