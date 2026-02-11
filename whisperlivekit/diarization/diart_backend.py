@@ -202,14 +202,14 @@ class DiartDiarization:
     def insert_silence(self, silence_duration):
         self.observer.global_time_offset += silence_duration
 
-    async def diarize(self, pcm_array: np.ndarray):
-        """
-        Process audio data for diarization.
-        Only used when working with WebSocketAudioSource.
-        """
+    def insert_audio_chunk(self, pcm_array: np.ndarray):
+        """Buffer audio for the next diarization step."""
         if self.custom_source:
-            self.custom_source.push_audio(pcm_array)            
-        # self.observer.clear_old_segments()        
+            self.custom_source.push_audio(pcm_array)
+
+    async def diarize(self):
+        """Return the current speaker segments from the diarization pipeline."""
+        return self.observer.get_segments()        
 
     def close(self):
         """Close the audio source."""
