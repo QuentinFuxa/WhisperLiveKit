@@ -46,8 +46,6 @@ class SimulStreamingOnlineProcessor:
         self.logfile = logfile
         self.end = 0.0
         self.buffer = []
-        self.committed: List[ASRToken] = []
-        self.last_result_tokens: List[ASRToken] = []        
         self.model = self._create_alignatt()
         
         if asr.tokenizer:
@@ -122,7 +120,6 @@ class SimulStreamingOnlineProcessor:
                 self.buffer.extend(timestamped_words)
                 return [], self.end
             
-            self.committed.extend(timestamped_words)
             self.buffer = []
             return timestamped_words, self.end
         except Exception as e:

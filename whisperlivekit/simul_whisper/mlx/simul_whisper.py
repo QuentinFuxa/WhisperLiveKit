@@ -532,7 +532,9 @@ class MLXAlignAtt:
         accumulated_cross_attns = []
 
         audio_duration_s = self.segments_len()
-        max_tokens_per_chunk = max(50, int(audio_duration_s * TOKENS_PER_SECOND * 2.0))
+        # ~15 text tokens/s is a generous upper bound for speech; TOKENS_PER_SECOND (50)
+        # is the mel-frame rate and was causing 10-40x over-allocation on repetition loops.
+        max_tokens_per_chunk = max(50, int(audio_duration_s * 15 * 1.5))
         tokens_produced_this_chunk = 0
 
         while not completed and current_tokens.shape[1] < self.max_text_len:
@@ -558,6 +560,8 @@ class MLXAlignAtt:
             mx.eval(logits)
             
             accumulated_cross_attns.append(cross_qk)
+            if len(accumulated_cross_attns) > 16:
+                accumulated_cross_attns = accumulated_cross_attns[-16:]
 
             if new_segment and self.tokenizer.no_speech is not None:
                 probs_at_sot = mx.softmax(logits[:, self.state.sot_index, :], axis=-1)
