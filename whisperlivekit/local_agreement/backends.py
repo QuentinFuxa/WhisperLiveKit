@@ -249,6 +249,7 @@ class OpenaiApiASR(ASRBase):
         self.load_model()
         self.use_vad_opt = False
         self.direct_english_translation = False
+        self.task = "transcribe"
 
     def load_model(self, *args, **kwargs):
         from openai import OpenAI
@@ -294,7 +295,8 @@ class OpenaiApiASR(ASRBase):
             params["language"] = self.original_language
         if prompt:
             params["prompt"] = prompt
-        proc = self.client.audio.translations if self.task == "translate" else self.client.audio.transcriptions
+        task = self.transcribe_kargs.get("task", self.task)
+        proc = self.client.audio.translations if task == "translate" else self.client.audio.transcriptions
         transcript = proc.create(**params)
         logger.debug(f"OpenAI API processed accumulated {self.transcribed_seconds} seconds")
         return transcript
