@@ -53,7 +53,8 @@ class TokensAlignment:
             segment.translation = ''
         for ts in self.all_translation_segments:
             if ts.is_within(segment):
-                segment.translation += ts.text + (self.sep if ts.text else '')
+                if ts.text:
+                    segment.translation += ts.text + self.sep
             elif segment.translation:
                 break
 
