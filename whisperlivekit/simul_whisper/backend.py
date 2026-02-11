@@ -217,7 +217,7 @@ class SimulStreamingASR:
                 cif_ckpt_path=self.cif_ckpt_path,
                 decoder_type="beam",
                 beam_size=self.beams,
-                task=self.direct_english_translation,
+                task="translate" if self.direct_english_translation else "transcribe",
                 never_fire=self.never_fire,
                 init_prompt=self.init_prompt,
                 max_context_tokens=self.max_context_tokens,
@@ -330,7 +330,7 @@ class SimulStreamingASR:
         lora_path = getattr(self, 'lora_path', None)
         whisper_model = load_model(
             name=model_ref,
-            download_root=None,
+            download_root=getattr(self, 'model_cache_dir', None),
             decoder_only=self.fast_encoder,
             custom_alignment_heads=self.custom_alignment_heads,
             lora_path=lora_path,
