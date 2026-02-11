@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "whisperlivekit"
-version = "0.2.17.post1"
+version = "0.2.18"
 description = "Real-time speech-to-text with speaker diarization using Whisper"
 readme = "README.md"
 authors = [
