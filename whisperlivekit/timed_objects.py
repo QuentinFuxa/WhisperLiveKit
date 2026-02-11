@@ -39,10 +39,11 @@ class TimedText(Timed):
 
 @dataclass()
 class ASRToken(TimedText):
-    
+    probability: Optional[float] = None
+
     def with_offset(self, offset: float) -> "ASRToken":
         """Return a new token with the time offset added."""
-        return ASRToken(self.start + offset, self.end + offset, self.text, self.speaker, detected_language=self.detected_language)
+        return ASRToken(self.start + offset, self.end + offset, self.text, self.speaker, detected_language=self.detected_language, probability=self.probability)
 
     def is_silence(self) -> bool:
         return False
