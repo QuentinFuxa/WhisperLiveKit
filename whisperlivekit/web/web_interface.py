@@ -17,17 +17,17 @@ def get_inline_ui_html():
     """Returns the complete web interface HTML with all assets embedded in a single call."""
     try:
         with resources.files('whisperlivekit.web').joinpath('live_transcription.html').open('r', encoding='utf-8') as f:
-            html_content = f.read()        
+            html_content = f.read()
         with resources.files('whisperlivekit.web').joinpath('live_transcription.css').open('r', encoding='utf-8') as f:
             css_content = f.read()
         with resources.files('whisperlivekit.web').joinpath('live_transcription.js').open('r', encoding='utf-8') as f:
             js_content = f.read()
-        
+
         with resources.files('whisperlivekit.web').joinpath('pcm_worklet.js').open('r', encoding='utf-8') as f:
             worklet_code = f.read()
         with resources.files('whisperlivekit.web').joinpath('recorder_worker.js').open('r', encoding='utf-8') as f:
             worker_code = f.read()
-        
+
         js_content = js_content.replace(
             'await audioContext.audioWorklet.addModule("/web/pcm_worklet.js");',
             'const workletBlob = new Blob([`' + worklet_code + '`], { type: "application/javascript" });\n' +
@@ -40,7 +40,7 @@ def get_inline_ui_html():
             'const workerUrl = URL.createObjectURL(workerBlob);\n' +
             'recorderWorker = new Worker(workerUrl);'
         )
-        
+
         # SVG files
         with resources.files('whisperlivekit.web').joinpath('src', 'system_mode.svg').open('r', encoding='utf-8') as f:
             system_svg = f.read()
@@ -60,42 +60,42 @@ def get_inline_ui_html():
             '<link rel="stylesheet" href="live_transcription.css" />',
             f'<style>\n{css_content}\n</style>'
         )
-        
+
         html_content = html_content.replace(
             '<script src="live_transcription.js"></script>',
             f'<script>\n{js_content}\n</script>'
         )
-        
+
         # Replace SVG references
         html_content = html_content.replace(
             '<img src="/web/src/system_mode.svg" alt="" />',
             f'<img src="{system_data_uri}" alt="" />'
         )
-        
+
         html_content = html_content.replace(
             '<img src="/web/src/light_mode.svg" alt="" />',
             f'<img src="{light_data_uri}" alt="" />'
         )
-        
+
         html_content = html_content.replace(
             '<img src="/web/src/dark_mode.svg" alt="" />',
             f'<img src="{dark_data_uri}" alt="" />'
         )
-        
+
         html_content = html_content.replace(
             '<img src="web/src/settings.svg" alt="Settings" />',
             f'<img src="{settings_uri}" alt="" />'
         )
-        
+
         return html_content
-        
+
     except Exception as e:
         logger.error(f"Error creating embedded web interface: {e}")
         return "<html><body><h1>Error loading embedded interface</h1></body></html>"
 
 
 if __name__ == '__main__':
-    
+
     import pathlib
 
     import uvicorn
@@ -104,11 +104,11 @@ if __name__ == '__main__':
     from starlette.staticfiles import StaticFiles
 
     import whisperlivekit.web as webpkg
-    
-    app = FastAPI()    
+
+    app = FastAPI()
     web_dir = pathlib.Path(webpkg.__file__).parent
     app.mount("/web", StaticFiles(directory=str(web_dir)), name="web")
-    
+
     @app.get("/")
     async def get():
         return HTMLResponse(get_inline_ui_html())

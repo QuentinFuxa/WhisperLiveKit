@@ -273,6 +273,13 @@ function setupWebSocket() {
         return;
       }
 
+      // Ignore diff/snapshot messages — the default frontend uses full-state mode.
+      // These are only sent when a client explicitly opts in via ?mode=diff.
+      if (data.type === "diff" || data.type === "snapshot") {
+        console.warn("Received diff-protocol message but frontend is in full mode; ignoring.", data.type);
+        return;
+      }
+
       if (data.type === "ready_to_stop") {
         console.log("Ready to stop received, finalizing display and closing WebSocket.");
         waitingForStop = false;
@@ -364,7 +371,13 @@ function renderLinesWithBuffer(
   }
   lastSignature = signature;
 
-  const linesHtml = (lines || [])
+  // When there are no committed lines yet but buffer text exists (common with
+  // slow backends like voxtral on MPS), render the buffer as a standalone line.
+  const effectiveLines = (lines || []).length === 0 && (buffer_transcription || buffer_diarization)
+    ? [{ speaker: 1, text: "" }]
+    : (lines || []);
+
+  const linesHtml = effectiveLines
     .map((item, idx) => {
       let timeInfo = "";
       if (item.start !== undefined && item.end !== undefined) {
@@ -389,7 +402,7 @@ function renderLinesWithBuffer(
 
       let currentLineText = item.text || "";
 
-      if (idx === lines.length - 1) {
+      if (idx === effectiveLines.length - 1) {
         if (!isFinalizing && item.speaker !== -2) {
             speakerLabel += `<span class="label_transcription"><span class="spinner"></span>Transcription lag <span id='timeInfo'><span class="lag-transcription-value">${fmt1(
               remaining_time_transcription
@@ -424,7 +437,7 @@ function renderLinesWithBuffer(
       if (item.translation) {
         translationContent += item.translation.trim();
       }
-      if (idx === lines.length - 1 && buffer_translation) {
+      if (idx === effectiveLines.length - 1 && buffer_translation) {
         const bufferPiece = isFinalizing
           ? buffer_translation
           : `<span class="buffer_translation">${buffer_translation}</span>`;
