@@ -104,7 +104,12 @@ class TranscriptionEngine:
                 )
         backend_policy = self.args.backend_policy
         if self.args.transcription:
-            if backend_policy == "simulstreaming":                 
+            if self.args.backend == "voxtral-mlx":
+                from whisperlivekit.voxtral_streaming import VoxtralStreamingASR
+                self.tokenizer = None
+                self.asr = VoxtralStreamingASR(**transcription_common_params)
+                logger.info("Using Voxtral MLX streaming backend")
+            elif backend_policy == "simulstreaming":
                 simulstreaming_params = {
                     "disable_fast_encoder": False,
                     "custom_alignment_heads": None,
@@ -186,6 +191,9 @@ class TranscriptionEngine:
 
 
 def online_factory(args, asr):
+    if getattr(args, 'backend', None) == "voxtral-mlx":
+        from whisperlivekit.voxtral_streaming import VoxtralStreamingOnlineProcessor
+        return VoxtralStreamingOnlineProcessor(asr)
     if args.backend_policy == "simulstreaming":
         from whisperlivekit.simul_whisper import SimulStreamingOnlineProcessor
         return SimulStreamingOnlineProcessor(asr)

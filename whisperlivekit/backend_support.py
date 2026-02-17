@@ -29,6 +29,13 @@ def mlx_backend_available(warn_on_missing = False):
     return available
 
 
+def voxmlx_backend_available():
+    """Return True if voxmlx (Voxtral MLX backend) is available."""
+    is_macos = platform.system() == "Darwin"
+    is_arm = platform.machine() == "arm64"
+    return is_macos and is_arm and module_available("voxmlx")
+
+
 def faster_backend_available(warn_on_missing = False):
     available = module_available("faster_whisper")
     if not available and warn_on_missing and platform.system() != "Darwin":
