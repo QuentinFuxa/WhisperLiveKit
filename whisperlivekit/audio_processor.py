@@ -66,7 +66,8 @@ class AudioProcessor:
         self.args = models.args
         self.sample_rate = 16000
         self.channels = 1
-        self.samples_per_sec = int(self.sample_rate * self.args.min_chunk_size)
+        chunk_seconds = self.args.vac_chunk_size if self.args.vac else self.args.min_chunk_size
+        self.samples_per_sec = int(self.sample_rate * chunk_seconds)
         self.bytes_per_sample = 2
         self.bytes_per_sec = self.samples_per_sec * self.bytes_per_sample
         self.max_bytes_per_sec = 32000 * 5  # 5 seconds of audio at 32 kHz
