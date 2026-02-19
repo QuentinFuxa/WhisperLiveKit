@@ -34,7 +34,7 @@ class HypothesisBuffer:
         """
         # Apply the offset to each token.
         new_tokens = [token.with_offset(offset) for token in new_tokens]
-        # Only keep tokens that are roughly “new”
+        # Only keep tokens that are roughly "new"
         self.new = [token for token in new_tokens if token.start > self.last_committed_time - 0.1]
 
         if self.new:
@@ -93,6 +93,53 @@ class HypothesisBuffer:
             self.committed_in_buffer.pop(0)
 
 
+def _detect_repetition(
+    tokens: List[ASRToken],
+    window: int = 20,
+    min_repeats: int = 3,
+) -> bool:
+    """
+    Detect whether the tail of *tokens* contains a repeating phrase pattern.
+
+    The function checks whether any n-gram (of word length 1 .. window//min_repeats)
+    appears at least *min_repeats* consecutive times at the end of the token list.
+    This catches both single-word loops ("climate climate climate") and
+    full-sentence loops ("It is a new crisis. It is a new crisis.").
+
+    Args:
+        tokens:      Full list of committed ASR tokens to inspect.
+        window:      How many tail tokens to examine (default 20).
+        min_repeats: Minimum number of consecutive repetitions required (default 3).
+
+    Returns:
+        True  – a repetition loop was detected.
+        False – no repetition detected.
+    """
+    if len(tokens) < min_repeats * 2:
+        return False
+
+    recent = [t.text for t in tokens[-window:]]
+    n = len(recent)
+    max_pattern_len = n // min_repeats
+
+    for pattern_len in range(1, max_pattern_len + 1):
+        pattern = tuple(recent[-pattern_len:])
+        count = 1
+        pos = n - pattern_len * 2
+        while pos >= 0:
+            if tuple(recent[pos : pos + pattern_len]) == pattern:
+                count += 1
+                pos -= pattern_len
+            else:
+                break
+        if count >= min_repeats:
+            logger.debug(
+                f"_detect_repetition: pattern {pattern!r} repeated {count}x"
+            )
+            return True
+
+    return False
+
 
 class OnlineASRProcessor:
     """
@@ -135,6 +182,11 @@ class OnlineASRProcessor:
             logger.warning(
                 f"buffer_trimming_sec is set to {self.buffer_trimming_sec}, which is very long. It may cause OOM."
             )
+
+    def new_speaker(self, change_speaker):
+        """Handle speaker change event."""
+        self.process_iter()
+        self.init(offset=change_speaker.start)
 
     def init(self, offset: Optional[float] = None):
         """Initialize or reset the processing buffers."""
@@ -226,6 +278,24 @@ class OnlineASRProcessor:
         self.transcript_buffer.insert(tokens, self.buffer_time_offset)
         committed_tokens = self.transcript_buffer.flush()
         self.committed.extend(committed_tokens)
+
+        # --- Repetition loop guard ---
+        # The local-agreement algorithm can *confirm* hallucination loops because
+        # both `buffer` and `new` contain the identical repeating phrase, making
+        # it look like a stable hypothesis.  If we detect a repeating pattern in
+        # the tail of committed tokens we reset the processor, which:
+        #   1. Clears the audio buffer  (breaks the acoustic feedback)
+        #   2. Clears `committed`       (breaks the prompt() feedback loop)
+        #   3. Creates a fresh HypothesisBuffer
+        if committed_tokens and _detect_repetition(self.committed):
+            logger.warning(
+                "Repetition loop detected in committed tokens "
+                f"(last token: '{committed_tokens[-1].text}'). "
+                f"Resetting buffer at {current_audio_processed_upto:.2f}s."
+            )
+            self.init(offset=current_audio_processed_upto)
+            return [], current_audio_processed_upto
+        # --- End repetition loop guard ---
 
         if committed_tokens:
             self.time_of_last_asr_output = self.committed[-1].end
