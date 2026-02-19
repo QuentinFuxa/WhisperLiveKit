@@ -79,6 +79,9 @@ RUN if [ -n "$HF_TKN_FILE" ]; then \
 
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
+
 ENTRYPOINT ["whisperlivekit-server", "--host", "0.0.0.0"]
 
 CMD ["--model", "medium"]
