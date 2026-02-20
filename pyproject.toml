@@ -44,6 +44,7 @@ dependencies = [
 [project.optional-dependencies]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
+voxtral-hf = ["transformers>=5.2.0", "mistral-common[audio]"]
 
 [project.urls]
 Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"

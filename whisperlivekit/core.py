@@ -92,7 +92,12 @@ class TranscriptionEngine:
         }
 
         if config.transcription:
-            if config.backend_policy == "simulstreaming":
+            if config.backend == "voxtral":
+                from whisperlivekit.voxtral_hf_streaming import VoxtralHFStreamingASR
+                self.tokenizer = None
+                self.asr = VoxtralHFStreamingASR(**transcription_common_params)
+                logger.info("Using Voxtral HF Transformers streaming backend")
+            elif config.backend_policy == "simulstreaming":
                 simulstreaming_params = {
                     "disable_fast_encoder": config.disable_fast_encoder,
                     "custom_alignment_heads": config.custom_alignment_heads,
@@ -164,6 +169,9 @@ class TranscriptionEngine:
 
 
 def online_factory(args, asr):
+    if getattr(args, 'backend', None) == "voxtral":
+        from whisperlivekit.voxtral_hf_streaming import VoxtralHFStreamingOnlineProcessor
+        return VoxtralHFStreamingOnlineProcessor(asr)
     if args.backend_policy == "simulstreaming":
         from whisperlivekit.simul_whisper import SimulStreamingOnlineProcessor
         return SimulStreamingOnlineProcessor(asr)

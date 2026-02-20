@@ -29,6 +29,12 @@ def mlx_backend_available(warn_on_missing = False):
     return available
 
 
+def voxtral_hf_backend_available():
+    """Return True if HF Transformers Voxtral backend is available."""
+    return module_available("transformers")
+
+
+
 def faster_backend_available(warn_on_missing = False):
     available = module_available("faster_whisper")
     if not available and warn_on_missing and platform.system() != "Darwin":
