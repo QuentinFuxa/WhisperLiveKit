@@ -11,7 +11,7 @@ def load_file(warmup_file=None, timeout=5):
     import librosa
 
     if warmup_file == "":
-        logger.info(f"Skipping warmup.")
+        logger.info("Skipping warmup.")
         return None
 
     # Download JFK sample if not already present
@@ -48,5 +48,9 @@ def warmup_asr(asr, warmup_file=None, timeout=5):
     if audio is None:
         logger.warning("Warmup file unavailable. Skipping ASR warmup.")
         return
-    asr.transcribe(audio)
+    try:
+        asr.transcribe(audio)
+    except Exception as e:
+        logger.warning("Warmup transcription failed: %s", e)
+        return
     logger.info("ASR model is warmed up.")

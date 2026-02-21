@@ -35,7 +35,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=7.0", "pytest-asyncio>=0.21"]
+test = ["pytest>=7.0", "pytest-asyncio>=0.21", "datasets>=2.14", "librosa"]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
 mlx-whisper = [
@@ -52,6 +52,7 @@ voxtral-hf = [
     "mistral-common[audio]",
     "accelerate>=0.12",
 ]
+listen = ["sounddevice>=0.4.6"]
 cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
 cu129 = [
     "torch>=2.0.0",
@@ -117,7 +118,18 @@ Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
 
 [project.scripts]
 whisperlivekit-server = "whisperlivekit.basic_server:main"
-wlk = "whisperlivekit.basic_server:main"
+wlk = "whisperlivekit.cli:main"
+wlk-test = "whisperlivekit.test_client:main"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+exclude = [".git", "__pycache__", "build", "dist", ".eggs", ".claude", "scripts", "run_benchmark.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "E741"]
+per-file-ignores = {"whisperlivekit/whisper/*" = ["F401", "F841", "E731", "W"], "whisperlivekit/simul_whisper/mlx/*" = ["F401", "E731", "W"], "whisperlivekit/simul_whisper/mlx_encoder.py" = ["E731", "F821"], "whisperlivekit/silero_vad_iterator.py" = ["F401"]}
 
 [tool.setuptools]
 packages = [
