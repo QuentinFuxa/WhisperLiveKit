@@ -90,7 +90,8 @@ See **[BENCHMARK.md](BENCHMARK.md)** for detailed performance comparisons across
 
 WhisperLiveKit supports [Voxtral Mini](https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602),
 a 4B-parameter speech model from Mistral AI that natively handles 100+ languages with automatic
-language detection. Unlike whisper-based backends, Voxtral does not require specifying `--language`.
+language detection. Whisper also supports auto-detection (`--language auto`), but Voxtral's per-chunk
+detection is more reliable and does not bias towards English.
 
 ```bash
 # Apple Silicon (native MLX, recommended)

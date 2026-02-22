@@ -78,7 +78,7 @@ class SessionMetrics:
 
     def log_summary(self) -> None:
         """Emit a structured log line summarising the session."""
-        elapsed = time.time() - self.session_start if self.session_start else 0
-        self.total_processing_time_s = elapsed
+        self.total_processing_time_s = sum(self.transcription_durations)
         d = self.to_dict()
+        d["session_elapsed_s"] = round(time.time() - self.session_start, 3) if self.session_start else 0
         logger.info(f"SESSION_METRICS {d}")

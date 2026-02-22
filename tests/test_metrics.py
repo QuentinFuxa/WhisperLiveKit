@@ -145,3 +145,39 @@ class TestComputeTimestampAccuracy:
         result = compute_timestamp_accuracy(pred, ref)
         assert result["n_matched"] == 1
         assert result["mae_start"] == pytest.approx(0.1)
+
+    def test_median_even_count(self):
+        """Median with even number of matched words should average the two middle values."""
+        ref = [
+            {"word": "a", "start": 0.0, "end": 0.2},
+            {"word": "b", "start": 0.5, "end": 0.7},
+            {"word": "c", "start": 1.0, "end": 1.2},
+            {"word": "d", "start": 1.5, "end": 1.7},
+        ]
+        pred = [
+            {"word": "a", "start": 0.1, "end": 0.3},   # delta 0.1
+            {"word": "b", "start": 0.7, "end": 0.9},   # delta 0.2
+            {"word": "c", "start": 1.3, "end": 1.5},   # delta 0.3
+            {"word": "d", "start": 1.9, "end": 2.1},   # delta 0.4
+        ]
+        result = compute_timestamp_accuracy(pred, ref)
+        assert result["n_matched"] == 4
+        # sorted abs deltas: [0.1, 0.2, 0.3, 0.4] -> median = (0.2 + 0.3) / 2 = 0.25
+        assert result["median_delta_start"] == pytest.approx(0.25)
+
+    def test_median_odd_count(self):
+        """Median with odd number of matched words takes the middle value."""
+        ref = [
+            {"word": "a", "start": 0.0, "end": 0.2},
+            {"word": "b", "start": 0.5, "end": 0.7},
+            {"word": "c", "start": 1.0, "end": 1.2},
+        ]
+        pred = [
+            {"word": "a", "start": 0.1, "end": 0.3},   # delta 0.1
+            {"word": "b", "start": 0.8, "end": 1.0},   # delta 0.3
+            {"word": "c", "start": 1.2, "end": 1.4},   # delta 0.2
+        ]
+        result = compute_timestamp_accuracy(pred, ref)
+        assert result["n_matched"] == 3
+        # sorted abs deltas: [0.1, 0.2, 0.3] -> median = 0.2
+        assert result["median_delta_start"] == pytest.approx(0.2)

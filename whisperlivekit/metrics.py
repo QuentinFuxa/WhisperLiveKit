@@ -140,11 +140,16 @@ def compute_timestamp_accuracy(
 
     abs_deltas = [abs(d) for d in deltas_start]
     sorted_abs = sorted(abs_deltas)
+    n = len(sorted_abs)
+    if n % 2 == 1:
+        median = sorted_abs[n // 2]
+    else:
+        median = (sorted_abs[n // 2 - 1] + sorted_abs[n // 2]) / 2
 
     return {
         "mae_start": sum(abs_deltas) / len(abs_deltas),
         "max_delta_start": max(abs_deltas),
-        "median_delta_start": sorted_abs[len(sorted_abs) // 2],
+        "median_delta_start": median,
         "n_matched": len(deltas_start),
         "n_ref": len(reference),
         "n_pred": len(predicted),

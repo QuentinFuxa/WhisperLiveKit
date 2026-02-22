@@ -77,24 +77,25 @@ should be run with `--lan fr` or `--lan auto`. The Voxtral backends auto-detect 
 ### Speed (RTF = processing time / audio duration, lower is better)
 
 1. **mlx-whisper + LocalAgreement** is the fastest combo on Apple Silicon, reaching 0.05-0.06x RTF
-   on English audio. This means 30 seconds of audio is processed in under 2 seconds.
-2. **SimulStreaming** is consistently faster than LocalAgreement for faster-whisper, but comparable
-   for mlx-whisper.
+   on English audio. 30 seconds of audio processed in under 2 seconds.
+2. For **faster-whisper**, SimulStreaming is consistently faster than LocalAgreement.
+   For **mlx-whisper**, it is the opposite: LocalAgreement (0.05-0.06x) is faster than SimulStreaming (0.11-0.14x).
 3. **voxtral-mlx** runs at 0.18-0.32x RTF, roughly 3-5x slower than mlx-whisper but well within
    real-time requirements.
-4. **voxtral (HF transformers)** is the slowest, hitting 1.0-1.3x RTF. On longer audio, it risks
+4. **voxtral (HF transformers)** is the slowest at 1.0-1.3x RTF. On longer audio it risks
    falling behind real-time. On Apple Silicon, the MLX variant is strongly preferred.
 
 ### Accuracy (WER = Word Error Rate, lower is better)
 
 1. **SimulStreaming** produces significantly better WER than LocalAgreement for whisper backends.
    On the 30s English file: 5.3% vs 23.7-44.7%.
-2. **voxtral-mlx** achieves strong accuracy (0% on short English, 9.2% on multi-speaker) and is
-   the only backend that auto-detects language, making it the best choice for multilingual use.
+2. **voxtral-mlx** has good accuracy (0% on short English, 9.2% on multi-speaker).
+   Whisper also supports `--language auto`, but Voxtral's language detection is more
+   reliable and does not bias towards English the way Whisper's auto mode tends to.
 3. **LocalAgreement** tends to duplicate the last sentence, inflating WER. This is a known
    artifact of the LCP (Longest Common Prefix) commit strategy at end-of-stream.
 4. **Voxtral** backends handle French natively with 28-37% WER, while whisper backends
-   attempted English transcription of French audio (not a fair comparison for French).
+   were run with `--lan en` here (not a fair comparison for French).
 
 ### Timestamp Accuracy (MAE = Mean Absolute Error on word start times, lower is better)
 
@@ -102,10 +103,10 @@ should be run with `--lan fr` or `--lan auto`. The Voxtral backends auto-detect 
    processes overlapping audio windows and validates via prefix matching.
 2. **SimulStreaming** timestamps are slightly less precise (0.24-0.40s MAE) but still usable
    for most applications.
-3. **voxtral-mlx** achieves excellent timestamps on English (0.18-0.25s MAE) but can drift on
+3. **voxtral-mlx** has good timestamp accuracy on English (0.18-0.25s MAE) but drifts on
    audio with long silence gaps (3.4s MAE on the French file with 4-second pauses).
-4. **voxtral (HF)** has the worst timestamp accuracy (1.0-4.0s MAE), likely due to the
-   additional overhead of the transformers pipeline.
+4. **voxtral (HF)** has the worst timestamp accuracy (1.0-4.0s MAE). This is likely related to
+   differences in the transformers-based decoding pipeline rather than model quality.
 
 ### VAC (Voice Activity Classification) Impact
 
