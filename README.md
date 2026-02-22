@@ -75,14 +75,34 @@ Go to `chrome-extension` for instructions.
 |-----------|-------------|
 | **Windows/Linux optimizations** | `faster-whisper` |
 | **Apple Silicon optimizations** | `mlx-whisper` |
+| **Voxtral (multilingual, auto-detect)** | `transformers torch` (or use built-in `voxtral-mlx` on Apple Silicon) |
 | **Translation** | `nllw` |
 | **Speaker diarization** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
 | OpenAI API | `openai` |
 | *[Not recommanded]*  Speaker diarization with Diart | `diart` |
 
-See  **Parameters & Configuration** below on how to use them.
+See **Parameters & Configuration** below on how to use them.
+See **[BENCHMARK.md](BENCHMARK.md)** for detailed performance comparisons across all backends.
 
 
+
+### Voxtral Backend
+
+WhisperLiveKit supports [Voxtral Mini](https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602),
+a 4B-parameter speech model from Mistral AI that natively handles 100+ languages with automatic
+language detection. Unlike whisper-based backends, Voxtral does not require specifying `--language`.
+
+```bash
+# Apple Silicon (native MLX, recommended)
+wlk --backend voxtral-mlx
+
+# Linux/GPU (HuggingFace transformers)
+pip install transformers torch
+wlk --backend voxtral
+```
+
+Voxtral uses its own streaming policy and does not use LocalAgreement or SimulStreaming.
+See [BENCHMARK.md](BENCHMARK.md) for performance numbers.
 
 ### Usage Examples
 
@@ -92,8 +112,11 @@ See  **Parameters & Configuration** below on how to use them.
 # Large model and translate from french to danish
 wlk --model large-v3 --language fr --target-language da
 
-# Diarization and server listening on */80 
+# Diarization and server listening on */80
 wlk --host 0.0.0.0 --port 80 --model medium --diarization --language fr
+
+# Voxtral multilingual (auto-detects language)
+wlk --backend voxtral-mlx
 ```
 
 
@@ -151,7 +174,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--target-language` | If sets, translates using [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting). [200 languages available](docs/supported_languages.md). If you want to translate to english, you can also use `--direct-english-translation`. The STT model will try to directly output the translation. | `None` |
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
-| `--backend` | Whisper implementation selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. You can also force `mlx-whisper`, `faster-whisper`, `whisper`, or `openai-api` (LocalAgreement only) | `auto` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace) | `auto` |
 | `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
 | `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
@@ -271,5 +294,29 @@ docker run --gpus all -p 8000:8000 --name wlk wlk --model large-v3 --language fr
   - `HF_PRECACHE_DIR="./.cache/"` - Pre-load a model cache for faster first-time start
   - `HF_TKN_FILE="./token"` - Add your Hugging Face Hub access token to download gated models
 
-## 🔮 Use Cases
+## Testing & Benchmarks
+
+WhisperLiveKit includes a unit test suite and an offline benchmark harness.
+
+```bash
+# Install test dependencies
+pip install -e ".[test]"
+
+# Run unit tests (no model download required)
+pytest tests/ -v
+
+# Benchmark a single backend
+python test_backend_offline.py --backend faster-whisper --no-realtime
+
+# Benchmark all installed backends
+python test_backend_offline.py --benchmark --no-realtime
+
+# Export benchmark results as JSON
+python test_backend_offline.py --benchmark --no-realtime --json results.json
+```
+
+See [BENCHMARK.md](BENCHMARK.md) for a full comparison of backends, policies, WER, speed, and
+timestamp accuracy on Apple Silicon.
+
+## Use Cases
 Capture discussions in real-time for meeting transcription, help hearing-impaired users follow conversations through accessibility tools, transcribe podcasts or videos automatically for content creation, transcribe support calls with speaker identification for customer service...
