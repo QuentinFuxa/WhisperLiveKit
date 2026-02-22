@@ -85,10 +85,11 @@ class VoxtralHFStreamingOnlineProcessor:
         processor = asr.processor
         self._first_chunk_samples = processor.num_samples_first_audio_chunk
         self._chunk_samples = processor.num_samples_per_audio_chunk
-        self._chunk_step = processor.num_samples_per_audio_chunk_step
-        self._right_pad_samples = int(
-            processor.num_right_pad_tokens * processor.raw_audio_length_per_tok
-        )
+        self._chunk_step = processor.raw_audio_length_per_tok
+        n_right_pad = processor.num_right_pad_tokens
+        if callable(n_right_pad):
+            n_right_pad = n_right_pad()
+        self._right_pad_samples = int(n_right_pad * processor.raw_audio_length_per_tok)
         self._seconds_per_token = processor.raw_audio_length_per_tok / self.SAMPLING_RATE
 
         self._reset_state()
@@ -238,10 +239,16 @@ class VoxtralHFStreamingOnlineProcessor:
         def run_generate():
             try:
                 with torch.no_grad():
+                    # Pass generator as input_features — the model detects GeneratorType
+                    # and internally converts it to input_features_generator
+                    generate_kwargs = {
+                        k: v for k, v in first_inputs.items()
+                        if k != "input_features"
+                    }
                     model.generate(
-                        input_features_generator=input_features_gen(),
+                        input_features=input_features_gen(),
                         streamer=streamer,
-                        **first_inputs,
+                        **generate_kwargs,
                     )
             except Exception as e:
                 logger.error(f"[voxtral-hf] generate error: {e}", exc_info=True)
@@ -271,18 +278,20 @@ class VoxtralHFStreamingOnlineProcessor:
         if not self._generate_started:
             return
 
-        streamer = self._streamer
-        try:
-            for text_fragment in streamer:
-                if text_fragment:
-                    with self._text_lock:
-                        self._accumulated_text += text_fragment
-                    self._n_text_tokens_received += 1
-                # Check if more is immediately available (non-blocking)
-                if streamer.text_queue.empty():
-                    break
-        except StopIteration:
-            pass
+        text_queue = self._streamer.text_queue
+        while True:
+            try:
+                text_fragment = text_queue.get_nowait()
+            except queue.Empty:
+                break
+            # TextIteratorStreamer uses None as end-of-stream sentinel
+            if text_fragment is None:
+                self._generate_finished = True
+                break
+            if text_fragment:
+                with self._text_lock:
+                    self._accumulated_text += text_fragment
+                self._n_text_tokens_received += 1
 
     # ── Word extraction ──
 
