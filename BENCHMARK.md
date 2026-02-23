@@ -188,3 +188,18 @@ python test_backend_offline.py --backend voxtral-mlx --audio your_file.wav --no-
 
 The benchmark harness computes WER and timestamp accuracy automatically when ground truth
 `.transcript.json` files exist alongside the audio files. See `audio_tests/` for the format.
+
+---
+
+## Help Us Benchmark on More Hardware
+
+These results are from a single Apple M4 machine. We'd love to see numbers from other setups: Linux with CUDA GPUs, older Macs, different CPU architectures, cloud instances, etc.
+
+If you run the benchmark on your hardware, please open an issue or PR with your results and we will add them here. The more data points we have, the better the recommendations get.
+
+What we are especially interested in:
+- **NVIDIA GPUs** (RTX 3090, 4090, A100, T4, etc.) with faster-whisper
+- **Older Apple Silicon** (M1, M2, M3) with mlx-whisper and voxtral-mlx
+- **Medium and large-v3 models** (we only tested base and small so far)
+- **Longer audio files** or domain-specific audio (medical, legal, call center)
+- **Other languages** beyond English and French
