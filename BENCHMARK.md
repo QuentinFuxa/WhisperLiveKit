@@ -66,6 +66,10 @@ Ground truth transcripts (`.transcript.json`) with per-word timestamps are hand-
 <img src="benchmark_chart.png" alt="Benchmark comparison on 30s English" width="800">
 </p>
 
+<p align="center">
+<img src="benchmark_scatter.png" alt="Speed vs Accuracy tradeoff" width="700">
+</p>
+
 ### French (16.3 s, 1 speaker, `--language fr`)
 
 | Backend | Policy | Model | RTF | WER | Timestamp MAE |

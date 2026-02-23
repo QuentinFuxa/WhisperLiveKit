@@ -82,7 +82,12 @@ Go to `chrome-extension` for instructions.
 | *[Not recommanded]*  Speaker diarization with Diart | `diart` |
 
 See **Parameters & Configuration** below on how to use them.
-See **[BENCHMARK.md](BENCHMARK.md)** for detailed performance comparisons across all backends.
+
+<p align="center">
+<img src="benchmark_scatter.png" alt="Speed vs Accuracy tradeoff" width="700">
+</p>
+
+See **[BENCHMARK.md](BENCHMARK.md)** for the full benchmark with tables, model size comparison, and more.
 
 
 
