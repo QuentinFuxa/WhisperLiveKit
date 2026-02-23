@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "whisperlivekit"
-version = "0.2.18"
+version = "0.2.19"
 description = "Real-time speech-to-text with speaker diarization using Whisper"
 readme = "README.md"
 authors = [
@@ -42,6 +42,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = ["pytest>=7.0", "pytest-asyncio>=0.21"]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
 voxtral-hf = ["transformers>=5.2.0", "mistral-common[audio]"]
@@ -64,6 +65,7 @@ packages = [
     "whisperlivekit.whisper.normalizers",
     "whisperlivekit.web",
     "whisperlivekit.local_agreement",
+    "whisperlivekit.voxtral_mlx",
     "whisperlivekit.silero_vad_models"
 ]
 

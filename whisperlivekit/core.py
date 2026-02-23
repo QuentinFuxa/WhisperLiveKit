@@ -92,7 +92,12 @@ class TranscriptionEngine:
         }
 
         if config.transcription:
-            if config.backend == "voxtral":
+            if config.backend == "voxtral-mlx":
+                from whisperlivekit.voxtral_mlx_asr import VoxtralMLXASR
+                self.tokenizer = None
+                self.asr = VoxtralMLXASR(**transcription_common_params)
+                logger.info("Using Voxtral MLX native backend")
+            elif config.backend == "voxtral":
                 from whisperlivekit.voxtral_hf_streaming import VoxtralHFStreamingASR
                 self.tokenizer = None
                 self.asr = VoxtralHFStreamingASR(**transcription_common_params)
@@ -169,6 +174,9 @@ class TranscriptionEngine:
 
 
 def online_factory(args, asr):
+    if getattr(args, 'backend', None) == "voxtral-mlx":
+        from whisperlivekit.voxtral_mlx_asr import VoxtralMLXOnlineProcessor
+        return VoxtralMLXOnlineProcessor(asr)
     if getattr(args, 'backend', None) == "voxtral":
         from whisperlivekit.voxtral_hf_streaming import VoxtralHFStreamingOnlineProcessor
         return VoxtralHFStreamingOnlineProcessor(asr)
