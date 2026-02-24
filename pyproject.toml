@@ -32,20 +32,53 @@ dependencies = [
     "soundfile",
     "uvicorn",
     "websockets",
-    "torchaudio>=2.0.0",
-    "torch>=2.0.0",
     "huggingface-hub>=0.25.0",
     "faster-whisper>=1.2.0",
     "tqdm",
-    "tiktoken",
-    'triton>=2.0.0; platform_machine == "x86_64" and (sys_platform == "linux" or sys_platform == "linux2")'
+    "tiktoken"
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=7.0", "pytest-asyncio>=0.21"]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
-voxtral-hf = ["transformers>=5.2.0", "mistral-common[audio]"]
+voxtral-hf = ["transformers>=5.2.0; python_version >= '3.10'", "mistral-common[audio]"]
+cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
+gpu-cu129 = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    'triton>=2.0.0; platform_machine == "x86_64" and (sys_platform == "linux" or sys_platform == "linux2")'
+]
+diarization-sortformer = ["nemo-toolkit[asr]>=2.2,<3; python_version >= '3.10'"]
+diarization-diart = ["diart"]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "gpu-cu129" }
+    ]
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu", marker = "platform_system != 'Darwin'" },
+    { index = "pytorch-cu129", extra = "gpu-cu129", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" }
+]
+torchaudio = [
+    { index = "pytorch-cpu", extra = "cpu", marker = "platform_system != 'Darwin'" },
+    { index = "pytorch-cu129", extra = "gpu-cu129", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" }
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
 
 [project.urls]
 Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
