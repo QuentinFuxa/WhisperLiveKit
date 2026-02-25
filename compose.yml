@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        EXTRAS: ${GPU_SORTFORMER_EXTRAS:-gpu-cu129,diarization-sortformer}
+        EXTRAS: ${GPU_SORTFORMER_EXTRAS:-cu129,diarization-sortformer}
     image: wlk:gpu-sortformer
     gpus: all
     ports:
@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        EXTRAS: ${GPU_VOXTRAL_EXTRAS:-gpu-cu129,voxtral-hf,translation}
+        EXTRAS: ${GPU_VOXTRAL_EXTRAS:-cu129,voxtral-hf,translation}
     image: wlk:gpu-voxtral
     gpus: all
     ports:

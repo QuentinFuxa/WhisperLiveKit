@@ -39,21 +39,31 @@ sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
 voxtral-hf = [
     "transformers>=5.2.0; python_version >= '3.10'",
     "mistral-common[audio]",
+    "accelerate>=0.12",
 ]
 cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
-gpu-cu129 = [
+cu129 = [
     "torch>=2.0.0",
     "torchaudio>=2.0.0",
     'triton>=2.0.0; platform_machine == "x86_64" and (sys_platform == "linux" or sys_platform == "linux2")',
 ]
 diarization-sortformer = ["nemo-toolkit[asr]>2.4; python_version >= '3.10'"]
-diarization-diart = ["diart"]
+diarization-diart = [
+    "diart",
+    "torch<2.9.0",
+    "torchaudio<2.9.0",
+    "torchvision<0.24.0",
+]
 
 [tool.uv]
 conflicts = [
     [
         { extra = "cpu" },
-        { extra = "gpu-cu129" },
+        { extra = "cu129" },
+    ],
+    [
+        { extra = "diarization-diart" },
+        { extra = "cu129" },
     ],
     [
         { extra = "voxtral-hf" },
@@ -64,11 +74,16 @@ conflicts = [
 [tool.uv.sources]
 torch = [
     { index = "pytorch-cpu", extra = "cpu", marker = "platform_system != 'Darwin'" },
-    { index = "pytorch-cu129", extra = "gpu-cu129", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cpu", extra = "diarization-diart", marker = "platform_system != 'Darwin'" },
+    { index = "pytorch-cu129", extra = "cu129", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
 ]
 torchaudio = [
     { index = "pytorch-cpu", extra = "cpu", marker = "platform_system != 'Darwin'" },
-    { index = "pytorch-cu129", extra = "gpu-cu129", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cpu", extra = "diarization-diart", marker = "platform_system != 'Darwin'" },
+    { index = "pytorch-cu129", extra = "cu129", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "diarization-diart", marker = "platform_system != 'Darwin'" },
 ]
 
 [[tool.uv.index]]

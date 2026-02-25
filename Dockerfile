@@ -23,7 +23,7 @@ ENV UV_PYTHON_INSTALL_DIR=/python
 RUN uv python install 3.12
 
 # Install dependencies first to leverage caching
-ARG EXTRAS=gpu-cu129
+ARG EXTRAS=cu129
 COPY pyproject.toml uv.lock /app/
 RUN set -eux; \
   set --; \

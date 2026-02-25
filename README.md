@@ -75,7 +75,7 @@ Go to `chrome-extension` for instructions.
 | Feature | `uv sync` | `pip install -e` |
 |-----------|-------------|-------------|
 | **CPU PyTorch stack** | `uv sync --extra cpu` | `pip install -e ".[cpu]"` |
-| **CUDA 12.9 PyTorch stack** | `uv sync --extra gpu-cu129` | `pip install -e ".[gpu-cu129]"` |
+| **CUDA 12.9 PyTorch stack** | `uv sync --extra cu129` | `pip install -e ".[cu129]"` |
 | **Translation** | `uv sync --extra translation` | `pip install -e ".[translation]"` |
 | **Sentence tokenizer** | `uv sync --extra sentence_tokenizer` | `pip install -e ".[sentence_tokenizer]"` |
 | **Voxtral (HF backend)** | `uv sync --extra voxtral-hf` | `pip install -e ".[voxtral-hf]"` |
@@ -86,10 +86,10 @@ Supported GPU profiles:
 
 ```bash
 # Profile A: Sortformer diarization
-uv sync --extra gpu-cu129 --extra diarization-sortformer
+uv sync --extra cu129 --extra diarization-sortformer
 
 # Profile B: Voxtral HF + translation
-uv sync --extra gpu-cu129 --extra voxtral-hf --extra translation
+uv sync --extra cu129 --extra voxtral-hf --extra translation
 ```
 
 `voxtral-hf` and `diarization-sortformer` are intentionally incompatible extras and must be installed in separate environments.
@@ -322,8 +322,8 @@ docker compose up --build wlk-cpu
 #### Customization
 
 - `--build-arg` Options:
-  - `EXTRAS="gpu-cu129,diarization-sortformer"` - GPU Sortformer profile extras.
-  - `EXTRAS="gpu-cu129,voxtral-hf,translation"` - GPU Voxtral profile extras.
+  - `EXTRAS="cu129,diarization-sortformer"` - GPU Sortformer profile extras.
+  - `EXTRAS="cu129,voxtral-hf,translation"` - GPU Voxtral profile extras.
   - `EXTRAS="cpu,diarization-diart,translation"` - CPU profile extras.
   - Hugging Face cache + token are configured in `compose.yml` using a named volume and `HF_TKN_FILE` (default: `./token`).
 
