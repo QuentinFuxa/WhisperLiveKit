@@ -9,19 +9,14 @@ description = "Real-time speech-to-text with speaker diarization using Whisper"
 readme = "README.md"
 authors = [{ name = "Quentin Fuxa" }]
 license = { file = "LICENSE" }
-requires-python = ">=3.9, <3.14"
-# requires-python = ">=3.12, <3.13"
+requires-python = ">=3.11, <3.14"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Programming Language :: Python :: 3.15",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]

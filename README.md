@@ -72,15 +72,27 @@ Go to `chrome-extension` for instructions.
 
 #### Optional Dependencies
 
-| Optional | `pip install` |
-|-----------|-------------|
-| **Windows/Linux optimizations** | `faster-whisper` |
-| **Apple Silicon optimizations** | `mlx-whisper` |
-| **Voxtral (multilingual, auto-detect)** | `transformers torch` (or use built-in `voxtral-mlx` on Apple Silicon) |
-| **Translation** | `nllw` |
-| **Speaker diarization** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
-| OpenAI API | `openai` |
-| *[Not recommanded]*  Speaker diarization with Diart | `diart` |
+| Feature | `uv sync` | `pip install -e` |
+|-----------|-------------|-------------|
+| **CPU PyTorch stack** | `uv sync --extra cpu` | `pip install -e ".[cpu]"` |
+| **CUDA 12.9 PyTorch stack** | `uv sync --extra gpu-cu129` | `pip install -e ".[gpu-cu129]"` |
+| **Translation** | `uv sync --extra translation` | `pip install -e ".[translation]"` |
+| **Sentence tokenizer** | `uv sync --extra sentence_tokenizer` | `pip install -e ".[sentence_tokenizer]"` |
+| **Voxtral (HF backend)** | `uv sync --extra voxtral-hf` | `pip install -e ".[voxtral-hf]"` |
+| **Speaker diarization (Sortformer / NeMo)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
+| *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
+
+Supported GPU profiles:
+
+```bash
+# Profile A: Sortformer diarization
+uv sync --extra gpu-cu129 --extra diarization-sortformer
+
+# Profile B: Voxtral HF + translation
+uv sync --extra gpu-cu129 --extra voxtral-hf --extra translation
+```
+
+`voxtral-hf` and `diarization-sortformer` are intentionally incompatible extras and must be installed in separate environments.
 
 See **Parameters & Configuration** below on how to use them.
 
@@ -279,7 +291,7 @@ docker run --gpus all -p 8000:8000 --name wlk wlk
 
 **CPU only:**
 ```bash
-docker build -f Dockerfile.cpu -t wlk .
+docker build -f Dockerfile.cpu -t wlk --build-arg EXTRAS="cpu" .
 docker run -p 8000:8000 --name wlk wlk
 ```
 
@@ -291,6 +303,18 @@ docker run -p 8000:8000 --name wlk wlk
 docker run --gpus all -p 8000:8000 --name wlk wlk --model large-v3 --language fr
 ```
 
+**Compose (recommended for cache + token wiring):**
+```bash
+# GPU Sortformer profile
+docker compose up --build wlk-gpu-sortformer
+
+# GPU Voxtral profile
+docker compose up --build wlk-gpu-voxtral
+
+# CPU service
+docker compose up --build wlk-cpu
+```
+
 ### Memory Requirements
 - **Large models**: Ensure your Docker runtime has sufficient memory allocated
 
@@ -298,9 +322,10 @@ docker run --gpus all -p 8000:8000 --name wlk wlk --model large-v3 --language fr
 #### Customization
 
 - `--build-arg` Options:
-  - `EXTRAS="translation"` - Add extras to the image's installation (no spaces). Remember to set necessary container options!
-  - `HF_PRECACHE_DIR="./.cache/"` - Pre-load a model cache for faster first-time start
-  - `HF_TKN_FILE="./token"` - Add your Hugging Face Hub access token to download gated models
+  - `EXTRAS="gpu-cu129,diarization-sortformer"` - GPU Sortformer profile extras.
+  - `EXTRAS="gpu-cu129,voxtral-hf,translation"` - GPU Voxtral profile extras.
+  - `EXTRAS="cpu,diarization-diart,translation"` - CPU profile extras.
+  - Hugging Face cache + token are configured in `compose.yml` using a named volume and `HF_TKN_FILE` (default: `./token`).
 
 ## Testing & Benchmarks
 
