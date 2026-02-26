@@ -57,6 +57,9 @@ diarization-diart = [
     "torchvision<0.24.0",
 ]
 
+[dependency-groups]
+dev = ["rich>=14.3.3"]
+
 [tool.uv]
 conflicts = [
     [

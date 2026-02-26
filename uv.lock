@@ -6215,6 +6215,11 @@ voxtral-hf = [
     { name = "transformers", version = "5.2.0", source = { registry = "https://pypi.org/simple" } },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "rich" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "accelerate", marker = "extra == 'voxtral-hf'", specifier = ">=0.12" },
@@ -6253,6 +6258,9 @@ requires-dist = [
     { name = "wtpsplit", marker = "extra == 'sentence-tokenizer'" },
 ]
 provides-extras = ["test", "translation", "sentence-tokenizer", "voxtral-hf", "cpu", "cu129", "diarization-sortformer", "diarization-diart"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "rich", specifier = ">=14.3.3" }]
 
 [[package]]
 name = "wrapt"
