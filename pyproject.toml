@@ -28,6 +28,8 @@ dependencies = [
     "websockets",
     "huggingface-hub>=0.25.0",
     "faster-whisper>=1.2.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
     "tqdm",
     "tiktoken",
 ]
