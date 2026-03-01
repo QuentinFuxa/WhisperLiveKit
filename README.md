@@ -74,6 +74,8 @@ Go to `chrome-extension` for instructions.
 
 | Feature | `uv sync` | `pip install -e` |
 |-----------|-------------|-------------|
+| **Apple Silicon MLX Whisper backend** | `uv sync --extra mlx-whisper` | `pip install -e ".[mlx-whisper]"` |
+| **Voxtral (MLX backend, Apple Silicon)** | `uv sync --extra voxtral-mlx` | `pip install -e ".[voxtral-mlx]"` |
 | **CPU PyTorch stack** | `uv sync --extra cpu` | `pip install -e ".[cpu]"` |
 | **CUDA 12.9 PyTorch stack** | `uv sync --extra cu129` | `pip install -e ".[cu129]"` |
 | **Translation** | `uv sync --extra translation` | `pip install -e ".[translation]"` |
@@ -114,6 +116,7 @@ detection is more reliable and does not bias towards English.
 
 ```bash
 # Apple Silicon (native MLX, recommended)
+pip install -e ".[voxtral-mlx]"
 wlk --backend voxtral-mlx
 
 # Linux/GPU (HuggingFace transformers)

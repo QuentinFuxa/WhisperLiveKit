@@ -38,6 +38,15 @@ dependencies = [
 test = ["pytest>=7.0", "pytest-asyncio>=0.21"]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
+mlx-whisper = [
+    'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx-whisper>=0.4.0; sys_platform == "darwin" and platform_machine == "arm64"',
+]
+voxtral-mlx = [
+    'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx-whisper>=0.4.0; sys_platform == "darwin" and platform_machine == "arm64"',
+    "mistral-common[audio]",
+]
 voxtral-hf = [
     "transformers>=5.2.0; python_version >= '3.10'",
     "mistral-common[audio]",
