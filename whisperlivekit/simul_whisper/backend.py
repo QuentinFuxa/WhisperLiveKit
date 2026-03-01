@@ -200,9 +200,12 @@ class SimulStreamingASR:
         if self.encoder_backend == "whisper":
             self.disable_fast_encoder = True
         
-        if self.encoder_backend == "mlx-whisper" and platform.system() == "Darwin":
-            if not hasattr(self, '_full_mlx_disabled'):
-                self.use_full_mlx = True
+        # MLX full decoder disabled by default — MLXAlignAtt has known issues
+        # with token generation after punctuation. Users can opt-in with
+        # --use-full-mlx if they want to test it.
+        # if self.encoder_backend == "mlx-whisper" and platform.system() == "Darwin":
+        #     if not hasattr(self, '_full_mlx_disabled'):
+        #         self.use_full_mlx = True
                     
         self.cfg = AlignAttConfig(
                 tokenizer_is_multilingual= is_multilingual,
