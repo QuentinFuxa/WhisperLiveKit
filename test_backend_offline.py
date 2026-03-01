@@ -150,7 +150,10 @@ def float32_to_s16le_bytes(audio: np.ndarray) -> bytes:
 
 def create_engine(
     backend: str, model_size: str, lan: str,
-    diarization: bool = False, vac: bool = True, policy: str = "",
+    diarization: bool = False,
+    diarization_backend: str = "",
+    vac: bool = True,
+    policy: str = "",
 ):
     """Create a TranscriptionEngine with the given backend config."""
     import gc
@@ -169,6 +172,8 @@ def create_engine(
         transcription=True,
         diarization=diarization,
     )
+    if diarization_backend:
+        kwargs["diarization_backend"] = diarization_backend
     if model_size:
         kwargs["model_size"] = model_size
     if policy:
@@ -179,13 +184,18 @@ def create_engine(
 
 def _extract_text_from_response(response_dict: dict) -> str:
     """Extract full transcription text from a FrontData dict."""
+    def _strip_or_empty(value: object) -> str:
+        return value.strip() if isinstance(value, str) else ""
+
     segments = response_dict.get("lines", [])
     full_text = " ".join(
-        seg.get("text", "").strip()
+        text
         for seg in segments
-        if seg.get("text", "").strip()
+        if isinstance(seg, dict)
+        for text in [_strip_or_empty(seg.get("text"))]
+        if text
     )
-    buf = response_dict.get("buffer_transcription", "").strip()
+    buf = _strip_or_empty(response_dict.get("buffer_transcription"))
     if buf:
         full_text = f"{full_text} {buf}".strip() if full_text else buf
     return full_text
@@ -236,7 +246,8 @@ async def run_test(
             # Only print when transcription text actually changes
             current_text = _extract_text_from_response(d)
             if current_text and current_text != last_printed_text:
-                buf = d.get("buffer_transcription", "").strip()
+                buf = d.get("buffer_transcription")
+                buf = buf.strip() if isinstance(buf, str) else ""
                 committed = current_text
                 if buf and committed.endswith(buf):
                     committed = committed[:-len(buf)].strip()
@@ -687,6 +698,12 @@ def main():
         help="Enable speaker diarization.",
     )
     parser.add_argument(
+        "--diarization-backend",
+        default="",
+        choices=["diart", "sortformer"],
+        help="Diarization backend when --diarization is enabled.",
+    )
+    parser.add_argument(
         "--benchmark", action="store_true",
         help="Run benchmark across all detected backend+policy combinations.",
     )
@@ -748,7 +765,10 @@ def main():
         logger.info(f"Creating {args.backend} engine...")
         engine = create_engine(
             args.backend, args.model_size, args.lan,
-            diarization=args.diarization, vac=vac, policy=policy,
+            diarization=args.diarization,
+            diarization_backend=args.diarization_backend,
+            vac=vac,
+            policy=policy,
         )
         logger.info("Engine ready.")
 
