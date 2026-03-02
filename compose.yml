@@ -1,0 +1,52 @@
+services:
+  wlk-gpu-sortformer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        EXTRAS: ${GPU_SORTFORMER_EXTRAS:-cu129,diarization-sortformer}
+    image: wlk:gpu-sortformer
+    gpus: all
+    ports:
+      - "8000:8000"
+    volumes:
+      - hf-cache:/root/.cache/huggingface/hub
+      # - ${HF_TKN_FILE:-./token}:/root/.cache/huggingface/token:ro
+    environment:
+      - HF_TOKEN
+    command: ["--model", "medium", "--diarization", "--pcm-input"]
+
+  wlk-gpu-voxtral:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        EXTRAS: ${GPU_VOXTRAL_EXTRAS:-cu129,voxtral-hf,translation}
+    image: wlk:gpu-voxtral
+    gpus: all
+    ports:
+      - "8001:8000"
+    volumes:
+      - hf-cache:/root/.cache/huggingface/hub
+      # - ${HF_TKN_FILE:-./token}:/root/.cache/huggingface/token:ro
+    environment:
+      - HF_TOKEN
+    command: ["--backend", "voxtral", "--pcm-input"]
+
+  wlk-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+      args:
+        EXTRAS: ${CPU_EXTRAS:-cpu,diarization-diart,translation}
+    image: wlk:cpu
+    ports:
+      - "8000:8000"
+    volumes:
+      - hf-cache:/root/.cache/huggingface/hub
+      # - ${HF_TKN_FILE:-./token}:/root/.cache/huggingface/token:ro
+    environment:
+      - HF_TOKEN
+
+volumes:
+  hf-cache:

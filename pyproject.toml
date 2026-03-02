@@ -7,24 +7,18 @@ name = "whisperlivekit"
 version = "0.2.19"
 description = "Real-time speech-to-text with speaker diarization using Whisper"
 readme = "README.md"
-authors = [
-    { name = "Quentin Fuxa" }
-]
+authors = [{ name = "Quentin Fuxa" }]
 license = { file = "LICENSE" }
-requires-python = ">=3.9"
+requires-python = ">=3.11, <3.14"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Programming Language :: Python :: 3.15",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Multimedia :: Sound/Audio :: Speech"
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
 dependencies = [
     "fastapi",
@@ -32,20 +26,91 @@ dependencies = [
     "soundfile",
     "uvicorn",
     "websockets",
-    "torchaudio>=2.0.0",
-    "torch>=2.0.0",
     "huggingface-hub>=0.25.0",
     "faster-whisper>=1.2.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
     "tqdm",
     "tiktoken",
-    'triton>=2.0.0; platform_machine == "x86_64" and (sys_platform == "linux" or sys_platform == "linux2")'
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=7.0", "pytest-asyncio>=0.21"]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
-voxtral-hf = ["transformers>=5.2.0", "mistral-common[audio]"]
+mlx-whisper = [
+    'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx-whisper>=0.4.0; sys_platform == "darwin" and platform_machine == "arm64"',
+]
+voxtral-mlx = [
+    'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx-whisper>=0.4.0; sys_platform == "darwin" and platform_machine == "arm64"',
+    "mistral-common[audio]",
+]
+voxtral-hf = [
+    "transformers>=5.2.0; python_version >= '3.10'",
+    "mistral-common[audio]",
+    "accelerate>=0.12",
+]
+cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
+cu129 = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    'triton>=2.0.0; platform_machine == "x86_64" and (sys_platform == "linux" or sys_platform == "linux2")',
+]
+diarization-sortformer = [
+    "nemo-toolkit[asr]>2.4; python_version >= '3.10' and python_version < '3.13'",
+]
+diarization-diart = [
+    "diart",
+    "torch<2.9.0",
+    "torchaudio<2.9.0",
+    "torchvision<0.24.0",
+]
+
+[dependency-groups]
+dev = ["rich>=14.3.3"]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cu129" },
+    ],
+    [
+        { extra = "diarization-diart" },
+        { extra = "cu129" },
+    ],
+    [
+        { extra = "voxtral-hf" },
+        { extra = "diarization-sortformer" },
+    ],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu", marker = "platform_system != 'Darwin'" },
+    { index = "pytorch-cpu", extra = "diarization-diart", marker = "platform_system != 'Darwin'" },
+    { index = "pytorch-cu129", extra = "cu129", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
+]
+torchaudio = [
+    { index = "pytorch-cpu", extra = "cpu", marker = "platform_system != 'Darwin'" },
+    { index = "pytorch-cpu", extra = "diarization-diart", marker = "platform_system != 'Darwin'" },
+    { index = "pytorch-cu129", extra = "cu129", marker = "platform_system == 'Linux' and platform_machine == 'x86_64'" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "diarization-diart", marker = "platform_system != 'Darwin'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
 
 [project.urls]
 Homepage = "https://github.com/QuentinFuxa/WhisperLiveKit"
@@ -66,7 +131,7 @@ packages = [
     "whisperlivekit.web",
     "whisperlivekit.local_agreement",
     "whisperlivekit.voxtral_mlx",
-    "whisperlivekit.silero_vad_models"
+    "whisperlivekit.silero_vad_models",
 ]
 
 [tool.setuptools.package-data]
