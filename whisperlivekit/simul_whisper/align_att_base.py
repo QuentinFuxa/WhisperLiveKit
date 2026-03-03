@@ -120,6 +120,7 @@ class AlignAttBase(ABC):
             self.state.segments = []
         self.state.log_segments += 1
         self.state.pending_incomplete_tokens = []
+        self.state.pending_retries = 0
 
     def segments_len(self):
         return sum(s.shape[0] for s in self.state.segments) / 16000
@@ -223,6 +224,7 @@ class AlignAttBase(ABC):
             new_segment = False
 
             logits = self._apply_token_suppression(logits)
+            logits = self._apply_dry_penalty(logits, current_tokens)
             current_tokens, completed = self._update_tokens(
                 current_tokens, logits, sum_logprobs
             )
@@ -326,9 +328,13 @@ class AlignAttBase(ABC):
 
         for word, word_tokens in zip(split_words, split_tokens):
             if replacement_char in word:
-                logger.warning(f"[UTF-8 Filter] Skipping: {repr(word)}")
-                timestamp_idx += len(word_tokens)
-                continue
+                cleaned = word.replace(replacement_char, "")
+                if not cleaned.strip():
+                    logger.debug(f"[UTF-8 Filter] Skipping: {repr(word)}")
+                    timestamp_idx += len(word_tokens)
+                    continue
+                logger.debug(f"[UTF-8 Filter] Cleaned {repr(word)} -> {repr(cleaned)}")
+                word = cleaned
 
             try:
                 current_timestamp = l_absolute_timestamps[timestamp_idx]
@@ -354,21 +360,84 @@ class AlignAttBase(ABC):
 
     def _handle_pending_tokens(self, split_words, split_tokens):
         """Handle incomplete UTF-8 tokens for next chunk."""
-        self.state.pending_incomplete_tokens = []
         MAX_PENDING_TOKENS = 10
+        MAX_PENDING_RETRIES = 2
         replacement_char = "\ufffd"
+
         if split_words and replacement_char in split_words[-1]:
-            if len(split_tokens[-1]) <= MAX_PENDING_TOKENS:
+            self.state.pending_retries += 1
+            if self.state.pending_retries > MAX_PENDING_RETRIES:
+                logger.warning(
+                    f"[UTF-8 Fix] Dropping {len(split_tokens[-1])} incomplete tokens "
+                    f"after {MAX_PENDING_RETRIES} retries (won't resolve)"
+                )
+                self.state.pending_incomplete_tokens = []
+                self.state.pending_retries = 0
+            elif len(split_tokens[-1]) <= MAX_PENDING_TOKENS:
                 self.state.pending_incomplete_tokens = split_tokens[-1]
                 logger.debug(
                     f"[UTF-8 Fix] Holding {len(self.state.pending_incomplete_tokens)} "
-                    f"incomplete tokens for next chunk"
+                    f"incomplete tokens for next chunk (retry {self.state.pending_retries})"
                 )
             else:
                 logger.warning(
                     f"[UTF-8 Fix] Skipping {len(split_tokens[-1])} tokens "
                     f"(exceeds limit of {MAX_PENDING_TOKENS}, likely hallucination)"
                 )
+                self.state.pending_incomplete_tokens = []
+                self.state.pending_retries = 0
+        else:
+            self.state.pending_incomplete_tokens = []
+            self.state.pending_retries = 0
+
+    # === Repetition penalty ===
+
+    def _apply_dry_penalty(self, logits, current_tokens):
+        """DRY penalty v0: penalize tokens that would extend a verbatim repetition.
+        See https://github.com/oobabooga/text-generation-webui/pull/5677
+
+        Scans the decoded sequence for positions where the current suffix already
+        appeared --> for each such match, the token that followed it in the past is
+        penalised exponentially with the match length
+        """
+        eot = self.tokenizer.eot
+        seq = current_tokens[0].tolist()
+        if len(seq) < 5:
+            return logits
+
+        last = seq[-1]
+        if last >= eot:
+            return logits
+
+        penalties = {}
+        for i in range(len(seq) - 2, -1, -1):
+            if seq[i] != last:
+                continue
+            next_tok = seq[i + 1]
+            if next_tok >= eot:
+                continue
+
+            length = 1
+            while length < 50:
+                j, k = i - length, len(seq) - 1 - length
+                if j < 0 or k <= i:
+                    break
+                if seq[j] != seq[k] or seq[j] >= eot:
+                    break
+                length += 1
+
+            if next_tok not in penalties or length > penalties[next_tok]:
+                penalties[next_tok] = length
+
+        if penalties:
+            max_len = max(penalties.values())
+            if max_len >= 4:
+                logger.debug(f"[DRY] penalising {len(penalties)} tokens (longest match: {max_len})")
+            for tok, length in penalties.items():
+                if length >= 2:
+                    logits[:, tok] = logits[:, tok] - 1.0 * 2.0 ** (length - 2)
+
+        return logits
 
     # === Abstract methods — subclass must implement ===
 

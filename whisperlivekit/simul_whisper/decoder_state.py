@@ -25,7 +25,8 @@ class DecoderState:
     context: Any = None
     
     pending_incomplete_tokens: List[int] = field(default_factory=list)
-    
+    pending_retries: int = 0
+
     global_time_offset: float = 0.0
     cumulative_time_offset: float = 0.0
     first_timestamp: Optional[float] = None
@@ -78,8 +79,9 @@ class DecoderState:
         self.last_attend_frame = -rewind_threshold
         self.cumulative_time_offset = 0.0
         self.pending_incomplete_tokens = []
+        self.pending_retries = 0
         self.log_segments += 1
-    
+
     def full_reset(self, rewind_threshold: int = 200):
         """
         Full reset including audio segments and tokens.
