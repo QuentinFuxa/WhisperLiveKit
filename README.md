@@ -25,6 +25,7 @@
 - [WhisperStreaming](https://github.com/ufal/whisper_streaming) (SOTA 2023) - Low latency transcription using [LocalAgreement policy](https://www.isca-archive.org/interspeech_2020/liu20s_interspeech.pdf)
 - [Streaming Sortformer](https://arxiv.org/abs/2507.18446) (SOTA 2025) - Advanced real-time speaker diarization
 - [Diart](https://github.com/juanmc2005/diart) (SOTA 2021) - Real-time speaker diarization
+- [Voxtral Mini](https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602) (2025) - 4B-parameter multilingual speech model by Mistral AI
 - [Silero VAD](https://github.com/snakers4/silero-vad) (2024) - Enterprise-grade Voice Activity Detection
 
 
@@ -71,18 +72,60 @@ Go to `chrome-extension` for instructions.
 
 #### Optional Dependencies
 
-| Optional | `pip install` |
-|-----------|-------------|
-| **Windows/Linux optimizations** | `faster-whisper` |
-| **Apple Silicon optimizations** | `mlx-whisper` |
-| **Translation** | `nllw` |
-| **Speaker diarization** | `git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]` |
-| OpenAI API | `openai` |
-| *[Not recommanded]*  Speaker diarization with Diart | `diart` |
+| Feature | `uv sync` | `pip install -e` |
+|-----------|-------------|-------------|
+| **Apple Silicon MLX Whisper backend** | `uv sync --extra mlx-whisper` | `pip install -e ".[mlx-whisper]"` |
+| **Voxtral (MLX backend, Apple Silicon)** | `uv sync --extra voxtral-mlx` | `pip install -e ".[voxtral-mlx]"` |
+| **CPU PyTorch stack** | `uv sync --extra cpu` | `pip install -e ".[cpu]"` |
+| **CUDA 12.9 PyTorch stack** | `uv sync --extra cu129` | `pip install -e ".[cu129]"` |
+| **Translation** | `uv sync --extra translation` | `pip install -e ".[translation]"` |
+| **Sentence tokenizer** | `uv sync --extra sentence_tokenizer` | `pip install -e ".[sentence_tokenizer]"` |
+| **Voxtral (HF backend)** | `uv sync --extra voxtral-hf` | `pip install -e ".[voxtral-hf]"` |
+| **Speaker diarization (Sortformer / NeMo)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
+| *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
 
-See  **Parameters & Configuration** below on how to use them.
+Supported GPU profiles:
+
+```bash
+# Profile A: Sortformer diarization
+uv sync --extra cu129 --extra diarization-sortformer
+
+# Profile B: Voxtral HF + translation
+uv sync --extra cu129 --extra voxtral-hf --extra translation
+```
+
+`voxtral-hf` and `diarization-sortformer` are intentionally incompatible extras and must be installed in separate environments.
+
+See **Parameters & Configuration** below on how to use them.
+
+<p align="center">
+<img src="benchmark_scatter.png" alt="Speed vs Accuracy tradeoff" width="700">
+</p>
+
+See **[BENCHMARK.md](BENCHMARK.md)** for the full benchmark with tables, model size comparison, and more.
+We are actively looking for benchmark results on other hardware (NVIDIA GPUs, different Apple Silicon chips, cloud instances). If you run the benchmarks on your machine, please share your results via an issue or PR!
 
 
+
+### Voxtral Backend
+
+WhisperLiveKit supports [Voxtral Mini](https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602),
+a 4B-parameter speech model from Mistral AI that natively handles 100+ languages with automatic
+language detection. Whisper also supports auto-detection (`--language auto`), but Voxtral's per-chunk
+detection is more reliable and does not bias towards English.
+
+```bash
+# Apple Silicon (native MLX, recommended)
+pip install -e ".[voxtral-mlx]"
+wlk --backend voxtral-mlx
+
+# Linux/GPU (HuggingFace transformers)
+pip install transformers torch
+wlk --backend voxtral
+```
+
+Voxtral uses its own streaming policy and does not use LocalAgreement or SimulStreaming.
+See [BENCHMARK.md](BENCHMARK.md) for performance numbers.
 
 ### Usage Examples
 
@@ -92,8 +135,11 @@ See  **Parameters & Configuration** below on how to use them.
 # Large model and translate from french to danish
 wlk --model large-v3 --language fr --target-language da
 
-# Diarization and server listening on */80 
+# Diarization and server listening on */80
 wlk --host 0.0.0.0 --port 80 --model medium --diarization --language fr
+
+# Voxtral multilingual (auto-detects language)
+wlk --backend voxtral-mlx
 ```
 
 
@@ -151,7 +197,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--target-language` | If sets, translates using [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting). [200 languages available](docs/supported_languages.md). If you want to translate to english, you can also use `--direct-english-translation`. The STT model will try to directly output the translation. | `None` |
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
-| `--backend` | Whisper implementation selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. You can also force `mlx-whisper`, `faster-whisper`, `whisper`, or `openai-api` (LocalAgreement only) | `auto` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace) | `auto` |
 | `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
 | `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
@@ -248,7 +294,7 @@ docker run --gpus all -p 8000:8000 --name wlk wlk
 
 **CPU only:**
 ```bash
-docker build -f Dockerfile.cpu -t wlk .
+docker build -f Dockerfile.cpu -t wlk --build-arg EXTRAS="cpu" .
 docker run -p 8000:8000 --name wlk wlk
 ```
 
@@ -260,6 +306,18 @@ docker run -p 8000:8000 --name wlk wlk
 docker run --gpus all -p 8000:8000 --name wlk wlk --model large-v3 --language fr
 ```
 
+**Compose (recommended for cache + token wiring):**
+```bash
+# GPU Sortformer profile
+docker compose up --build wlk-gpu-sortformer
+
+# GPU Voxtral profile
+docker compose up --build wlk-gpu-voxtral
+
+# CPU service
+docker compose up --build wlk-cpu
+```
+
 ### Memory Requirements
 - **Large models**: Ensure your Docker runtime has sufficient memory allocated
 
@@ -267,9 +325,34 @@ docker run --gpus all -p 8000:8000 --name wlk wlk --model large-v3 --language fr
 #### Customization
 
 - `--build-arg` Options:
-  - `EXTRAS="translation"` - Add extras to the image's installation (no spaces). Remember to set necessary container options!
-  - `HF_PRECACHE_DIR="./.cache/"` - Pre-load a model cache for faster first-time start
-  - `HF_TKN_FILE="./token"` - Add your Hugging Face Hub access token to download gated models
+  - `EXTRAS="cu129,diarization-sortformer"` - GPU Sortformer profile extras.
+  - `EXTRAS="cu129,voxtral-hf,translation"` - GPU Voxtral profile extras.
+  - `EXTRAS="cpu,diarization-diart,translation"` - CPU profile extras.
+  - Hugging Face cache + token are configured in `compose.yml` using a named volume and `HF_TKN_FILE` (default: `./token`).
 
-## 🔮 Use Cases
+## Testing & Benchmarks
+
+WhisperLiveKit includes a unit test suite and an offline benchmark harness.
+
+```bash
+# Install test dependencies
+pip install -e ".[test]"
+
+# Run unit tests (no model download required)
+pytest tests/ -v
+
+# Benchmark a single backend
+python test_backend_offline.py --backend faster-whisper --no-realtime
+
+# Benchmark all installed backends
+python test_backend_offline.py --benchmark --no-realtime
+
+# Export benchmark results as JSON
+python test_backend_offline.py --benchmark --no-realtime --json results.json
+```
+
+See [BENCHMARK.md](BENCHMARK.md) for a full comparison of backends, policies, WER, speed, and
+timestamp accuracy on Apple Silicon.
+
+## Use Cases
 Capture discussions in real-time for meeting transcription, help hearing-impaired users follow conversations through accessibility tools, transcribe podcasts or videos automatically for content creation, transcribe support calls with speaker identification for customer service...

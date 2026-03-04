@@ -1,0 +1,97 @@
+[
+  {
+    "word": "This",
+    "start": 0.0,
+    "end": 0.24
+  },
+  {
+    "word": "is",
+    "start": 0.24,
+    "end": 0.56
+  },
+  {
+    "word": "a",
+    "start": 0.56,
+    "end": 0.76
+  },
+  {
+    "word": "transcription",
+    "start": 0.76,
+    "end": 1.32
+  },
+  {
+    "word": "test.",
+    "start": 1.32,
+    "end": 2.0
+  },
+  {
+    "word": "We",
+    "start": 2.4,
+    "end": 2.5
+  },
+  {
+    "word": "want",
+    "start": 2.5,
+    "end": 2.66
+  },
+  {
+    "word": "to",
+    "start": 2.66,
+    "end": 2.84
+  },
+  {
+    "word": "see",
+    "start": 2.84,
+    "end": 3.1
+  },
+  {
+    "word": "if",
+    "start": 3.1,
+    "end": 3.34
+  },
+  {
+    "word": "we",
+    "start": 3.34,
+    "end": 3.5
+  },
+  {
+    "word": "can",
+    "start": 3.5,
+    "end": 3.68
+  },
+  {
+    "word": "use",
+    "start": 3.68,
+    "end": 4.04
+  },
+  {
+    "word": "smaller",
+    "start": 4.04,
+    "end": 4.76
+  },
+  {
+    "word": "chunks.",
+    "start": 4.76,
+    "end": 5.16
+  },
+  {
+    "word": "What",
+    "start": 6.06,
+    "end": 6.32
+  },
+  {
+    "word": "do",
+    "start": 6.32,
+    "end": 6.44
+  },
+  {
+    "word": "you",
+    "start": 6.44,
+    "end": 6.58
+  },
+  {
+    "word": "think?",
+    "start": 6.58,
+    "end": 6.84
+  }
+]

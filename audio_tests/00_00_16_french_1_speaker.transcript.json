@@ -1,0 +1,177 @@
+[
+  {
+    "word": "Ok,",
+    "start": 2.02,
+    "end": 2.38
+  },
+  {
+    "word": "là",
+    "start": 2.52,
+    "end": 2.58
+  },
+  {
+    "word": "c",
+    "start": 2.58,
+    "end": 2.74
+  },
+  {
+    "word": "'est",
+    "start": 2.74,
+    "end": 2.76
+  },
+  {
+    "word": "un",
+    "start": 2.76,
+    "end": 2.86
+  },
+  {
+    "word": "test,",
+    "start": 2.86,
+    "end": 3.2
+  },
+  {
+    "word": "on",
+    "start": 3.34,
+    "end": 3.34
+  },
+  {
+    "word": "veut",
+    "start": 3.34,
+    "end": 3.48
+  },
+  {
+    "word": "voir",
+    "start": 3.48,
+    "end": 3.86
+  },
+  {
+    "word": "si",
+    "start": 3.86,
+    "end": 4.14
+  },
+  {
+    "word": "ça",
+    "start": 4.14,
+    "end": 4.26
+  },
+  {
+    "word": "arrive",
+    "start": 4.26,
+    "end": 4.36
+  },
+  {
+    "word": "à",
+    "start": 4.36,
+    "end": 4.5
+  },
+  {
+    "word": "capté",
+    "start": 4.5,
+    "end": 4.78
+  },
+  {
+    "word": "le",
+    "start": 4.78,
+    "end": 4.9
+  },
+  {
+    "word": "silence.",
+    "start": 4.9,
+    "end": 5.44
+  },
+  {
+    "word": "Là",
+    "start": 9.24,
+    "end": 9.6
+  },
+  {
+    "word": "il",
+    "start": 9.6,
+    "end": 9.78
+  },
+  {
+    "word": "est",
+    "start": 9.78,
+    "end": 9.84
+  },
+  {
+    "word": "une",
+    "start": 9.84,
+    "end": 9.96
+  },
+  {
+    "word": "telle",
+    "start": 9.96,
+    "end": 10.12
+  },
+  {
+    "word": "seconde",
+    "start": 10.12,
+    "end": 10.38
+  },
+  {
+    "word": "de",
+    "start": 10.38,
+    "end": 10.48
+  },
+  {
+    "word": "silence",
+    "start": 10.48,
+    "end": 10.78
+  },
+  {
+    "word": "et",
+    "start": 10.78,
+    "end": 11.06
+  },
+  {
+    "word": "je",
+    "start": 11.06,
+    "end": 11.16
+  },
+  {
+    "word": "vous",
+    "start": 11.16,
+    "end": 11.32
+  },
+  {
+    "word": "parle.",
+    "start": 11.32,
+    "end": 11.68
+  },
+  {
+    "word": "Et",
+    "start": 13.28,
+    "end": 13.64
+  },
+  {
+    "word": "voilà,",
+    "start": 13.64,
+    "end": 13.96
+  },
+  {
+    "word": "allez",
+    "start": 14.36,
+    "end": 14.62
+  },
+  {
+    "word": "on",
+    "start": 14.62,
+    "end": 14.78
+  },
+  {
+    "word": "va",
+    "start": 14.78,
+    "end": 14.88
+  },
+  {
+    "word": "tester",
+    "start": 14.88,
+    "end": 15.06
+  },
+  {
+    "word": "ça.",
+    "start": 15.06,
+    "end": 15.36
+  }
+]
