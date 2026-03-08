@@ -70,6 +70,6 @@ ENV UV_PYTHON_DOWNLOADS=0
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
 
-ENTRYPOINT ["whisperlivekit-server", "--host", "0.0.0.0"]
+ENTRYPOINT ["wlk", "--host", "0.0.0.0"]
 
 CMD ["--model", "medium"]

@@ -10,7 +10,7 @@
 <p align="center">
 <a href="https://pypi.org/project/whisperlivekit/"><img alt="PyPI Version" src="https://img.shields.io/pypi/v/whisperlivekit?color=g"></a>
 <a href="https://pepy.tech/project/whisperlivekit"><img alt="PyPI Downloads" src="https://static.pepy.tech/personalized-badge/whisperlivekit?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=installations"></a>
-<a href="https://pypi.org/project/whisperlivekit/"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.9--3.15-dark_green"></a>
+<a href="https://pypi.org/project/whisperlivekit/"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.11--3.13-dark_green"></a>
 <a href="https://huggingface.co/qfuxa/whisper-base-french-lora">
   <img alt="Hugging Face Weights" src="https://img.shields.io/badge/🤗-Hugging%20Face%20Weights-yellow" />
 </a>
@@ -20,7 +20,6 @@
 
 ### Powered by Leading Research:
 
-**See the interactive playground in [this repo](https://github.com/QuentinFuxa/streamlit-d3-network) to explore how AlignAtt works**
 - Simul-[Whisper](https://arxiv.org/pdf/2406.10052)/[Streaming](https://arxiv.org/abs/2506.17077) (SOTA 2025) - Ultra-low latency transcription using [AlignAtt policy](https://arxiv.org/pdf/2305.11408). 
 - [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting) (2025), based on [distilled](https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2) [NLLB](https://arxiv.org/abs/2207.04672) (2022, 2024) - Simulatenous translation from & to 200 languages.
 - [WhisperStreaming](https://github.com/ufal/whisper_streaming) (SOTA 2023) - Low latency transcription using [LocalAgreement policy](https://www.isca-archive.org/interspeech_2020/liu20s_interspeech.pdf)
@@ -44,20 +43,55 @@
 ```bash
 pip install whisperlivekit
 ```
-> You can also clone the repo and `pip install -e .` for the latest version.
 
 #### Quick Start
-1. **Start the transcription server:**
-   ```bash
-   wlk --model base --language en
-   ```
 
-2. **Open your browser** and navigate to `http://localhost:8000`. Start speaking and watch your words appear in real-time!
+```bash
 
+# Start the server — open http://localhost:8000 and start talking
+wlk --model base --language en
+
+
+# Auto-pull model and start server
+wlk run whisper:tiny
+
+# Transcribe a file (no server needed)
+wlk transcribe meeting.wav
+
+# Generate subtitles
+wlk transcribe --format srt podcast.mp3 -o podcast.srt
+
+# Manage models
+wlk models                             # See what's installed
+wlk pull large-v3                      # Download a model
+wlk rm large-v3                        # Delete a model
+
+# Benchmark speed and accuracy
+wlk bench
+```
+
+#### API Compatibility
+
+WhisperLiveKit exposes multiple APIs so you can use it as a drop-in replacement:
+
+```bash
+# OpenAI-compatible REST API
+curl http://localhost:8000/v1/audio/transcriptions -F file=@audio.wav
+
+# Works with the OpenAI Python SDK
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")
+
+# Deepgram-compatible WebSocket (use any Deepgram SDK)
+# Just point your Deepgram client at localhost:8000
+
+# Native WebSocket for real-time streaming
+ws://localhost:8000/asr
+```
+
+See [docs/API.md](docs/API.md) for the complete API reference.
 
 > - See [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py) for the list of all available languages.
 > - Check the [troubleshooting guide](docs/troubleshooting.md) for step-by-step fixes collected from recent GPU setup/env issues.
-> - The CLI entry point is exposed as both `wlk` and `whisperlivekit-server`; they are equivalent.
 > - For HTTPS requirements, see the **Parameters** section for SSL configuration options.
 
 
@@ -160,7 +194,7 @@ transcription_engine = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global transcription_engine
-    transcription_engine = TranscriptionEngine(model="medium", diarization=True, lan="en")
+    transcription_engine = TranscriptionEngine(model_size="medium", diarization=True, lan="en")
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -212,7 +246,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 | Translation options | Description | Default |
 |-----------|-------------|---------|
-| `--nllb-backend` | `transformers` or `ctranslate2` | `ctranslate2` |
+| `--nllb-backend` | `transformers` or `ctranslate2` | `transformers` |
 | `--nllb-size` | `600M` or `1.3B` | `600M` |
 
 | Diarization options | Description | Default |
@@ -220,7 +254,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--diarization-backend` |  `diart` or `sortformer` | `sortformer` |
 | `--disable-punctuation-split` | [NOT FUNCTIONAL IN 0.2.15 / 0.2.16] Disable punctuation based splits. See #214 | `False` |
 | `--segmentation-model` | Hugging Face model ID for Diart segmentation model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/segmentation-3.0` |
-| `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `speechbrain/spkrec-ecapa-voxceleb` |
+| `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/embedding` |
 
 | SimulStreaming backend options | Description | Default |
 |-----------|-------------|---------|
@@ -333,22 +367,20 @@ docker compose up --build wlk-cpu
 
 ## Testing & Benchmarks
 
-WhisperLiveKit includes a unit test suite and an offline benchmark harness.
-
 ```bash
-# Install test dependencies
+# Quick benchmark with the CLI
+wlk bench
+wlk bench --backend faster-whisper --model large-v3
+wlk bench --json results.json
+
+# Install test dependencies for full suite
 pip install -e ".[test]"
 
 # Run unit tests (no model download required)
 pytest tests/ -v
 
-# Benchmark a single backend
-python test_backend_offline.py --backend faster-whisper --no-realtime
-
-# Benchmark all installed backends
+# Detailed multi-backend benchmark
 python test_backend_offline.py --benchmark --no-realtime
-
-# Export benchmark results as JSON
 python test_backend_offline.py --benchmark --no-realtime --json results.json
 ```
 
