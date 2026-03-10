@@ -282,10 +282,20 @@ class AlignAtt(AlignAttBase):
             try:
                 encoder_feature = torch.as_tensor(encoder_feature_ctranslate, device=self.device)
             except TypeError:
-                # Some numpy/ctranslate2 versions produce object_ dtype arrays; force float32
-                arr = np.array(encoder_feature_ctranslate)
-                if arr.dtype == np.object_:
-                    arr = np.array(arr.tolist(), dtype=np.float32)
+                try:
+                    arr = np.asarray(encoder_feature_ctranslate, dtype=np.float32)
+                except (TypeError, ValueError):
+                    arr = np.array(encoder_feature_ctranslate)
+                    if arr.dtype == np.object_:
+                        try:
+                            arr = np.stack([
+                                np.asarray(item, dtype=np.float32) for item in arr.flat
+                            ])
+                        except (TypeError, ValueError):
+                            arr = np.array(
+                                [[float(x) for x in row] for row in arr.flat],
+                                dtype=np.float32,
+                            )
                 encoder_feature = torch.as_tensor(arr, device=self.device)
         else:
             mel_padded = log_mel_spectrogram(
