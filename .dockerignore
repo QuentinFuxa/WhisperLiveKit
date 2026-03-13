@@ -11,3 +11,4 @@ __pycache__
 .secrets
 dist
 build
+*.c
