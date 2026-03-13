@@ -102,7 +102,8 @@ class VoxtralHFStreamingOnlineProcessor:
         )
 
     def _reset_state(self):
-        self._pending_audio = np.zeros(0, dtype=np.float32)
+        self._pending_chunks: List[np.ndarray] = []
+        self._pending_len = 0
         self._audio_queue: queue.Queue = queue.Queue()
         self._streamer_texts: List[str] = []
         self._generate_thread: Optional[threading.Thread] = None
@@ -110,22 +111,63 @@ class VoxtralHFStreamingOnlineProcessor:
         self._generate_finished = False
         self._generate_error: Optional[Exception] = None
 
-        # Text accumulation and word extraction
-        self._accumulated_text = ""
+        # Text accumulation (list of fragments, joined on demand)
+        self._text_fragments: List[str] = []
+        self._text_len = 0
+        # Fragment position tracking for accurate word timestamps:
+        # each entry is (char_offset_in_full_text, audio_tok_pos_consumed)
+        self._fragment_positions: List[Tuple[int, int]] = []
         self._n_text_tokens_received = 0
         self._n_audio_tokens_fed = 0
+        # Audio tokens actually consumed by the model (tracked inside generator)
+        self._n_audio_tokens_consumed = 0
         self._n_committed_words = 0
         self._global_time_offset = 0.0
 
+        # Event signalled by the generate thread when it finishes
+        self._generate_done = threading.Event()
+
         # Lock for text state accessed from both generate thread and main thread
         self._text_lock = threading.Lock()
+
+    # ── Audio / text helpers ──
+
+    def _get_pending_audio(self) -> np.ndarray:
+        """Flatten pending audio chunks into a single array."""
+        if not self._pending_chunks:
+            return np.zeros(0, dtype=np.float32)
+        if len(self._pending_chunks) == 1:
+            return self._pending_chunks[0]
+        flat = np.concatenate(self._pending_chunks)
+        self._pending_chunks = [flat]
+        return flat
+
+    def _set_pending_audio(self, arr: np.ndarray):
+        """Replace pending audio with a single array."""
+        if len(arr) == 0:
+            self._pending_chunks = []
+            self._pending_len = 0
+        else:
+            self._pending_chunks = [arr]
+            self._pending_len = len(arr)
+
+    def _get_accumulated_text(self) -> str:
+        """Get the full accumulated text (joins fragments if needed)."""
+        if not self._text_fragments:
+            return ""
+        if len(self._text_fragments) == 1:
+            return self._text_fragments[0]
+        joined = "".join(self._text_fragments)
+        self._text_fragments = [joined]
+        return joined
 
     # ── Interface methods ──
 
     def insert_audio_chunk(self, audio: np.ndarray, audio_stream_end_time: float):
         self.end = audio_stream_end_time
-        self._pending_audio = np.append(self._pending_audio, audio)
-        self.audio_buffer = self._pending_audio
+        self._pending_chunks.append(audio)
+        self._pending_len += len(audio)
+        self.audio_buffer = audio  # diagnostic only
 
     def process_iter(self, is_last=False) -> Tuple[List[ASRToken], float]:
         try:
@@ -142,7 +184,7 @@ class VoxtralHFStreamingOnlineProcessor:
         """
         self._drain_streamer()
         with self._text_lock:
-            text = self._accumulated_text
+            text = self._get_accumulated_text()
         if not text:
             return Transcript(start=None, end=None, text="")
 
@@ -174,16 +216,17 @@ class VoxtralHFStreamingOnlineProcessor:
         # real audio and shouldn't affect word timestamp calculations.
         if self._right_pad_samples > 0:
             right_pad = np.zeros(self._right_pad_samples, dtype=np.float32)
-            self._pending_audio = np.append(self._pending_audio, right_pad)
+            self._pending_chunks.append(right_pad)
+            self._pending_len += len(right_pad)
             saved_count = self._n_audio_tokens_fed
             self._feed_pending_audio()
             self._n_audio_tokens_fed = saved_count
 
-        # Drain in a loop: the model may still be processing right-padding
-        # chunks after the first drain returns. Keep draining until no new
-        # text appears for two consecutive rounds.
+        # Drain in a loop: the model may continue producing text tokens after
+        # the audio queue is empty (autoregressive generation). Each iteration
+        # uses an event-driven blocking drain with short timeouts.
         all_words: List[ASRToken] = []
-        for _ in range(5):  # at most 5 drain+flush cycles
+        for _ in range(5):
             self._drain_streamer_blocking(timeout=5.0)
             batch = self._flush_all_pending_words()
             all_words.extend(batch)
@@ -208,7 +251,8 @@ class VoxtralHFStreamingOnlineProcessor:
         # Add right-padding so the model can finish decoding
         if self._right_pad_samples > 0:
             right_pad = np.zeros(self._right_pad_samples, dtype=np.float32)
-            self._pending_audio = np.append(self._pending_audio, right_pad)
+            self._pending_chunks.append(right_pad)
+            self._pending_len += len(right_pad)
 
         # Feed remaining audio
         if self._generate_started and not self._generate_finished:
@@ -218,7 +262,7 @@ class VoxtralHFStreamingOnlineProcessor:
             # Wait for generate to finish
             if self._generate_thread is not None:
                 self._generate_thread.join(timeout=30.0)
-        elif not self._generate_started and len(self._pending_audio) >= self._first_chunk_samples:
+        elif not self._generate_started and self._pending_len >= self._first_chunk_samples:
             # Never started but have enough audio — start and immediately finish
             self._start_generate_thread()
             self._feed_pending_audio()
@@ -242,8 +286,9 @@ class VoxtralHFStreamingOnlineProcessor:
         model = self.asr.model
 
         # Extract first chunk
-        first_chunk_audio = self._pending_audio[:self._first_chunk_samples]
-        self._pending_audio = self._pending_audio[self._first_chunk_samples:]
+        pending = self._get_pending_audio()
+        first_chunk_audio = pending[:self._first_chunk_samples]
+        self._set_pending_audio(pending[self._first_chunk_samples:])
         # First chunk covers multiple audio tokens
         self._n_audio_tokens_fed += max(1, self._first_chunk_samples // self._chunk_step)
 
@@ -265,11 +310,14 @@ class VoxtralHFStreamingOnlineProcessor:
         audio_queue = self._audio_queue
 
         def input_features_gen():
+            # Track audio consumption inside the generator (runs in generate thread)
+            self._n_audio_tokens_consumed = max(1, self._first_chunk_samples // self._chunk_step)
             yield first_inputs.input_features
             while True:
                 chunk_audio = audio_queue.get()
                 if chunk_audio is None:
                     break
+                self._n_audio_tokens_consumed += 1
                 inputs = processor(
                     chunk_audio,
                     is_streaming=True,
@@ -298,6 +346,7 @@ class VoxtralHFStreamingOnlineProcessor:
                 self._generate_error = e
             finally:
                 self._generate_finished = True
+                self._generate_done.set()
 
         self._generate_thread = threading.Thread(target=run_generate, daemon=True)
         self._generate_thread.start()
@@ -309,13 +358,22 @@ class VoxtralHFStreamingOnlineProcessor:
         chunk_size = self._chunk_samples
         step_size = self._chunk_step
 
-        while len(self._pending_audio) >= chunk_size:
-            chunk = self._pending_audio[:chunk_size]
+        pending = self._get_pending_audio()
+        while len(pending) >= chunk_size:
+            chunk = pending[:chunk_size]
             self._audio_queue.put(chunk)
-            self._pending_audio = self._pending_audio[step_size:]
+            pending = pending[step_size:]
             self._n_audio_tokens_fed += 1
 
-        self.audio_buffer = self._pending_audio
+        self._set_pending_audio(pending)
+        self.audio_buffer = pending
+
+    def _append_text_fragment(self, text_fragment: str):
+        """Append a text fragment with its audio position (must hold _text_lock)."""
+        self._fragment_positions.append((self._text_len, self._n_audio_tokens_consumed))
+        self._text_fragments.append(text_fragment)
+        self._text_len += len(text_fragment)
+        self._n_text_tokens_received += 1
 
     def _drain_streamer(self):
         """Non-blocking drain of all available text from the streamer."""
@@ -333,19 +391,13 @@ class VoxtralHFStreamingOnlineProcessor:
                 break
             if text_fragment:
                 with self._text_lock:
-                    self._accumulated_text += text_fragment
-                    self._n_text_tokens_received += 1
+                    self._append_text_fragment(text_fragment)
 
     def _drain_streamer_blocking(self, timeout=30.0):
-        """Blocking drain: wait for the generate thread to process all queued
-        audio and produce the corresponding text.
+        """Blocking drain: wait for the generate thread to finish producing text.
 
-        Polls the text queue while the audio queue has items (model still
-        processing). Once the audio queue is empty, waits for trailing
-        tokens, then returns.
-
-        This is critical for start_silence(): without it, the non-blocking
-        drain races with the generate thread and the last words get stuck.
+        Uses the _generate_done event to know when the model is truly finished.
+        Falls back to text-queue polling with adaptive timeouts.
         """
         if not self._generate_started or self._generate_finished:
             self._drain_streamer()
@@ -353,52 +405,101 @@ class VoxtralHFStreamingOnlineProcessor:
 
         text_queue = self._streamer.text_queue
         deadline = time.time() + timeout
+        # Count consecutive empty polls to detect when model has caught up
+        empty_streak = 0
 
         while time.time() < deadline:
-            # Short poll while model is still processing queued audio;
-            # longer wait once the audio queue is empty (trailing tokens).
-            wait = 2.0 if self._audio_queue.empty() else 0.1
+            remaining = max(deadline - time.time(), 0.01)
+
+            # If generate thread is done, do a final flush and exit
+            if self._generate_done.is_set() or self._generate_finished:
+                self._drain_streamer()
+                return
+
+            # Adaptive wait: short while audio is queued, longer once queue is empty
+            if self._audio_queue.empty():
+                wait = min(remaining, 0.5)
+            else:
+                wait = min(remaining, 0.1)
+
             try:
                 text_fragment = text_queue.get(timeout=wait)
             except queue.Empty:
-                if self._audio_queue.empty():
-                    break  # Audio done + no text for 2s → fully caught up
-                continue  # Audio still queued, model still working
+                empty_streak += 1
+                # Only exit if audio queue is empty AND we've had enough empty polls
+                # This prevents premature exit when the model is slow
+                if self._audio_queue.empty() and empty_streak >= 4:
+                    break
+                continue
+
+            empty_streak = 0
             if text_fragment is None:
                 self._generate_finished = True
                 break
             if text_fragment:
                 with self._text_lock:
-                    self._accumulated_text += text_fragment
-                    self._n_text_tokens_received += 1
+                    self._append_text_fragment(text_fragment)
 
     # ── Word extraction ──
 
     def _pos_to_time(self, token_position: int) -> float:
-        """Convert token position to seconds."""
+        """Convert audio token position to seconds."""
         return token_position * self._seconds_per_token + self._global_time_offset
+
+    def _audio_pos_for_char(self, char_idx: int) -> int:
+        """Look up the audio token position for a character index in the text.
+
+        Uses the fragment position index recorded when text arrives from the
+        generate thread.  Returns the audio position of the fragment that
+        contains ``char_idx``, giving much better word timestamps than the
+        old uniform-distribution heuristic.
+        """
+        if not self._fragment_positions:
+            return 0
+        # _fragment_positions is sorted by char_offset — find the last entry
+        # whose char_offset <= char_idx (the fragment containing this char).
+        pos = 0
+        for offset, audio_tok in self._fragment_positions:
+            if offset > char_idx:
+                break
+            pos = audio_tok
+        return pos
+
+    def _word_timestamps(self, text: str, words: List[str], start_idx: int, end_idx: int) -> List[Tuple[int, int]]:
+        """Compute (tok_start, tok_end) for words[start_idx:end_idx] using fragment positions."""
+        # Build char offsets for each word
+        result = []
+        char_pos = 0
+        for i, word in enumerate(words):
+            if i > 0:
+                char_pos += 1  # space separator
+            if start_idx <= i < end_idx:
+                tok_start = self._audio_pos_for_char(char_pos)
+                tok_end = self._audio_pos_for_char(char_pos + len(word))
+                result.append((tok_start, tok_end))
+            char_pos += len(word)
+        return result
 
     def _extract_new_words(self) -> List[ASRToken]:
         """Extract complete words (all but the last, which may still be growing)."""
         with self._text_lock:
-            text = self._accumulated_text
+            text = self._get_accumulated_text()
         if not text:
             return []
 
         words = text.split()
         new_words: List[ASRToken] = []
-        n_words_total = len(words)
-        n_audio_toks = max(self._n_audio_tokens_fed, 1)
+        n_to_commit = len(words) - 1  # keep last word (may still grow)
 
-        while len(words) > self._n_committed_words + 1:
+        if n_to_commit <= self._n_committed_words:
+            return []
+
+        timestamps = self._word_timestamps(text, words, self._n_committed_words, n_to_commit)
+
+        for tok_start, tok_end in timestamps:
             word = words[self._n_committed_words]
-            word_idx = self._n_committed_words
-
-            tok_start = int(word_idx / n_words_total * n_audio_toks) if n_words_total > 0 else 0
-            tok_end = int((word_idx + 1) / n_words_total * n_audio_toks) if n_words_total > 0 else 0
-
             start_time = self._pos_to_time(tok_start)
-            end_time = self._pos_to_time(tok_end)
+            end_time = self._pos_to_time(max(tok_end, tok_start + 1))
 
             text_out = word if self._n_committed_words == 0 else " " + word
             new_words.append(ASRToken(start=start_time, end=end_time, text=text_out))
@@ -409,24 +510,22 @@ class VoxtralHFStreamingOnlineProcessor:
     def _flush_all_pending_words(self) -> List[ASRToken]:
         """Flush ALL words including the last partial one."""
         with self._text_lock:
-            text = self._accumulated_text
+            text = self._get_accumulated_text()
         if not text:
             return []
 
         words = text.split()
         new_words: List[ASRToken] = []
-        n_words_total = max(len(words), 1)
-        n_audio_toks = max(self._n_audio_tokens_fed, 1)
 
-        while self._n_committed_words < len(words):
+        if self._n_committed_words >= len(words):
+            return []
+
+        timestamps = self._word_timestamps(text, words, self._n_committed_words, len(words))
+
+        for tok_start, tok_end in timestamps:
             word = words[self._n_committed_words]
-            word_idx = self._n_committed_words
-
-            tok_start = int(word_idx / n_words_total * n_audio_toks)
-            tok_end = int((word_idx + 1) / n_words_total * n_audio_toks)
-
             start_time = self._pos_to_time(tok_start)
-            end_time = self._pos_to_time(tok_end)
+            end_time = self._pos_to_time(max(tok_end, tok_start + 1))
 
             text_out = word if self._n_committed_words == 0 else " " + word
             new_words.append(ASRToken(start=start_time, end=end_time, text=text_out))
@@ -439,7 +538,7 @@ class VoxtralHFStreamingOnlineProcessor:
     def _process_iter_inner(self, is_last: bool) -> Tuple[List[ASRToken], float]:
         # Start generate thread when enough audio is buffered
         if not self._generate_started:
-            if len(self._pending_audio) >= self._first_chunk_samples:
+            if self._pending_len >= self._first_chunk_samples:
                 self._start_generate_thread()
                 self._feed_pending_audio()
             else:
@@ -450,7 +549,7 @@ class VoxtralHFStreamingOnlineProcessor:
             self._feed_pending_audio()
 
         # If generate finished unexpectedly (EOS) but new audio arrived, restart
-        if self._generate_finished and len(self._pending_audio) >= self._first_chunk_samples:
+        if self._generate_finished and self._pending_len >= self._first_chunk_samples:
             self._drain_streamer()
             flush_words = self._flush_all_pending_words()
             # Reset for new utterance

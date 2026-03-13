@@ -135,8 +135,9 @@ class VoxtralMLXOnlineProcessor:
 
     def _reset_state(self):
         """Reset all incremental state for a fresh utterance."""
-        # Audio accumulation
-        self._pending = np.zeros(0, dtype=np.float32)
+        # Audio accumulation (list of chunks, concatenated on demand)
+        self._pending_chunks: list[np.ndarray] = []
+        self._pending_len = 0
         # Mel overlap
         self._mel_overlap: np.ndarray | None = None
         # Encoder incremental state
@@ -167,10 +168,30 @@ class VoxtralMLXOnlineProcessor:
 
     # -- audio ingestion --
 
+    def _get_pending(self) -> np.ndarray:
+        """Flatten pending chunks into a single array."""
+        if not self._pending_chunks:
+            return np.zeros(0, dtype=np.float32)
+        if len(self._pending_chunks) == 1:
+            return self._pending_chunks[0]
+        flat = np.concatenate(self._pending_chunks)
+        self._pending_chunks = [flat]
+        return flat
+
+    def _set_pending(self, arr: np.ndarray):
+        """Replace pending audio with a single array."""
+        if len(arr) == 0:
+            self._pending_chunks = []
+            self._pending_len = 0
+        else:
+            self._pending_chunks = [arr]
+            self._pending_len = len(arr)
+
     def insert_audio_chunk(self, audio: np.ndarray, audio_stream_end_time: float):
         self.end = audio_stream_end_time
-        self._pending = np.append(self._pending, audio)
-        self.audio_buffer = self._pending
+        self._pending_chunks.append(audio)
+        self._pending_len += len(audio)
+        self.audio_buffer = audio  # diagnostic only
 
     # -- core processing --
 
@@ -231,22 +252,24 @@ class VoxtralMLXOnlineProcessor:
 
     def _encode_pending(self):
         """Feed pending audio through the incremental encoder."""
-        available = len(self._pending)
-        if available < SAMPLES_PER_TOKEN:
+        if self._pending_len < SAMPLES_PER_TOKEN:
             return
+
+        pending = self._get_pending()
+        available = len(pending)
 
         if self._first_chunk:
             # First chunk: prepend silence for left-padding
             n_take = (available // SAMPLES_PER_TOKEN) * SAMPLES_PER_TOKEN
             left_pad = np.zeros(LEFT_PAD_TOKENS * SAMPLES_PER_TOKEN, dtype=np.float32)
-            chunk = np.concatenate([left_pad, self._pending[:n_take]])
-            self._pending = self._pending[n_take:]
+            chunk = np.concatenate([left_pad, pending[:n_take]])
+            self._set_pending(pending[n_take:])
             self._samples_encoded += n_take
             self._first_chunk = False
         else:
             n_take = (available // SAMPLES_PER_TOKEN) * SAMPLES_PER_TOKEN
-            chunk = self._pending[:n_take]
-            self._pending = self._pending[n_take:]
+            chunk = pending[:n_take]
+            self._set_pending(pending[n_take:])
             self._samples_encoded += n_take
 
         mel, self._mel_overlap = compute_mel_streaming(chunk, self._mel_overlap)
@@ -261,10 +284,9 @@ class VoxtralMLXOnlineProcessor:
             mx.eval(embeds)
             if self._audio_embeds is not None:
                 self._audio_embeds = mx.concatenate([self._audio_embeds, embeds])
+                mx.eval(self._audio_embeds)
             else:
                 self._audio_embeds = embeds
-
-        self.audio_buffer = self._pending
 
     def _do_prefill(self):
         """Run the decoder prefill pass over the prompt + first audio embeddings."""
@@ -430,6 +452,55 @@ class VoxtralMLXOnlineProcessor:
         return Transcript(start=None, end=None, text="")
 
     def start_silence(self) -> Tuple[List[ASRToken], float]:
+        """Flush all pending words when silence starts.
+
+        Adds right-padding silence and forces a full decode pass so the
+        decoder emits tokens for the last words of speech. Without this,
+        the model holds back the final tokens waiting for future context.
+        """
+        # Align pending audio to SAMPLES_PER_TOKEN boundary
+        remainder = self._pending_len % SAMPLES_PER_TOKEN
+        align_pad = (SAMPLES_PER_TOKEN - remainder) if remainder > 0 else 0
+
+        # Add alignment + right-padding silence to provide future context
+        total_pad = align_pad + RIGHT_PAD_TOKENS * SAMPLES_PER_TOKEN
+        if total_pad > 0:
+            self._pending_chunks.append(np.zeros(total_pad, dtype=np.float32))
+            self._pending_len += total_pad
+
+        # Encode remaining audio (including right-padding)
+        self._encode_pending()
+
+        # Decode everything that's left
+        if self._audio_embeds is not None and self._prefilled:
+            self._decode_positions(self._audio_embeds.shape[0])
+
+        # Flush last token if it wasn't EOS
+        if self._last_token is not None:
+            tid = self._last_token.item()
+            if tid != self._eos_id:
+                text = self._tokenizer.decode(
+                    [tid], special_token_policy=SpecialTokenPolicy.IGNORE
+                )
+                if text:
+                    last_pos = self._positions_decoded - self._prefix_len
+                    if text.lstrip() != text or not self._full_text:
+                        if self._current_word_pos is not None:
+                            self._word_audio_ends.append(last_pos)
+                        self._word_audio_starts.append(last_pos)
+                        self._current_word_pos = last_pos
+                    elif self._current_word_pos is None:
+                        self._word_audio_starts.append(last_pos)
+                        self._current_word_pos = last_pos
+                    self._full_text += text
+                    self._n_text_tokens += 1
+
+        # Close the last word if still open
+        if self._current_word_pos is not None:
+            last_pos = self._positions_decoded - self._prefix_len
+            self._word_audio_ends.append(last_pos)
+            self._current_word_pos = None
+
         words = self._flush_all_words()
         logger.info("[voxtral-mlx] start_silence: flushed %d words", len(words))
         return words, self.end
@@ -448,7 +519,7 @@ class VoxtralMLXOnlineProcessor:
         logger.debug(
             "[voxtral-mlx] finish: pending=%d samples, audio_embeds=%s, "
             "samples_encoded=%d, positions_decoded=%d, prefilled=%s, text so far='%s'",
-            len(self._pending),
+            self._pending_len,
             self._audio_embeds.shape if self._audio_embeds is not None else None,
             self._samples_encoded,
             self._positions_decoded,
@@ -457,7 +528,7 @@ class VoxtralMLXOnlineProcessor:
         )
 
         # Align pending audio to SAMPLES_PER_TOKEN boundary so nothing is lost
-        remainder = len(self._pending) % SAMPLES_PER_TOKEN
+        remainder = self._pending_len % SAMPLES_PER_TOKEN
         if remainder > 0:
             align_pad = SAMPLES_PER_TOKEN - remainder
         else:
@@ -466,9 +537,8 @@ class VoxtralMLXOnlineProcessor:
         # Add alignment + right-padding silence
         total_pad = align_pad + RIGHT_PAD_TOKENS * SAMPLES_PER_TOKEN
         if total_pad > 0:
-            self._pending = np.append(
-                self._pending, np.zeros(total_pad, dtype=np.float32)
-            )
+            self._pending_chunks.append(np.zeros(total_pad, dtype=np.float32))
+            self._pending_len += total_pad
 
         # Encode remaining audio (including right-padding)
         self._encode_pending()
@@ -476,7 +546,7 @@ class VoxtralMLXOnlineProcessor:
         logger.debug(
             "[voxtral-mlx] finish after encode: audio_embeds=%s, pending=%d",
             self._audio_embeds.shape if self._audio_embeds is not None else None,
-            len(self._pending),
+            self._pending_len,
         )
 
         hit_eos = False

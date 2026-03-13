@@ -57,6 +57,8 @@ BACKENDS = [
         "install": "pip install faster-whisper",
         "description": "CTranslate2-based Whisper (fast, CPU/CUDA)",
         "policy": "localagreement",
+        "streaming": "chunk",      # batch inference with LocalAgreement/SimulStreaming
+        "devices": ["cpu", "cuda"],
     },
     {
         "id": "whisper",
@@ -65,6 +67,8 @@ BACKENDS = [
         "install": "pip install openai-whisper",
         "description": "Original OpenAI Whisper (PyTorch)",
         "policy": "simulstreaming",
+        "streaming": "chunk",
+        "devices": ["cpu", "cuda"],
     },
     {
         "id": "mlx-whisper",
@@ -74,21 +78,27 @@ BACKENDS = [
         "description": "Apple Silicon native Whisper (MLX)",
         "policy": "localagreement",
         "platform": "darwin-arm64",
+        "streaming": "chunk",
+        "devices": ["mlx"],
     },
     {
         "id": "voxtral-mlx",
         "name": "Voxtral MLX",
         "module": "mlx",
         "install": "pip install whisperlivekit[voxtral-mlx]",
-        "description": "Mistral Voxtral Mini on Apple Silicon (MLX)",
+        "description": "Mistral Voxtral Mini on Apple Silicon (MLX, native streaming)",
         "platform": "darwin-arm64",
+        "streaming": "native",     # truly streaming (token-by-token)
+        "devices": ["mlx"],
     },
     {
         "id": "voxtral",
         "name": "Voxtral HF",
         "module": "transformers",
         "install": "pip install whisperlivekit[voxtral-hf]",
-        "description": "Mistral Voxtral Mini (HF Transformers, CUDA/CPU/MPS)",
+        "description": "Mistral Voxtral Mini (HF Transformers, native streaming)",
+        "streaming": "native",
+        "devices": ["cuda", "mps", "cpu"],
     },
     {
         "id": "qwen3",
@@ -96,6 +106,8 @@ BACKENDS = [
         "module": "qwen_asr",
         "install": "pip install qwen-asr",
         "description": "Qwen3-ASR with ForcedAligner timestamps",
+        "streaming": "chunk",
+        "devices": ["cuda", "mps", "cpu"],
     },
     {
         "id": "openai-api",
@@ -103,6 +115,8 @@ BACKENDS = [
         "module": "openai",
         "install": "pip install openai",
         "description": "Cloud-based transcription via OpenAI API",
+        "streaming": "cloud",
+        "devices": ["cloud"],
     },
 ]
 
@@ -158,6 +172,28 @@ QWEN3_REPOS = {
     "0.6b": "Qwen/Qwen3-ASR-0.6B",
 }
 QWEN3_ALIGNER_REPO = "Qwen/Qwen3-ForcedAligner-0.6B"
+
+# Model catalog: metadata for display in `wlk models`
+# params = approximate parameter count, disk = approximate download size
+MODEL_CATALOG = [
+    # Whisper family (available across faster-whisper, mlx-whisper, whisper backends)
+    {"name": "tiny",            "family": "whisper", "params": "39M",   "disk": "75 MB",   "languages": 99,  "quality": "low",    "speed": "fastest"},
+    {"name": "tiny.en",         "family": "whisper", "params": "39M",   "disk": "75 MB",   "languages": 1,   "quality": "low",    "speed": "fastest"},
+    {"name": "base",            "family": "whisper", "params": "74M",   "disk": "142 MB",  "languages": 99,  "quality": "fair",   "speed": "fast"},
+    {"name": "base.en",         "family": "whisper", "params": "74M",   "disk": "142 MB",  "languages": 1,   "quality": "fair",   "speed": "fast"},
+    {"name": "small",           "family": "whisper", "params": "244M",  "disk": "466 MB",  "languages": 99,  "quality": "good",   "speed": "medium"},
+    {"name": "small.en",        "family": "whisper", "params": "244M",  "disk": "466 MB",  "languages": 1,   "quality": "good",   "speed": "medium"},
+    {"name": "medium",          "family": "whisper", "params": "769M",  "disk": "1.5 GB",  "languages": 99,  "quality": "great",  "speed": "slow"},
+    {"name": "medium.en",       "family": "whisper", "params": "769M",  "disk": "1.5 GB",  "languages": 1,   "quality": "great",  "speed": "slow"},
+    {"name": "large-v3",        "family": "whisper", "params": "1.5B",  "disk": "3.1 GB",  "languages": 99,  "quality": "best",   "speed": "slowest"},
+    {"name": "large-v3-turbo",  "family": "whisper", "params": "809M",  "disk": "1.6 GB",  "languages": 99,  "quality": "great",  "speed": "medium"},
+    # Voxtral (native streaming, single model)
+    {"name": "voxtral",         "family": "voxtral", "params": "4B",    "disk": "8.2 GB",  "languages": 15,  "quality": "great",  "speed": "medium"},
+    {"name": "voxtral-mlx",     "family": "voxtral", "params": "4B",    "disk": "2.7 GB",  "languages": 15,  "quality": "great",  "speed": "medium"},
+    # Qwen3 ASR
+    {"name": "qwen3:1.7b",      "family": "qwen3",  "params": "1.7B",  "disk": "3.6 GB",  "languages": 12,  "quality": "good",   "speed": "fast"},
+    {"name": "qwen3:0.6b",      "family": "qwen3",  "params": "0.6B",  "disk": "1.4 GB",  "languages": 12,  "quality": "fair",   "speed": "fastest"},
+]
 
 
 def _check_platform(backend: dict) -> bool:
@@ -254,93 +290,124 @@ def print_banner(config, host: str, port: int, ssl: bool = False):
 # `wlk models` subcommand
 # ---------------------------------------------------------------------------
 
-def cmd_models():
-    """List available backends and their installation status."""
-    is_apple_silicon = platform.system() == "Darwin" and platform.machine() == "arm64"
+def _model_is_downloaded(model_entry: dict, downloaded: dict) -> bool:
+    """Check if a model catalog entry has been downloaded."""
+    name = model_entry["name"]
+    family = model_entry["family"]
 
-    print("\nAvailable backends:\n")
+    if family == "whisper":
+        # Check all whisper backends
+        repos = [
+            FASTER_WHISPER_REPOS.get(name),
+            MLX_WHISPER_REPOS.get(name),
+            f"openai/whisper-{name}",
+        ]
+        return any(r in downloaded for r in repos if r)
+    elif name == "voxtral":
+        return VOXTRAL_HF_REPO in downloaded
+    elif name == "voxtral-mlx":
+        return VOXTRAL_MLX_REPO in downloaded
+    elif family == "qwen3":
+        size = name.split(":")[1] if ":" in name else "1.7b"
+        return QWEN3_REPOS.get(size, "") in downloaded
+    return False
+
+
+def _best_backend_for_model(model_entry: dict) -> str:
+    """Suggest the best available backend for a model."""
+    family = model_entry["family"]
+    is_apple = platform.system() == "Darwin" and platform.machine() == "arm64"
+
+    if family == "voxtral":
+        if "mlx" in model_entry["name"]:
+            return "voxtral-mlx"
+        return "voxtral"
+    elif family == "qwen3":
+        return "qwen3"
+    elif family == "whisper":
+        if is_apple and _module_available("mlx_whisper"):
+            return "mlx-whisper"
+        if _module_available("faster_whisper"):
+            return "faster-whisper"
+        if _module_available("whisper"):
+            return "whisper"
+        # Suggest best installable
+        return "mlx-whisper" if is_apple else "faster-whisper"
+    return "auto"
+
+
+def cmd_models():
+    """List available models and backends (ollama-style)."""
+    is_apple_silicon = platform.system() == "Darwin" and platform.machine() == "arm64"
+    downloaded = _scan_downloaded_models()
+
+    # --- Installed backends ---
+    print("\n  Backends:\n")
 
     max_name = max(len(b["name"]) for b in BACKENDS)
-
     for b in BACKENDS:
         compatible = _check_platform(b)
         installed = _is_installed(b)
+        streaming = b.get("streaming", "chunk")
+        stream_label = {"native": "streaming", "chunk": "chunked", "cloud": "cloud"}.get(streaming, streaming)
 
         if installed:
-            status = "\033[32m installed\033[0m"
+            status = "\033[32m+\033[0m"
         elif not compatible:
-            status = "\033[90m n/a (wrong platform)\033[0m"
+            status = "\033[90m-\033[0m"
         else:
-            status = "\033[33m not installed\033[0m"
+            status = "\033[33m-\033[0m"
 
         name_pad = b["name"].ljust(max_name)
-        print(f"  {name_pad}  [{status}]  {b['description']}")
+        desc_short = b["description"]
+        print(f"  {status} {name_pad}  {desc_short}  [{stream_label}]")
 
         if not installed and compatible:
-            print(f"  {''.ljust(max_name)}  └─ {b['install']}")
+            print(f"    {''.ljust(max_name)}  \033[90m{b['install']}\033[0m")
 
-    # System info
+    # --- System info ---
     print(f"\n  Platform:     {platform.system()} {platform.machine()}")
-    print(f"  Python:       {platform.python_version()}")
     print(f"  Accelerator:  {_gpu_info()}")
-    print(f"  ffmpeg:       {'found' if _check_ffmpeg() else 'NOT FOUND (required)'}")
+    print(f"  ffmpeg:       {'found' if _check_ffmpeg() else '\033[31mNOT FOUND\033[0m (required)'}")
 
+    # --- Model catalog ---
+    print("\n  Models:\n")
+
+    # Table header
+    hdr = f"  {'NAME':<20} {'PARAMS':>7}  {'SIZE':>8}  {'QUALITY':<8} {'SPEED':<8} {'LANGS':>5}  {'STATUS':<10}"
+    print(hdr)
+    print(f"  {'─' * 20} {'─' * 7}  {'─' * 8}  {'─' * 8} {'─' * 8} {'─' * 5}  {'─' * 10}")
+
+    for m in MODEL_CATALOG:
+        name = m["name"]
+        # Skip platform-incompatible models
+        if name == "voxtral-mlx" and not is_apple_silicon:
+            continue
+
+        is_dl = _model_is_downloaded(m, downloaded)
+
+        if is_dl:
+            status = "\033[32mpulled\033[0m    "
+        else:
+            status = "\033[90mavailable\033[0m "
+
+        langs = str(m["languages"]) if m["languages"] < 99 else "99+"
+
+        print(
+            f"  {name:<20} {m['params']:>7}  {m['disk']:>8}  "
+            f"{m['quality']:<8} {m['speed']:<8} {langs:>5}  {status}"
+        )
+
+    # --- Quick start ---
+    print(f"\n  Quick start:\n")
     if is_apple_silicon:
-        print("\n  Tip: On Apple Silicon, mlx-whisper and voxtral-mlx offer the best performance.")
-
-    # Scan for downloaded models
-    downloaded = _scan_downloaded_models()
-
-    print("\n  Downloaded models:\n")
-    found_any = False
-
-    # Check Whisper-family models
-    all_repos = {
-        "faster-whisper": FASTER_WHISPER_REPOS,
-        "mlx-whisper": MLX_WHISPER_REPOS,
-    }
-    for backend_name, repos in all_repos.items():
-        for size, repo_id in repos.items():
-            if repo_id in downloaded:
-                found_any = True
-                print(f"    \033[32m*\033[0m {backend_name}:{size}  ({repo_id})")
-
-    # Check native whisper
-    for size in WHISPER_SIZES:
-        key = f"openai/whisper-{size}"
-        if key in downloaded:
-            found_any = True
-            print(f"    \033[32m*\033[0m whisper:{size}")
-
-    # Check voxtral / qwen3
-    if VOXTRAL_HF_REPO in downloaded:
-        found_any = True
-        print(f"    \033[32m*\033[0m voxtral  ({VOXTRAL_HF_REPO})")
-    if VOXTRAL_MLX_REPO in downloaded:
-        found_any = True
-        print(f"    \033[32m*\033[0m voxtral-mlx  ({VOXTRAL_MLX_REPO})")
-    for qsize, repo_id in QWEN3_REPOS.items():
-        if repo_id in downloaded:
-            found_any = True
-            print(f"    \033[32m*\033[0m qwen3:{qsize}  ({repo_id})")
-    if QWEN3_ALIGNER_REPO in downloaded:
-        found_any = True
-        print(f"    \033[32m*\033[0m qwen3-aligner  ({QWEN3_ALIGNER_REPO})")
-
-    if not found_any:
-        print("    (none — models download automatically on first use, or use 'wlk pull')")
-
-    # Show pullable models
-    print("\n  Available models (use 'wlk pull <name>'):\n")
-    print("    Whisper sizes: " + ", ".join(WHISPER_SIZES))
-    print("    Voxtral:       voxtral, voxtral-mlx")
-    print("    Qwen3:         qwen3:1.7b, qwen3:0.6b")
-    print()
-    print("  Examples:")
-    print("    wlk pull base                     # Download for best available backend")
-    print("    wlk pull faster-whisper:large-v3   # Specific backend + model")
-    print("    wlk pull voxtral                   # Voxtral HF model")
-    print("    wlk pull qwen3:1.7b                # Qwen3-ASR 1.7B")
+        print("    wlk run voxtral-mlx              # Best streaming on Apple Silicon")
+        print("    wlk run large-v3-turbo            # Best quality/speed balance")
+    else:
+        print("    wlk run large-v3-turbo            # Best quality/speed balance")
+        print("    wlk run voxtral                   # Native streaming (CUDA/CPU)")
+    print("    wlk pull base                     # Download smallest multilingual model")
+    print("    wlk transcribe audio.mp3          # Offline transcription")
     print()
 
 
@@ -1010,6 +1077,23 @@ def cmd_run(args: list):
     if parsed.model:
         backend_flag, model_flag = _resolve_run_spec(parsed.model)
 
+        # Show what we resolved
+        catalog_match = next(
+            (m for m in MODEL_CATALOG if m["name"] == parsed.model),
+            None,
+        )
+        if catalog_match:
+            print(
+                f"\n  Model: {catalog_match['name']} "
+                f"({catalog_match['params']} params, {catalog_match['disk']})",
+                file=sys.stderr,
+            )
+            if backend_flag:
+                print(f"  Backend: {backend_flag}", file=sys.stderr)
+            else:
+                best = _best_backend_for_model(catalog_match)
+                print(f"  Backend: {best} (auto-detected)", file=sys.stderr)
+
         # Auto-pull if needed
         downloaded = _scan_downloaded_models()
         targets = _resolve_pull_target(parsed.model)
@@ -1198,9 +1282,9 @@ def _probe_backend_state(processor) -> dict:
         info["n_audio_tokens_fed"] = transcription._n_audio_tokens_fed
         info["n_text_tokens_received"] = transcription._n_text_tokens_received
         info["n_committed_words"] = transcription._n_committed_words
-        info["pending_audio_samples"] = len(transcription._pending_audio)
+        info["pending_audio_samples"] = transcription._pending_len
         with transcription._text_lock:
-            info["accumulated_text"] = transcription._accumulated_text
+            info["accumulated_text"] = transcription._get_accumulated_text()
         if transcription._generate_error:
             info["generate_error"] = str(transcription._generate_error)
         # Audio queue depth

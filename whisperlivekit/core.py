@@ -102,7 +102,16 @@ class TranscriptionEngine:
         }
 
         if config.transcription:
-            if config.backend == "voxtral-mlx":
+            if config.backend == "vllm-realtime":
+                from whisperlivekit.vllm_realtime import VLLMRealtimeASR
+                self.tokenizer = None
+                self.asr = VLLMRealtimeASR(
+                    vllm_url=config.vllm_url,
+                    model_name=config.vllm_model or "Qwen/Qwen3-ASR-1.7B",
+                    lan=config.lan,
+                )
+                logger.info("Using vLLM Realtime streaming backend at %s", config.vllm_url)
+            elif config.backend == "voxtral-mlx":
                 from whisperlivekit.voxtral_mlx_asr import VoxtralMLXASR
                 self.tokenizer = None
                 self.asr = VoxtralMLXASR(**transcription_common_params)
@@ -112,6 +121,14 @@ class TranscriptionEngine:
                 self.tokenizer = None
                 self.asr = VoxtralHFStreamingASR(**transcription_common_params)
                 logger.info("Using Voxtral HF Transformers streaming backend")
+            elif config.backend == "qwen3-simul":
+                from whisperlivekit.qwen3_simul import Qwen3SimulStreamingASR
+                self.tokenizer = None
+                self.asr = Qwen3SimulStreamingASR(
+                    **transcription_common_params,
+                    alignment_heads_path=config.custom_alignment_heads,
+                )
+                logger.info("Using Qwen3-ASR backend with SimulStreaming policy")
             elif config.backend == "qwen3":
                 from whisperlivekit.qwen3_asr import Qwen3ASR
                 self.asr = Qwen3ASR(**transcription_common_params)
@@ -210,6 +227,12 @@ def online_factory(args, asr, language=None):
         asr = SessionASRProxy(asr, language)
 
     backend = getattr(args, 'backend', None)
+    if backend == "vllm-realtime":
+        from whisperlivekit.vllm_realtime import VLLMRealtimeOnlineProcessor
+        return VLLMRealtimeOnlineProcessor(asr)
+    if backend == "qwen3-simul":
+        from whisperlivekit.qwen3_simul import Qwen3SimulStreamingOnlineProcessor
+        return Qwen3SimulStreamingOnlineProcessor(asr)
     if backend == "voxtral-mlx":
         from whisperlivekit.voxtral_mlx_asr import VoxtralMLXOnlineProcessor
         return VoxtralMLXOnlineProcessor(asr)

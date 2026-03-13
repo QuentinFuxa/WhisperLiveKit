@@ -1,4 +1,5 @@
 import logging
+import re
 import sys
 from typing import List, Optional
 
@@ -11,12 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 def _patch_transformers_compat():
-    """Patch transformers for qwen_asr compatibility.
+    """Patch transformers for qwen_asr 0.0.6 + transformers >= 5.3 compatibility."""
+    import torch
 
-    qwen_asr imports ``check_model_inputs`` from ``transformers.utils.generic``,
-    but this decorator hasn't been released yet in any public transformers
-    version.  We inject a no-op stub so the import succeeds.
-    """
+    # 1. check_model_inputs was removed
     try:
         import transformers.utils.generic as _g
         if not hasattr(_g, "check_model_inputs"):
@@ -25,6 +24,63 @@ def _patch_transformers_compat():
                     return fn
                 return decorator
             _g.check_model_inputs = check_model_inputs
+    except ImportError:
+        pass
+
+    # 2. 'default' rope type was removed from ROPE_INIT_FUNCTIONS
+    try:
+        from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS
+        if "default" not in ROPE_INIT_FUNCTIONS:
+            def _compute_default_rope_parameters(config=None, device=None, seq_len=None, **kwargs):
+                head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+                partial = getattr(config, "partial_rotary_factor", 1.0)
+                dim = int(head_dim * partial)
+                base = config.rope_theta
+                inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.int64).float().to(device) / dim))
+                return inv_freq, 1.0
+            ROPE_INIT_FUNCTIONS["default"] = _compute_default_rope_parameters
+    except ImportError:
+        pass
+
+    # 3. pad_token_id missing on thinker config
+    try:
+        from qwen_asr.core.transformers_backend.configuration_qwen3_asr import (
+            Qwen3ASRThinkerConfig,
+        )
+        if not hasattr(Qwen3ASRThinkerConfig, "pad_token_id"):
+            Qwen3ASRThinkerConfig.pad_token_id = None
+    except ImportError:
+        pass
+
+    # 4. fix_mistral_regex kwarg not accepted by newer transformers
+    try:
+        from transformers.models.auto import processing_auto
+        _orig_ap_from_pretrained = processing_auto.AutoProcessor.from_pretrained.__func__
+
+        @classmethod
+        def _patched_ap_from_pretrained(cls, *args, **kwargs):
+            kwargs.pop("fix_mistral_regex", None)
+            return _orig_ap_from_pretrained(cls, *args, **kwargs)
+
+        processing_auto.AutoProcessor.from_pretrained = _patched_ap_from_pretrained
+    except Exception:
+        pass
+
+    # 5. compute_default_rope_parameters missing on RotaryEmbedding
+    try:
+        from qwen_asr.core.transformers_backend.modeling_qwen3_asr import (
+            Qwen3ASRThinkerTextRotaryEmbedding,
+        )
+        if not hasattr(Qwen3ASRThinkerTextRotaryEmbedding, "compute_default_rope_parameters"):
+            @staticmethod
+            def _rope_params(config=None, device=None, seq_len=None, **kwargs):
+                head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+                partial = getattr(config, "partial_rotary_factor", 1.0)
+                dim = int(head_dim * partial)
+                base = config.rope_theta
+                inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.int64).float().to(device) / dim))
+                return inv_freq, 1.0
+            Qwen3ASRThinkerTextRotaryEmbedding.compute_default_rope_parameters = _rope_params
     except ImportError:
         pass
 
@@ -62,6 +118,9 @@ QWEN3_MODEL_MAPPING = {
 }
 
 _PUNCTUATION_ENDS = set(".!?。！？；;")
+# Qwen3 raw output starts with "language <Name>" metadata before <asr_text> tag.
+# When the tag is missing (silence/noise), this metadata leaks as transcription text.
+_GARBAGE_RE = re.compile(r"^language\s+\S+$", re.IGNORECASE)
 
 
 class Qwen3ASR(ASRBase):
@@ -88,8 +147,12 @@ class Qwen3ASR(ASRBase):
         else:
             model_id = "Qwen/Qwen3-ASR-1.7B"
 
-        dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            dtype, device = torch.bfloat16, "cuda:0"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            dtype, device = torch.float32, "mps"
+        else:
+            dtype, device = torch.float32, "cpu"
 
         logger.info(f"Loading Qwen3-ASR: {model_id} ({dtype}, {device})")
         model = Qwen3ASRModel.from_pretrained(
@@ -126,17 +189,32 @@ class Qwen3ASR(ASRBase):
         result = results[0]
         # Stash audio length for timestamp estimation fallback
         result._audio_duration = len(audio) / 16000
+        logger.info(
+            "Qwen3 result: language=%r text=%r ts=%s",
+            result.language, result.text[:80] if result.text else "",
+            bool(result.time_stamps),
+        )
         return result
 
     @staticmethod
     def _detected_language(result) -> Optional[str]:
         """Extract Whisper-style language code from Qwen3 result."""
         lang = getattr(result, 'language', None)
-        if lang:
-            return QWEN3_TO_WHISPER_LANGUAGE.get(lang, lang.lower())
-        return None
+        if not lang or lang.lower() == "none":
+            return None
+        # merge_languages may return comma-separated; take the first
+        first = lang.split(",")[0].strip()
+        if not first or first.lower() == "none":
+            return None
+        return QWEN3_TO_WHISPER_LANGUAGE.get(first, first.lower())
 
     def ts_words(self, result) -> List[ASRToken]:
+        # Filter garbage model output (e.g. "language None" for silence/noise)
+        text = (result.text or "").strip()
+        if not text or _GARBAGE_RE.match(text):
+            if text:
+                logger.info("Filtered garbage Qwen3 output: %r", text)
+            return []
         detected = self._detected_language(result)
         if result.time_stamps:
             tokens = []

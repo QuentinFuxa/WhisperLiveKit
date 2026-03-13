@@ -91,20 +91,33 @@ def _mel_filters() -> mx.array:
 
 
 # ---------------------------------------------------------------------------
-# DFT helpers
+# DFT helpers (cached — these are constant for a given WINDOW_SIZE)
 # ---------------------------------------------------------------------------
 
+_CACHED_WINDOW: mx.array | None = None
+_CACHED_DFT_RE: mx.array | None = None
+_CACHED_DFT_IM: mx.array | None = None
+
+
 def _hann_window() -> mx.array:
-    return mx.array(np.hanning(WINDOW_SIZE + 1)[:-1].astype(np.float32))
+    global _CACHED_WINDOW
+    if _CACHED_WINDOW is None:
+        _CACHED_WINDOW = mx.array(np.hanning(WINDOW_SIZE + 1)[:-1].astype(np.float32))
+    return _CACHED_WINDOW
 
 
 def _dft_matrices():
-    """Pre-compute the real / imaginary DFT basis matrices."""
-    n_bins = WINDOW_SIZE // 2 + 1
-    k = mx.arange(n_bins, dtype=mx.float32)[:, None]
-    n = mx.arange(WINDOW_SIZE, dtype=mx.float32)[None, :]
-    phase = -2.0 * math.pi * (k @ n) / WINDOW_SIZE
-    return mx.cos(phase), mx.sin(phase)
+    """Return cached real / imaginary DFT basis matrices."""
+    global _CACHED_DFT_RE, _CACHED_DFT_IM
+    if _CACHED_DFT_RE is None:
+        n_bins = WINDOW_SIZE // 2 + 1
+        k = mx.arange(n_bins, dtype=mx.float32)[:, None]
+        n = mx.arange(WINDOW_SIZE, dtype=mx.float32)[None, :]
+        phase = -2.0 * math.pi * (k @ n) / WINDOW_SIZE
+        _CACHED_DFT_RE = mx.cos(phase)
+        _CACHED_DFT_IM = mx.sin(phase)
+        mx.eval(_CACHED_DFT_RE, _CACHED_DFT_IM)
+    return _CACHED_DFT_RE, _CACHED_DFT_IM
 
 
 def _stft_frames(audio: mx.array, window: mx.array) -> mx.array:
