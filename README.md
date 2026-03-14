@@ -90,7 +90,7 @@ ws://localhost:8000/asr
 
 See [docs/API.md](docs/API.md) for the complete API reference.
 
-> - See [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py) for the list of all available languages.
+> - See [here](whisperlivekit/whisper/tokenizer.py#L10) for the list of all available languages.
 > - Check the [troubleshooting guide](docs/troubleshooting.md) for step-by-step fixes collected from recent GPU setup/env issues.
 > - For HTTPS requirements, see the **Parameters** section for SSL configuration options.
 
