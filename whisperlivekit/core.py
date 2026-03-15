@@ -126,6 +126,15 @@ class TranscriptionEngine:
                 self.tokenizer = None
                 self.asr = Qwen3MLXASR(**transcription_common_params)
                 logger.info("Using Qwen3 MLX native backend")
+            elif config.backend == "qwen3-simul-kv":
+                from whisperlivekit.qwen3_simul_kv import Qwen3SimulKVASR
+                self.tokenizer = None
+                self.asr = Qwen3SimulKVASR(
+                    **transcription_common_params,
+                    alignment_heads_path=config.custom_alignment_heads,
+                    border_fraction=getattr(config, 'border_fraction', 0.25),
+                )
+                logger.info("Using Qwen3-ASR backend with SimulStreaming+KV policy")
             elif config.backend == "qwen3-simul":
                 from whisperlivekit.qwen3_simul import Qwen3SimulStreamingASR
                 self.tokenizer = None
@@ -235,6 +244,9 @@ def online_factory(args, asr, language=None):
     if backend == "vllm-realtime":
         from whisperlivekit.vllm_realtime import VLLMRealtimeOnlineProcessor
         return VLLMRealtimeOnlineProcessor(asr)
+    if backend == "qwen3-simul-kv":
+        from whisperlivekit.qwen3_simul_kv import Qwen3SimulKVOnlineProcessor
+        return Qwen3SimulKVOnlineProcessor(asr)
     if backend == "qwen3-mlx":
         from whisperlivekit.qwen3_mlx_asr import Qwen3MLXOnlineProcessor
         return Qwen3MLXOnlineProcessor(asr)
