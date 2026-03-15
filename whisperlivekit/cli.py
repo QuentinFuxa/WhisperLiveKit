@@ -690,7 +690,11 @@ def _subtitle_timestamp(seconds: float, fmt: str) -> str:
 # ---------------------------------------------------------------------------
 
 def cmd_bench(args: list):
-    """Benchmark the transcription pipeline on standard test audio.
+    """Benchmark the transcription pipeline on public test audio.
+
+    Downloads samples from LibriSpeech, Multilingual LibriSpeech, FLEURS,
+    and AMI on first run. Supports multilingual benchmarking across all
+    available backends.
 
     Usage: wlk bench [options]
     """
@@ -698,27 +702,48 @@ def cmd_bench(args: list):
 
     parser = argparse.ArgumentParser(
         prog="wlk bench",
-        description="Benchmark WhisperLiveKit on standard test audio.",
+        description="Benchmark WhisperLiveKit on public test audio.",
     )
-    parser.add_argument("--backend", default="auto", help="ASR backend (default: auto)")
-    parser.add_argument("--model", default="base", dest="model_size", help="Model size (default: base)")
-    parser.add_argument("--language", "--lan", default="en", dest="lan", help="Language code (default: en)")
-    parser.add_argument("--samples", default="all", help="Sample name or 'all' (default: all)")
-    parser.add_argument("--json", default=None, dest="json_out", help="Export results to JSON file")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed logs")
+    parser.add_argument("--backend", default="auto",
+                        help="ASR backend (default: auto-detect)")
+    parser.add_argument("--model", default="base", dest="model_size",
+                        help="Model size (default: base)")
+    parser.add_argument("--languages", "--lan", default=None,
+                        help="Comma-separated language codes, or 'all' (default: en)")
+    parser.add_argument("--categories", default=None,
+                        help="Comma-separated categories: clean,noisy,multilingual,meeting")
+    parser.add_argument("--quick", action="store_true",
+                        help="Quick mode: small subset for smoke tests")
+    parser.add_argument("--json", default=None, dest="json_out",
+                        help="Export full report to JSON file")
+    parser.add_argument("--transcriptions", action="store_true",
+                        help="Show hypothesis vs reference for each sample")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Show detailed logs")
 
     parsed = parser.parse_args(args)
+
+    # Parse languages
+    languages = None
+    if parsed.languages and parsed.languages != "all":
+        languages = [l.strip() for l in parsed.languages.split(",")]
+    elif parsed.languages is None:
+        languages = ["en"]  # default to English only
+
+    categories = None
+    if parsed.categories:
+        categories = [c.strip() for c in parsed.categories.split(",")]
 
     import asyncio
 
     if not parsed.verbose:
-        asyncio.run(_run_bench_quiet(parsed))
-    else:
-        asyncio.run(_run_bench(parsed))
+        _suppress_logging()
+
+    asyncio.run(_run_bench_new(parsed, languages, categories))
 
 
-async def _run_bench_quiet(parsed):
-    """Run benchmark with suppressed logging."""
+def _suppress_logging():
+    """Suppress noisy logs during benchmark."""
     import warnings
     warnings.filterwarnings("ignore")
     logging.root.setLevel(logging.ERROR)
@@ -726,130 +751,42 @@ async def _run_bench_quiet(parsed):
         handler.setLevel(logging.ERROR)
     for name in list(logging.Logger.manager.loggerDict.keys()):
         logging.getLogger(name).setLevel(logging.ERROR)
-    await _run_bench(parsed)
 
 
-async def _run_bench(parsed):
-    """Run the benchmark."""
-    import json as json_module
-    import time
+async def _run_bench_new(parsed, languages, categories):
+    """Run the benchmark using the new benchmark module."""
+    from whisperlivekit.benchmark.report import print_report, print_transcriptions, write_json
+    from whisperlivekit.benchmark.runner import BenchmarkRunner
 
-    from whisperlivekit.metrics import compute_wer
-    from whisperlivekit.test_data import get_sample, get_samples
-    from whisperlivekit.test_harness import TestHarness
+    def on_progress(name, i, total):
+        if name == "done":
+            print(f"\r  [{total}/{total}] Done.{' ' * 30}", file=sys.stderr)
+        else:
+            print(f"\r  [{i + 1}/{total}] {name}...{' ' * 20}",
+                  end="", file=sys.stderr, flush=True)
 
-    # Determine samples to run
-    if parsed.samples == "all":
-        print("  Downloading test samples (first run only)...", file=sys.stderr)
-        samples = get_samples()
-        # Filter to matching language
-        samples = [s for s in samples if s.language == parsed.lan]
-        if not samples:
-            # Fall back to all samples if none match the language
-            samples = get_samples()
-    else:
-        samples = [get_sample(parsed.samples)]
+    runner = BenchmarkRunner(
+        backend=parsed.backend,
+        model_size=parsed.model_size,
+        languages=languages,
+        categories=categories,
+        quick=parsed.quick,
+        on_progress=on_progress,
+    )
 
-    backend_label = parsed.backend
-    if backend_label == "auto":
-        backend_label = "auto-detect"
+    print(f"\n  Downloading benchmark samples (cached after first run)...",
+          file=sys.stderr)
 
-    print(file=sys.stderr)
-    print("  WhisperLiveKit Benchmark", file=sys.stderr)
-    print(f"  Backend: {backend_label} | Model: {parsed.model_size} | Language: {parsed.lan}", file=sys.stderr)
-    print(f"  Samples: {len(samples)}", file=sys.stderr)
-    print(f"  {'─' * 70}", file=sys.stderr)
+    report = await runner.run()
 
-    results = []
+    print_report(report)
 
-    kwargs = {
-        "model_size": parsed.model_size,
-        "lan": parsed.lan,
-        "pcm_input": True,
-    }
-    if parsed.backend != "auto":
-        kwargs["backend"] = parsed.backend
+    if parsed.transcriptions:
+        print_transcriptions(report)
 
-    for sample in samples:
-        print(f"\n  {sample.name} ({sample.duration:.1f}s, {sample.language})", file=sys.stderr)
-
-        t_start = time.perf_counter()
-
-        async with TestHarness(**kwargs) as h:
-            await h.feed(sample.path, speed=0)
-            await h.drain(5.0)
-            state = await h.finish(timeout=120)
-
-        t_elapsed = time.perf_counter() - t_start
-        rtf = t_elapsed / sample.duration if sample.duration > 0 else 0
-
-        # Compute WER
-        hypothesis = state.committed_text or state.text
-        wer_result = compute_wer(sample.reference, hypothesis)
-
-        n_lines = len(state.speech_lines)
-
-        result_entry = {
-            "sample": sample.name,
-            "duration_s": round(sample.duration, 2),
-            "processing_time_s": round(t_elapsed, 2),
-            "rtf": round(rtf, 3),
-            "wer": round(wer_result["wer"], 4),
-            "wer_details": {
-                "substitutions": wer_result["substitutions"],
-                "insertions": wer_result["insertions"],
-                "deletions": wer_result["deletions"],
-                "ref_words": wer_result["ref_words"],
-                "hyp_words": wer_result["hyp_words"],
-            },
-            "n_lines": n_lines,
-            "transcription": hypothesis,
-        }
-        results.append(result_entry)
-
-        # Print per-sample result
-        wer_pct = wer_result["wer"] * 100
-        wer_color = "\033[32m" if wer_pct < 15 else "\033[33m" if wer_pct < 30 else "\033[31m"
-        rtf_color = "\033[32m" if rtf < 0.5 else "\033[33m" if rtf < 1.0 else "\033[31m"
-
-        print(f"    WER:  {wer_color}{wer_pct:5.1f}%\033[0m  "
-              f"(S:{wer_result['substitutions']} I:{wer_result['insertions']} D:{wer_result['deletions']})",
-              file=sys.stderr)
-        print(f"    RTF:  {rtf_color}{rtf:.3f}x\033[0m  "
-              f"({t_elapsed:.1f}s for {sample.duration:.1f}s audio)",
-              file=sys.stderr)
-        print(f"    Lines: {n_lines}",
-              file=sys.stderr)
-
-    # Summary
-    if len(results) > 1:
-        avg_wer = sum(r["wer"] for r in results) / len(results)
-        avg_rtf = sum(r["rtf"] for r in results) / len(results)
-        total_audio = sum(r["duration_s"] for r in results)
-        total_proc = sum(r["processing_time_s"] for r in results)
-
-        print(f"\n  {'─' * 70}", file=sys.stderr)
-        print(f"  Summary ({len(results)} samples, {total_audio:.1f}s total audio)", file=sys.stderr)
-        wer_color = "\033[32m" if avg_wer * 100 < 15 else "\033[33m" if avg_wer * 100 < 30 else "\033[31m"
-        rtf_color = "\033[32m" if avg_rtf < 0.5 else "\033[33m" if avg_rtf < 1.0 else "\033[31m"
-        print(f"    Avg WER:  {wer_color}{avg_wer * 100:5.1f}%\033[0m", file=sys.stderr)
-        print(f"    Avg RTF:  {rtf_color}{avg_rtf:.3f}x\033[0m  "
-              f"({total_proc:.1f}s for {total_audio:.1f}s audio)", file=sys.stderr)
-
-    print(file=sys.stderr)
-
-    # JSON export
     if parsed.json_out:
-        export = {
-            "backend": parsed.backend,
-            "model_size": parsed.model_size,
-            "language": parsed.lan,
-            "accelerator": _gpu_info(),
-            "results": results,
-        }
-        with open(parsed.json_out, "w") as f:
-            json_module.dump(export, f, indent=2)
-        print(f"  Results exported to: {parsed.json_out}", file=sys.stderr)
+        write_json(report, parsed.json_out)
+        print(f"  Results exported to: {parsed.json_out}\n", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------

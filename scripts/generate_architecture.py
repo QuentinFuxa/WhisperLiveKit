@@ -144,13 +144,14 @@ ax.text(10.4, 4.2, "4B params • 15 languages • 6-bit quant (MLX)", fontsize=
 # ── Qwen3 backend ──
 section_box(15.0, 3.8, 4.6, 3.2, "Qwen3 ASR (batch + aligner)", border=C_GREEN, bg=C_BOX_BG3)
 
-box(15.2, 5.9, 2.0, 0.6, "Qwen3 ASR\n1.7B / 0.6B", color=C_GREEN, bg="#1a3a2a", fontsize=7, bold=True)
-box(17.4, 5.9, 2.0, 0.6, "Forced\nAligner", color=C_GREEN, bg="#1a3a2a", fontsize=7)
+box(15.2, 5.9, 1.5, 0.6, "Qwen3 ASR\n1.7B / 0.6B", color=C_GREEN, bg="#1a3a2a", fontsize=7, bold=True)
+box(16.9, 5.9, 1.5, 0.6, "Qwen3\nSimul", color=C_GREEN, bg="#1a3a2a", fontsize=7, bold=True)
+box(18.6, 5.9, 1.0, 0.6, "Forced\nAligner", color=C_GREEN, bg="#1a3a2a", fontsize=6.5)
 
-ax.text(15.2, 5.4, "Full-audio batch inference", fontsize=6.5, color=C_TEXTDIM, family="monospace")
+ax.text(15.2, 5.4, "Batch + SimulStreaming (AlignAtt)", fontsize=6.5, color=C_TEXTDIM, family="monospace")
 ax.text(15.2, 5.0, "ForcedAligner provides word timestamps", fontsize=6, color=C_GREEN, family="monospace")
-ax.text(15.2, 4.6, "Uses LocalAgreement for streaming output", fontsize=6, color=C_TEXTDIM, family="monospace")
-ax.text(15.2, 4.2, "12 languages • CUDA/MPS/CPU", fontsize=6, color=C_TEXTDIM, family="monospace")
+ax.text(15.2, 4.6, "LocalAgreement or border-distance policy", fontsize=6, color=C_TEXTDIM, family="monospace")
+ax.text(15.2, 4.2, "29 languages • CUDA/MPS/CPU", fontsize=6, color=C_TEXTDIM, family="monospace")
 
 # ── OpenAI API ──
 box(15.2, 7.7, 4.2, 0.6, "OpenAI API (cloud)", color="#5a6a7a", fontsize=7)
@@ -168,8 +169,10 @@ box(16.0, 2.2, 3.4, 0.8, "Translation\nNLLB • CTranslate2",
 
 box(10.4, 0.8, 4.0, 0.8, "WhisperLiveKitConfig\n(single source of truth)",
     color=C_ACCENT, fontsize=7, bold=True)
-box(14.8, 0.8, 4.6, 0.8, "TestHarness\nfull pipeline testing without server",
+box(14.8, 0.8, 2.3, 0.8, "TestHarness\npipeline testing",
     color="#5a6a7a", fontsize=7)
+box(17.3, 0.8, 2.3, 0.8, "Benchmark\n8 langs • 13 samples",
+    color=C_ORANGE, fontsize=7, bold=True)
 
 # ═══════════════════════════════════════════════════════════════════
 # Arrows: main data flow

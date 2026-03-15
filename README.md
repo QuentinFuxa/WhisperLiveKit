@@ -134,10 +134,13 @@ uv sync --extra cu129 --extra voxtral-hf --extra translation
 See **Parameters & Configuration** below on how to use them.
 
 <p align="center">
-<img src="benchmark_scatter.png" alt="Speed vs Accuracy tradeoff" width="700">
+<img src="benchmark_scatter_en_unaware.png" alt="Speed vs Accuracy — English, compute-unaware" width="700">
+</p>
+<p align="center">
+<img src="benchmark_scatter_en_aware.png" alt="Speed vs Accuracy — English, compute-aware" width="700">
 </p>
 
-See **[BENCHMARK.md](BENCHMARK.md)** for the full benchmark with tables, model size comparison, and more.
+Benchmarks use public audio from [LibriSpeech](https://huggingface.co/datasets/openslr/librispeech_asr) and [Multilingual LibriSpeech](https://huggingface.co/datasets/facebook/multilingual_librispeech) — fully reproducible with `python scripts/run_scatter_benchmark.py`.
 We are actively looking for benchmark results on other hardware (NVIDIA GPUs, different Apple Silicon chips, cloud instances). If you run the benchmarks on your machine, please share your results via an issue or PR!
 
 
@@ -371,7 +374,7 @@ docker compose up --build wlk-cpu
 # Quick benchmark with the CLI
 wlk bench
 wlk bench --backend faster-whisper --model large-v3
-wlk bench --json results.json
+wlk bench --languages all --json results.json
 
 # Install test dependencies for full suite
 pip install -e ".[test]"
@@ -379,13 +382,11 @@ pip install -e ".[test]"
 # Run unit tests (no model download required)
 pytest tests/ -v
 
-# Detailed multi-backend benchmark
-python test_backend_offline.py --benchmark --no-realtime
-python test_backend_offline.py --benchmark --no-realtime --json results.json
+# Speed vs Accuracy scatter plot (all backends, compute-aware + unaware)
+python scripts/create_long_samples.py        # generate ~90s test samples (cached)
+python scripts/run_scatter_benchmark.py      # English (both modes)
+python scripts/run_scatter_benchmark.py --lang fr  # French
 ```
-
-See [BENCHMARK.md](BENCHMARK.md) for a full comparison of backends, policies, WER, speed, and
-timestamp accuracy on Apple Silicon.
 
 ## Use Cases
 Capture discussions in real-time for meeting transcription, help hearing-impaired users follow conversations through accessibility tools, transcribe podcasts or videos automatically for content creation, transcribe support calls with speaker identification for customer service...

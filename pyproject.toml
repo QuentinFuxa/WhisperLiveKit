@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "whisperlivekit"
 version = "0.2.20"
-description = "Real-time speech-to-text with speaker diarization using Whisper"
+description = "Real-time speech-to-text models"
 readme = "README.md"
 authors = [{ name = "Quentin Fuxa" }]
 license = { file = "LICENSE" }
@@ -144,6 +144,7 @@ packages = [
     "whisperlivekit.local_agreement",
     "whisperlivekit.voxtral_mlx",
     "whisperlivekit.silero_vad_models",
+    "whisperlivekit.benchmark",
 ]
 
 [tool.setuptools.package-data]
