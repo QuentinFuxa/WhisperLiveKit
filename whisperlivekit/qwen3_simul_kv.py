@@ -45,6 +45,7 @@ class Qwen3SimulKVConfig:
     max_context_tokens: int = 20
     init_prompt: Optional[str] = None
     max_alignment_heads: int = 10
+    min_new_seconds: float = 2.0  # minimum new audio before running inference
 
 
 @dataclass
@@ -477,7 +478,7 @@ class Qwen3SimulKVOnlineProcessor:
             return [], self.end
 
         new_samples = len(self.state.audio_buffer) - self.state.last_infer_samples
-        min_new_seconds = 1.0
+        min_new_seconds = self.asr.cfg.min_new_seconds
         if not is_last and new_samples < int(min_new_seconds * self.SAMPLING_RATE):
             return [], self.end
 
