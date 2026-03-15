@@ -121,6 +121,15 @@ class TranscriptionEngine:
                 self.tokenizer = None
                 self.asr = VoxtralHFStreamingASR(**transcription_common_params)
                 logger.info("Using Voxtral HF Transformers streaming backend")
+            elif config.backend == "qwen3-mlx-simul":
+                from whisperlivekit.qwen3_mlx_simul import Qwen3MLXSimulStreamingASR
+                self.tokenizer = None
+                self.asr = Qwen3MLXSimulStreamingASR(
+                    **transcription_common_params,
+                    alignment_heads_path=config.custom_alignment_heads,
+                    border_fraction=getattr(config, 'border_fraction', 0.15),
+                )
+                logger.info("Using Qwen3 MLX SimulStreaming backend")
             elif config.backend == "qwen3-mlx":
                 from whisperlivekit.qwen3_mlx_asr import Qwen3MLXASR
                 self.tokenizer = None
@@ -247,6 +256,9 @@ def online_factory(args, asr, language=None):
     if backend == "qwen3-simul-kv":
         from whisperlivekit.qwen3_simul_kv import Qwen3SimulKVOnlineProcessor
         return Qwen3SimulKVOnlineProcessor(asr)
+    if backend == "qwen3-mlx-simul":
+        from whisperlivekit.qwen3_mlx_simul import Qwen3MLXSimulStreamingOnlineProcessor
+        return Qwen3MLXSimulStreamingOnlineProcessor(asr)
     if backend == "qwen3-mlx":
         from whisperlivekit.qwen3_mlx_asr import Qwen3MLXOnlineProcessor
         return Qwen3MLXOnlineProcessor(asr)
