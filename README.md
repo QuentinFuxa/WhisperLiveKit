@@ -126,13 +126,13 @@ uv sync --extra cu129 --extra voxtral-hf --extra translation
 See **Parameters & Configuration** below on how to use them.
 
 <p align="center">
-<img src="benchmark_scatter_en_unaware.png" alt="Speed vs Accuracy — English, compute-unaware" width="700">
+<img src="benchmark_scatter_en_aware.png" alt="Speed vs Accuracy — English" width="700">
 </p>
 <p align="center">
-<img src="benchmark_scatter_en_aware.png" alt="Speed vs Accuracy — English, compute-aware" width="700">
+<img src="benchmark_scatter_fr_aware.png" alt="Speed vs Accuracy — French" width="700">
 </p>
 
-Benchmarks use public audio from [LibriSpeech](https://huggingface.co/datasets/openslr/librispeech_asr) and [Multilingual LibriSpeech](https://huggingface.co/datasets/facebook/multilingual_librispeech) — fully reproducible with `python scripts/run_scatter_benchmark.py`.
+Benchmarks use 6 minutes of public [LibriVox](https://librivox.org/) audiobook recordings per language (30s + 60s + 120s + 180s), with ground truth from [Project Gutenberg](https://www.gutenberg.org/). Fully reproducible with `python scripts/run_scatter_benchmark.py`.
 We are actively looking for benchmark results on other hardware (NVIDIA GPUs, different Apple Silicon chips, cloud instances). If you run the benchmarks on your machine, please share your results via an issue or PR!
 
 

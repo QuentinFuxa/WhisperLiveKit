@@ -227,27 +227,32 @@ def generate_scatter(results, system_info, output_path, n_samples, lang="en",
     fig, ax = plt.subplots(figsize=(12, 7), facecolor="white")
     ax.set_facecolor("#fafafa")
 
-    # Separate main cluster from outliers (RTF > 1.0)
-    main = [r for r in results if r["rtf"] <= 1.0]
-    slow = [r for r in results if r["rtf"] > 1.0]
+    # Show ALL points on chart (no outlier exclusion)
+    main = results
+    slow = []
 
-    # Axis limits: tight around main data
+    # Axis limits: fit all data
     if main:
-        xmax = max(r["rtf"] for r in main) * 1.6
-        ymax = max(r["wer_pct"] for r in main) * 1.5 + 1
+        xmax = max(r["rtf"] for r in main) * 1.15
+        ymax = max(r["wer_pct"] for r in main) * 1.15 + 1
     else:
         xmax, ymax = 0.5, 10
-    xmax = max(xmax, 0.45)
+    xmax = max(xmax, 1.15)  # always show the real-time line
     ymax = max(ymax, 8)
 
-    # Sweet spot zone
-    sweet_x = xmax * 0.85
-    sweet_y = ymax * 0.55
+    # Sweet spot zone: RTF < 1.0 (real-time) and WER < 12%
+    sweet_x = min(1.0, xmax * 0.85)
+    sweet_y = min(12, ymax * 0.45)
     rect = plt.Rectangle((0, 0), sweet_x, sweet_y, alpha=0.07, color="#4ecca3",
                           zorder=0, linewidth=0)
     ax.add_patch(rect)
     ax.text(sweet_x - 0.005, sweet_y - 0.15, "sweet spot", ha="right", va="top",
             fontsize=10, color="#2ecc71", fontstyle="italic", fontweight="bold", alpha=0.5)
+
+    # Real-time limit line
+    ax.axvline(x=1.0, color="#e94560", linestyle="--", linewidth=1.5, alpha=0.4, zorder=1)
+    ax.text(1.02, ymax * 0.97, "real-time\nlimit", fontsize=8, color="#e94560",
+            va="top", alpha=0.6)
 
     # Manual label offsets keyed by label name — hand-tuned
     OFFSETS = {
