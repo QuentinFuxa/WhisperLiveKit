@@ -1,0 +1,9 @@
+{
+  "platform": "Apple M5 (32GB RAM, MLX fp16)",
+  "dataset": "LibriSpeech test-clean",
+  "methodology": "per-utterance (500 samples)",
+  "models": {
+    "qwen3-asr-0.6b-simul": {"wer": 3.30, "rtf": 0.263},
+    "qwen3-asr-1.7b-simul": {"wer": 4.07, "rtf": 0.944}
+  }
+}
