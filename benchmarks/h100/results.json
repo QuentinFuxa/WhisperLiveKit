@@ -1,0 +1,56 @@
+{
+  "hardware": "NVIDIA H100 80GB HBM3, CUDA 12.4, Driver 550.163",
+  "date": "2026-03-15",
+
+  "librispeech_clean": {
+    "n_samples": 91,
+    "total_audio_s": 602,
+    "systems": {
+      "whisper_large_v3_batch":     {"wer": 2.02, "rtf": 0.071, "first_word_latency_s": 0.472},
+      "qwen3_0.6b_batch":          {"wer": 2.30, "rtf": 0.065, "first_word_latency_s": 0.432},
+      "qwen3_1.7b_batch":          {"wer": 2.46, "rtf": 0.069, "first_word_latency_s": 0.457},
+      "voxtral_4b_vllm_realtime":  {"wer": 2.71, "rtf": 0.137, "first_word_latency_s": 0.137},
+      "qwen3_0.6b_simulstream_kv": {"wer": 6.44, "rtf": 0.109, "first_word_latency_s": 0.091},
+      "qwen3_1.7b_simulstream_kv": {"wer": 8.09, "rtf": 0.117, "first_word_latency_s": 0.094}
+    }
+  },
+
+  "librispeech_other": {
+    "n_samples": 133,
+    "total_audio_s": 600,
+    "systems": {
+      "qwen3_1.7b_batch":          {"wer": 5.34, "rtf": 0.088},
+      "qwen3_0.6b_batch":          {"wer": 6.12, "rtf": 0.086},
+      "whisper_large_v3_batch":     {"wer": 7.79, "rtf": 0.092},
+      "qwen3_0.6b_simulstream_kv": {"wer": 9.27, "rtf": 0.127},
+      "voxtral_4b_vllm_realtime":  {"wer": 9.26, "rtf": 0.144},
+      "qwen3_1.7b_simulstream_kv": {"wer": 9.56, "rtf": 0.140}
+    }
+  },
+
+  "acl6060": {
+    "description": "5 ACL 2022 conference talks, 58 min total",
+    "talks": ["110", "117", "268", "367", "590"],
+    "systems": {
+      "voxtral_4b_vllm_realtime":  {"avg_wer": 7.83, "avg_rtf": 0.203, "per_talk": {"110": 5.18, "117": 2.24, "268": 14.88, "367": 9.40, "590": 7.45}},
+      "qwen3_1.7b_simulstream_kv": {"avg_wer": 9.20, "avg_rtf": 0.074, "per_talk": {"110": 5.59, "117": 8.12, "268": 12.25, "367": 12.29, "590": 7.77}},
+      "qwen3_0.6b_simulstream_kv": {"avg_wer": 13.21, "avg_rtf": 0.098},
+      "whisper_large_v3_batch":     {"avg_wer": 22.53, "avg_rtf": 0.125}
+    }
+  },
+
+  "m5_reference": {
+    "description": "MacBook M5 results (from WLK scatter benchmarks)",
+    "systems": {
+      "fw_la_base":    {"wer": 17.0, "rtf": 0.82},
+      "fw_la_small":   {"wer":  8.6, "rtf": 0.76},
+      "fw_ss_base":    {"wer":  7.8, "rtf": 0.46},
+      "fw_ss_small":   {"wer":  7.0, "rtf": 0.90},
+      "mlx_ss_base":   {"wer":  7.7, "rtf": 0.34},
+      "mlx_ss_small":  {"wer":  6.5, "rtf": 0.68},
+      "voxtral_mlx":   {"wer":  7.0, "rtf": 0.26},
+      "qwen3_mlx_0.6b":{"wer":  5.5, "rtf": 0.55},
+      "qwen3_0.6b_batch":{"wer":24.0, "rtf": 1.42}
+    }
+  }
+}
