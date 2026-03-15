@@ -95,14 +95,6 @@ See [docs/API.md](docs/API.md) for the complete API reference.
 > - For HTTPS requirements, see the **Parameters** section for SSL configuration options.
 
 
-#### Use it to capture audio from web pages.
-
-Go to `chrome-extension` for instructions.
-
-<p align="center">
-<img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/chrome-extension/demo-extension.png" alt="WhisperLiveKit Demo" width="600">
-</p>
-
 
 
 #### Optional Dependencies
@@ -143,6 +135,14 @@ See **Parameters & Configuration** below on how to use them.
 Benchmarks use public audio from [LibriSpeech](https://huggingface.co/datasets/openslr/librispeech_asr) and [Multilingual LibriSpeech](https://huggingface.co/datasets/facebook/multilingual_librispeech) — fully reproducible with `python scripts/run_scatter_benchmark.py`.
 We are actively looking for benchmark results on other hardware (NVIDIA GPUs, different Apple Silicon chips, cloud instances). If you run the benchmarks on your machine, please share your results via an issue or PR!
 
+
+#### Use it to capture audio from web pages.
+
+Go to `chrome-extension` for instructions.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/chrome-extension/demo-extension.png" alt="WhisperLiveKit Demo" width="600">
+</p>
 
 
 ### Voxtral Backend
@@ -262,7 +262,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | SimulStreaming backend options | Description | Default |
 |-----------|-------------|---------|
 | `--disable-fast-encoder` | Disable Faster Whisper or MLX Whisper backends for the encoder (if installed). Inference can be slower but helpful when GPU memory is limited | `False` |
-| `--custom-alignment-heads` | Use your own alignment heads, useful when `--model-dir` is used. Use `scripts/determine_alignment_heads.py` to extract them. <img src="scripts/alignment_heads.png" alt="WhisperLiveKit Demo" width="300">
+| `--custom-alignment-heads` | Use your own alignment heads, useful when `--model-dir` is used. Use `scripts/determine_alignment_heads.py` to extract them. <img src="scripts/alignment_heads_qwen3_asr_1.7B.png" alt="WhisperLiveKit Demo" width="300">
  | `None` |
 | `--frame-threshold` | AlignAtt frame threshold (lower = faster, higher = more accurate) | `25` |
 | `--beams` | Number of beams for beam search (1 = greedy decoding) | `1` |
