@@ -41,8 +41,8 @@ class Qwen3SimulKVConfig:
     border_fraction: float = 0.20
     rewind_fraction: float = 0.12
     audio_min_len: float = 0.5
-    audio_max_len: float = 20.0
-    max_context_tokens: int = 30
+    audio_max_len: float = 30.0
+    max_context_tokens: int = 20
     init_prompt: Optional[str] = None
     max_alignment_heads: int = 10
 
@@ -101,6 +101,9 @@ class Qwen3SimulKVState:
         self.prompt_token_count = 0
         self.audio_token_count = 0
         self.generated_token_ids = []
+        # Reset alignment tracking — old frame references are invalid
+        # after audio is trimmed from the front
+        self.last_attend_frame = -15
 
 
 class Qwen3SimulKVASR:
