@@ -210,7 +210,18 @@ class Qwen3SimulKVASR:
         if path and Path(path).exists():
             with open(path) as f:
                 data = json.load(f)
-            all_heads = [tuple(h) for h in data["alignment_heads_compact"]]
+            if "alignment_heads_compact" in data:
+                all_heads = [tuple(h) for h in data["alignment_heads_compact"]]
+            elif "token_alignment_heads" in data:
+                all_heads = [
+                    (int(h["layer"]), int(h["head"]))
+                    for h in data["token_alignment_heads"]
+                ]
+            else:
+                raise KeyError(
+                    "alignment_heads_compact/token_alignment_heads not found in "
+                    f"{path}"
+                )
             heads = all_heads[:max_heads]
             logger.info("Loaded top %d alignment heads from %s", len(heads), path)
             return heads
@@ -333,6 +344,21 @@ class Qwen3SimulKVOnlineProcessor:
     def get_buffer(self) -> Transcript:
         return Transcript.from_tokens(tokens=self.buffer, sep='')
 
+    @staticmethod
+    def _normalize_audio_embeds(audio_embeds: torch.Tensor) -> torch.Tensor:
+        """Keep cached audio embeddings in a consistent 2D layout."""
+        if audio_embeds.dim() == 3:
+            if audio_embeds.shape[0] != 1:
+                raise ValueError(
+                    f"Unexpected batched audio embeds shape: {tuple(audio_embeds.shape)}",
+                )
+            audio_embeds = audio_embeds[0]
+        if audio_embeds.dim() == 1:
+            audio_embeds = audio_embeds.unsqueeze(0)
+        if audio_embeds.dim() != 2:
+            raise ValueError(f"Unexpected audio embeds shape: {tuple(audio_embeds.shape)}")
+        return audio_embeds
+
     def _encode_audio(self) -> Tuple[torch.Tensor, int]:
         """Encode full audio buffer, with caching for stable windows."""
         asr = self.asr
@@ -364,8 +390,7 @@ class Qwen3SimulKVOnlineProcessor:
             audio_embeds = asr.model.thinker.get_audio_features(
                 input_features, feature_attention_mask=feature_attention_mask,
             )
-            if audio_embeds.dim() == 3:
-                audio_embeds = audio_embeds[0]
+            audio_embeds = self._normalize_audio_embeds(audio_embeds)
             stable_mel = n_complete_windows * n_window_infer if n_complete_windows > 0 else 0
             stable_tokens = _get_feat_extract_output_lengths(
                 torch.tensor(stable_mel),
@@ -389,8 +414,7 @@ class Qwen3SimulKVOnlineProcessor:
                     tail_embeds = asr.model.thinker.get_audio_features(
                         tail_features, feature_attention_mask=tail_mask,
                     )
-                    if tail_embeds.dim() == 3:
-                        tail_embeds = tail_embeds[0]
+                    tail_embeds = self._normalize_audio_embeds(tail_embeds)
                     audio_embeds = torch.cat([cached_prefix, tail_embeds], dim=0)
                 else:
                     audio_embeds = cached_prefix
@@ -398,11 +422,10 @@ class Qwen3SimulKVOnlineProcessor:
                 audio_embeds = asr.model.thinker.get_audio_features(
                     input_features, feature_attention_mask=feature_attention_mask,
                 )
-                if audio_embeds.dim() == 3:
-                    audio_embeds = audio_embeds[0]
+                audio_embeds = self._normalize_audio_embeds(audio_embeds)
 
         # Update cache
-        cache.embeddings = audio_embeds if audio_embeds.dim() == 2 else audio_embeds[0]
+        cache.embeddings = audio_embeds.unsqueeze(0)
         cache.encoded_samples = len(state.audio_buffer)
         cache.encoded_mel_frames = total_mel_frames
         stable_mel_final = n_complete_windows * n_window_infer if n_complete_windows > 0 else 0
@@ -482,14 +505,17 @@ class Qwen3SimulKVOnlineProcessor:
         if not is_last and new_samples < int(min_new_seconds * self.SAMPLING_RATE):
             return [], self.end
 
-        self.state.last_infer_samples = len(self.state.audio_buffer)
-
         try:
             timestamped_words = self._infer(is_last)
         except Exception as e:
             logger.exception("Inference error: %s", e)
             self.state.reset_kv()
             return [], self.end
+
+        # Advance the decode budget marker only after inference. Updating this
+        # before _infer() makes new_audio_secs collapse to zero inside the
+        # decoder loop and artificially caps generation to the 1-second path.
+        self.state.last_infer_samples = len(self.state.audio_buffer)
 
         if not timestamped_words:
             return [], self.end

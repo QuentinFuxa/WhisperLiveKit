@@ -719,13 +719,16 @@ class Qwen3SimulStreamingOnlineProcessor:
             return [], self.end
 
         logger.info("Running SimulStreaming inference on %.2fs of audio (%.2fs new)", audio_duration, new_samples / self.SAMPLING_RATE)
-        self.state.last_infer_samples = len(self.state.audio_buffer)
 
         try:
             timestamped_words = self._infer(is_last)
         except Exception as e:
             logger.exception("Qwen3 SimulStreaming inference error: %s", e)
             return [], self.end
+
+        # Update the decode-budget marker after inference so _infer() sees the
+        # true amount of newly arrived audio.
+        self.state.last_infer_samples = len(self.state.audio_buffer)
 
         logger.info("SimulStreaming produced %d words", len(timestamped_words))
         if not timestamped_words:

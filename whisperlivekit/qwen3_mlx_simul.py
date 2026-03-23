@@ -399,13 +399,15 @@ class Qwen3MLXSimulStreamingOnlineProcessor:
         if not is_last and new_samples < int(1.0 * self.SAMPLING_RATE):
             return [], self.end
 
-        self.state.last_infer_samples = len(self.state.audio_buffer)
-
         try:
             words = self._infer(is_last)
         except Exception as e:
             logger.exception("Qwen3 MLX SimulStreaming inference error: %s", e)
             return [], self.end
+
+        # Update the budget marker after _infer() so the decoder can size its
+        # generation budget using the real amount of fresh audio.
+        self.state.last_infer_samples = len(self.state.audio_buffer)
 
         if not words:
             return [], self.end
