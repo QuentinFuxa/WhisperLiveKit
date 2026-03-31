@@ -418,7 +418,31 @@ class AudioProcessor:
         logger.info("Transcription processor task finished.")
 
 
+    async def _update_diarization_state(self, diarization_segments) -> None:
+        """Push new diarization segments into the shared state."""
+        if not diarization_segments:
+            return
+        diar_end = max(getattr(s, "end", 0.0) for s in diarization_segments)
+        async with self.lock:
+            self.state.new_diarization.extend(diarization_segments)
+            self.state.end_attributed_speaker = max(self.state.end_attributed_speaker, diar_end)
+
+    async def _drain_diarization_buffer(self) -> None:
+        """Process all remaining audio in the diarization buffer.
+
+        Sortformer-style backends accumulate audio in an internal buffer and
+        process one chunk per ``diarize()`` call, returning ``[]`` when the
+        buffer is too short.  This helper loops until the buffer is fully
+        consumed.
+        """
+        while True:
+            diarization_segments = await self.diarization.diarize()
+            if not diarization_segments:
+                break
+            await self._update_diarization_state(diarization_segments)
+
     async def diarization_processor(self) -> None:
+        has_buffer = hasattr(self.diarization, 'buffer_audio')
         while True:
             try:
                 item = await get_all_from_queue(self.diarization_queue)
@@ -429,16 +453,26 @@ class AudioProcessor:
                         self.diarization.insert_silence(item.duration)
                     continue
                 self.diarization.insert_audio_chunk(item)
-                diarization_segments = await self.diarization.diarize()
-                diar_end = 0.0
-                if diarization_segments:
-                    diar_end = max(getattr(s, "end", 0.0) for s in diarization_segments)
-                async with self.lock:
-                    self.state.new_diarization = diarization_segments
-                    self.state.end_attributed_speaker = max(self.state.end_attributed_speaker, diar_end)
+                if has_buffer:
+                    await self._drain_diarization_buffer()
+                else:
+                    # Cumulative backends (e.g. Diart): replace, not extend
+                    diarization_segments = await self.diarization.diarize()
+                    diar_end = 0.0
+                    if diarization_segments:
+                        diar_end = max(getattr(s, "end", 0.0) for s in diarization_segments)
+                    async with self.lock:
+                        self.state.new_diarization = diarization_segments
+                        self.state.end_attributed_speaker = max(self.state.end_attributed_speaker, diar_end)
             except Exception as e:
                 logger.warning(f"Exception in diarization_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")
+        # Drain any remaining audio in the buffer before exiting
+        if has_buffer:
+            try:
+                await self._drain_diarization_buffer()
+            except Exception as e:
+                logger.warning(f"Exception draining diarization buffer: {e}")
         logger.info("Diarization processor task finished.")
 
     async def translation_processor(self) -> None:
