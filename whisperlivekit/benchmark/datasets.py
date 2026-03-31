@@ -233,6 +233,7 @@ def _save_wav(path: Path, audio: np.ndarray, sample_rate: int = 16000) -> None:
 
 def _decode_audio(audio_bytes: bytes) -> tuple:
     import io
+
     import soundfile as sf
     audio_array, sr = sf.read(io.BytesIO(audio_bytes), dtype="float32")
     return np.array(audio_array, dtype=np.float32), sr

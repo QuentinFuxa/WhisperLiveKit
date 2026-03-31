@@ -9,9 +9,10 @@ import json
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 import numpy as np
 
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -113,7 +114,8 @@ def fig_scatter_acl6060():
     label_off = [(10, -12), (10, 6), (10, 6), (10, 6)]
 
     for (name, d, color, marker, sz), (lx, ly) in zip(pts, label_off):
-        wer = d["avg_wer"]; rtf = d["avg_rtf"]
+        wer = d["avg_wer"]
+        rtf = d["avg_rtf"]
         ax.scatter(rtf, wer, s=sz, c=color, marker=marker,
                    edgecolors="white", linewidths=1.5, zorder=5)
         ax.annotate(name, (rtf, wer), fontsize=9.5, fontweight="bold",
@@ -157,20 +159,26 @@ def fig_bars():
     fig, axes = plt.subplots(1, 3, figsize=(16, 6))
 
     # WER
-    ax = axes[0]; w = 0.36
+    ax = axes[0]
+    w = 0.36
     ax.bar(x - w/2, wer_c, w, color=cols, alpha=0.9, edgecolor="white", label="test-clean")
     ax.bar(x + w/2, wer_o, w, color=cols_l, alpha=0.65, edgecolor="white", label="test-other")
-    ax.set_ylabel("WER %"); ax.set_title("Word Error Rate", fontweight="bold")
-    ax.set_xticks(x); ax.set_xticklabels(names, fontsize=7.5, rotation=25, ha="right")
-    ax.legend(fontsize=8); ax.grid(axis="y", alpha=0.15)
+    ax.set_ylabel("WER %")
+    ax.set_title("Word Error Rate", fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, fontsize=7.5, rotation=25, ha="right")
+    ax.legend(fontsize=8)
+    ax.grid(axis="y", alpha=0.15)
     for i, v in enumerate(wer_c):
         ax.text(i - w/2, v + 0.2, f"{v:.1f}", ha="center", fontsize=7, fontweight="bold")
 
     # RTF
     ax = axes[1]
     ax.bar(x, rtf_c, 0.55, color=cols, alpha=0.9, edgecolor="white")
-    ax.set_ylabel("RTF  (lower = faster)"); ax.set_title("Real-Time Factor (test-clean)", fontweight="bold")
-    ax.set_xticks(x); ax.set_xticklabels(names, fontsize=7.5, rotation=25, ha="right")
+    ax.set_ylabel("RTF  (lower = faster)")
+    ax.set_title("Real-Time Factor (test-clean)", fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, fontsize=7.5, rotation=25, ha="right")
     ax.grid(axis="y", alpha=0.15)
     for i, v in enumerate(rtf_c):
         ax.text(i, v + 0.003, f"{v:.3f}", ha="center", fontsize=8, fontweight="bold")
@@ -178,8 +186,10 @@ def fig_bars():
     # First-word latency
     ax = axes[2]
     ax.bar(x, fwl, 0.55, color=cols, alpha=0.9, edgecolor="white")
-    ax.set_ylabel("ms"); ax.set_title("First Word Latency", fontweight="bold")
-    ax.set_xticks(x); ax.set_xticklabels(names, fontsize=7.5, rotation=25, ha="right")
+    ax.set_ylabel("ms")
+    ax.set_title("First Word Latency", fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(names, fontsize=7.5, rotation=25, ha="right")
     ax.grid(axis="y", alpha=0.15)
     for i, v in enumerate(fwl):
         ax.text(i, v + 8, f"{v}", ha="center", fontsize=8, fontweight="bold")
@@ -222,8 +232,10 @@ def fig_robustness():
     ax.set_xlabel("WER % on test-clean")
     ax.set_ylabel("WER % on test-other")
     ax.set_title("Clean vs Noisy Robustness  (H100 80 GB)", fontsize=13, fontweight="bold", pad=12)
-    ax.set_xlim(-0.3, 12); ax.set_ylim(-0.3, 12)
-    ax.set_aspect("equal"); ax.grid(True, alpha=0.12)
+    ax.set_xlim(-0.3, 12)
+    ax.set_ylim(-0.3, 12)
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.12)
     _save(fig, "robustness_clean_vs_other.png")
 
 
@@ -236,7 +248,8 @@ def fig_per_talk():
     talks = DATA["acl6060"]["talks"]
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    x = np.arange(len(talks)); w = 0.35
+    x = np.arange(len(talks))
+    w = 0.35
 
     bars_v = ax.bar(x - w/2, [v[t] for t in talks], w, color=COLORS["voxtral"],
                     edgecolor="white", label="Voxtral 4B (vLLM)")
@@ -254,8 +267,10 @@ def fig_per_talk():
     ax.set_ylabel("WER %")
     ax.set_title("Per-Talk WER  —  ACL6060 Conference Talks  (H100 80 GB)",
                  fontsize=13, fontweight="bold", pad=12)
-    ax.set_xticks(x); ax.set_xticklabels([f"Talk {t}" for t in talks])
-    ax.legend(fontsize=9); ax.grid(axis="y", alpha=0.15)
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"Talk {t}" for t in talks])
+    ax.legend(fontsize=9)
+    ax.grid(axis="y", alpha=0.15)
     ax.set_ylim(0, 18)
     _save(fig, "acl6060_per_talk.png")
 

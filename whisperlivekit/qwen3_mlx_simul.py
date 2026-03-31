@@ -69,7 +69,7 @@ class Qwen3MLXSimulConfig:
     alignment_heads_path: Optional[str] = None
     border_fraction: float = 0.15
     rewind_fraction: float = 0.12
-    audio_min_len: float = 0.5
+    audio_min_len: float = 3.0
     audio_max_len: float = 15.0
     max_context_tokens: int = 30
     max_alignment_heads: int = 20
@@ -94,6 +94,14 @@ class _SessionState:
     committed_token_ids: List[int] = field(default_factory=list)
     detected_language: Optional[str] = None
     last_infer_samples: int = 0
+    # Pending partial word from previous _infer() call.
+    # When a border stops mid-word (e.g., "Vill" from "Villard"),
+    # the partial is held here and prepended to the next call's output.
+    pending_partial: str = ""
+    pending_partial_start: Optional[float] = None
+    # Whether the first emitted token of this call is a continuation of the
+    # previous call's last word (no leading space → subword continuation).
+    first_emit_is_continuation: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +619,9 @@ class Qwen3MLXSimulStreamingOnlineProcessor:
             return []
 
         emitted_ids = generated[:emit_up_to]
+
+        if emit_up_to <= 0:
+            return []
 
         # 11. Build timestamped words
         words = self._build_timestamped_words(

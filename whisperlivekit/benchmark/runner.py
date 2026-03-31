@@ -46,7 +46,6 @@ class BenchmarkRunner:
     async def run(self) -> BenchmarkReport:
         """Run the full benchmark suite and return a report."""
         from whisperlivekit.metrics import compute_wer
-        from whisperlivekit.test_harness import TestHarness
 
         # Get samples
         samples = get_benchmark_samples(

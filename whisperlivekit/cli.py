@@ -386,7 +386,8 @@ def cmd_models():
     # --- System info ---
     print(f"\n  Platform:     {platform.system()} {platform.machine()}")
     print(f"  Accelerator:  {_gpu_info()}")
-    print(f"  ffmpeg:       {'found' if _check_ffmpeg() else '\033[31mNOT FOUND\033[0m (required)'}")
+    _ffmpeg_status = "found" if _check_ffmpeg() else "\033[31mNOT FOUND\033[0m (required)"
+    print(f"  ffmpeg:       {_ffmpeg_status}")
 
     # --- Model catalog ---
     print("\n  Models:\n")
@@ -419,7 +420,7 @@ def cmd_models():
         )
 
     # --- Quick start ---
-    print(f"\n  Quick start:\n")
+    print("\n  Quick start:\n")
     if is_apple_silicon:
         print("    wlk run voxtral-mlx              # Best streaming on Apple Silicon")
         print("    wlk run large-v3-turbo            # Best quality/speed balance")
@@ -806,7 +807,7 @@ async def _run_bench_new(parsed, languages, categories):
         on_progress=on_progress,
     )
 
-    print(f"\n  Downloading benchmark samples (cached after first run)...",
+    print("\n  Downloading benchmark samples (cached after first run)...",
           file=sys.stderr)
 
     report = await runner.run()

@@ -158,7 +158,9 @@ class Qwen3SimulKVASR:
         _patch_transformers_compat()
 
         from qwen_asr.core.transformers_backend import (
-            Qwen3ASRConfig, Qwen3ASRForConditionalGeneration, Qwen3ASRProcessor,
+            Qwen3ASRConfig,
+            Qwen3ASRForConditionalGeneration,
+            Qwen3ASRProcessor,
         )
         from transformers import AutoConfig, AutoModel, AutoProcessor
 
@@ -441,9 +443,6 @@ class Qwen3SimulKVOnlineProcessor:
         state = self.state
         thinker = asr.model.thinker
 
-        from qwen_asr.core.transformers_backend.processing_qwen3_asr import (
-            _get_feat_extract_output_lengths,
-        )
 
         n_audio_tokens = audio_embeds.shape[0]
 
@@ -555,7 +554,6 @@ class Qwen3SimulKVOnlineProcessor:
             use_cache=True,
         )
         kv_cache = out.past_key_values
-        prompt_len = input_ids.shape[1]
 
         # Step 4: Greedy decode with alignment head stopping
         border_threshold = max(2, int(n_audio_tokens * asr.cfg.border_fraction))
@@ -679,7 +677,6 @@ class Qwen3SimulKVOnlineProcessor:
             return []
 
         # Strip metadata prefix (<asr_text> token)
-        all_generated = torch.tensor(generated_ids, device=asr.device)
         num_gen = len(generated_ids)
         asr_text_id = asr.asr_text_token_id
         metadata_offset = 0

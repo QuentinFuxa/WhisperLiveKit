@@ -103,7 +103,6 @@ def print_report(report: BenchmarkReport, out: TextIO = sys.stderr) -> None:
 
     # Per-language breakdown
     wer_by_lang = report.wer_by_language()
-    rtf_by_lang = report.rtf_by_language()
     if len(wer_by_lang) > 1:
         w(f"\n  {BOLD}By Language{RESET}\n")
         w(f"  {'─' * 40}\n")

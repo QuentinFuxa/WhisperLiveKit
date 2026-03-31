@@ -622,9 +622,6 @@ class Qwen3SimulStreamingOnlineProcessor:
         thinker = asr.model.thinker
 
         try:
-            from qwen_asr.core.transformers_backend.processing_qwen3_asr import (
-                _get_feat_extract_output_lengths,
-            )
 
             n_audio_tokens = audio_embeds.shape[0]
 

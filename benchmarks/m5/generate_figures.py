@@ -15,9 +15,10 @@ import json
 import os
 
 import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 H100_DATA = json.load(open(os.path.join(DIR, "..", "h100", "results.json")))

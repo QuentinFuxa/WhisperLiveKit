@@ -28,18 +28,18 @@ import os
 import re
 import sys
 import time
-from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-from jiwer import wer as compute_wer, cer as compute_cer
+from jiwer import cer as compute_cer
+from jiwer import wer as compute_wer
 
 # Add WhisperLiveKit to path
 WLKIT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(WLKIT_DIR))
 
-from whisperlivekit.qwen3_mlx_simul import (
+from whisperlivekit.qwen3_mlx_simul import (  # noqa: E402
     Qwen3MLXSimulStreamingASR,
     Qwen3MLXSimulStreamingOnlineProcessor,
 )

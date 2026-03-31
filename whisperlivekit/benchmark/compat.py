@@ -59,6 +59,7 @@ def detect_available_backends() -> List[str]:
 
     try:
         import mlx.core  # noqa: F401
+
         from whisperlivekit.voxtral_mlx.loader import load_voxtral_model  # noqa: F401
         backends.append("voxtral-mlx")
     except ImportError:
