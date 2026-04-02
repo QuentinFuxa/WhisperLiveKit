@@ -10,8 +10,10 @@ WORKDIR /app
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   build-essential \
-  python3-dev && \
-  rm -rf /var/lib/apt/lists/*
+  python3-dev \
+  ca-certificates && \
+  rm -rf /var/lib/apt/lists/* \
+  && update-ca-certificates
 
 # Install UV and set up the environment 
 COPY --from=uvbin /uv /uvx /bin/
@@ -61,6 +63,8 @@ COPY --from=builder-cpu --chown=python:python /python /python
 
 # Copy the virtual environment with all dependencies installed
 COPY --from=builder-cpu /app/.venv /app/.venv
+
+RUN apt-get update && apt-get install -y  
 
 EXPOSE 8000
 
