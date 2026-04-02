@@ -10,10 +10,9 @@ WORKDIR /app
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   build-essential \
-  python3-dev \
-  ca-certificates && \
+  python3-dev && \
   rm -rf /var/lib/apt/lists/* \
-  && update-ca-certificates
+
 
 # Install UV and set up the environment 
 COPY --from=uvbin /uv /uvx /bin/
@@ -53,7 +52,10 @@ WORKDIR /app
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   ffmpeg &&\
-  rm -rf /var/lib/apt/lists/*
+  ca-certificates && \
+  rm -rf /var/lib/apt/lists/* && \
+  update-ca-certificates
+
 
 # Copy UV binaries
 COPY --from=uvbin /uv /uvx /bin/
