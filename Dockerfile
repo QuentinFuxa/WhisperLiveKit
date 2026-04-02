@@ -11,7 +11,7 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   build-essential \
   python3-dev && \
-  rm -rf /var/lib/apt/lists/* \
+  rm -rf /var/lib/apt/lists/*
 
 
 # Install UV and set up the environment 
