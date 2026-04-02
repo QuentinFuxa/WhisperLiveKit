@@ -64,8 +64,6 @@ COPY --from=builder-cpu --chown=python:python /python /python
 # Copy the virtual environment with all dependencies installed
 COPY --from=builder-cpu /app/.venv /app/.venv
 
-RUN apt-get update && apt-get install -y  
-
 EXPOSE 8000
 
 ENV PATH="/app/.venv/bin:$PATH"
