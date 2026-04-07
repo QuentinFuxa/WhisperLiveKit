@@ -11,7 +11,8 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   build-essential \
   python3-dev && \
-  rm -rf /var/lib/apt/lists/*
+  rm -rf /var/lib/apt/lists/* 
+
 
 # Install UV and set up the environment 
 COPY --from=uvbin /uv /uvx /bin/
@@ -50,8 +51,10 @@ WORKDIR /app
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
-  ffmpeg &&\
-  rm -rf /var/lib/apt/lists/*
+  ffmpeg \
+  ca-certificates && \
+  rm -rf /var/lib/apt/lists/* && \
+  update-ca-certificates
 
 # Copy UV binaries
 COPY --from=uvbin /uv /uvx /bin/
@@ -61,6 +64,8 @@ COPY --from=builder-cpu --chown=python:python /python /python
 
 # Copy the virtual environment with all dependencies installed
 COPY --from=builder-cpu /app/.venv /app/.venv
+
+RUN update-ca-certificates
 
 EXPOSE 8000
 
