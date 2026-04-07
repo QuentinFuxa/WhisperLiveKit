@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:0.10.4 AS uvbin
 
 # --- MARK: Builder Stage
-FROM nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04 AS builder-gpu
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04 AS builder-gpu
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
@@ -12,7 +12,6 @@ RUN apt-get update && \
   build-essential \
   python3-dev && \
   rm -rf /var/lib/apt/lists/*
-
 
 # Install UV and set up the environment 
 COPY --from=uvbin /uv /uvx /bin/
@@ -43,7 +42,7 @@ RUN set -eux; \
   uv sync --frozen --no-editable --no-cache "$@"
 
 # --- MARK: Runtime Stage 
-FROM nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -56,7 +55,7 @@ RUN apt-get update && \
   rm -rf /var/lib/apt/lists/* && \
   update-ca-certificates
 
-
+  
 # Copy UV binaries
 COPY --from=uvbin /uv /uvx /bin/
 
