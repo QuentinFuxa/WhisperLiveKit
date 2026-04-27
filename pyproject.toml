@@ -32,6 +32,7 @@ dependencies = [
     "torchaudio>=2.0.0",
     "tqdm",
     "tiktoken",
+    "python-multipart>=0.0.27",
 ]
 
 [project.optional-dependencies]

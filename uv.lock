@@ -183,13 +183,13 @@ name = "aiohttp"
 version = "3.13.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiohappyeyeballs", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "aiosignal", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "attrs", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "frozenlist", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "multidict", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "propcache", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "yarl", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
+    { name = "aiohappyeyeballs" },
+    { name = "aiosignal" },
+    { name = "attrs" },
+    { name = "frozenlist" },
+    { name = "multidict" },
+    { name = "propcache" },
+    { name = "yarl" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/42/32cf8e7704ceb4481406eb87161349abb46a57fee3f008ba9cb610968646/aiohttp-3.13.3.tar.gz", hash = "sha256:a949eee43d3782f2daae4f4a2819b2cb9b0c5d3b7f7a927067cc84dafdbb9f88", size = 7844556, upload-time = "2026-01-03T17:33:05.204Z" }
 wheels = [
@@ -251,8 +251,8 @@ name = "aiosignal"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "frozenlist", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "typing-extensions", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
+    { name = "frozenlist" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/62/06741b579156360248d1ec624842ad0edf697050bbaf7c3e46394e106ad1/aiosignal-1.4.0.tar.gz", hash = "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7", size = 25007, upload-time = "2025-07-03T22:54:43.528Z" }
 wheels = [
@@ -837,20 +837,21 @@ name = "datasets"
 version = "4.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "dill", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "filelock", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "fsspec", extra = ["http"], marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "httpx", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "multiprocess", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "numpy", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "packaging", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "pandas", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "pyarrow", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "pyyaml", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "requests", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "tqdm", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
-    { name = "xxhash", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
+    { name = "dill" },
+    { name = "filelock" },
+    { name = "fsspec", extra = ["http"] },
+    { name = "httpx" },
+    { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
+    { name = "huggingface-hub", version = "1.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13' or extra != 'extra-14-whisperlivekit-diarization-sortformer' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
+    { name = "multiprocess" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "tqdm" },
+    { name = "xxhash" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/55/bf/bb927bde63d649296c83e883171ae77074717c1b80fe2868b328bd0dbcbb/datasets-4.5.0.tar.gz", hash = "sha256:00c698ce1c2452e646cc5fad47fef39d3fe78dd650a8a6eb205bb45eb63cd500", size = 588384, upload-time = "2026-01-14T18:27:54.297Z" }
 wheels = [
@@ -1148,7 +1149,7 @@ wheels = [
 
 [package.optional-dependencies]
 http = [
-    { name = "aiohttp", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
+    { name = "aiohttp" },
 ]
 
 [[package]]
@@ -2377,7 +2378,7 @@ name = "multiprocess"
 version = "0.70.18"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "dill", marker = "python_full_version < '3.13' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart')" },
+    { name = "dill" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/72/fd/2ae3826f5be24c6ed87266bc4e59c46ea5b059a103f3d7e7eb76a52aeecb/multiprocess-0.70.18.tar.gz", hash = "sha256:f9597128e6b3e67b23956da07cf3d2e5cba79e2f4e0fba8d7903636663ec6d0d", size = 1798503, upload-time = "2025-04-17T03:11:27.742Z" }
 wheels = [
@@ -3897,6 +3898,15 @@ wheels = [
 ]
 
 [[package]]
+name = "python-multipart"
+version = "0.0.27"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/9b/f23807317a113dc36e74e75eb265a02dd1a4d9082abc3c1064acd22997c4/python_multipart-0.0.27.tar.gz", hash = "sha256:9870a6a8c5a20a5bf4f07c017bd1489006ff8836cff097b6933355ee2b49b602", size = 44043, upload-time = "2026-04-27T10:51:26.649Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/78/4126abcbdbd3c559d43e0db7f7b9173fc6befe45d39a2856cc0b8ec2a5a6/python_multipart-0.0.27-py3-none-any.whl", hash = "sha256:6fccfad17a27334bd0193681b369f476eda3409f17381a2d65aa7df3f7275645", size = 29254, upload-time = "2026-04-27T10:51:24.997Z" },
+]
+
+[[package]]
 name = "pytorch-lightning"
 version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -5130,24 +5140,24 @@ dependencies = [
     { name = "typing-extensions", marker = "(sys_platform != 'darwin' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'darwin' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform == 'darwin' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'darwin' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-linux_s390x.whl", hash = "sha256:2bfc013dd6efdc8f8223a0241d3529af9f315dffefb53ffa3bf14d3f10127da6" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:680129efdeeec3db5da3f88ee5d28c1b1e103b774aef40f9d638e2cce8f8d8d8" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:cb06175284673a581dd91fb1965662ae4ecaba6e5c357aa0ea7bb8b84b6b7eeb" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:7631ef49fbd38d382909525b83696dc12a55d68492ade4ace3883c62b9fc140f" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-win_arm64.whl", hash = "sha256:41e6fc5ec0914fcdce44ccf338b1d19a441b55cafdd741fd0bf1af3f9e4cfd14" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-linux_s390x.whl", hash = "sha256:0e34e276722ab7dd0dffa9e12fe2135a9b34a0e300c456ed7ad6430229404eb5" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:610f600c102386e581327d5efc18c0d6edecb9820b4140d26163354a99cd800d" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:cb9a8ba8137ab24e36bf1742cb79a1294bd374db570f09fc15a5e1318160db4e" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:2be20b2c05a0cce10430cc25f32b689259640d273232b2de357c35729132256d" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-win_arm64.whl", hash = "sha256:99fc421a5d234580e45957a7b02effbf3e1c884a5dd077afc85352c77bf41434" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-linux_s390x.whl", hash = "sha256:8b5882276633cf91fe3d2d7246c743b94d44a7e660b27f1308007fdb1bb89f7d" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:a5064b5e23772c8d164068cc7c12e01a75faf7b948ecd95a0d4007d7487e5f25" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:8f81dedb4c6076ec325acc3b47525f9c550e5284a18eae1d9061c543f7b6e7de" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:e1ee1b2346ade3ea90306dfbec7e8ff17bc220d344109d189ae09078333b0856" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-win_arm64.whl", hash = "sha256:64c187345509f2b1bb334feed4666e2c781ca381874bde589182f81247e61f88" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:af81283ac671f434b1b25c95ba295f270e72db1fad48831eb5e4748ff9840041" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:a9dbb6f64f63258bc811e2c0c99640a81e5af93c531ad96e95c5ec777ea46dab" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:6d93a7165419bc4b2b907e859ccab0dea5deeab261448ae9a5ec5431f14c0e64" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-linux_s390x.whl", hash = "sha256:2bfc013dd6efdc8f8223a0241d3529af9f315dffefb53ffa3bf14d3f10127da6", upload-time = "2025-10-01T23:33:07Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:680129efdeeec3db5da3f88ee5d28c1b1e103b774aef40f9d638e2cce8f8d8d8", upload-time = "2025-10-01T23:33:11Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:cb06175284673a581dd91fb1965662ae4ecaba6e5c357aa0ea7bb8b84b6b7eeb", upload-time = "2025-10-01T23:33:14Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:7631ef49fbd38d382909525b83696dc12a55d68492ade4ace3883c62b9fc140f", upload-time = "2025-10-01T23:33:20Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp311-cp311-win_arm64.whl", hash = "sha256:41e6fc5ec0914fcdce44ccf338b1d19a441b55cafdd741fd0bf1af3f9e4cfd14", upload-time = "2025-10-01T23:33:36Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-linux_s390x.whl", hash = "sha256:0e34e276722ab7dd0dffa9e12fe2135a9b34a0e300c456ed7ad6430229404eb5", upload-time = "2025-10-01T23:33:41Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:610f600c102386e581327d5efc18c0d6edecb9820b4140d26163354a99cd800d", upload-time = "2025-10-01T23:33:45Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:cb9a8ba8137ab24e36bf1742cb79a1294bd374db570f09fc15a5e1318160db4e", upload-time = "2025-10-01T23:33:48Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:2be20b2c05a0cce10430cc25f32b689259640d273232b2de357c35729132256d", upload-time = "2025-10-01T23:33:52Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp312-cp312-win_arm64.whl", hash = "sha256:99fc421a5d234580e45957a7b02effbf3e1c884a5dd077afc85352c77bf41434", upload-time = "2025-10-01T23:34:10Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-linux_s390x.whl", hash = "sha256:8b5882276633cf91fe3d2d7246c743b94d44a7e660b27f1308007fdb1bb89f7d", upload-time = "2025-10-01T23:34:15Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:a5064b5e23772c8d164068cc7c12e01a75faf7b948ecd95a0d4007d7487e5f25", upload-time = "2025-10-01T23:34:19Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:8f81dedb4c6076ec325acc3b47525f9c550e5284a18eae1d9061c543f7b6e7de", upload-time = "2025-10-01T23:34:23Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:e1ee1b2346ade3ea90306dfbec7e8ff17bc220d344109d189ae09078333b0856", upload-time = "2025-10-01T23:34:28Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313-win_arm64.whl", hash = "sha256:64c187345509f2b1bb334feed4666e2c781ca381874bde589182f81247e61f88", upload-time = "2025-10-01T23:34:45Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:af81283ac671f434b1b25c95ba295f270e72db1fad48831eb5e4748ff9840041", upload-time = "2025-10-01T23:34:50Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:a9dbb6f64f63258bc811e2c0c99640a81e5af93c531ad96e95c5ec777ea46dab", upload-time = "2025-10-01T23:34:53Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.8.0%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:6d93a7165419bc4b2b907e859ccab0dea5deeab261448ae9a5ec5431f14c0e64", upload-time = "2025-10-01T23:34:58Z" },
 ]
 
 [[package]]
@@ -5270,21 +5280,21 @@ dependencies = [
     { name = "typing-extensions", marker = "(sys_platform != 'darwin' and extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart') or (sys_platform == 'darwin' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:0e611cfb16724e62252b67d31073bc5c490cb83e92ecdc1192762535e0e44487" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:3de2adb9b4443dc9210ef1f1b16da3647ace53553166d6360bbbd7edd6f16e4d" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:69b3785d28be5a9c56ab525788ec5000349ec59132a74b7d5e954b905015b992" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp311-cp311-win_arm64.whl", hash = "sha256:15b4ae6fe371d96bffb8e1e9af62164797db20a0dc1337345781659cfd0b8bb1" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:3bf9b442a51a2948e41216a76d7ab00f0694cfcaaa51b6f9bcab57b7f89843e6" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:7417d8c565f219d3455654cb431c6d892a3eb40246055e14d645422de13b9ea1" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:a4e06b4f441675d26b462123c8a83e77c55f1ec8ebc081203be2db1ea8054add" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-win_arm64.whl", hash = "sha256:1abe31f14b560c1f062699e966cb08ef5b67518a1cfac2d8547a3dbcd8387b06" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:3e532e553b37ee859205a9b2d1c7977fd6922f53bbb1b9bfdd5bdc00d1a60ed4" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:39b3dff6d8fba240ae0d1bede4ca11c2531ae3b47329206512d99e17907ff74b" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:404a7ab2fffaf2ca069e662f331eb46313692b2f1630df2720094284f390ccef" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313-win_arm64.whl", hash = "sha256:161decbff26a33f13cb5ba6d2c8f458bbf56193bcc32ecc70be6dd4c7a3ee79d" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:01b1884f724977a20c7da2f640f1c7b37f4a2c117a7f4a6c1c0424d14cb86322" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:031a597147fa81b1e6d79ccf1ad3ccc7fafa27941d6cf26ff5caaa384fb20e92" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:e586ab1363e3f86aa4cc133b7fdcf98deb1d2c13d43a7a6e5a6a18e9c5364893" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:0e611cfb16724e62252b67d31073bc5c490cb83e92ecdc1192762535e0e44487", upload-time = "2026-01-23T15:12:54Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:3de2adb9b4443dc9210ef1f1b16da3647ace53553166d6360bbbd7edd6f16e4d", upload-time = "2026-01-23T15:12:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:69b3785d28be5a9c56ab525788ec5000349ec59132a74b7d5e954b905015b992", upload-time = "2026-01-23T15:12:59Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp311-cp311-win_arm64.whl", hash = "sha256:15b4ae6fe371d96bffb8e1e9af62164797db20a0dc1337345781659cfd0b8bb1", upload-time = "2026-01-23T15:13:00Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:3bf9b442a51a2948e41216a76d7ab00f0694cfcaaa51b6f9bcab57b7f89843e6", upload-time = "2026-01-23T15:13:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:7417d8c565f219d3455654cb431c6d892a3eb40246055e14d645422de13b9ea1", upload-time = "2026-01-23T15:13:04Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:a4e06b4f441675d26b462123c8a83e77c55f1ec8ebc081203be2db1ea8054add", upload-time = "2026-01-23T15:13:06Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp312-cp312-win_arm64.whl", hash = "sha256:1abe31f14b560c1f062699e966cb08ef5b67518a1cfac2d8547a3dbcd8387b06", upload-time = "2026-01-23T15:13:08Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:3e532e553b37ee859205a9b2d1c7977fd6922f53bbb1b9bfdd5bdc00d1a60ed4", upload-time = "2026-01-23T15:13:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:39b3dff6d8fba240ae0d1bede4ca11c2531ae3b47329206512d99e17907ff74b", upload-time = "2026-01-23T15:13:12Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:404a7ab2fffaf2ca069e662f331eb46313692b2f1630df2720094284f390ccef", upload-time = "2026-01-23T15:13:13Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313-win_arm64.whl", hash = "sha256:161decbff26a33f13cb5ba6d2c8f458bbf56193bcc32ecc70be6dd4c7a3ee79d", upload-time = "2026-01-23T15:13:14Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:01b1884f724977a20c7da2f640f1c7b37f4a2c117a7f4a6c1c0424d14cb86322", upload-time = "2026-01-23T15:13:16Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:031a597147fa81b1e6d79ccf1ad3ccc7fafa27941d6cf26ff5caaa384fb20e92", upload-time = "2026-01-23T15:13:19Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.9.1%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:e586ab1363e3f86aa4cc133b7fdcf98deb1d2c13d43a7a6e5a6a18e9c5364893", upload-time = "2026-01-23T15:13:20Z" },
 ]
 
 [[package]]
@@ -5322,14 +5332,14 @@ dependencies = [
     { name = "typing-extensions", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-cu129') or (platform_machine != 'x86_64' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (platform_machine != 'x86_64' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'x86_64' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'linux' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:5a990644f98b4db59630a5b9cf41711294fe621131dbc41e1488f3a665c8b320" },
-    { url = "https://download.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:a070a0c3d357b44a239810767f7509c3fce3146e051751410b50630b12486cc2" },
-    { url = "https://download.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:c501c66fe5b0e2fc70f9d8a18e17a265f92ad1d1009dba03f5938d2f15a9066f" },
-    { url = "https://download.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:9968834a95e4b09f702549285f6210eade0d268b3b7e52b35aff1c6529fb8022" },
-    { url = "https://download.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:ab44cf28e6ca2df679f0845fb4b950c81834431218840ca01c0a1583892a0986" },
-    { url = "https://download.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:5adb25576c9cff0a25aab7e859f44121a5b150a6e319e027c27b55bf1ed57524" },
-    { url = "https://download.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:794482180a4f2d92a960f470fcd47e066dbe2eeb27816880e618d3ce031805f7" },
-    { url = "https://download.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:0df90a06330f53bebb40b5740e5c24c0aad4e8b363d09b02379f1c12ab43564b" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:5a990644f98b4db59630a5b9cf41711294fe621131dbc41e1488f3a665c8b320", upload-time = "2026-01-26T17:26:53Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:a070a0c3d357b44a239810767f7509c3fce3146e051751410b50630b12486cc2", upload-time = "2026-01-26T17:26:37Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:c501c66fe5b0e2fc70f9d8a18e17a265f92ad1d1009dba03f5938d2f15a9066f", upload-time = "2026-01-26T17:26:29Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:9968834a95e4b09f702549285f6210eade0d268b3b7e52b35aff1c6529fb8022", upload-time = "2026-01-26T17:26:28Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:ab44cf28e6ca2df679f0845fb4b950c81834431218840ca01c0a1583892a0986", upload-time = "2026-01-26T17:26:26Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:5adb25576c9cff0a25aab7e859f44121a5b150a6e319e027c27b55bf1ed57524", upload-time = "2026-01-26T17:26:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:794482180a4f2d92a960f470fcd47e066dbe2eeb27816880e618d3ce031805f7", upload-time = "2026-01-26T17:26:04Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torch-2.9.1%2Bcu129-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:0df90a06330f53bebb40b5740e5c24c0aad4e8b363d09b02379f1c12ab43564b", upload-time = "2026-01-26T17:25:41Z" },
 ]
 
 [[package]]
@@ -5381,14 +5391,14 @@ dependencies = [
     { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'aarch64' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'aarch64' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_python_implementation != 'CPython' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_python_implementation != 'CPython' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'linux' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:c9276857d241c6de257af765c0f51fc011af38cb725401495121b280913007cf" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:4573c6042950c20278e3608a9a38050ba0bc72e0049e1bbfd249caf859a8029b" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ddef94bf181e6447cbb05f38beaca8f6c5bb8d2b9ddced1aa3452025b9fc70d3" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:862e2e40bf09d865e5df080a84c1a39bbcef40e43140f4b1737eb3a389d3b38f" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:f851d32e94ca05e470f0c60e25726ec1e0eb71cb2ca5a0206b7fd03272ccc3c8" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:09535a9b727c0793cd07c1ace99f3f353626281bcc3e30c2f2314e3ebc9d3f96" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:68df9c9068984edff8065c2b6656725e6114fe89281b0cf122c7505305fc98a4" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:1951f10ed092f2dda57634f6a3950ef21c9d9352551aa84a9fccd51bbda18095" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:c9276857d241c6de257af765c0f51fc011af38cb725401495121b280913007cf", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:4573c6042950c20278e3608a9a38050ba0bc72e0049e1bbfd249caf859a8029b", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ddef94bf181e6447cbb05f38beaca8f6c5bb8d2b9ddced1aa3452025b9fc70d3", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:862e2e40bf09d865e5df080a84c1a39bbcef40e43140f4b1737eb3a389d3b38f", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:f851d32e94ca05e470f0c60e25726ec1e0eb71cb2ca5a0206b7fd03272ccc3c8", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:09535a9b727c0793cd07c1ace99f3f353626281bcc3e30c2f2314e3ebc9d3f96", upload-time = "2025-08-05T20:12:03Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:68df9c9068984edff8065c2b6656725e6114fe89281b0cf122c7505305fc98a4", upload-time = "2025-08-05T20:12:03Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:1951f10ed092f2dda57634f6a3950ef21c9d9352551aa84a9fccd51bbda18095", upload-time = "2025-08-05T20:12:03Z" },
 ]
 
 [[package]]
@@ -5456,14 +5466,14 @@ dependencies = [
     { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine != 'aarch64' and sys_platform == 'linux' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'aarch64' and sys_platform == 'linux' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_machine != 'aarch64' and sys_platform == 'linux' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_machine != 'aarch64' and extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_python_implementation != 'CPython' and sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_python_implementation != 'CPython' and sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_python_implementation != 'CPython' and extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform == 'darwin' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform == 'darwin' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform == 'darwin' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:e54bd7fc9472019308097d99102df9acee22aa2451ae808d27840bc874320292" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:db37df7eee906f8fe0a639fdc673f3541cb2e173169b16d4133447eb922d1938" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:9377faee65a290578280ac7f4884c3586253dac2ca28c60f458ff6efe86a6b05" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:9b302192b570657c1cc787a4d487ae4bbb7f2aab1c01b1fcc46757e7f86f391e" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:e1b1f530e8b71b1d079e23db45a0e621709061710ef8540aae8280aa039554ee" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:0c2d081e24204768e636cbf05e1377c8a6964b8ed6fa3aa5092ba9af9bbc19c5" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:89c2d04fe1cb7c31eb042f7b36e1ce8e2afacf769ecd5f216527e184e4857099" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:ab4653da31dc37f0a643f41f4da8bee647a8686bacf12d3929cac8aead186811" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:e54bd7fc9472019308097d99102df9acee22aa2451ae808d27840bc874320292", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:db37df7eee906f8fe0a639fdc673f3541cb2e173169b16d4133447eb922d1938", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:9377faee65a290578280ac7f4884c3586253dac2ca28c60f458ff6efe86a6b05", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:9b302192b570657c1cc787a4d487ae4bbb7f2aab1c01b1fcc46757e7f86f391e", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:e1b1f530e8b71b1d079e23db45a0e621709061710ef8540aae8280aa039554ee", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:0c2d081e24204768e636cbf05e1377c8a6964b8ed6fa3aa5092ba9af9bbc19c5", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:89c2d04fe1cb7c31eb042f7b36e1ce8e2afacf769ecd5f216527e184e4857099", upload-time = "2025-08-05T20:12:02Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.8.0%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:ab4653da31dc37f0a643f41f4da8bee647a8686bacf12d3929cac8aead186811", upload-time = "2025-08-05T20:12:02Z" },
 ]
 
 [[package]]
@@ -5479,14 +5489,14 @@ dependencies = [
     { name = "torch", version = "2.9.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'aarch64' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_python_implementation != 'CPython' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'linux' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'linux' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e6a4c796b1b5dbd820be83388c209d0f163ef5d74a43a06d519360fdacd36ed1" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:9d3956e2bcf8a67e7e8468d760209aed0a5de3cfbdd46e4adfba80a3bc2d0d7b" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c779c0380fbba12d63f56c093dd93be1222d6cc3caf140ad1d89c4a60b28eff1" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:f6fa882b750385fdb0a2aa5215a6a04b97cf9668b37617038a814c7630b2dc8d" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1-cp313-cp313-macosx_12_0_arm64.whl", hash = "sha256:1c521e9f70fab2e825f6b831ac314a79dc37f51c8d11cd5498c0f3c880a122e1" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:0b3fecc6bcfe46fcb905ea826ef63e9a052a6d9d1e2cd713f59a53a509fc8b5c" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:976c4106f9f1d86ecd74c1a6e1fbf903403f2a37547ba2ece262f82b0daae300" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:f5b0595fa19ee8c5ac6a997c0d14b662d9c92a08c43771698ae4c9e3f2273fdf" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e6a4c796b1b5dbd820be83388c209d0f163ef5d74a43a06d519360fdacd36ed1", upload-time = "2025-11-11T19:16:59Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:9d3956e2bcf8a67e7e8468d760209aed0a5de3cfbdd46e4adfba80a3bc2d0d7b", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c779c0380fbba12d63f56c093dd93be1222d6cc3caf140ad1d89c4a60b28eff1", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:f6fa882b750385fdb0a2aa5215a6a04b97cf9668b37617038a814c7630b2dc8d", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1-cp313-cp313-macosx_12_0_arm64.whl", hash = "sha256:1c521e9f70fab2e825f6b831ac314a79dc37f51c8d11cd5498c0f3c880a122e1", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:0b3fecc6bcfe46fcb905ea826ef63e9a052a6d9d1e2cd713f59a53a509fc8b5c", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:976c4106f9f1d86ecd74c1a6e1fbf903403f2a37547ba2ece262f82b0daae300", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:f5b0595fa19ee8c5ac6a997c0d14b662d9c92a08c43771698ae4c9e3f2273fdf", upload-time = "2025-11-11T19:16:58Z" },
 ]
 
 [[package]]
@@ -5572,14 +5582,14 @@ dependencies = [
     { name = "torch", version = "2.9.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_machine != 'aarch64' and sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'aarch64' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_python_implementation != 'CPython' and sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart') or (platform_python_implementation != 'CPython' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-cpu' and extra != 'extra-14-whisperlivekit-diarization-diart') or (sys_platform == 'darwin' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform == 'darwin' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:6adc89a3c903d552e1654102134734179036bb8b756acab3db27d8bd8bd4d186" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:54667bd392300887cf0948aa5a793ac51b4cef6395afdd9469e7ed9097dadac2" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:43cf20a2965cf081945c91d2dc8844377e5e3f1b172c0d0c18399ca3ecf1f899" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:53dd3155b794019e8de2dc49d044f410e6bce081d23a0e6548c156f37dfc9d0d" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:c3cb189e9b30ff639535c1152056cc2523aecf139978f2b9b89109e2d376909e" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:f5426c7766f1e6aae0f2e59967292b9c3a3a21012e12ac7dcfd138a489eca4c7" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:386141130d1f054225e483cfaa942fe0219f1340d737de9018417452b42cf994" },
-    { url = "https://download.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:0306bc184da793ffbfd6ae4ef32ab39215f64f4155c762f4c54970a991638bb5" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:6adc89a3c903d552e1654102134734179036bb8b756acab3db27d8bd8bd4d186", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:54667bd392300887cf0948aa5a793ac51b4cef6395afdd9469e7ed9097dadac2", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:43cf20a2965cf081945c91d2dc8844377e5e3f1b172c0d0c18399ca3ecf1f899", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:53dd3155b794019e8de2dc49d044f410e6bce081d23a0e6548c156f37dfc9d0d", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:c3cb189e9b30ff639535c1152056cc2523aecf139978f2b9b89109e2d376909e", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:f5426c7766f1e6aae0f2e59967292b9c3a3a21012e12ac7dcfd138a489eca4c7", upload-time = "2025-11-11T19:16:58Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:386141130d1f054225e483cfaa942fe0219f1340d737de9018417452b42cf994", upload-time = "2025-11-11T19:16:59Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchaudio-2.9.1%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:0306bc184da793ffbfd6ae4ef32ab39215f64f4155c762f4c54970a991638bb5", upload-time = "2025-11-11T19:16:58Z" },
 ]
 
 [[package]]
@@ -5595,10 +5605,10 @@ dependencies = [
     { name = "torch", version = "2.9.1+cu129", source = { registry = "https://download.pytorch.org/whl/cu129" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-cu129') or (platform_machine != 'x86_64' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (platform_machine != 'x86_64' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'x86_64' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'linux' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu129/torchaudio-2.9.1%2Bcu129-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:c1ff146bedc7df264bf4863eeb267ca997460e9e322c6e6ca1eeef1143e79911" },
-    { url = "https://download.pytorch.org/whl/cu129/torchaudio-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:a663aea7f1d830e656d55bd10d43597a421511cafaaccc5c37ddf498431fc761" },
-    { url = "https://download.pytorch.org/whl/cu129/torchaudio-2.9.1%2Bcu129-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:c783c92f84b1489157888f13c3fc316653e0a692cd197808a198ae1867335bca" },
-    { url = "https://download.pytorch.org/whl/cu129/torchaudio-2.9.1%2Bcu129-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:997a65cc713f117e1762499feafa140da8c11a999d2341ccd719e3657b528bf4" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torchaudio-2.9.1%2Bcu129-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:c1ff146bedc7df264bf4863eeb267ca997460e9e322c6e6ca1eeef1143e79911", upload-time = "2025-11-11T19:17:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torchaudio-2.9.1%2Bcu129-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:a663aea7f1d830e656d55bd10d43597a421511cafaaccc5c37ddf498431fc761", upload-time = "2025-11-11T19:17:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torchaudio-2.9.1%2Bcu129-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:c783c92f84b1489157888f13c3fc316653e0a692cd197808a198ae1867335bca", upload-time = "2025-11-11T19:17:09Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu129/torchaudio-2.9.1%2Bcu129-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:997a65cc713f117e1762499feafa140da8c11a999d2341ccd719e3657b528bf4", upload-time = "2025-11-11T19:17:10Z" },
 ]
 
 [[package]]
@@ -5635,14 +5645,14 @@ dependencies = [
     { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine != 'aarch64' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (platform_python_implementation != 'CPython' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'linux' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:49aa20e21f0c2bd458c71d7b449776cbd5f16693dd5807195a820612b8a229b7" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:01dc33ee24c79148aee7cdbcf34ae8a3c9da1674a591e781577b716d233b1fa6" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:e0e2c04a91403e8dd3af9756c6a024a1d9c0ed9c0d592a8314ded8f4fe30d440" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:6dd7c4d329a0e03157803031bc856220c6155ef08c26d4f5bbac938acecf0948" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:1c37e325e09a184b730c3ef51424f383ec5745378dc0eca244520aca29722600" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:2f7fd6c15f3697e80627b77934f77705f3bc0e98278b989b2655de01f6903e1d" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:2df618e1143805a7673aaf82cb5720dd9112d4e771983156aaf2ffff692eebf9" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:2a3299d2b1d5a7aed2d3b6ffb69c672ca8830671967eb1cee1497bacd82fe47b" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:49aa20e21f0c2bd458c71d7b449776cbd5f16693dd5807195a820612b8a229b7", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:01dc33ee24c79148aee7cdbcf34ae8a3c9da1674a591e781577b716d233b1fa6", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:e0e2c04a91403e8dd3af9756c6a024a1d9c0ed9c0d592a8314ded8f4fe30d440", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:6dd7c4d329a0e03157803031bc856220c6155ef08c26d4f5bbac938acecf0948", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:1c37e325e09a184b730c3ef51424f383ec5745378dc0eca244520aca29722600", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:2f7fd6c15f3697e80627b77934f77705f3bc0e98278b989b2655de01f6903e1d", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:2df618e1143805a7673aaf82cb5720dd9112d4e771983156aaf2ffff692eebf9", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:2a3299d2b1d5a7aed2d3b6ffb69c672ca8830671967eb1cee1497bacd82fe47b", upload-time = "2025-08-05T20:11:47Z" },
 ]
 
 [[package]]
@@ -5714,14 +5724,14 @@ dependencies = [
     { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux') or (sys_platform == 'darwin' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform == 'linux' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:d83d8075db43b8ca89680bdeb2f100c832e2a3aa61ee42c038b1a146e5e511b6" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:51603eb071d0681abc4db98b10ff394ace31f425852e8de249b91c09c60eb19a" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:ae459d4509d3b837b978dc6c66106601f916b6d2cda75c137e3f5f48324ce1da" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:a651ccc540cf4c87eb988730c59c2220c52b57adc276f044e7efb9830fa65a1d" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:dea90a67d60a5366b0358a0b8d6bf267805278697d6fd950cf0e31139e56d1be" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:82928788025170c62e7df1120dcdc0cd175bfc31c08374613ce6d1a040bc0cda" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:474d77adbbbed5166db3e5636b4b4ae3399c66ef5bfa12536e254b32259c90c0" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:8d6a47e23d7896f0ef9aa7ea7179eb6324e82438aa66d19884c2020d0646b104" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:d83d8075db43b8ca89680bdeb2f100c832e2a3aa61ee42c038b1a146e5e511b6", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp311-cp311-win_amd64.whl", hash = "sha256:51603eb071d0681abc4db98b10ff394ace31f425852e8de249b91c09c60eb19a", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:ae459d4509d3b837b978dc6c66106601f916b6d2cda75c137e3f5f48324ce1da", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp312-cp312-win_amd64.whl", hash = "sha256:a651ccc540cf4c87eb988730c59c2220c52b57adc276f044e7efb9830fa65a1d", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:dea90a67d60a5366b0358a0b8d6bf267805278697d6fd950cf0e31139e56d1be", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp313-cp313-win_amd64.whl", hash = "sha256:82928788025170c62e7df1120dcdc0cd175bfc31c08374613ce6d1a040bc0cda", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:474d77adbbbed5166db3e5636b4b4ae3399c66ef5bfa12536e254b32259c90c0", upload-time = "2025-08-05T20:11:47Z" },
+    { url = "https://download-r2.pytorch.org/whl/cpu/torchvision-0.23.0%2Bcpu-cp313-cp313t-win_amd64.whl", hash = "sha256:8d6a47e23d7896f0ef9aa7ea7179eb6324e82438aa66d19884c2020d0646b104", upload-time = "2025-08-05T20:11:47Z" },
 ]
 
 [[package]]
@@ -6216,7 +6226,7 @@ wheels = [
 
 [[package]]
 name = "whisperlivekit"
-version = "0.2.19"
+version = "0.2.20"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -6224,6 +6234,7 @@ dependencies = [
     { name = "huggingface-hub", version = "0.36.2", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
     { name = "huggingface-hub", version = "1.4.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13' or extra != 'extra-14-whisperlivekit-diarization-sortformer' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
     { name = "librosa" },
+    { name = "python-multipart" },
     { name = "soundfile" },
     { name = "tiktoken" },
     { name = "torch", version = "2.8.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform == 'darwin' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'darwin' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
@@ -6278,6 +6289,9 @@ diarization-diart = [
 diarization-sortformer = [
     { name = "nemo-toolkit", extra = ["asr"], marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
 ]
+listen = [
+    { name = "sounddevice" },
+]
 mlx-whisper = [
     { name = "mlx", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine != 'arm64' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (platform_machine != 'arm64' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'arm64' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'darwin' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (sys_platform != 'darwin' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'darwin' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'darwin' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
     { name = "mlx-whisper", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine != 'arm64' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (platform_machine != 'arm64' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (platform_machine != 'arm64' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'darwin' and extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (sys_platform != 'darwin' and extra == 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-diart') or (sys_platform != 'darwin' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf') or (sys_platform != 'darwin' and extra != 'extra-14-whisperlivekit-cu129' and extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
@@ -6287,6 +6301,8 @@ sentence-tokenizer = [
     { name = "wtpsplit" },
 ]
 test = [
+    { name = "datasets" },
+    { name = "librosa" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -6312,11 +6328,13 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "accelerate", marker = "extra == 'voxtral-hf'", specifier = ">=0.12" },
+    { name = "datasets", marker = "extra == 'test'", specifier = ">=2.14" },
     { name = "diart", marker = "extra == 'diarization-diart'" },
     { name = "fastapi" },
     { name = "faster-whisper", specifier = ">=1.2.0" },
     { name = "huggingface-hub", specifier = ">=0.25.0" },
     { name = "librosa" },
+    { name = "librosa", marker = "extra == 'test'" },
     { name = "mistral-common", extras = ["audio"], marker = "extra == 'voxtral-hf'" },
     { name = "mistral-common", extras = ["audio"], marker = "extra == 'voxtral-mlx'" },
     { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mlx-whisper'", specifier = ">=0.11.0" },
@@ -6328,6 +6346,8 @@ requires-dist = [
     { name = "nllw", marker = "extra == 'translation'" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21" },
+    { name = "python-multipart", specifier = ">=0.0.27" },
+    { name = "sounddevice", marker = "extra == 'listen'", specifier = ">=0.4.6" },
     { name = "soundfile" },
     { name = "tiktoken" },
     { name = "torch", specifier = ">=2.0.0" },
@@ -6353,7 +6373,7 @@ requires-dist = [
     { name = "websockets" },
     { name = "wtpsplit", marker = "extra == 'sentence-tokenizer'" },
 ]
-provides-extras = ["test", "translation", "sentence-tokenizer", "mlx-whisper", "voxtral-mlx", "voxtral-hf", "cpu", "cu129", "diarization-sortformer", "diarization-diart"]
+provides-extras = ["test", "translation", "sentence-tokenizer", "mlx-whisper", "voxtral-mlx", "voxtral-hf", "listen", "cpu", "cu129", "diarization-sortformer", "diarization-diart"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "rich", specifier = ">=14.3.3" }]
@@ -6501,9 +6521,9 @@ name = "yarl"
 version = "1.22.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "idna", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "multidict", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
-    { name = "propcache", marker = "(python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or (python_full_version < '3.13' and extra != 'extra-14-whisperlivekit-cu129' and extra != 'extra-14-whisperlivekit-diarization-diart' and extra == 'extra-14-whisperlivekit-diarization-sortformer') or extra == 'extra-14-whisperlivekit-diarization-diart' or (extra == 'extra-14-whisperlivekit-cpu' and extra == 'extra-14-whisperlivekit-cu129') or (extra == 'extra-14-whisperlivekit-diarization-sortformer' and extra == 'extra-14-whisperlivekit-voxtral-hf')" },
+    { name = "idna" },
+    { name = "multidict" },
+    { name = "propcache" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/57/63/0c6ebca57330cd313f6102b16dd57ffaf3ec4c83403dcb45dbd15c6f3ea1/yarl-1.22.0.tar.gz", hash = "sha256:bebf8557577d4401ba8bd9ff33906f1376c877aa78d1fe216ad01b4d6745af71", size = 187169, upload-time = "2025-10-06T14:12:55.963Z" }
 wheels = [
