@@ -13,6 +13,7 @@ RUN apt-get update && \
   python3-dev && \
   rm -rf /var/lib/apt/lists/*
 
+
 # Install UV and set up the environment 
 COPY --from=uvbin /uv /uvx /bin/
 
@@ -50,8 +51,11 @@ WORKDIR /app
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
-  ffmpeg &&\
-  rm -rf /var/lib/apt/lists/*
+  ffmpeg \
+  ca-certificates && \
+  rm -rf /var/lib/apt/lists/* && \
+  update-ca-certificates
+
 
 # Copy UV binaries
 COPY --from=uvbin /uv /uvx /bin/
