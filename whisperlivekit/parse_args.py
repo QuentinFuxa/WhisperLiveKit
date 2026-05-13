@@ -147,8 +147,8 @@ def parse_args():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3", "qwen3-mlx", "qwen3-mlx-simul", "qwen3-simul", "vllm-realtime"],
-        help="Select the ASR backend implementation. Use 'qwen3-mlx-simul' for Qwen3-ASR SimulStreaming on Apple Silicon (MLX). Use 'qwen3-mlx' for Qwen3-ASR LocalAgreement on MLX. Use 'qwen3-simul' for Qwen3-ASR SimulStreaming (PyTorch). Use 'vllm-realtime' for vLLM Realtime WebSocket.",
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3", "qwen3-mlx", "qwen3-mlx-simul", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-simul", "vllm-realtime"],
+        help="Select the ASR backend implementation. Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-mlx-simul' for Qwen3-ASR SimulStreaming on Apple Silicon (MLX). Use 'qwen3-mlx' for Qwen3-ASR LocalAgreement on MLX. Use 'qwen3-simul' for Qwen3-ASR SimulStreaming (PyTorch). Use 'vllm-realtime' for vLLM Realtime WebSocket.",
     )
     parser.add_argument(
         "--no-vac",
@@ -210,6 +210,34 @@ def parse_args():
         default="",
         dest="vllm_model",
         help="Model name to use with vLLM (e.g. Qwen/Qwen3-ASR-1.7B).",
+    )
+    parser.add_argument(
+        "--vllm-aligner-model",
+        type=str,
+        default="Qwen/Qwen3-ForcedAligner-0.6B",
+        dest="vllm_aligner_model",
+        help="ForcedAligner model name to use with the qwen3-vllm backend.",
+    )
+    parser.add_argument(
+        "--vllm-tensor-parallel-size",
+        type=int,
+        default=1,
+        dest="vllm_tensor_parallel_size",
+        help="Tensor parallel size for the qwen3-vllm in-process backend.",
+    )
+    parser.add_argument(
+        "--vllm-gpu-memory-utilization",
+        type=float,
+        default=0.45,
+        dest="vllm_gpu_memory_utilization",
+        help="GPU memory utilization fraction for qwen3-vllm vLLM engines.",
+    )
+    parser.add_argument(
+        "--vllm-dtype",
+        type=str,
+        default="auto",
+        dest="vllm_dtype",
+        help="dtype passed to vLLM for qwen3-vllm engines, e.g. auto, bfloat16, float16.",
     )
 
     # SimulStreaming-specific arguments

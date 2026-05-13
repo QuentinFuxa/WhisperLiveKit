@@ -99,6 +99,11 @@ class TranscriptionEngine:
             "lora_path": config.lora_path,
             "lan": config.lan,
             "direct_english_translation": config.direct_english_translation,
+            "vllm_model": config.vllm_model,
+            "vllm_aligner_model": config.vllm_aligner_model,
+            "vllm_tensor_parallel_size": config.vllm_tensor_parallel_size,
+            "vllm_gpu_memory_utilization": config.vllm_gpu_memory_utilization,
+            "vllm_dtype": config.vllm_dtype,
         }
 
         if config.transcription:
@@ -111,6 +116,16 @@ class TranscriptionEngine:
                     lan=config.lan,
                 )
                 logger.info("Using vLLM Realtime streaming backend at %s", config.vllm_url)
+            elif config.backend == "qwen3-vllm":
+                from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMASR
+                self.tokenizer = None
+                self.asr = Qwen3VLLMASR(**transcription_common_params)
+                logger.info("Using Qwen3-ASR vLLM in-process backend")
+            elif config.backend == "qwen3-vllm-metal":
+                from whisperlivekit.qwen3_vllm_metal_asr import Qwen3VLLMMetalASR
+                self.tokenizer = None
+                self.asr = Qwen3VLLMMetalASR(**transcription_common_params)
+                logger.info("Using Qwen3-ASR vllm-metal in-process backend")
             elif config.backend == "voxtral-mlx":
                 from whisperlivekit.voxtral_mlx_asr import VoxtralMLXASR
                 self.tokenizer = None
@@ -220,6 +235,8 @@ class TranscriptionEngine:
 
         self.translation_model = None
         if config.target_language:
+            if config.backend in {"qwen3-vllm", "qwen3-vllm-metal"}:
+                raise ValueError(f"{config.backend} supports transcription only; translation is not supported.")
             if config.lan == 'auto' and config.backend_policy != "simulstreaming":
                 raise ValueError('Translation cannot be set with language auto when transcription backend is not simulstreaming')
             else:
@@ -253,6 +270,12 @@ def online_factory(args, asr, language=None):
     if backend == "vllm-realtime":
         from whisperlivekit.vllm_realtime import VLLMRealtimeOnlineProcessor
         return VLLMRealtimeOnlineProcessor(asr)
+    if backend == "qwen3-vllm":
+        from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMOnlineProcessor
+        return Qwen3VLLMOnlineProcessor(asr)
+    if backend == "qwen3-vllm-metal":
+        from whisperlivekit.qwen3_vllm_metal_asr import Qwen3VLLMMetalOnlineProcessor
+        return Qwen3VLLMMetalOnlineProcessor(asr)
     if backend == "qwen3-simul-kv":
         from whisperlivekit.qwen3_simul_kv import Qwen3SimulKVOnlineProcessor
         return Qwen3SimulKVOnlineProcessor(asr)

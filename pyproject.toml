@@ -52,6 +52,12 @@ voxtral-hf = [
     "mistral-common[audio]",
     "accelerate>=0.12",
 ]
+qwen3-vllm-metal = [
+    'vllm-metal[stt]; python_version >= "3.12" and sys_platform == "darwin" and platform_machine == "arm64"',
+]
+qwen3-vllm = [
+    'vllm[audio]>=0.20.0; sys_platform == "linux"',
+]
 listen = ["sounddevice>=0.4.6"]
 cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
 cu129 = [
@@ -85,6 +91,10 @@ conflicts = [
     [
         { extra = "voxtral-hf" },
         { extra = "diarization-sortformer" },
+    ],
+    [
+        { extra = "qwen3-vllm" },
+        { extra = "diarization-diart" },
     ],
 ]
 

@@ -57,6 +57,13 @@ try:
 except ImportError:
     pass
 
+try:
+    from whisperlivekit.qwen3_vllm_asr import _load_vllm_runtime
+    _load_vllm_runtime()
+    AVAILABLE_BACKENDS.append("qwen3-vllm")
+except (ImportError, Exception):
+    pass
+
 BACKEND_CONFIG = {
     "whisper": {"model_size": "tiny", "lan": "en"},
     "voxtral-mlx": {"backend": "voxtral-mlx", "lan": "en"},
@@ -68,6 +75,7 @@ BACKEND_CONFIG = {
         "custom_alignment_heads": "scripts/alignment_heads_qwen3_asr_1.7B.json",
     },
     "qwen3-mlx": {"backend": "qwen3-mlx", "lan": "en"},
+    "qwen3-vllm": {"backend": "qwen3-vllm", "lan": "en"},
 }
 
 # Voxtral backends flush all words at once with proportionally-distributed
@@ -77,7 +85,7 @@ BACKEND_CONFIG = {
 VOXTRAL_BACKENDS = {"voxtral-mlx", "voxtral-hf"}
 
 # Backends that use batch-flush and may have non-monotonic timestamps
-BATCH_FLUSH_BACKENDS = {"voxtral-mlx", "voxtral-hf", "qwen3", "qwen3-simul", "qwen3-mlx"}
+BATCH_FLUSH_BACKENDS = {"voxtral-mlx", "voxtral-hf", "qwen3", "qwen3-simul", "qwen3-mlx", "qwen3-vllm"}
 
 
 def backend_kwargs(backend: str) -> dict:
