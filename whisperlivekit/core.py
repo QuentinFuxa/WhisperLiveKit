@@ -104,19 +104,12 @@ class TranscriptionEngine:
             "vllm_tensor_parallel_size": config.vllm_tensor_parallel_size,
             "vllm_gpu_memory_utilization": config.vllm_gpu_memory_utilization,
             "vllm_dtype": config.vllm_dtype,
+            "holdback_words": config.holdback_words,
+            "trim_sentence_buffer": config.trim_sentence_buffer,
         }
 
         if config.transcription:
-            if config.backend == "vllm-realtime":
-                from whisperlivekit.vllm_realtime import VLLMRealtimeASR
-                self.tokenizer = None
-                self.asr = VLLMRealtimeASR(
-                    vllm_url=config.vllm_url,
-                    model_name=config.vllm_model or "Qwen/Qwen3-ASR-1.7B",
-                    lan=config.lan,
-                )
-                logger.info("Using vLLM Realtime streaming backend at %s", config.vllm_url)
-            elif config.backend == "qwen3-vllm":
+            if config.backend == "qwen3-vllm":
                 from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMASR
                 self.tokenizer = None
                 self.asr = Qwen3VLLMASR(**transcription_common_params)
@@ -136,48 +129,6 @@ class TranscriptionEngine:
                 self.tokenizer = None
                 self.asr = VoxtralHFStreamingASR(**transcription_common_params)
                 logger.info("Using Voxtral HF Transformers streaming backend")
-            elif config.backend == "qwen3-mlx-simul":
-                from whisperlivekit.qwen3_mlx_simul import Qwen3MLXSimulStreamingASR
-                self.tokenizer = None
-                self.asr = Qwen3MLXSimulStreamingASR(
-                    **transcription_common_params,
-                    alignment_heads_path=config.custom_alignment_heads,
-                    border_fraction=getattr(config, 'border_fraction', 0.15),
-                )
-                logger.info("Using Qwen3 MLX SimulStreaming backend")
-            elif config.backend == "qwen3-mlx":
-                from whisperlivekit.qwen3_mlx_asr import Qwen3MLXASR
-                self.tokenizer = None
-                self.asr = Qwen3MLXASR(**transcription_common_params)
-                logger.info("Using Qwen3 MLX native backend")
-            elif config.backend == "qwen3-simul-kv":
-                from whisperlivekit.qwen3_simul_kv import Qwen3SimulKVASR
-                self.tokenizer = None
-                self.asr = Qwen3SimulKVASR(
-                    **transcription_common_params,
-                    alignment_heads_path=config.custom_alignment_heads,
-                    border_fraction=getattr(config, 'border_fraction', 0.25),
-                )
-                logger.info("Using Qwen3-ASR backend with SimulStreaming+KV policy")
-            elif config.backend == "qwen3-simul":
-                from whisperlivekit.qwen3_simul import Qwen3SimulStreamingASR
-                self.tokenizer = None
-                self.asr = Qwen3SimulStreamingASR(
-                    **transcription_common_params,
-                    alignment_heads_path=config.custom_alignment_heads,
-                )
-                logger.info("Using Qwen3-ASR backend with SimulStreaming policy")
-            elif config.backend == "qwen3":
-                from whisperlivekit.qwen3_asr import Qwen3ASR
-                self.asr = Qwen3ASR(**transcription_common_params)
-                self.asr.confidence_validation = config.confidence_validation
-                self.asr.tokenizer = None
-                self.asr.buffer_trimming = config.buffer_trimming
-                self.asr.buffer_trimming_sec = config.buffer_trimming_sec
-                self.asr.backend_choice = "qwen3"
-                from whisperlivekit.warmup import warmup_asr
-                warmup_asr(self.asr, config.warmup_file)
-                logger.info("Using Qwen3-ASR backend with LocalAgreement policy")
             elif config.backend_policy == "simulstreaming":
                 simulstreaming_params = {
                     "disable_fast_encoder": config.disable_fast_encoder,
@@ -267,35 +218,18 @@ def online_factory(args, asr, language=None):
         asr = SessionASRProxy(asr, language)
 
     backend = getattr(args, 'backend', None)
-    if backend == "vllm-realtime":
-        from whisperlivekit.vllm_realtime import VLLMRealtimeOnlineProcessor
-        return VLLMRealtimeOnlineProcessor(asr)
     if backend == "qwen3-vllm":
         from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMOnlineProcessor
         return Qwen3VLLMOnlineProcessor(asr)
     if backend == "qwen3-vllm-metal":
         from whisperlivekit.qwen3_vllm_metal_asr import Qwen3VLLMMetalOnlineProcessor
         return Qwen3VLLMMetalOnlineProcessor(asr)
-    if backend == "qwen3-simul-kv":
-        from whisperlivekit.qwen3_simul_kv import Qwen3SimulKVOnlineProcessor
-        return Qwen3SimulKVOnlineProcessor(asr)
-    if backend == "qwen3-mlx-simul":
-        from whisperlivekit.qwen3_mlx_simul import Qwen3MLXSimulStreamingOnlineProcessor
-        return Qwen3MLXSimulStreamingOnlineProcessor(asr)
-    if backend == "qwen3-mlx":
-        from whisperlivekit.qwen3_mlx_asr import Qwen3MLXOnlineProcessor
-        return Qwen3MLXOnlineProcessor(asr)
-    if backend == "qwen3-simul":
-        from whisperlivekit.qwen3_simul import Qwen3SimulStreamingOnlineProcessor
-        return Qwen3SimulStreamingOnlineProcessor(asr)
     if backend == "voxtral-mlx":
         from whisperlivekit.voxtral_mlx_asr import VoxtralMLXOnlineProcessor
         return VoxtralMLXOnlineProcessor(asr)
     if backend == "voxtral":
         from whisperlivekit.voxtral_hf_streaming import VoxtralHFStreamingOnlineProcessor
         return VoxtralHFStreamingOnlineProcessor(asr)
-    if backend == "qwen3":
-        return OnlineASRProcessor(asr)
     if args.backend_policy == "simulstreaming":
         from whisperlivekit.simul_whisper import SimulStreamingOnlineProcessor
         return SimulStreamingOnlineProcessor(asr)

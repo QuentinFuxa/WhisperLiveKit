@@ -137,7 +137,7 @@ Auto-pull model if not downloaded, then start the server.
 wlk run voxtral                        # Pull voxtral + start server
 wlk run large-v3                       # Pull large-v3 + start server
 wlk run faster-whisper:base            # Specific backend + model
-wlk run qwen3:1.7b                     # Qwen3-ASR
+wlk run qwen3-vllm-metal:0.6b          # Qwen3-ASR on Apple Silicon
 wlk run voxtral --lan fr --port 9000   # Extra server options passed through
 ```
 
@@ -196,7 +196,7 @@ Download models for offline use.
 wlk pull base                      # Download for best available backend
 wlk pull faster-whisper:large-v3   # Specific backend + model
 wlk pull voxtral                   # Voxtral HF model
-wlk pull qwen3:1.7b               # Qwen3-ASR 1.7B
+wlk pull qwen3-vllm-metal:0.6b    # Qwen3-ASR vLLM Metal 0.6B
 ```
 
 ### `wlk rm`

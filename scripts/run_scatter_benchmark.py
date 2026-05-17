@@ -76,10 +76,6 @@ def is_backend_available(backend):
             from whisperlivekit.voxtral_mlx.loader import load_voxtral_model; return True  # noqa
         elif backend == "voxtral":
             from transformers import VoxtralRealtimeForConditionalGeneration; return True  # noqa
-        elif backend in ("qwen3", "qwen3-simul"):
-            from whisperlivekit.qwen3_asr import _patch_transformers_compat
-            _patch_transformers_compat()
-            from qwen_asr import Qwen3ASRModel; return True  # noqa
     except (ImportError, Exception):
         pass
     return False
@@ -220,8 +216,8 @@ def generate_scatter(results, system_info, output_path, n_samples, lang="en",
     """
     import matplotlib
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches
+    import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
 
     fig, ax = plt.subplots(figsize=(12, 7), facecolor="white")
@@ -265,9 +261,6 @@ def generate_scatter(results, system_info, output_path, n_samples, lang="en",
         "mlx SS base":    (-55, 8),
         "mlx SS small":   (-55, -5),
         "voxtral mlx":    (10, -14),
-        "qwen3 0.6B":     (10, 8),
-        "qwen3-mlx 0.6B": (10, -14),
-        "qwen3-mlx 1.7B": (10, 8),
         "fw LA large-v3": (8, -5),
         "fw SS large-v3": (8, 5),
     }

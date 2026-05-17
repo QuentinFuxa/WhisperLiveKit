@@ -147,8 +147,8 @@ def parse_args():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3", "qwen3-mlx", "qwen3-mlx-simul", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-simul", "vllm-realtime"],
-        help="Select the ASR backend implementation. Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-mlx-simul' for Qwen3-ASR SimulStreaming on Apple Silicon (MLX). Use 'qwen3-mlx' for Qwen3-ASR LocalAgreement on MLX. Use 'qwen3-simul' for Qwen3-ASR SimulStreaming (PyTorch). Use 'vllm-realtime' for vLLM Realtime WebSocket.",
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal"],
+        help="Select the ASR backend implementation. Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon.",
     )
     parser.add_argument(
         "--no-vac",
@@ -196,14 +196,7 @@ def parse_args():
         default=False,
         help="If set, raw PCM (s16le) data is expected as input and FFmpeg will be bypassed. Frontend will use AudioWorklet instead of MediaRecorder."
     )
-    # vLLM Realtime backend arguments
-    parser.add_argument(
-        "--vllm-url",
-        type=str,
-        default="ws://localhost:8000/v1/realtime",
-        dest="vllm_url",
-        help="URL of the vLLM realtime WebSocket endpoint.",
-    )
+    # vLLM Qwen3 backend arguments
     parser.add_argument(
         "--vllm-model",
         type=str,
@@ -238,6 +231,20 @@ def parse_args():
         default="auto",
         dest="vllm_dtype",
         help="dtype passed to vLLM for qwen3-vllm engines, e.g. auto, bfloat16, float16.",
+    )
+    parser.add_argument(
+        "--holdback-words",
+        type=int,
+        default=None,
+        dest="holdback_words",
+        help="For Qwen3 vllm-metal, keep this many trailing words uncommitted.",
+    )
+    parser.add_argument(
+        "--no-trim-sentence-buffer",
+        action="store_false",
+        default=True,
+        dest="trim_sentence_buffer",
+        help="Disable Qwen3 vllm-metal buffer trimming at committed sentence boundaries.",
     )
 
     # SimulStreaming-specific arguments

@@ -78,6 +78,7 @@ def backend_factory(
             confidence_validation,
             warmup_file=None,
             min_chunk_size=None,
+            **_unused_kwargs,
         ):
     backend_choice = backend
     custom_reference = model_path or model_dir

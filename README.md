@@ -108,6 +108,7 @@ See [docs/API.md](docs/API.md) for the complete API reference.
 | **Translation** | `uv sync --extra translation` | `pip install -e ".[translation]"` |
 | **Sentence tokenizer** | `uv sync --extra sentence_tokenizer` | `pip install -e ".[sentence_tokenizer]"` |
 | **Voxtral (HF backend)** | `uv sync --extra voxtral-hf` | `pip install -e ".[voxtral-hf]"` |
+| **Qwen3-ASR vLLM Metal (Apple Silicon)** | Install vLLM with the official vllm-metal script first, then `uv sync --extra qwen3-vllm-metal` | Install vLLM with the official vllm-metal script first, then `pip install -e ".[qwen3-vllm-metal]"` |
 | **Speaker diarization (Sortformer / NeMo)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
 | *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
 
@@ -121,7 +122,7 @@ uv sync --extra cu129 --extra diarization-sortformer
 uv sync --extra cu129 --extra voxtral-hf --extra translation
 ```
 
-`voxtral-hf` and `diarization-sortformer` are intentionally incompatible extras and must be installed in separate environments.
+`voxtral-hf` / `qwen3-vllm-metal` and `diarization-sortformer` are intentionally incompatible extras and must be installed in separate environments.
 
 See **Parameters & Configuration** below on how to use them.
 
@@ -235,7 +236,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--target-language` | If sets, translates using [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting). [200 languages available](docs/supported_languages.md). If you want to translate to english, you can also use `--direct-english-translation`. The STT model will try to directly output the translation. | `None` |
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
-| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace) | `auto` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon) | `auto` |
 | `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
 | `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
@@ -262,7 +263,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | SimulStreaming backend options | Description | Default |
 |-----------|-------------|---------|
 | `--disable-fast-encoder` | Disable Faster Whisper or MLX Whisper backends for the encoder (if installed). Inference can be slower but helpful when GPU memory is limited | `False` |
-| `--custom-alignment-heads` | Use your own alignment heads, useful when `--model-dir` is used. Use `scripts/determine_alignment_heads.py` to extract them. <img src="scripts/alignment_heads_qwen3_asr_1.7B.png" alt="WhisperLiveKit Demo" width="300">
+| `--custom-alignment-heads` | Use your own alignment heads, useful when `--model-dir` is used. Use `scripts/determine_alignment_heads.py` to extract them.
  | `None` |
 | `--frame-threshold` | AlignAtt frame threshold (lower = faster, higher = more accurate) | `25` |
 | `--beams` | Number of beams for beam search (1 = greedy decoding) | `1` |

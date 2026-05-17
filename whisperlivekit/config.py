@@ -72,13 +72,14 @@ class WhisperLiveKitConfig:
     nllb_backend: str = "transformers"
     nllb_size: str = "600M"
 
-    # vLLM Realtime backend
-    vllm_url: str = "ws://localhost:8000/v1/realtime"
+    # vLLM Qwen3 backends
     vllm_model: str = ""
     vllm_aligner_model: str = "Qwen/Qwen3-ForcedAligner-0.6B"
     vllm_tensor_parallel_size: int = 1
     vllm_gpu_memory_utilization: float = 0.45
     vllm_dtype: str = "auto"
+    holdback_words: Optional[int] = None
+    trim_sentence_buffer: bool = True
 
     def __post_init__(self):
         # .en model suffix forces English

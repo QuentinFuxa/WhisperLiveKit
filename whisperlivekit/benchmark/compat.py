@@ -14,16 +14,6 @@ BACKEND_LANGUAGES: Dict[str, Optional[Set[str]]] = {
     "mlx-whisper": None,
     "voxtral-mlx": None,
     "voxtral": None,
-    "qwen3": {
-        "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it",
-        "ko", "ru", "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv",
-        "da", "fi", "pl", "cs", "fa", "el", "hu", "mk", "ro",
-    },
-    "qwen3-simul": {
-        "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it",
-        "ko", "ru", "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv",
-        "da", "fi", "pl", "cs", "fa", "el", "hu", "mk", "ro",
-    },
 }
 
 
@@ -71,15 +61,6 @@ def detect_available_backends() -> List[str]:
     except ImportError:
         pass
 
-    try:
-        from whisperlivekit.qwen3_asr import _patch_transformers_compat
-        _patch_transformers_compat()
-        from qwen_asr import Qwen3ASRModel  # noqa: F401
-        backends.append("qwen3")
-        backends.append("qwen3-simul")
-    except (ImportError, Exception):
-        pass
-
     return backends
 
 
@@ -98,7 +79,7 @@ def resolve_backend(backend: str) -> str:
     # Priority order
     priority = [
         "faster-whisper", "mlx-whisper", "voxtral-mlx", "voxtral",
-        "qwen3", "qwen3-simul", "whisper",
+        "whisper",
     ]
     for p in priority:
         if p in available:

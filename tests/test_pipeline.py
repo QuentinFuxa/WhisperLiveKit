@@ -43,24 +43,18 @@ except ImportError:
     pass
 
 try:
-    from whisperlivekit.qwen3_asr import _patch_transformers_compat
-    _patch_transformers_compat()
-    from qwen_asr import Qwen3ASRModel  # noqa: F401
-    AVAILABLE_BACKENDS.append("qwen3")
-    AVAILABLE_BACKENDS.append("qwen3-simul")
+    from whisperlivekit.qwen3_vllm_asr import _load_vllm_runtime
+    _load_vllm_runtime()
+    AVAILABLE_BACKENDS.append("qwen3-vllm")
 except (ImportError, Exception):
     pass
 
 try:
-    import mlx_qwen3_asr  # noqa: F401
-    AVAILABLE_BACKENDS.append("qwen3-mlx")
-except ImportError:
-    pass
-
-try:
-    from whisperlivekit.qwen3_vllm_asr import _load_vllm_runtime
-    _load_vllm_runtime()
-    AVAILABLE_BACKENDS.append("qwen3-vllm")
+    from whisperlivekit.qwen3_vllm_metal_asr import _ensure_supported_platform
+    _ensure_supported_platform()
+    from vllm_metal.stt.loader import load_model  # noqa: F401
+    from vllm_metal.stt.qwen3_asr.adapter import Qwen3ASRRuntimeAdapter  # noqa: F401
+    AVAILABLE_BACKENDS.append("qwen3-vllm-metal")
 except (ImportError, Exception):
     pass
 
@@ -68,14 +62,8 @@ BACKEND_CONFIG = {
     "whisper": {"model_size": "tiny", "lan": "en"},
     "voxtral-mlx": {"backend": "voxtral-mlx", "lan": "en"},
     "voxtral-hf": {"backend": "voxtral", "lan": "en"},
-    "qwen3": {"backend": "qwen3", "lan": "en"},
-    "qwen3-simul": {
-        "backend": "qwen3-simul",
-        "lan": "en",
-        "custom_alignment_heads": "scripts/alignment_heads_qwen3_asr_1.7B.json",
-    },
-    "qwen3-mlx": {"backend": "qwen3-mlx", "lan": "en"},
     "qwen3-vllm": {"backend": "qwen3-vllm", "lan": "en"},
+    "qwen3-vllm-metal": {"backend": "qwen3-vllm-metal", "model_size": "0.6b", "lan": "en"},
 }
 
 # Voxtral backends flush all words at once with proportionally-distributed
@@ -85,7 +73,12 @@ BACKEND_CONFIG = {
 VOXTRAL_BACKENDS = {"voxtral-mlx", "voxtral-hf"}
 
 # Backends that use batch-flush and may have non-monotonic timestamps
-BATCH_FLUSH_BACKENDS = {"voxtral-mlx", "voxtral-hf", "qwen3", "qwen3-simul", "qwen3-mlx", "qwen3-vllm"}
+BATCH_FLUSH_BACKENDS = {
+    "voxtral-mlx",
+    "voxtral-hf",
+    "qwen3-vllm",
+    "qwen3-vllm-metal",
+}
 
 
 def backend_kwargs(backend: str) -> dict:
@@ -201,7 +194,7 @@ async def test_text_appears_progressively(backend, medium_sample):
     if len(non_empty) >= 3:
         # Check that text grew at SOME point during streaming.
         # Compare first vs last non-empty snapshot rather than mid vs last,
-        # because some streaming backends (e.g. qwen3-simul) produce all text
+        # because some streaming backends produce all text
         # during the feed phase and the latter half of snapshots are stable.
         assert len(non_empty[-1]) > len(non_empty[0]), (
             f"Text not growing during streaming for {backend}"
@@ -276,7 +269,7 @@ async def test_silence_flushes_all_words(backend, medium_sample):
         # Key assertion: silence must have committed most words.
         # Some backends (voxtral-hf) produce extra words from right-padding
         # at finish(), and MPS inference may leave some words in the pipeline.
-        # Generative backends (qwen3-simul) keep producing new text on each
+        # Generative backends keep producing new text on each
         # inference call, so finish() adds significantly more words.
         if words_at_finish > 3:
             min_pct = 0.20 if backend in BATCH_FLUSH_BACKENDS else 0.50
