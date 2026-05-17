@@ -351,7 +351,23 @@ def parse_args():
         type=str,
         default=None,
         dest="model_path",
-        help="Direct path to the SimulStreaming Whisper .pt model file. Overrides --model for SimulStreaming backend.",
+        help="Legacy alias for --decoder-model-path. Direct path to the SimulStreaming PyTorch Whisper decoder/alignment model.",
+    )
+
+    simulstreaming_group.add_argument(
+        "--encoder-model-path",
+        type=str,
+        default=None,
+        dest="encoder_model_path",
+        help="Direct path or Hugging Face repo ID for the fast encoder weights used by SimulStreaming hybrid mode (CT2 for faster-whisper, MLX for mlx-whisper).",
+    )
+
+    simulstreaming_group.add_argument(
+        "--decoder-model-path",
+        type=str,
+        default=None,
+        dest="decoder_model_path",
+        help="Direct path or Hugging Face repo ID for the PyTorch Whisper decoder/alignment weights used by SimulStreaming.",
     )
 
     simulstreaming_group.add_argument(

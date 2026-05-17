@@ -230,12 +230,9 @@ class AudioProcessor:
     async def ffmpeg_stdout_reader(self) -> None:
         """Read audio data from FFmpeg stdout and process it into the PCM pipeline."""
         beg = time()
+        cancelled = False
         while True:
             try:
-                if self.is_stopping:
-                    logger.info("Stopping ffmpeg_stdout_reader due to stopping flag.")
-                    break
-
                 state = await self.ffmpeg_manager.get_state() if self.ffmpeg_manager else FFmpegState.STOPPED
                 if state == FFmpegState.FAILED:
                     logger.error("FFmpeg is in FAILED state, cannot read data")
@@ -253,28 +250,43 @@ class AudioProcessor:
                 beg = current_time
 
                 chunk = await self.ffmpeg_manager.read_data(buffer_size)
-                if not chunk:
-                    # No data currently available
+                if chunk is None:
                     await asyncio.sleep(0.05)
                     continue
+                if chunk == b"":
+                    logger.info("FFmpeg stdout reached EOF.")
+                    break
 
                 self.pcm_buffer.extend(chunk)
                 await self.handle_pcm_data()
 
             except asyncio.CancelledError:
                 logger.info("ffmpeg_stdout_reader cancelled.")
+                cancelled = True
                 break
             except Exception as e:
                 logger.warning(f"Exception in ffmpeg_stdout_reader: {e}")
                 logger.debug(f"Traceback: {traceback.format_exc()}")
                 await asyncio.sleep(0.2)
 
+        if cancelled:
+            return
+
+        await self._flush_remaining_pcm()
+        if self.ffmpeg_manager:
+            await self.ffmpeg_manager.stop()
+
         logger.info("FFmpeg stdout processing finished. Signaling downstream processors if needed.")
+        await self._signal_input_complete()
+
+    async def _signal_input_complete(self) -> None:
+        """Signal end-of-input to the first active processing queue."""
         if self.transcription_queue:
             await self.transcription_queue.put(SENTINEL)
-        if self.diarization:
+            return
+        if self.diarization_queue:
             await self.diarization_queue.put(SENTINEL)
-        if self.translation:
+        if self.translation_queue:
             await self.translation_queue.put(SENTINEL)
 
     async def _finish_transcription(self) -> None:
@@ -681,14 +693,12 @@ class AudioProcessor:
             self.is_stopping = True
 
             # Flush any remaining PCM data before signaling end-of-stream
-            if self.is_pcm_input and self.pcm_buffer:
-                await self._flush_remaining_pcm()
-
-            if self.transcription_queue:
-                await self.transcription_queue.put(SENTINEL)
-
-            if not self.is_pcm_input and self.ffmpeg_manager:
-                await self.ffmpeg_manager.stop()
+            if self.is_pcm_input:
+                if self.pcm_buffer:
+                    await self._flush_remaining_pcm()
+                await self._signal_input_complete()
+            elif self.ffmpeg_manager:
+                await self.ffmpeg_manager.close_stdin()
 
             return
 

@@ -15,6 +15,7 @@ tests, and validate transcription quality, timing, and streaming behavior.
 """
 
 import logging
+import os
 
 import pytest
 
@@ -42,12 +43,13 @@ try:
 except ImportError:
     pass
 
-try:
-    from whisperlivekit.qwen3_vllm_asr import _load_vllm_runtime
-    _load_vllm_runtime()
-    AVAILABLE_BACKENDS.append("qwen3-vllm")
-except (ImportError, Exception):
-    pass
+if os.environ.get("WLK_RUN_QWEN3_VLLM_E2E") == "1":
+    try:
+        from whisperlivekit.qwen3_vllm_asr import _load_vllm_runtime
+        _load_vllm_runtime()
+        AVAILABLE_BACKENDS.append("qwen3-vllm")
+    except (ImportError, Exception):
+        pass
 
 try:
     from whisperlivekit.qwen3_vllm_metal_asr import _ensure_supported_platform

@@ -2,7 +2,8 @@ import gc
 import logging
 import platform
 import sys
-from typing import List, Tuple
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -161,29 +162,47 @@ class SimulStreamingASR:
 
         self.fast_encoder = False
         self._resolved_model_path = None
+        self._resolved_decoder_model_path = None
+        self._resolved_encoder_model_path = None
         self.encoder_backend = "whisper"
         self.use_full_mlx = getattr(self, "use_full_mlx", False)
         preferred_backend = getattr(self, "backend", "auto")
         compatible_whisper_mlx, compatible_faster_whisper = True, True
 
-        if self.model_path:
-            resolved_model_path = resolve_model_path(self.model_path)
-            self._resolved_model_path = resolved_model_path
-            self.model_path = str(resolved_model_path)
+        decoder_path = self._decoder_path_from_config()
+        decoder_model_info = None
+        if decoder_path:
+            resolved_decoder_path = resolve_model_path(decoder_path)
+            self._resolved_decoder_model_path = resolved_decoder_path
+            self._resolved_model_path = resolved_decoder_path
+            self.decoder_model_path = str(resolved_decoder_path)
+            if self.model_path:
+                self.model_path = str(resolved_decoder_path)
 
-            model_info = detect_model_format(resolved_model_path)
-            compatible_whisper_mlx = model_info.compatible_whisper_mlx
-            compatible_faster_whisper = model_info.compatible_faster_whisper
-
-            if not self.use_full_mlx and not model_info.has_pytorch:
+            decoder_model_info = detect_model_format(resolved_decoder_path)
+            if not self.use_full_mlx and not decoder_model_info.has_pytorch:
                 raise FileNotFoundError(
-                    f"No PyTorch checkpoint (.pt/.bin/.safetensors) found under {self.model_path}"
+                    self._decoder_path_error(resolved_decoder_path, decoder_model_info)
                 )
-            self.model_name = resolved_model_path.name if resolved_model_path.is_dir() else resolved_model_path.stem
+            self.model_name = self._model_name_from_path(resolved_decoder_path)
         elif self.model_size is not None:
             self.model_name = self.model_size
         else:
-            raise ValueError("Either model_size or model_path must be specified for SimulStreaming.")
+            raise ValueError(
+                "Either --model or --decoder-model-path must be specified for SimulStreaming. "
+                "Use --encoder-model-path only for the fast encoder weights."
+            )
+
+        if self.encoder_model_path:
+            resolved_encoder_path = resolve_model_path(self.encoder_model_path)
+            self._resolved_encoder_model_path = resolved_encoder_path
+            self.encoder_model_path = str(resolved_encoder_path)
+            encoder_model_info = detect_model_format(resolved_encoder_path)
+            compatible_whisper_mlx = encoder_model_info.compatible_whisper_mlx
+            compatible_faster_whisper = encoder_model_info.compatible_faster_whisper
+        elif decoder_model_info is not None:
+            compatible_whisper_mlx = decoder_model_info.compatible_whisper_mlx
+            compatible_faster_whisper = decoder_model_info.compatible_faster_whisper
 
         is_multilingual = not self.model_name.endswith(".en")
 
@@ -231,8 +250,10 @@ class SimulStreamingASR:
 
         if self.use_full_mlx and HAS_MLX_WHISPER:
             logger.info('MLX Whisper backend used.')
-            if self._resolved_model_path is not None:
-                mlx_model_path = str(self._resolved_model_path)
+            if self._resolved_encoder_model_path is not None:
+                mlx_model_path = str(self._resolved_encoder_model_path)
+            elif self._resolved_decoder_model_path is not None:
+                mlx_model_path = str(self._resolved_decoder_model_path)
             else:
                 mlx_model_path = mlx_model_mapping.get(self.model_name)
             if not mlx_model_path:
@@ -244,8 +265,10 @@ class SimulStreamingASR:
         elif self.encoder_backend == "mlx-whisper":
             # hybrid mode: mlx encoder + pytorch decoder
             logger.info('SimulStreaming will use MLX Whisper encoder with PyTorch decoder.')
-            if self._resolved_model_path is not None:
-                mlx_model_path = str(self._resolved_model_path)
+            if self._resolved_encoder_model_path is not None:
+                mlx_model_path = str(self._resolved_encoder_model_path)
+            elif self._resolved_decoder_model_path is not None:
+                mlx_model_path = str(self._resolved_decoder_model_path)
             else:
                 mlx_model_path = mlx_model_mapping.get(self.model_name)
             if not mlx_model_path:
@@ -256,8 +279,10 @@ class SimulStreamingASR:
             self.shared_model = self.load_model()
         elif self.encoder_backend == "faster-whisper":
             logger.info('SimulStreaming will use Faster Whisper for the encoder.')
-            if self._resolved_model_path is not None:
-                fw_model = str(self._resolved_model_path)
+            if self._resolved_encoder_model_path is not None:
+                fw_model = str(self._resolved_encoder_model_path)
+            elif self._resolved_decoder_model_path is not None:
+                fw_model = str(self._resolved_decoder_model_path)
             else:
                 fw_model = self.model_name
             self.fw_encoder = WhisperModel(
@@ -268,6 +293,40 @@ class SimulStreamingASR:
             self.shared_model = self.load_model()
         else:
             self.shared_model = self.load_model()
+
+    def _decoder_path_from_config(self) -> Optional[str]:
+        """Resolve the decoder path from explicit config and legacy aliases."""
+        legacy_model_path = getattr(self, "model_path", None)
+        decoder_model_path = getattr(self, "decoder_model_path", None)
+        if legacy_model_path and decoder_model_path and legacy_model_path != decoder_model_path:
+            raise ValueError(
+                "--model-path is a legacy alias for --decoder-model-path; provide only one "
+                "decoder path or make both values identical."
+            )
+        return decoder_model_path or legacy_model_path
+
+    @staticmethod
+    def _model_name_from_path(path: Path) -> str:
+        return path.name if path.is_dir() else path.stem
+
+    @staticmethod
+    def _decoder_path_error(path: Path, model_info) -> str:
+        ct2_markers = {"model.bin", "encoder.bin", "decoder.bin"}
+        vocab_markers = {"vocabulary.json", "vocabulary.txt", "shared_vocabulary.json"}
+        looks_like_ct2 = (
+            path.is_dir()
+            and any((path / marker).exists() for marker in ct2_markers)
+            and any((path / marker).exists() for marker in vocab_markers)
+        )
+        if (model_info.compatible_faster_whisper or looks_like_ct2) and not model_info.has_pytorch:
+            return (
+                f"SimulStreaming --model-path/--decoder-model-path must point to "
+                f"PyTorch Whisper decoder/alignment weights, but {path} looks like a "
+                "Faster-Whisper/CTranslate2 encoder-only directory. Use "
+                "--encoder-model-path <ct2_dir> together with --model <whisper-model>, "
+                "or provide --decoder-model-path <pytorch_dir> for the decoder."
+            )
+        return f"No PyTorch checkpoint (.pt/.bin/.safetensors) found under {path}"
 
     def _warmup_mlx_model(self):
         """Warmup the full MLX model."""
@@ -305,7 +364,10 @@ class SimulStreamingASR:
         return "whisper"
 
     def _has_custom_model_path(self):
-        return self._resolved_model_path is not None
+        return (
+            self._resolved_encoder_model_path is not None
+            or self._resolved_decoder_model_path is not None
+        )
 
     def _can_use_mlx(self, compatible_whisper_mlx):
         if not HAS_MLX_WHISPER:
@@ -322,7 +384,7 @@ class SimulStreamingASR:
         return True
 
     def load_model(self):
-        model_ref = str(self._resolved_model_path) if self._resolved_model_path else self.model_name
+        model_ref = str(self._resolved_decoder_model_path) if self._resolved_decoder_model_path else self.model_name
         lora_path = getattr(self, 'lora_path', None)
         whisper_model = load_model(
             name=model_ref,
