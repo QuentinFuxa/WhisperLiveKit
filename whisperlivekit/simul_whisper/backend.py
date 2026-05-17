@@ -1,6 +1,7 @@
 import gc
 import logging
 import platform
+import re
 import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -17,6 +18,7 @@ from whisperlivekit.warmup import load_file
 from whisperlivekit.whisper import load_model, tokenizer
 
 logger = logging.getLogger(__name__)
+_WORD_RE = re.compile(r"[^\W_]+(?:'[^\W_]+)*", re.UNICODE)
 
 
 HAS_MLX_WHISPER = mlx_backend_available(warn_on_missing=True)
@@ -37,6 +39,11 @@ MIN_DURATION_REAL_SILENCE = 5
 class SimulStreamingOnlineProcessor:
     """Online processor for SimulStreaming ASR."""
     SAMPLING_RATE = 16000
+    _COMMITTED_EPSILON = 0.05
+    _INTRA_BATCH_REWIND_SECONDS = 0.75
+    _REWIND_RESET_SECONDS = 1.0
+    _RECENT_WORD_HISTORY = 80
+    _MIN_REPETITION_WORDS = 12
 
     def __init__(self, asr, logfile=sys.stderr):
         self.asr = asr
@@ -44,6 +51,8 @@ class SimulStreamingOnlineProcessor:
         self.end = 0.0
         self.buffer = []
         self.model = self._create_alignatt()
+        self._last_committed_end = 0.0
+        self._recent_words = []
 
         if asr.tokenizer:
             self.model.tokenizer = asr.tokenizer
@@ -80,6 +89,8 @@ class SimulStreamingOnlineProcessor:
         if long_silence:
             self.model.refresh_segment(complete=True)
             self.model.global_time_offset = silence_duration + offset
+            self._last_committed_end = max(self._last_committed_end, self.model.global_time_offset)
+            self._recent_words = []
 
     def insert_audio_chunk(self, audio: np.ndarray, audio_stream_end_time):
         """Append an audio chunk to be processed by SimulStreaming."""
@@ -96,10 +107,118 @@ class SimulStreamingOnlineProcessor:
         self.model.refresh_segment(complete=True)
         self.model.speaker = change_speaker.speaker
         self.model.global_time_offset = change_speaker.start
+        self._last_committed_end = max(self._last_committed_end, change_speaker.start)
+        self._recent_words = []
 
     def get_buffer(self):
         concat_buffer = Transcript.from_tokens(tokens= self.buffer, sep='')
         return concat_buffer
+
+    @staticmethod
+    def _words_from_tokens(tokens: List[ASRToken]) -> List[str]:
+        words: List[str] = []
+        for token in tokens:
+            text = (token.text or "").casefold()
+            words.extend(_WORD_RE.findall(text))
+        return words
+
+    @classmethod
+    def _has_repetition_loop(cls, words: List[str]) -> bool:
+        if len(words) < cls._MIN_REPETITION_WORDS:
+            return False
+
+        single_run = 1
+        for previous, current in zip(words, words[1:]):
+            if current == previous:
+                single_run += 1
+                if single_run >= 8:
+                    return True
+            else:
+                single_run = 1
+
+        max_ngram = min(8, len(words) // 2)
+        for size in range(2, max_ngram + 1):
+            repeat_count = 1
+            cursor = len(words)
+            while cursor - (2 * size) >= 0:
+                tail = words[cursor - size:cursor]
+                previous = words[cursor - (2 * size):cursor - size]
+                if tail != previous:
+                    break
+                repeat_count += 1
+                cursor -= size
+
+            if repeat_count >= 3 and repeat_count * size >= cls._MIN_REPETITION_WORDS:
+                return True
+
+        for size in range(2, max_ngram + 1):
+            counts = {}
+            for index in range(0, len(words) - size + 1):
+                ngram = tuple(words[index:index + size])
+                counts[ngram] = counts.get(ngram, 0) + 1
+            if not counts:
+                continue
+            most_common_count = max(counts.values())
+            coverage = most_common_count * size / len(words)
+            if (
+                most_common_count >= 4
+                and most_common_count * size >= cls._MIN_REPETITION_WORDS
+                and coverage >= 0.55
+            ):
+                return True
+
+        return False
+
+    def _reset_after_unstable_output(self, reason: str) -> None:
+        logger.warning("[SimulStreaming guard] %s; resetting current segment", reason)
+        self.model.refresh_segment(complete=True)
+        self.model.global_time_offset = max(self._last_committed_end, self.end)
+        self.buffer = []
+        self._recent_words = []
+
+    def _filter_stable_words(self, tokens: List[ASRToken]) -> List[ASRToken]:
+        stable: List[ASRToken] = []
+        last_end = self._last_committed_end
+
+        for token in tokens:
+            token_start = float(token.start or 0.0)
+            token_end = float(token.end or token_start)
+            if token_end < token_start:
+                logger.warning(
+                    "[SimulStreaming guard] dropping invalid token span %.2f -> %.2f: %r",
+                    token_start,
+                    token_end,
+                    token.text,
+                )
+                continue
+            if token_end <= self._last_committed_end + self._COMMITTED_EPSILON:
+                logger.debug(
+                    "[SimulStreaming guard] dropping stale token ending at %.2f after %.2f: %r",
+                    token_end,
+                    self._last_committed_end,
+                    token.text,
+                )
+                continue
+            if stable and last_end - token_end > self._INTRA_BATCH_REWIND_SECONDS:
+                logger.debug(
+                    "[SimulStreaming guard] dropping rewound token ending at %.2f after %.2f: %r",
+                    token_end,
+                    last_end,
+                    token.text,
+                )
+                continue
+            stable.append(token)
+            last_end = max(last_end, token_end)
+
+        return stable
+
+    def _remember_committed_words(self, tokens: List[ASRToken]) -> None:
+        words = self._words_from_tokens(tokens)
+        if not words:
+            return
+        self._recent_words.extend(words)
+        if len(self._recent_words) > self._RECENT_WORD_HISTORY:
+            self._recent_words = self._recent_words[-self._RECENT_WORD_HISTORY:]
 
     def process_iter(self, is_last=False) -> Tuple[List[ASRToken], float]:
         """
@@ -117,8 +236,29 @@ class SimulStreamingOnlineProcessor:
                 self.buffer.extend(timestamped_words)
                 return [], self.end
 
+            stable_words = self._filter_stable_words(timestamped_words)
+            if not stable_words:
+                max_end = max(float(token.end or 0.0) for token in timestamped_words)
+                if self._last_committed_end - max_end > self._REWIND_RESET_SECONDS:
+                    self._reset_after_unstable_output(
+                        f"all emitted words rewound behind committed time "
+                        f"{self._last_committed_end:.2f}s"
+                    )
+                self.buffer = []
+                return [], self.end
+
+            words_for_loop_check = self._recent_words + self._words_from_tokens(stable_words)
+            if self._has_repetition_loop(words_for_loop_check):
+                self._reset_after_unstable_output("repetition loop detected")
+                return [], self.end
+
             self.buffer = []
-            return timestamped_words, self.end
+            self._last_committed_end = max(
+                self._last_committed_end,
+                max(float(token.end or 0.0) for token in stable_words),
+            )
+            self._remember_committed_words(stable_words)
+            return stable_words, self.end
         except Exception as e:
             logger.exception(f"SimulStreaming processing error: {e}")
             return [], self.end

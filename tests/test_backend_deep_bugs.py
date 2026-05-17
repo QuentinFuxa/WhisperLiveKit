@@ -152,6 +152,152 @@ def test_simulstreaming_uses_explicit_mlx_encoder_path(tmp_path, monkeypatch):
     assert load_calls[0][0] == str(pytorch_dir)
 
 
+class FakeSimulStreamingModel:
+    def __init__(self, batches):
+        self.batches = list(batches)
+        self.cfg = SimpleNamespace(language="en")
+        self.refresh_calls = []
+        self.global_time_offset = 0.0
+
+    def infer(self, is_last=False):
+        return self.batches.pop(0) if self.batches else []
+
+    def refresh_segment(self, complete=False):
+        self.refresh_calls.append(complete)
+
+
+def _make_simul_processor(model, end=0.0):
+    from whisperlivekit.simul_whisper.backend import SimulStreamingOnlineProcessor
+
+    processor = object.__new__(SimulStreamingOnlineProcessor)
+    processor.asr = SimpleNamespace(use_full_mlx=True)
+    processor.model = model
+    processor.end = end
+    processor.buffer = []
+    processor._last_committed_end = 0.0
+    processor._recent_words = []
+    return processor
+
+
+def test_simulstreaming_filters_rewound_words_after_committed_time():
+    from whisperlivekit.timed_objects import ASRToken
+
+    model = FakeSimulStreamingModel(
+        [
+            [
+                ASRToken(10.00, 10.10, " hello"),
+                ASRToken(10.20, 10.30, " world"),
+            ],
+            [
+                ASRToken(9.50, 9.60, " stale"),
+                ASRToken(10.35, 10.45, " again"),
+                ASRToken(10.25, 10.35, " stale2"),
+                ASRToken(10.50, 10.60, " now"),
+            ],
+        ]
+    )
+    processor = _make_simul_processor(model, end=11.0)
+
+    first, _ = processor.process_iter()
+    second, _ = processor.process_iter()
+
+    assert [token.text for token in first] == [" hello", " world"]
+    assert [token.text for token in second] == [" again", " now"]
+    assert processor._last_committed_end == pytest.approx(10.60)
+    assert model.refresh_calls == []
+
+
+def test_simulstreaming_keeps_minor_intra_batch_timestamp_jitter():
+    from whisperlivekit.timed_objects import ASRToken
+
+    model = FakeSimulStreamingModel(
+        [
+            [
+                ASRToken(1.00, 1.10, " concord"),
+                ASRToken(1.60, 1.70, " returned"),
+                ASRToken(2.20, 2.30, " its"),
+                ASRToken(2.18, 2.28, " place"),
+                ASRToken(2.50, 2.60, " amidst"),
+            ]
+        ]
+    )
+    processor = _make_simul_processor(model, end=3.0)
+
+    tokens, _ = processor.process_iter()
+
+    assert [token.text for token in tokens] == [
+        " concord",
+        " returned",
+        " its",
+        " place",
+        " amidst",
+    ]
+    assert model.refresh_calls == []
+
+
+def test_simulstreaming_resets_when_all_words_rewind_far_behind():
+    from whisperlivekit.timed_objects import ASRToken
+
+    model = FakeSimulStreamingModel(
+        [[ASRToken(186.0, 186.1, " old"), ASRToken(187.0, 187.1, " text")]]
+    )
+    processor = _make_simul_processor(model, end=195.0)
+    processor._last_committed_end = 191.2
+
+    tokens, processed_upto = processor.process_iter()
+
+    assert tokens == []
+    assert processed_upto == 195.0
+    assert model.refresh_calls == [True]
+    assert model.global_time_offset == 195.0
+    assert processor.buffer == []
+
+
+def test_simulstreaming_resets_repetition_loop_before_emitting_words():
+    from whisperlivekit.timed_objects import ASRToken
+
+    phrase = [" Det", " ar", " en", " ny", " kriska", " klimat"]
+    tokens = [
+        ASRToken(idx * 0.2, idx * 0.2 + 0.1, word)
+        for idx, word in enumerate(phrase * 3)
+    ]
+    model = FakeSimulStreamingModel([tokens])
+    processor = _make_simul_processor(model, end=42.0)
+
+    emitted, processed_upto = processor.process_iter()
+
+    assert emitted == []
+    assert processed_upto == 42.0
+    assert model.refresh_calls == [True]
+    assert model.global_time_offset == 42.0
+    assert processor._last_committed_end == 0.0
+
+
+def test_simulstreaming_detects_repetition_across_small_batches():
+    from whisperlivekit.timed_objects import ASRToken
+
+    batches = []
+    phrase = [" Det", " ar", " en", " ny", " kriska", " klimat"]
+    for repeat in range(3):
+        batches.append(
+            [
+                ASRToken(repeat * 2.0 + idx * 0.2, repeat * 2.0 + idx * 0.2 + 0.1, word)
+                for idx, word in enumerate(phrase)
+            ]
+        )
+    model = FakeSimulStreamingModel(batches)
+    processor = _make_simul_processor(model, end=10.0)
+
+    first, _ = processor.process_iter()
+    second, _ = processor.process_iter()
+    third, _ = processor.process_iter()
+
+    assert len(first) == 6
+    assert len(second) == 6
+    assert third == []
+    assert model.refresh_calls == [True]
+
+
 def test_ctranslate2_storage_view_converts_to_tensor():
     ctranslate2 = pytest.importorskip("ctranslate2")
     from whisperlivekit.simul_whisper.simul_whisper import _encoder_features_to_tensor
