@@ -119,6 +119,7 @@ class AlignAttBase(ABC):
             self.state.segments = []
         self.state.log_segments += 1
         self.state.pending_incomplete_tokens = []
+        self.state.pending_incomplete_token_timestamps = []
         self.state.pending_retries = 0
 
     def segments_len(self):
@@ -277,12 +278,19 @@ class AlignAttBase(ABC):
 
         # Post-decode: split tokens and build timestamped words
         tokens_to_split = self._tokens_to_list(current_tokens, token_len_before)
+        token_timestamps = self._normalize_token_timestamps(
+            l_absolute_timestamps,
+            len(tokens_to_split),
+        )
         if self.state.pending_incomplete_tokens:
             logger.debug(
                 f"[UTF-8 Fix] Prepending {len(self.state.pending_incomplete_tokens)} "
                 f"pending tokens: {self.state.pending_incomplete_tokens}"
             )
-            tokens_to_split = self.state.pending_incomplete_tokens + tokens_to_split
+            tokens_to_split, token_timestamps = self._prepend_pending_tokens(
+                tokens_to_split,
+                token_timestamps,
+            )
 
         new_hypothesis, split_words, split_tokens = self._split_tokens(
             tokens_to_split, fire_detected, is_last
@@ -298,9 +306,9 @@ class AlignAttBase(ABC):
             self.state.first_timestamp = l_absolute_timestamps[0]
 
         timestamped_words = self._build_timestamped_words(
-            split_words, split_tokens, l_absolute_timestamps
+            split_words, split_tokens, token_timestamps
         )
-        self._handle_pending_tokens(split_words, split_tokens)
+        self._handle_pending_tokens(split_words, split_tokens, token_timestamps)
 
         return timestamped_words
 
@@ -319,36 +327,102 @@ class AlignAttBase(ABC):
                 new_hypothesis = []
         return new_hypothesis, split_words, split_tokens
 
-    def _build_timestamped_words(self, split_words, split_tokens, l_absolute_timestamps):
+    @staticmethod
+    def _normalize_token_timestamps(timestamps, expected_len):
+        normalized = [float(ts) for ts in timestamps[:expected_len]]
+        if len(normalized) >= expected_len:
+            return normalized
+        fallback = normalized[-1] if normalized else 0.0
+        return normalized + [fallback] * (expected_len - len(normalized))
+
+    def _prepend_pending_tokens(self, tokens_to_split, token_timestamps):
+        pending_tokens = list(self.state.pending_incomplete_tokens)
+        pending_timestamps = list(
+            getattr(self.state, "pending_incomplete_token_timestamps", [])
+        )
+
+        if len(pending_timestamps) != len(pending_tokens):
+            logger.warning(
+                "[UTF-8 Fix] Pending token/timestamp length mismatch: "
+                "%d tokens, %d timestamps",
+                len(pending_tokens),
+                len(pending_timestamps),
+            )
+            fallback = (
+                pending_timestamps[-1]
+                if pending_timestamps
+                else (token_timestamps[0] if token_timestamps else 0.0)
+            )
+            if len(pending_timestamps) > len(pending_tokens):
+                pending_timestamps = pending_timestamps[:len(pending_tokens)]
+            else:
+                pending_timestamps.extend(
+                    [fallback] * (len(pending_tokens) - len(pending_timestamps))
+                )
+
+        return pending_tokens + tokens_to_split, pending_timestamps + token_timestamps
+
+    @staticmethod
+    def _word_timestamps(token_timestamps, start_idx, token_count):
+        return token_timestamps[start_idx:start_idx + token_count]
+
+    @staticmethod
+    def _fallback_timestamp(token_timestamps, idx):
+        if not token_timestamps:
+            return 0.0
+        if idx < len(token_timestamps):
+            return token_timestamps[idx]
+        return token_timestamps[-1]
+
+    def _build_timestamped_words(self, split_words, split_tokens, token_timestamps):
         """Build list of timestamped ASRToken from split words."""
+        MIN_WORD_DURATION = 0.02
+        FALLBACK_WORD_DURATION = 0.10
+
         timestamped_words = []
         timestamp_idx = 0
         replacement_char = "\ufffd"
 
         for word, word_tokens in zip(split_words, split_tokens):
+            word_token_count = len(word_tokens)
             if replacement_char in word:
                 cleaned = word.replace(replacement_char, "")
                 if not cleaned.strip():
                     logger.debug(f"[UTF-8 Filter] Skipping: {repr(word)}")
-                    timestamp_idx += len(word_tokens)
+                    timestamp_idx += word_token_count
                     continue
                 logger.debug(f"[UTF-8 Filter] Cleaned {repr(word)} -> {repr(cleaned)}")
                 word = cleaned
 
-            try:
-                current_timestamp = l_absolute_timestamps[timestamp_idx]
-            except IndexError:
+            word_timestamps = self._word_timestamps(
+                token_timestamps,
+                timestamp_idx,
+                word_token_count,
+            )
+            if not word_timestamps:
                 logger.warning(
-                    f"Timestamp index {timestamp_idx} out of range, using last timestamp"
+                    "Timestamp index %d out of range, using local fallback",
+                    timestamp_idx,
                 )
-                current_timestamp = (
-                    l_absolute_timestamps[-1] if l_absolute_timestamps else 0.0
-                )
-            timestamp_idx += len(word_tokens)
+                word_timestamps = [
+                    self._fallback_timestamp(token_timestamps, timestamp_idx)
+                ]
+
+            start_timestamp = word_timestamps[0]
+            next_word_idx = timestamp_idx + word_token_count
+            if next_word_idx < len(token_timestamps):
+                end_timestamp = token_timestamps[next_word_idx]
+            else:
+                end_timestamp = word_timestamps[-1] + FALLBACK_WORD_DURATION
+            end_timestamp = max(
+                end_timestamp,
+                start_timestamp + MIN_WORD_DURATION,
+            )
+            timestamp_idx += word_token_count
 
             timestamp_entry = ASRToken(
-                start=round(current_timestamp, 2),
-                end=round(current_timestamp + 0.1, 2),
+                start=round(start_timestamp, 2),
+                end=round(end_timestamp, 2),
                 text=word,
                 speaker=self.state.speaker,
                 detected_language=self.state.detected_language,
@@ -357,7 +431,7 @@ class AlignAttBase(ABC):
 
         return timestamped_words
 
-    def _handle_pending_tokens(self, split_words, split_tokens):
+    def _handle_pending_tokens(self, split_words, split_tokens, token_timestamps):
         """Handle incomplete UTF-8 tokens for next chunk."""
         MAX_PENDING_TOKENS = 10
         MAX_PENDING_RETRIES = 2
@@ -371,9 +445,22 @@ class AlignAttBase(ABC):
                     f"after {MAX_PENDING_RETRIES} retries (won't resolve)"
                 )
                 self.state.pending_incomplete_tokens = []
+                self.state.pending_incomplete_token_timestamps = []
                 self.state.pending_retries = 0
             elif len(split_tokens[-1]) <= MAX_PENDING_TOKENS:
                 self.state.pending_incomplete_tokens = split_tokens[-1]
+                pending_start_idx = sum(len(tokens) for tokens in split_tokens[:-1])
+                pending_timestamps = self._word_timestamps(
+                    token_timestamps,
+                    pending_start_idx,
+                    len(split_tokens[-1]),
+                )
+                self.state.pending_incomplete_token_timestamps = (
+                    self._normalize_token_timestamps(
+                        pending_timestamps,
+                        len(split_tokens[-1]),
+                    )
+                )
                 logger.debug(
                     f"[UTF-8 Fix] Holding {len(self.state.pending_incomplete_tokens)} "
                     f"incomplete tokens for next chunk (retry {self.state.pending_retries})"
@@ -384,9 +471,11 @@ class AlignAttBase(ABC):
                     f"(exceeds limit of {MAX_PENDING_TOKENS}, likely hallucination)"
                 )
                 self.state.pending_incomplete_tokens = []
+                self.state.pending_incomplete_token_timestamps = []
                 self.state.pending_retries = 0
         else:
             self.state.pending_incomplete_tokens = []
+            self.state.pending_incomplete_token_timestamps = []
             self.state.pending_retries = 0
 
     # === Repetition penalty ===

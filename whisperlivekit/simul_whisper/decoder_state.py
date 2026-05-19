@@ -26,6 +26,7 @@ class DecoderState:
     context: Any = None
 
     pending_incomplete_tokens: List[int] = field(default_factory=list)
+    pending_incomplete_token_timestamps: List[float] = field(default_factory=list)
     pending_retries: int = 0
 
     global_time_offset: float = 0.0
@@ -80,6 +81,7 @@ class DecoderState:
         self.last_attend_frame = -rewind_threshold
         self.cumulative_time_offset = 0.0
         self.pending_incomplete_tokens = []
+        self.pending_incomplete_token_timestamps = []
         self.pending_retries = 0
         self.log_segments += 1
 
@@ -95,4 +97,3 @@ class DecoderState:
         self.tokens = []
         self.kv_cache = {}
         self.first_timestamp = None
-

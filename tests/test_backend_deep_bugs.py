@@ -298,6 +298,95 @@ def test_simulstreaming_detects_repetition_across_small_batches():
     assert model.refresh_calls == [True]
 
 
+def _make_alignatt_timestamp_tester(offset=0.0):
+    from whisperlivekit.simul_whisper.align_att_base import AlignAttBase
+
+    class TimestampAligner(AlignAttBase):
+        pass
+
+    TimestampAligner.__abstractmethods__ = frozenset()
+    aligner = TimestampAligner()
+    aligner.state = SimpleNamespace(
+        speaker=2,
+        detected_language="en",
+        global_time_offset=offset,
+        pending_incomplete_tokens=[],
+        pending_incomplete_token_timestamps=[],
+        pending_retries=0,
+    )
+    return aligner
+
+
+def test_alignatt_word_end_uses_next_word_timestamp_with_offset():
+    aligner = _make_alignatt_timestamp_tester(offset=10.0)
+
+    tokens = aligner._build_timestamped_words(
+        split_words=[" hello", " world"],
+        split_tokens=[[101, 102], [103]],
+        token_timestamps=[0.50, 0.70, 1.20],
+    )
+
+    assert tokens[0].start == pytest.approx(10.50)
+    assert tokens[0].end == pytest.approx(11.20)
+    assert tokens[1].start == pytest.approx(11.20)
+    assert tokens[1].end == pytest.approx(11.30)
+    assert tokens[0].end <= tokens[1].start
+
+
+def test_alignatt_final_multitoken_word_uses_last_token_timestamp_fallback():
+    aligner = _make_alignatt_timestamp_tester()
+
+    tokens = aligner._build_timestamped_words(
+        split_words=[" longer"],
+        split_tokens=[[201, 202]],
+        token_timestamps=[2.00, 2.34],
+    )
+
+    assert tokens[0].start == pytest.approx(2.00)
+    assert tokens[0].end == pytest.approx(2.44)
+
+
+def test_alignatt_single_token_word_keeps_short_numeric_end():
+    aligner = _make_alignatt_timestamp_tester()
+
+    tokens = aligner._build_timestamped_words(
+        split_words=[" word"],
+        split_tokens=[[301]],
+        token_timestamps=[4.00],
+    )
+
+    assert tokens[0].start == pytest.approx(4.00)
+    assert tokens[0].end == pytest.approx(4.10)
+
+
+def test_alignatt_pending_utf8_tokens_preserve_original_timestamps():
+    aligner = _make_alignatt_timestamp_tester()
+
+    aligner._handle_pending_tokens(
+        split_words=[" caf\ufffd"],
+        split_tokens=[[401, 402]],
+        token_timestamps=[3.20, 3.24],
+    )
+    assert aligner.state.pending_incomplete_tokens == [401, 402]
+    assert aligner.state.pending_incomplete_token_timestamps == [3.20, 3.24]
+
+    merged_tokens, merged_timestamps = aligner._prepend_pending_tokens(
+        tokens_to_split=[403, 404],
+        token_timestamps=[4.00, 4.12],
+    )
+    assert merged_tokens == [401, 402, 403, 404]
+    assert merged_timestamps == [3.20, 3.24, 4.00, 4.12]
+
+    words = aligner._build_timestamped_words(
+        split_words=[" cafe", " next"],
+        split_tokens=[[401, 402, 403], [404]],
+        token_timestamps=merged_timestamps,
+    )
+
+    assert words[0].start == pytest.approx(3.20)
+    assert words[0].end == pytest.approx(4.12)
+
+
 def test_ctranslate2_storage_view_converts_to_tensor():
     ctranslate2 = pytest.importorskip("ctranslate2")
     from whisperlivekit.simul_whisper.simul_whisper import _encoder_features_to_tensor
