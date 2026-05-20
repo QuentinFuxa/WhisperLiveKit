@@ -221,6 +221,7 @@ class OpenaiApiASR(ASRBase):
     """Uses OpenAI's Whisper API for transcription."""
     def __init__(self, lan=None, temperature=0, logfile=sys.stderr):
         self.logfile = logfile
+        self.transcribe_kargs = {}
         self.modelname = "whisper-1"
         self.original_language = None if lan == "auto" else lan
         self.response_format = "verbose_json"
@@ -258,6 +259,7 @@ class OpenaiApiASR(ASRBase):
         return [s.end for s in res.words]
 
     def transcribe(self, audio_data, prompt=None, *args, **kwargs):
+        prompt = prompt or kwargs.get("init_prompt")
         buffer = io.BytesIO()
         buffer.name = "temp.wav"
         sf.write(buffer, audio_data, samplerate=16000, format="WAV", subtype="PCM_16")

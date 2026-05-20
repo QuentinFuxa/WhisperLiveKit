@@ -653,21 +653,10 @@ async def _transcribe_files(parsed):
         elif parsed.format == "json":
             results.append(json_module.dumps({"text": result.committed_text or result.text}))
         elif parsed.format == "verbose_json":
-            results.append(json_module.dumps({
-                "text": result.committed_text or result.text,
-                "duration": round(duration, 2),
-                "language": parsed.lan,
-                "segments": [
-                    {
-                        "text": line.get("text", ""),
-                        "start": line.get("start", "0:00:00"),
-                        "end": line.get("end", "0:00:00"),
-                        "speaker": line.get("speaker", 0),
-                    }
-                    for line in result.lines
-                    if line.get("text") and line.get("speaker", 0) != -2
-                ],
-            }, indent=2))
+            results.append(json_module.dumps(
+                _format_verbose_json_result(result, duration, parsed.lan),
+                indent=2,
+            ))
         elif parsed.format in ("srt", "vtt"):
             results.append(_format_subtitle(result, parsed.format))
 
@@ -679,6 +668,38 @@ async def _transcribe_files(parsed):
         print(f"  Output written to: {parsed.output}", file=sys.stderr)
     else:
         print(output_text)
+
+
+def _format_verbose_json_result(result, duration: float, language: str) -> dict:
+    """Format CLI verbose_json, with a fallback when no lines were finalized."""
+    from whisperlivekit.timed_objects import format_time
+
+    text = result.committed_text or result.text
+    segments = [
+        {
+            "text": line.get("text", ""),
+            "start": line.get("start", "0:00:00"),
+            "end": line.get("end", "0:00:00"),
+            "speaker": line.get("speaker", 0),
+        }
+        for line in result.lines
+        if line.get("text") and line.get("speaker", 0) != -2
+    ]
+
+    if not segments and text.strip():
+        segments.append({
+            "text": text.strip(),
+            "start": "0:00:00.00",
+            "end": format_time(duration),
+            "speaker": 1,
+        })
+
+    return {
+        "text": text,
+        "duration": round(duration, 2),
+        "language": language,
+        "segments": segments,
+    }
 
 
 def _format_subtitle(result, fmt: str) -> str:

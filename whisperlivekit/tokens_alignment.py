@@ -71,21 +71,16 @@ class TokensAlignment:
                     return i
             return len(items)
 
-        idx = _find_cutoff(self.all_tokens)
-        if idx:
-            self.all_tokens = self.all_tokens[idx:]
+        def _prune_items(items: list) -> list:
+            idx = _find_cutoff(items)
+            return items[idx:] if idx else items
 
-        idx = _find_cutoff(self.all_diarization_segments)
-        if idx:
-            self.all_diarization_segments = self.all_diarization_segments[idx:]
-
-        idx = _find_cutoff(self.all_translation_segments)
-        if idx:
-            self.all_translation_segments = self.all_translation_segments[idx:]
-
-        idx = _find_cutoff(self.validated_segments)
-        if idx:
-            self.validated_segments = self.validated_segments[idx:]
+        self.all_tokens = _prune_items(self.all_tokens)
+        self.all_diarization_segments = _prune_items(self.all_diarization_segments)
+        self.all_translation_segments = _prune_items(self.all_translation_segments)
+        self.validated_segments = _prune_items(self.validated_segments)
+        self.current_line_tokens = _prune_items(self.current_line_tokens)
+        self.unvalidated_tokens = _prune_items(self.unvalidated_tokens)
 
     def add_translation(self, segment: Segment) -> None:
         """Append translated text segments that overlap with a segment."""

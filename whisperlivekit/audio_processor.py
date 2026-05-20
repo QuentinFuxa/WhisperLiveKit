@@ -227,6 +227,25 @@ class AudioProcessor:
 
             return self.state
 
+    def _prune_state_tokens(self) -> None:
+        """Bound persistent token history while keeping recent timing context."""
+        if not self.state.tokens:
+            return
+
+        retention_seconds = getattr(self.tokens_alignment, "_retention_seconds", 300.0)
+        latest_end = max(self.state.end_buffer, self.state.tokens[-1].end)
+        cutoff = latest_end - retention_seconds
+        if cutoff <= 0:
+            return
+
+        for idx, token in enumerate(self.state.tokens):
+            if token.end >= cutoff:
+                if idx:
+                    self.state.tokens = self.state.tokens[idx:]
+                return
+
+        self.state.tokens = self.state.tokens[-1:]
+
     async def ffmpeg_stdout_reader(self) -> None:
         """Read audio data from FFmpeg stdout and process it into the PCM pipeline."""
         beg = time()
@@ -311,6 +330,7 @@ class AudioProcessor:
                     self.state.end_buffer = max(self.state.end_buffer, end_time)
                     self.state.new_tokens.extend(final_tokens)
                     self.state.new_tokens_buffer = _buffer_transcript
+                    self._prune_state_tokens()
                 if self.translation_queue:
                     for token in final_tokens:
                         await self.translation_queue.put(token)
@@ -410,6 +430,7 @@ class AudioProcessor:
                     self.state.end_buffer = max(candidate_end_times)
                     self.state.new_tokens.extend(new_tokens)
                     self.state.new_tokens_buffer = _buffer_transcript
+                    self._prune_state_tokens()
 
                 if self.translation_queue:
                     for token in new_tokens:

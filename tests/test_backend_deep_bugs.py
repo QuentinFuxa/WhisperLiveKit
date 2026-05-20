@@ -182,6 +182,119 @@ def test_ctranslate2_storage_view_list_converts_to_tensor():
     np.testing.assert_allclose(tensor.numpy(), np.stack([first, second]))
 
 
+def test_openai_api_asr_initializes_transcribe_kwargs_and_routes_tasks(monkeypatch):
+    from whisperlivekit.local_agreement.backends import OpenaiApiASR
+
+    class FakeEndpoint:
+        def __init__(self):
+            self.calls = []
+
+        def create(self, **params):
+            self.calls.append(params)
+            return SimpleNamespace(words=[], segments=[])
+
+    transcriptions = FakeEndpoint()
+    translations = FakeEndpoint()
+
+    def fake_load_model(self):
+        self.client = SimpleNamespace(
+            audio=SimpleNamespace(
+                transcriptions=transcriptions,
+                translations=translations,
+            )
+        )
+        self.transcribed_seconds = 0
+
+    monkeypatch.setattr(OpenaiApiASR, "load_model", fake_load_model)
+
+    asr = OpenaiApiASR(lan="en")
+    audio = np.zeros(16_000, dtype=np.float32)
+
+    asr.transcribe(audio)
+    asr.transcribe_kargs["task"] = "translate"
+    asr.transcribe(audio, init_prompt="previous context")
+
+    assert len(transcriptions.calls) == 1
+    assert len(translations.calls) == 1
+    assert translations.calls[0]["prompt"] == "previous context"
+
+
+def test_tokens_alignment_prunes_long_running_history():
+    from whisperlivekit.timed_objects import ASRToken, Segment, SpeakerSegment, State, TimedText
+    from whisperlivekit.tokens_alignment import TokensAlignment
+
+    state = State()
+    alignment = TokensAlignment(state, SimpleNamespace(diarization=False), " ")
+    alignment._retention_seconds = 10.0
+
+    tokens = [ASRToken(i, i + 0.5, f" w{i}") for i in range(30)]
+    state.new_tokens = tokens[:]
+    state.new_diarization = [
+        SpeakerSegment(start=i, end=i + 0.5, speaker=0)
+        for i in range(30)
+    ]
+    state.new_translation = [
+        TimedText(start=i, end=i + 0.5, text=f"t{i}")
+        for i in range(30)
+    ]
+    alignment.validated_segments = [
+        Segment(start=i, end=i + 0.5, text=f"s{i}", speaker=1)
+        for i in range(30)
+    ]
+    alignment.unvalidated_tokens = tokens[:]
+
+    alignment.update()
+    alignment.get_lines(audio_time=30.0)
+
+    assert alignment.all_tokens[0].end >= 19.5
+    assert alignment.all_diarization_segments[0].end >= 19.5
+    assert alignment.all_translation_segments[0].end >= 19.5
+    assert alignment.validated_segments[0].end >= 19.5
+    assert alignment.current_line_tokens[0].end >= 19.5
+    assert alignment.unvalidated_tokens[0].end >= 19.5
+
+
+def test_audio_processor_prunes_persistent_state_tokens():
+    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.timed_objects import ASRToken, State
+
+    processor = object.__new__(AudioProcessor)
+    processor.state = State()
+    processor.tokens_alignment = SimpleNamespace(_retention_seconds=10.0)
+    processor.state.end_buffer = 30.0
+    processor.state.tokens = [
+        ASRToken(i, i + 0.5, f" w{i}")
+        for i in range(30)
+    ]
+
+    processor._prune_state_tokens()
+
+    assert processor.state.tokens[0].end >= 20.0
+    assert processor.state.tokens[-1].text == " w29"
+
+
+def test_verbose_json_fallback_creates_segment_when_text_has_no_lines():
+    from whisperlivekit.cli import _format_verbose_json_result
+
+    result = SimpleNamespace(
+        committed_text="",
+        text="hello world",
+        lines=[],
+    )
+
+    payload = _format_verbose_json_result(result, duration=12.5, language="en")
+
+    assert payload["text"] == "hello world"
+    assert payload["segments"] == [
+        {
+            "text": "hello world",
+            "start": "0:00:00.00",
+            "end": "0:00:12.50",
+            "speaker": 1,
+        }
+    ]
+
+
 class FakeFFmpegManager:
     def __init__(self, chunks=None):
         from whisperlivekit.ffmpeg_manager import FFmpegState
