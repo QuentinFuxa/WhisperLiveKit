@@ -96,6 +96,8 @@ class TranscriptionEngine:
             "model_cache_dir": config.model_cache_dir,
             "model_dir": config.model_dir,
             "model_path": config.model_path,
+            "encoder_model_path": config.encoder_model_path,
+            "decoder_model_path": config.decoder_model_path,
             "lora_path": config.lora_path,
             "lan": config.lan,
             "direct_english_translation": config.direct_english_translation,

@@ -107,9 +107,7 @@ class FFmpegManager:
             self.state = FFmpegState.STOPPED
 
         if self.process:
-            if self.process.stdin and not self.process.stdin.is_closing():
-                self.process.stdin.close()
-                await self.process.stdin.wait_closed()
+            await self.close_stdin()
             await self.process.wait()
             self.process = None
 
@@ -119,6 +117,12 @@ class FFmpegManager:
                 await self._stderr_task
 
         logger.info("FFmpeg stopped.")
+
+    async def close_stdin(self):
+        """Close FFmpeg stdin while keeping stdout readable for draining."""
+        if self.process and self.process.stdin and not self.process.stdin.is_closing():
+            self.process.stdin.close()
+            await self.process.stdin.wait_closed()
 
     async def write_data(self, data: bytes) -> bool:
         async with self._state_lock:

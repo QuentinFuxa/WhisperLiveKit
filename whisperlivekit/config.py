@@ -41,6 +41,8 @@ class WhisperLiveKitConfig:
     model_cache_dir: Optional[str] = None
     model_dir: Optional[str] = None
     model_path: Optional[str] = None
+    encoder_model_path: Optional[str] = None
+    decoder_model_path: Optional[str] = None
     lora_path: Optional[str] = None
     lan: str = "auto"
     direct_english_translation: bool = False

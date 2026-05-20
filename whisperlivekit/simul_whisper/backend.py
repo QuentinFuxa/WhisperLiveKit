@@ -1,8 +1,10 @@
 import gc
 import logging
 import platform
+import re
 import sys
-from typing import List, Tuple
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -16,6 +18,7 @@ from whisperlivekit.warmup import load_file
 from whisperlivekit.whisper import load_model, tokenizer
 
 logger = logging.getLogger(__name__)
+_WORD_RE = re.compile(r"[^\W_]+(?:'[^\W_]+)*", re.UNICODE)
 
 
 HAS_MLX_WHISPER = mlx_backend_available(warn_on_missing=True)
@@ -36,6 +39,11 @@ MIN_DURATION_REAL_SILENCE = 5
 class SimulStreamingOnlineProcessor:
     """Online processor for SimulStreaming ASR."""
     SAMPLING_RATE = 16000
+    _COMMITTED_EPSILON = 0.05
+    _INTRA_BATCH_REWIND_SECONDS = 0.75
+    _REWIND_RESET_SECONDS = 1.0
+    _RECENT_WORD_HISTORY = 80
+    _MIN_REPETITION_WORDS = 12
 
     def __init__(self, asr, logfile=sys.stderr):
         self.asr = asr
@@ -43,6 +51,8 @@ class SimulStreamingOnlineProcessor:
         self.end = 0.0
         self.buffer = []
         self.model = self._create_alignatt()
+        self._last_committed_end = 0.0
+        self._recent_words = []
 
         if asr.tokenizer:
             self.model.tokenizer = asr.tokenizer
@@ -79,6 +89,8 @@ class SimulStreamingOnlineProcessor:
         if long_silence:
             self.model.refresh_segment(complete=True)
             self.model.global_time_offset = silence_duration + offset
+            self._last_committed_end = max(self._last_committed_end, self.model.global_time_offset)
+            self._recent_words = []
 
     def insert_audio_chunk(self, audio: np.ndarray, audio_stream_end_time):
         """Append an audio chunk to be processed by SimulStreaming."""
@@ -95,10 +107,118 @@ class SimulStreamingOnlineProcessor:
         self.model.refresh_segment(complete=True)
         self.model.speaker = change_speaker.speaker
         self.model.global_time_offset = change_speaker.start
+        self._last_committed_end = max(self._last_committed_end, change_speaker.start)
+        self._recent_words = []
 
     def get_buffer(self):
         concat_buffer = Transcript.from_tokens(tokens= self.buffer, sep='')
         return concat_buffer
+
+    @staticmethod
+    def _words_from_tokens(tokens: List[ASRToken]) -> List[str]:
+        words: List[str] = []
+        for token in tokens:
+            text = (token.text or "").casefold()
+            words.extend(_WORD_RE.findall(text))
+        return words
+
+    @classmethod
+    def _has_repetition_loop(cls, words: List[str]) -> bool:
+        if len(words) < cls._MIN_REPETITION_WORDS:
+            return False
+
+        single_run = 1
+        for previous, current in zip(words, words[1:]):
+            if current == previous:
+                single_run += 1
+                if single_run >= 8:
+                    return True
+            else:
+                single_run = 1
+
+        max_ngram = min(8, len(words) // 2)
+        for size in range(2, max_ngram + 1):
+            repeat_count = 1
+            cursor = len(words)
+            while cursor - (2 * size) >= 0:
+                tail = words[cursor - size:cursor]
+                previous = words[cursor - (2 * size):cursor - size]
+                if tail != previous:
+                    break
+                repeat_count += 1
+                cursor -= size
+
+            if repeat_count >= 3 and repeat_count * size >= cls._MIN_REPETITION_WORDS:
+                return True
+
+        for size in range(2, max_ngram + 1):
+            counts = {}
+            for index in range(0, len(words) - size + 1):
+                ngram = tuple(words[index:index + size])
+                counts[ngram] = counts.get(ngram, 0) + 1
+            if not counts:
+                continue
+            most_common_count = max(counts.values())
+            coverage = most_common_count * size / len(words)
+            if (
+                most_common_count >= 4
+                and most_common_count * size >= cls._MIN_REPETITION_WORDS
+                and coverage >= 0.55
+            ):
+                return True
+
+        return False
+
+    def _reset_after_unstable_output(self, reason: str) -> None:
+        logger.warning("[SimulStreaming guard] %s; resetting current segment", reason)
+        self.model.refresh_segment(complete=True)
+        self.model.global_time_offset = max(self._last_committed_end, self.end)
+        self.buffer = []
+        self._recent_words = []
+
+    def _filter_stable_words(self, tokens: List[ASRToken]) -> List[ASRToken]:
+        stable: List[ASRToken] = []
+        last_end = self._last_committed_end
+
+        for token in tokens:
+            token_start = float(token.start or 0.0)
+            token_end = float(token.end or token_start)
+            if token_end < token_start:
+                logger.warning(
+                    "[SimulStreaming guard] dropping invalid token span %.2f -> %.2f: %r",
+                    token_start,
+                    token_end,
+                    token.text,
+                )
+                continue
+            if token_end <= self._last_committed_end + self._COMMITTED_EPSILON:
+                logger.debug(
+                    "[SimulStreaming guard] dropping stale token ending at %.2f after %.2f: %r",
+                    token_end,
+                    self._last_committed_end,
+                    token.text,
+                )
+                continue
+            if stable and last_end - token_end > self._INTRA_BATCH_REWIND_SECONDS:
+                logger.debug(
+                    "[SimulStreaming guard] dropping rewound token ending at %.2f after %.2f: %r",
+                    token_end,
+                    last_end,
+                    token.text,
+                )
+                continue
+            stable.append(token)
+            last_end = max(last_end, token_end)
+
+        return stable
+
+    def _remember_committed_words(self, tokens: List[ASRToken]) -> None:
+        words = self._words_from_tokens(tokens)
+        if not words:
+            return
+        self._recent_words.extend(words)
+        if len(self._recent_words) > self._RECENT_WORD_HISTORY:
+            self._recent_words = self._recent_words[-self._RECENT_WORD_HISTORY:]
 
     def process_iter(self, is_last=False) -> Tuple[List[ASRToken], float]:
         """
@@ -116,8 +236,29 @@ class SimulStreamingOnlineProcessor:
                 self.buffer.extend(timestamped_words)
                 return [], self.end
 
+            stable_words = self._filter_stable_words(timestamped_words)
+            if not stable_words:
+                max_end = max(float(token.end or 0.0) for token in timestamped_words)
+                if self._last_committed_end - max_end > self._REWIND_RESET_SECONDS:
+                    self._reset_after_unstable_output(
+                        f"all emitted words rewound behind committed time "
+                        f"{self._last_committed_end:.2f}s"
+                    )
+                self.buffer = []
+                return [], self.end
+
+            words_for_loop_check = self._recent_words + self._words_from_tokens(stable_words)
+            if self._has_repetition_loop(words_for_loop_check):
+                self._reset_after_unstable_output("repetition loop detected")
+                return [], self.end
+
             self.buffer = []
-            return timestamped_words, self.end
+            self._last_committed_end = max(
+                self._last_committed_end,
+                max(float(token.end or 0.0) for token in stable_words),
+            )
+            self._remember_committed_words(stable_words)
+            return stable_words, self.end
         except Exception as e:
             logger.exception(f"SimulStreaming processing error: {e}")
             return [], self.end
@@ -161,29 +302,47 @@ class SimulStreamingASR:
 
         self.fast_encoder = False
         self._resolved_model_path = None
+        self._resolved_decoder_model_path = None
+        self._resolved_encoder_model_path = None
         self.encoder_backend = "whisper"
         self.use_full_mlx = getattr(self, "use_full_mlx", False)
         preferred_backend = getattr(self, "backend", "auto")
         compatible_whisper_mlx, compatible_faster_whisper = True, True
 
-        if self.model_path:
-            resolved_model_path = resolve_model_path(self.model_path)
-            self._resolved_model_path = resolved_model_path
-            self.model_path = str(resolved_model_path)
+        decoder_path = self._decoder_path_from_config()
+        decoder_model_info = None
+        if decoder_path:
+            resolved_decoder_path = resolve_model_path(decoder_path)
+            self._resolved_decoder_model_path = resolved_decoder_path
+            self._resolved_model_path = resolved_decoder_path
+            self.decoder_model_path = str(resolved_decoder_path)
+            if self.model_path:
+                self.model_path = str(resolved_decoder_path)
 
-            model_info = detect_model_format(resolved_model_path)
-            compatible_whisper_mlx = model_info.compatible_whisper_mlx
-            compatible_faster_whisper = model_info.compatible_faster_whisper
-
-            if not self.use_full_mlx and not model_info.has_pytorch:
+            decoder_model_info = detect_model_format(resolved_decoder_path)
+            if not self.use_full_mlx and not decoder_model_info.has_pytorch:
                 raise FileNotFoundError(
-                    f"No PyTorch checkpoint (.pt/.bin/.safetensors) found under {self.model_path}"
+                    self._decoder_path_error(resolved_decoder_path, decoder_model_info)
                 )
-            self.model_name = resolved_model_path.name if resolved_model_path.is_dir() else resolved_model_path.stem
+            self.model_name = self._model_name_from_path(resolved_decoder_path)
         elif self.model_size is not None:
             self.model_name = self.model_size
         else:
-            raise ValueError("Either model_size or model_path must be specified for SimulStreaming.")
+            raise ValueError(
+                "Either --model or --decoder-model-path must be specified for SimulStreaming. "
+                "Use --encoder-model-path only for the fast encoder weights."
+            )
+
+        if self.encoder_model_path:
+            resolved_encoder_path = resolve_model_path(self.encoder_model_path)
+            self._resolved_encoder_model_path = resolved_encoder_path
+            self.encoder_model_path = str(resolved_encoder_path)
+            encoder_model_info = detect_model_format(resolved_encoder_path)
+            compatible_whisper_mlx = encoder_model_info.compatible_whisper_mlx
+            compatible_faster_whisper = encoder_model_info.compatible_faster_whisper
+        elif decoder_model_info is not None:
+            compatible_whisper_mlx = decoder_model_info.compatible_whisper_mlx
+            compatible_faster_whisper = decoder_model_info.compatible_faster_whisper
 
         is_multilingual = not self.model_name.endswith(".en")
 
@@ -231,8 +390,10 @@ class SimulStreamingASR:
 
         if self.use_full_mlx and HAS_MLX_WHISPER:
             logger.info('MLX Whisper backend used.')
-            if self._resolved_model_path is not None:
-                mlx_model_path = str(self._resolved_model_path)
+            if self._resolved_encoder_model_path is not None:
+                mlx_model_path = str(self._resolved_encoder_model_path)
+            elif self._resolved_decoder_model_path is not None:
+                mlx_model_path = str(self._resolved_decoder_model_path)
             else:
                 mlx_model_path = mlx_model_mapping.get(self.model_name)
             if not mlx_model_path:
@@ -244,8 +405,10 @@ class SimulStreamingASR:
         elif self.encoder_backend == "mlx-whisper":
             # hybrid mode: mlx encoder + pytorch decoder
             logger.info('SimulStreaming will use MLX Whisper encoder with PyTorch decoder.')
-            if self._resolved_model_path is not None:
-                mlx_model_path = str(self._resolved_model_path)
+            if self._resolved_encoder_model_path is not None:
+                mlx_model_path = str(self._resolved_encoder_model_path)
+            elif self._resolved_decoder_model_path is not None:
+                mlx_model_path = str(self._resolved_decoder_model_path)
             else:
                 mlx_model_path = mlx_model_mapping.get(self.model_name)
             if not mlx_model_path:
@@ -256,8 +419,10 @@ class SimulStreamingASR:
             self.shared_model = self.load_model()
         elif self.encoder_backend == "faster-whisper":
             logger.info('SimulStreaming will use Faster Whisper for the encoder.')
-            if self._resolved_model_path is not None:
-                fw_model = str(self._resolved_model_path)
+            if self._resolved_encoder_model_path is not None:
+                fw_model = str(self._resolved_encoder_model_path)
+            elif self._resolved_decoder_model_path is not None:
+                fw_model = str(self._resolved_decoder_model_path)
             else:
                 fw_model = self.model_name
             self.fw_encoder = WhisperModel(
@@ -268,6 +433,40 @@ class SimulStreamingASR:
             self.shared_model = self.load_model()
         else:
             self.shared_model = self.load_model()
+
+    def _decoder_path_from_config(self) -> Optional[str]:
+        """Resolve the decoder path from explicit config and legacy aliases."""
+        legacy_model_path = getattr(self, "model_path", None)
+        decoder_model_path = getattr(self, "decoder_model_path", None)
+        if legacy_model_path and decoder_model_path and legacy_model_path != decoder_model_path:
+            raise ValueError(
+                "--model-path is a legacy alias for --decoder-model-path; provide only one "
+                "decoder path or make both values identical."
+            )
+        return decoder_model_path or legacy_model_path
+
+    @staticmethod
+    def _model_name_from_path(path: Path) -> str:
+        return path.name if path.is_dir() else path.stem
+
+    @staticmethod
+    def _decoder_path_error(path: Path, model_info) -> str:
+        ct2_markers = {"model.bin", "encoder.bin", "decoder.bin"}
+        vocab_markers = {"vocabulary.json", "vocabulary.txt", "shared_vocabulary.json"}
+        looks_like_ct2 = (
+            path.is_dir()
+            and any((path / marker).exists() for marker in ct2_markers)
+            and any((path / marker).exists() for marker in vocab_markers)
+        )
+        if (model_info.compatible_faster_whisper or looks_like_ct2) and not model_info.has_pytorch:
+            return (
+                f"SimulStreaming --model-path/--decoder-model-path must point to "
+                f"PyTorch Whisper decoder/alignment weights, but {path} looks like a "
+                "Faster-Whisper/CTranslate2 encoder-only directory. Use "
+                "--encoder-model-path <ct2_dir> together with --model <whisper-model>, "
+                "or provide --decoder-model-path <pytorch_dir> for the decoder."
+            )
+        return f"No PyTorch checkpoint (.pt/.bin/.safetensors) found under {path}"
 
     def _warmup_mlx_model(self):
         """Warmup the full MLX model."""
@@ -305,7 +504,10 @@ class SimulStreamingASR:
         return "whisper"
 
     def _has_custom_model_path(self):
-        return self._resolved_model_path is not None
+        return (
+            self._resolved_encoder_model_path is not None
+            or self._resolved_decoder_model_path is not None
+        )
 
     def _can_use_mlx(self, compatible_whisper_mlx):
         if not HAS_MLX_WHISPER:
@@ -322,7 +524,7 @@ class SimulStreamingASR:
         return True
 
     def load_model(self):
-        model_ref = str(self._resolved_model_path) if self._resolved_model_path else self.model_name
+        model_ref = str(self._resolved_decoder_model_path) if self._resolved_decoder_model_path else self.model_name
         lora_path = getattr(self, 'lora_path', None)
         whisper_model = load_model(
             name=model_ref,
