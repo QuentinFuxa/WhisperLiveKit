@@ -89,6 +89,7 @@ ws://localhost:8000/asr
 ```
 
 See [docs/API.md](docs/API.md) for the complete API reference.
+For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLiveKitMac).
 
 > - See [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/simul_whisper/whisper/tokenizer.py) for the list of all available languages.
 > - Check the [troubleshooting guide](docs/troubleshooting.md) for step-by-step fixes collected from recent GPU setup/env issues.
