@@ -191,6 +191,8 @@ class FrontData():
     buffer_diarization: str = ''
     buffer_translation: str = ''
     remaining_time_transcription: float = 0.
+    remaining_time_transcription_processing: float = 0.
+    remaining_time_transcription_policy: float = 0.
     remaining_time_diarization: float = 0.
 
     def to_dict(self) -> Dict[str, Any]:
@@ -202,6 +204,8 @@ class FrontData():
             'buffer_diarization': self.buffer_diarization,
             'buffer_translation': self.buffer_translation,
             'remaining_time_transcription': self.remaining_time_transcription,
+            'remaining_time_transcription_processing': self.remaining_time_transcription_processing,
+            'remaining_time_transcription_policy': self.remaining_time_transcription_policy,
             'remaining_time_diarization': self.remaining_time_diarization,
         }
         if self.error:
@@ -224,8 +228,12 @@ class State():
     tokens: List[ASRToken] = field(default_factory=list)
     buffer_transcription: Transcript = field(default_factory=Transcript)
     end_buffer: float = 0.0
+    end_transcription_processed: float = 0.0
+    end_transcription_committed: float = 0.0
     end_attributed_speaker: float = 0.0
     remaining_time_transcription: float = 0.0
+    remaining_time_transcription_processing: float = 0.0
+    remaining_time_transcription_policy: float = 0.0
     remaining_time_diarization: float = 0.0
 
     # Temporary update buffers (consumed by TokensAlignment.update())

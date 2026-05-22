@@ -44,13 +44,15 @@ final class TranscriptionViewModel: ObservableObject {
     @Published var bufferTranscription = ""
     @Published var bufferDiarization = ""
     @Published var bufferTranslation = ""
-    @Published var remainingTranscription = 0.0
+    @Published var remainingTranscriptionProcessing = 0.0
+    @Published var remainingTranscriptionPolicy = 0.0
     @Published var remainingDiarization = 0.0
     @Published var audioLevel: Float = 0
     @Published var elapsedSeconds: TimeInterval = 0
     @Published var statusText = "Ready"
     @Published var alert: AppAlert?
     @Published var selectedAudioFileName: String?
+    @Published var isFileSimulationPaused = false
 
     let languages: [(id: String, title: String)] = [
         ("server", "Server default"),
@@ -165,6 +167,14 @@ final class TranscriptionViewModel: ObservableObject {
 
     var isInputActive: Bool {
         phase == .recording || phase == .simulatingFile
+    }
+
+    var fileSimulationPauseSystemImage: String {
+        isFileSimulationPaused ? "play.fill" : "pause.fill"
+    }
+
+    var fileSimulationPauseAccessibilityLabel: String {
+        isFileSimulationPaused ? "Resume audio file" : "Pause audio file and send silence"
     }
 
     var localServerCommand: String {
@@ -284,10 +294,12 @@ final class TranscriptionViewModel: ObservableObject {
         bufferTranscription = ""
         bufferDiarization = ""
         bufferTranslation = ""
-        remainingTranscription = 0
+        remainingTranscriptionProcessing = 0
+        remainingTranscriptionPolicy = 0
         remainingDiarization = 0
         audioLevel = 0
         elapsedSeconds = 0
+        isFileSimulationPaused = false
     }
 
     func copyTranscript() {
@@ -327,6 +339,7 @@ final class TranscriptionViewModel: ObservableObject {
             return
         }
 
+        isFileSimulationPaused = false
         fileStreamTask?.cancel()
         fileStreamTask = nil
         audioCapture.stop()
@@ -350,6 +363,7 @@ final class TranscriptionViewModel: ObservableObject {
             return
         }
 
+        isFileSimulationPaused = false
         audioCapture.stop()
         fileStreamTask?.cancel()
         fileStreamTask = nil
@@ -380,6 +394,7 @@ final class TranscriptionViewModel: ObservableObject {
             fileStreamTask = nil
             stopTimer()
             audioLevel = 0
+            isFileSimulationPaused = false
             phase = .idle
             statusText = "Finished"
             await transport.close()
@@ -416,12 +431,20 @@ final class TranscriptionViewModel: ObservableObject {
             }
         case .audioFile(let url):
             phase = .simulatingFile
-            statusText = "Simulating \(url.lastPathComponent)"
+            isFileSimulationPaused = false
+            statusText = simulationStatusText(for: url.lastPathComponent)
             startTimer()
 
             fileStreamTask = Task { [weak self, transport, fileStreamer] in
                 do {
-                    try await fileStreamer.streamRealtime(url: url) { data, level in
+                    try await fileStreamer.streamRealtime(
+                        url: url,
+                        isPaused: { [weak self] in
+                            await MainActor.run {
+                                self?.isFileSimulationPaused ?? false
+                            }
+                        }
+                    ) { data, level in
                         Task {
                             await transport.sendAudio(data)
                         }
@@ -449,17 +472,22 @@ final class TranscriptionViewModel: ObservableObject {
             return
         }
 
-        if update.status == "no_audio_detected" {
+        if phase == .simulatingFile, isFileSimulationPaused {
+            statusText = "Sending silence"
+        } else if update.status == "no_audio_detected" {
             statusText = "Listening"
         } else if phase == .recording {
             statusText = "Recording"
+        } else if phase == .simulatingFile {
+            statusText = simulationStatusText(for: selectedAudioFileName)
         }
 
         lines = update.lines ?? []
         bufferTranscription = update.bufferTranscription ?? ""
         bufferDiarization = update.bufferDiarization ?? ""
         bufferTranslation = update.bufferTranslation ?? ""
-        remainingTranscription = update.remainingTimeTranscription ?? 0
+        remainingTranscriptionProcessing = update.remainingTimeTranscriptionProcessing ?? update.remainingTimeTranscription ?? 0
+        remainingTranscriptionPolicy = update.remainingTimeTranscriptionPolicy ?? 0
         remainingDiarization = update.remainingTimeDiarization ?? 0
     }
 
@@ -469,6 +497,7 @@ final class TranscriptionViewModel: ObservableObject {
         fileStreamTask = nil
         stopTimer()
         audioLevel = 0
+        isFileSimulationPaused = false
 
         switch phase {
         case .idle:
@@ -506,6 +535,27 @@ final class TranscriptionViewModel: ObservableObject {
         language == "server" ? "auto" : language
     }
 
+    private func simulationStatusText(for fileName: String?) -> String {
+        guard let fileName, !fileName.isEmpty else {
+            return "Simulating audio file"
+        }
+        return "Simulating \(fileName)"
+    }
+
+    func toggleFileSimulationPause() {
+        guard phase == .simulatingFile else {
+            return
+        }
+
+        isFileSimulationPaused.toggle()
+        if isFileSimulationPaused {
+            audioLevel = 0
+            statusText = "Sending silence"
+        } else {
+            statusText = simulationStatusText(for: selectedAudioFileName)
+        }
+    }
+
     private func startTimer() {
         startedAt = Date()
         elapsedSeconds = 0
@@ -533,6 +583,7 @@ final class TranscriptionViewModel: ObservableObject {
         audioCapture.stop()
         stopTimer()
         audioLevel = 0
+        isFileSimulationPaused = false
         phase = .failed(title)
         statusText = title
         alert = AppAlert(title: title, message: detail)

@@ -36,6 +36,8 @@ struct TranscriptionUpdate: Decodable, Equatable {
     let bufferDiarization: String?
     let bufferTranslation: String?
     let remainingTimeTranscription: Double?
+    let remainingTimeTranscriptionProcessing: Double?
+    let remainingTimeTranscriptionPolicy: Double?
     let remainingTimeDiarization: Double?
     let error: String?
 
@@ -47,6 +49,8 @@ struct TranscriptionUpdate: Decodable, Equatable {
         case bufferDiarization = "buffer_diarization"
         case bufferTranslation = "buffer_translation"
         case remainingTimeTranscription = "remaining_time_transcription"
+        case remainingTimeTranscriptionProcessing = "remaining_time_transcription_processing"
+        case remainingTimeTranscriptionPolicy = "remaining_time_transcription_policy"
         case remainingTimeDiarization = "remaining_time_diarization"
         case error
     }

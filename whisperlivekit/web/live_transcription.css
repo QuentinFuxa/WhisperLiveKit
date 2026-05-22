@@ -430,7 +430,9 @@ label {
   color: var(--label-dia-text);
 }
 
-.label_transcription {
+.label_transcription,
+.label_compute,
+.label_policy {
   background-color: var(--chip-bg);
   border-radius: 100px;
   padding: 2px 10px;
@@ -440,6 +442,10 @@ label {
   font-size: 14px;
   margin-bottom: 0px;
   color: var(--label-trans-text);
+}
+
+.label_policy {
+  color: var(--label-dia-text);
 }
 
 .label_translation {

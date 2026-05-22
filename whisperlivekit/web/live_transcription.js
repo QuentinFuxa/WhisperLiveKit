@@ -31,6 +31,7 @@ let configReadyResolve;
 const configReady = new Promise((r) => (configReadyResolve = r));
 let outputAudioContext = null;
 let audioSource = null;
+const LAG_DISPLAY_THRESHOLD = 0.1;
 
 waveCanvas.width = 60 * (window.devicePixelRatio || 1);
 waveCanvas.height = 30 * (window.devicePixelRatio || 1);
@@ -312,6 +313,8 @@ function setupWebSocket() {
         buffer_diarization = "",
         buffer_translation = "",
         remaining_time_transcription = 0,
+        remaining_time_transcription_processing = null,
+        remaining_time_transcription_policy = null,
         remaining_time_diarization = 0,
         status = "active_transcription",
       } = data;
@@ -324,7 +327,9 @@ function setupWebSocket() {
         remaining_time_diarization,
         remaining_time_transcription,
         false,
-        status
+        status,
+        remaining_time_transcription_processing,
+        remaining_time_transcription_policy
       );
     };
   });
@@ -338,7 +343,9 @@ function renderLinesWithBuffer(
   remaining_time_diarization,
   remaining_time_transcription,
   isFinalizing = false,
-  current_status = "active_transcription"
+  current_status = "active_transcription",
+  remaining_time_transcription_processing = null,
+  remaining_time_transcription_policy = null
 ) {
   if (current_status === "no_audio_detected") {
     linesTranscriptDiv.innerHTML =
@@ -347,7 +354,10 @@ function renderLinesWithBuffer(
   }
 
   const showLoading = !isFinalizing && (lines || []).some((it) => it.speaker == 0);
-  const showTransLag = !isFinalizing && remaining_time_transcription > 0;
+  const computeLag = remaining_time_transcription_processing ?? remaining_time_transcription;
+  const policyLag = remaining_time_transcription_policy ?? 0;
+  const showComputeLag = !isFinalizing && computeLag > LAG_DISPLAY_THRESHOLD;
+  const showPolicyLag = !isFinalizing && policyLag > LAG_DISPLAY_THRESHOLD;
   const showDiaLag = !isFinalizing && !!buffer_diarization && remaining_time_diarization > 0;
   const signature = JSON.stringify({
     lines: (lines || []).map((it) => ({ speaker: it.speaker, text: it.text, start: it.start, end: it.end, detected_language: it.detected_language })),
@@ -356,13 +366,16 @@ function renderLinesWithBuffer(
     buffer_translation: buffer_translation,
     status: current_status,
     showLoading,
-    showTransLag,
+    showComputeLag,
+    showPolicyLag,
     showDiaLag,
     isFinalizing: !!isFinalizing,
   });
   if (lastSignature === signature) {
-    const t = document.querySelector(".lag-transcription-value");
-    if (t) t.textContent = fmt1(remaining_time_transcription);
+    const c = document.querySelector(".lag-compute-value");
+    if (c) c.textContent = fmt1(computeLag);
+    const p = document.querySelector(".lag-policy-value");
+    if (p) p.textContent = fmt1(policyLag);
     const d = document.querySelector(".lag-diarization-value");
     if (d) d.textContent = fmt1(remaining_time_diarization);
     const ld = document.querySelector(".loading-diarization-value");
@@ -404,9 +417,17 @@ function renderLinesWithBuffer(
 
       if (idx === effectiveLines.length - 1) {
         if (!isFinalizing && item.speaker !== -2) {
-            speakerLabel += `<span class="label_transcription"><span class="spinner"></span>Transcription lag <span id='timeInfo'><span class="lag-transcription-value">${fmt1(
-              remaining_time_transcription
+          if (showComputeLag) {
+            speakerLabel += `<span class="label_compute" title="Audio received but not processed yet"><span class="spinner"></span>Compute <span id='timeInfo'><span class="lag-compute-value">${fmt1(
+              computeLag
             )}</span>s</span></span>`;
+          }
+
+          if (showPolicyLag) {
+            speakerLabel += `<span class="label_policy" title="Processed audio waiting for streaming stabilization">Policy <span id='timeInfo'><span class="lag-policy-value">${fmt1(
+              policyLag
+            )}</span>s</span></span>`;
+          }
 
           if (buffer_diarization && remaining_time_diarization) {
             speakerLabel += `<span class="label_diarization"><span class="spinner"></span>Diarization lag<span id='timeInfo'><span class="lag-diarization-value">${fmt1(

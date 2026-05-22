@@ -208,6 +208,12 @@ class AudioProcessor:
         """Convert PCM buffer in s16le format to normalized NumPy array."""
         return np.frombuffer(pcm_buffer, dtype=np.int16).astype(np.float32) / 32768.0
 
+    def _latest_committed_transcription_end(self) -> float:
+        latest_end = self.state.end_transcription_committed
+        if self.state.tokens:
+            latest_end = max(latest_end, self.state.tokens[-1].end or 0.0)
+        return latest_end
+
     async def get_current_state(self) -> State:
         """Get current state."""
         async with self.lock:
@@ -224,6 +230,23 @@ class AudioProcessor:
 
             self.state.remaining_time_transcription = remaining_transcription
             self.state.remaining_time_diarization = remaining_diarization
+
+            if getattr(getattr(self, "args", None), "transcription", True):
+                audio_received_end = self.total_pcm_samples / self.sample_rate if self.sample_rate else 0.0
+                processed_end = max(0.0, self.state.end_transcription_processed)
+                committed_end = self._latest_committed_transcription_end()
+                self.state.end_transcription_committed = committed_end
+                self.state.remaining_time_transcription_processing = max(
+                    0.0,
+                    round(audio_received_end - processed_end, 1),
+                )
+                self.state.remaining_time_transcription_policy = max(
+                    0.0,
+                    round(processed_end - committed_end, 1),
+                )
+            else:
+                self.state.remaining_time_transcription_processing = 0.0
+                self.state.remaining_time_transcription_policy = 0.0
 
             return self.state
 
@@ -320,6 +343,17 @@ class AudioProcessor:
                 final_tokens, end_time = await asyncio.to_thread(self.transcription.start_silence)
 
             final_tokens = final_tokens or []
+            final_committed_end = final_tokens[-1].end if final_tokens else None
+            async with self.lock:
+                self.state.end_transcription_processed = max(
+                    self.state.end_transcription_processed,
+                    end_time,
+                )
+                if final_committed_end is not None:
+                    self.state.end_transcription_committed = max(
+                        self.state.end_transcription_committed,
+                        final_committed_end,
+                    )
             if final_tokens:
                 logger.info(f"Finish flushed {len(final_tokens)} tokens")
                 self.metrics.n_tokens_produced += len(final_tokens)
@@ -428,6 +462,15 @@ class AudioProcessor:
                     self.state.tokens.extend(new_tokens)
                     self.state.buffer_transcription = _buffer_transcript
                     self.state.end_buffer = max(candidate_end_times)
+                    self.state.end_transcription_processed = max(
+                        self.state.end_transcription_processed,
+                        current_audio_processed_upto,
+                    )
+                    if new_tokens:
+                        self.state.end_transcription_committed = max(
+                            self.state.end_transcription_committed,
+                            new_tokens[-1].end or 0.0,
+                        )
                     self.state.new_tokens.extend(new_tokens)
                     self.state.new_tokens_buffer = _buffer_transcript
                     self._prune_state_tokens()
@@ -575,6 +618,8 @@ class AudioProcessor:
                     buffer_diarization=buffer_diarization_text,
                     buffer_translation=buffer_translation_text,
                     remaining_time_transcription=state.remaining_time_transcription,
+                    remaining_time_transcription_processing=state.remaining_time_transcription_processing,
+                    remaining_time_transcription_policy=state.remaining_time_transcription_policy,
                     remaining_time_diarization=state.remaining_time_diarization if self.args.diarization else 0
                 )
 
@@ -785,13 +830,17 @@ class AudioProcessor:
                     pcm_array, chunk_sample_start, res.get("end")
                 )
                 if pre_silence_chunk is not None and pre_silence_chunk.size > 0:
+                    self.total_pcm_samples = chunk_sample_end
                     await self._enqueue_active_audio(pre_silence_chunk)
+                else:
+                    self.total_pcm_samples = chunk_sample_end
                 await self._begin_silence(at_sample=res.get("end"))
 
         if not self.current_silence:
+            self.total_pcm_samples = chunk_sample_end
             await self._enqueue_active_audio(pcm_array)
-
-        self.total_pcm_samples = chunk_sample_end
+        else:
+            self.total_pcm_samples = chunk_sample_end
 
         if not self.args.transcription and not self.args.diarization:
             await asyncio.sleep(0.1)
@@ -810,6 +859,6 @@ class AudioProcessor:
         if self.current_silence:
             await self._end_silence(at_sample=self.total_pcm_samples)
 
-        await self._enqueue_active_audio(pcm_array)
         self.total_pcm_samples += len(pcm_array)
+        await self._enqueue_active_audio(pcm_array)
         logger.info(f"Flushed remaining PCM buffer: {len(pcm_array)} samples ({len(pcm_array)/self.sample_rate:.2f}s)")

@@ -61,6 +61,8 @@ class DiffTracker:
             "buffer_diarization": full["buffer_diarization"],
             "buffer_translation": full["buffer_translation"],
             "remaining_time_transcription": full["remaining_time_transcription"],
+            "remaining_time_transcription_processing": full["remaining_time_transcription_processing"],
+            "remaining_time_transcription_policy": full["remaining_time_transcription_policy"],
             "remaining_time_diarization": full["remaining_time_diarization"],
         }
         if full.get("error"):

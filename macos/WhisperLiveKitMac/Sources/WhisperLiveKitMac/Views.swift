@@ -252,6 +252,10 @@ private struct HeaderControls: View {
             HStack(spacing: 14) {
                 RecordButton(model: model)
 
+                if model.phase == .simulatingFile {
+                    FileSimulationPauseButton(model: model)
+                }
+
                 FileButton {
                     model.chooseAudioFileAndSimulateRealtime()
                 }
@@ -286,7 +290,7 @@ private struct RecordButton: View {
 
                 if model.isInputActive {
                     MiniWaveform(level: model.audioLevel)
-                        .frame(width: 60, height: 30)
+                        .frame(width: 64, height: 22)
 
                     Text(formattedElapsed)
                         .font(.system(size: 14, weight: .medium))
@@ -339,6 +343,39 @@ private struct FileButton: View {
     }
 }
 
+private struct FileSimulationPauseButton: View {
+    @ObservedObject var model: TranscriptionViewModel
+
+    var body: some View {
+        Group {
+            if #available(macOS 26.0, *) {
+                Button {
+                    model.toggleFileSimulationPause()
+                } label: {
+                    Image(systemName: model.fileSimulationPauseSystemImage)
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .controlSize(.extraLarge)
+            } else {
+                Button {
+                    model.toggleFileSimulationPause()
+                } label: {
+                    Image(systemName: model.fileSimulationPauseSystemImage)
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(width: 42, height: 42)
+                        .systemGlass(in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .disabled(model.phase != .simulatingFile)
+        .help(model.fileSimulationPauseAccessibilityLabel)
+        .accessibilityLabel(model.fileSimulationPauseAccessibilityLabel)
+    }
+}
+
 private struct TranscriptScroll: View {
     @ObservedObject var model: TranscriptionViewModel
 
@@ -359,7 +396,8 @@ private struct TranscriptScroll: View {
                                 line: line,
                                 isLast: index == model.lines.count - 1,
                                 isFinalizing: model.phase == .finalizing,
-                                transcriptionLag: model.remainingTranscription,
+                                transcriptionProcessingLag: model.remainingTranscriptionProcessing,
+                                transcriptionPolicyLag: model.remainingTranscriptionPolicy,
                                 diarizationLag: model.remainingDiarization
                             )
                             .id(line.id)
@@ -413,8 +451,10 @@ private struct TranscriptLineView: View {
     let line: TranscriptLine
     let isLast: Bool
     let isFinalizing: Bool
-    let transcriptionLag: Double
+    let transcriptionProcessingLag: Double
+    let transcriptionPolicyLag: Double
     let diarizationLag: Double
+    private let lagDisplayThreshold = 0.1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -434,8 +474,12 @@ private struct TranscriptLineView: View {
                         Chip(systemImage: "globe", text: language, style: .muted)
                     }
 
-                    if isLast && !isFinalizing && transcriptionLag > 0 {
-                        Chip(systemImage: nil, text: "Transcription \(String(format: "%.1f", transcriptionLag))s", style: .active)
+                    if isLast && !isFinalizing && transcriptionProcessingLag > lagDisplayThreshold {
+                        Chip(systemImage: "cpu", text: "Compute \(String(format: "%.1f", transcriptionProcessingLag))s", style: .active)
+                    }
+
+                    if isLast && !isFinalizing && transcriptionPolicyLag > lagDisplayThreshold {
+                        Chip(systemImage: "timer", text: "Policy \(String(format: "%.1f", transcriptionPolicyLag))s", style: .muted)
                     }
 
                     if isLast && !isFinalizing && diarizationLag > 0 {
@@ -580,25 +624,32 @@ private struct MiniWaveform: View {
     let level: Float
 
     var body: some View {
-        GeometryReader { geometry in
-            let count = 18
-            let width = geometry.size.width / CGFloat(count)
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+            GeometryReader { geometry in
+                let sampleCount = 44
+                let width = max(geometry.size.width, 1)
+                let height = max(geometry.size.height, 1)
+                let centerY = height * 0.5
+                let clampedLevel = min(max(CGFloat(level), 0), 1)
+                let amplitude = height * max(0.015, clampedLevel * 0.44)
+                let phase = timeline.date.timeIntervalSinceReferenceDate * 7.0
 
-            Path { path in
-                for index in 0..<count {
-                    let x = CGFloat(index) * width
-                    let phase = Double(index) * 0.75 + Double(level) * 5.0
-                    let value = CGFloat(0.18 + abs(sin(phase)) * Double(max(level, 0.04)))
-                    let y = geometry.size.height / 2 - (value * geometry.size.height * 0.45)
+                Path { path in
+                    for index in 0..<sampleCount {
+                        let progress = CGFloat(index) / CGFloat(sampleCount - 1)
+                        let x = progress * width
+                        let envelope = 0.62 + 0.38 * sin(progress * .pi)
+                        let y = centerY + sin(progress * .pi * 4.0 + phase) * amplitude * envelope
 
-                    if index == 0 {
-                        path.move(to: CGPoint(x: x, y: y))
-                    } else {
-                        path.addLine(to: CGPoint(x: x, y: y))
+                        if index == 0 {
+                            path.move(to: CGPoint(x: x, y: y))
+                        } else {
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
                     }
                 }
+                .stroke(Color.wlkText, style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round))
             }
-            .stroke(Color.wlkText, lineWidth: 1.2)
         }
     }
 }

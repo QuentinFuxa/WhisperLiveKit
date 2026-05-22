@@ -508,6 +508,95 @@ def test_audio_processor_prunes_persistent_state_tokens():
     assert processor.state.tokens[-1].text == " w29"
 
 
+def test_front_data_serializes_split_transcription_lags():
+    from whisperlivekit.timed_objects import FrontData
+
+    payload = FrontData(
+        remaining_time_transcription=1.5,
+        remaining_time_transcription_processing=0.4,
+        remaining_time_transcription_policy=1.1,
+        remaining_time_diarization=0.2,
+    ).to_dict()
+
+    assert payload["remaining_time_transcription"] == 1.5
+    assert payload["remaining_time_transcription_processing"] == 0.4
+    assert payload["remaining_time_transcription_policy"] == 1.1
+    assert payload["remaining_time_diarization"] == 0.2
+
+
+def test_diff_protocol_preserves_split_transcription_lags():
+    from whisperlivekit.diff_protocol import DiffTracker
+    from whisperlivekit.timed_objects import FrontData
+
+    tracker = DiffTracker()
+
+    snapshot = tracker.to_message(
+        FrontData(
+            status="active_transcription",
+            remaining_time_transcription=1.0,
+            remaining_time_transcription_processing=0.6,
+            remaining_time_transcription_policy=0.4,
+        )
+    )
+    diff = tracker.to_message(
+        FrontData(
+            status="active_transcription",
+            remaining_time_transcription=1.2,
+            remaining_time_transcription_processing=0.7,
+            remaining_time_transcription_policy=0.5,
+        )
+    )
+
+    assert snapshot["remaining_time_transcription"] == 1.0
+    assert snapshot["remaining_time_transcription_processing"] == 0.6
+    assert snapshot["remaining_time_transcription_policy"] == 0.4
+    assert diff["remaining_time_transcription"] == 1.2
+    assert diff["remaining_time_transcription_processing"] == 0.7
+    assert diff["remaining_time_transcription_policy"] == 0.5
+
+
+@pytest.mark.asyncio
+async def test_audio_processor_calculates_processing_and_policy_lag():
+    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.timed_objects import ASRToken, State
+
+    processor = object.__new__(AudioProcessor)
+    processor.lock = asyncio.Lock()
+    processor.state = State()
+    processor.sample_rate = 16000
+    processor.total_pcm_samples = 48000
+    processor.beg_loop = None
+    processor.args = SimpleNamespace(transcription=True)
+    processor.state.end_transcription_processed = 2.0
+    processor.state.tokens = [ASRToken(1.0, 1.4, "hello")]
+
+    state = await processor.get_current_state()
+
+    assert state.remaining_time_transcription_processing == 1.0
+    assert state.remaining_time_transcription_policy == 0.6
+
+
+@pytest.mark.asyncio
+async def test_audio_processor_split_lags_are_zero_when_timestamps_are_aligned():
+    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.timed_objects import ASRToken, State
+
+    processor = object.__new__(AudioProcessor)
+    processor.lock = asyncio.Lock()
+    processor.state = State()
+    processor.sample_rate = 16000
+    processor.total_pcm_samples = 32000
+    processor.beg_loop = None
+    processor.args = SimpleNamespace(transcription=True)
+    processor.state.end_transcription_processed = 2.0
+    processor.state.tokens = [ASRToken(1.5, 2.0, "done")]
+
+    state = await processor.get_current_state()
+
+    assert state.remaining_time_transcription_processing == 0.0
+    assert state.remaining_time_transcription_policy == 0.0
+
+
 def test_verbose_json_fallback_creates_segment_when_text_has_no_lines():
     from whisperlivekit.cli import _format_verbose_json_result
 

@@ -26,6 +26,7 @@ final class AudioFileStreamer {
     func streamRealtime(
         url: URL,
         chunkDuration: TimeInterval = 0.1,
+        isPaused: @escaping () async -> Bool = { false },
         onPCMData: @escaping (Data, Float) -> Void
     ) async throws {
         let file = try AVAudioFile(forReading: url)
@@ -36,8 +37,14 @@ final class AudioFileStreamer {
         }
 
         let inputFramesPerChunk = AVAudioFrameCount(max(inputFormat.sampleRate * chunkDuration, 1_024))
+        let silentChunk = Self.silentData(sampleRate: targetFormat.sampleRate, duration: chunkDuration)
 
         while file.framePosition < file.length && !Task.isCancelled {
+            while await isPaused(), !Task.isCancelled {
+                onPCMData(silentChunk, 0)
+                try await Task.sleep(nanoseconds: UInt64(chunkDuration * 1_000_000_000))
+            }
+
             let remainingFrames = AVAudioFrameCount(file.length - file.framePosition)
             let framesToRead = min(inputFramesPerChunk, remainingFrames)
 
@@ -88,6 +95,11 @@ final class AudioFileStreamer {
                 break
             }
         }
+    }
+
+    private static func silentData(sampleRate: Double, duration: TimeInterval) -> Data {
+        let sampleCount = max(Int(sampleRate * duration), 1)
+        return Data(repeating: 0, count: sampleCount * MemoryLayout<Int16>.size)
     }
 
     private static func data(from buffer: AVAudioPCMBuffer) -> Data? {
