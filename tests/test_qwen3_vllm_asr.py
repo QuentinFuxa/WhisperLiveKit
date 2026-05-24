@@ -1,3 +1,5 @@
+import tomllib
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -20,6 +22,18 @@ class MockQwen3VLLM:
     def transcribe_aligned(self, audio):
         self.calls += 1
         return self.aligned, "English"
+
+
+class SequencedMockQwen3VLLM:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = 0
+
+    def transcribe_aligned(self, audio):
+        self.calls += 1
+        if not self.responses:
+            return [], "English"
+        return self.responses.pop(0), "English"
 
 
 def _audio(seconds):
@@ -61,6 +75,24 @@ def test_qwen3_vllm_finish_flushes_last_250ms():
     assert processor.get_buffer().text == ""
 
 
+def test_qwen3_vllm_finish_flushes_cached_buffer_if_final_retry_is_empty():
+    asr = SequencedMockQwen3VLLM(
+        [
+            [_AlignedWord("late", 0.80, 0.95)],
+            [],
+        ]
+    )
+    processor = Qwen3VLLMOnlineProcessor(asr)
+    processor.insert_audio_chunk(_audio(1.0), 1.0)
+
+    first, _ = processor.process_iter()
+    final, _ = processor.finish()
+
+    assert first == []
+    assert processor.get_buffer().text == ""
+    assert [token.text.strip() for token in final] == ["late"]
+
+
 def test_qwen3_vllm_no_duplicate_on_same_buffer():
     asr = MockQwen3VLLM(
         [
@@ -98,3 +130,23 @@ def test_qwen3_vllm_lazy_import_error_is_clear():
         _load_vllm_runtime()
     except ImportError as exc:
         assert "qwen3-vllm requires vLLM" in str(exc)
+
+
+def test_qwen3_vllm_declares_torchvision_and_conflicts_with_cu129():
+    pyproject = tomllib.loads(
+        (Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    sources = pyproject["tool"]["uv"]["sources"]["torchvision"]
+    dependencies = pyproject["project"]["optional-dependencies"]["qwen3-vllm"]
+    conflicts = pyproject["tool"]["uv"]["conflicts"]
+
+    assert any("torchvision" in dependency for dependency in dependencies)
+    assert any(
+        {"extra": "qwen3-vllm"} in conflict and {"extra": "cu129"} in conflict
+        for conflict in conflicts
+    )
+    assert not any(
+        source.get("extra") == "qwen3-vllm"
+        for source in sources
+    )

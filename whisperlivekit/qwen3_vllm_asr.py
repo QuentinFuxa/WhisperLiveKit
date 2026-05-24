@@ -88,7 +88,8 @@ class _AlignedWord:
 def _missing_dependency_error(reason: str) -> ImportError:
     return ImportError(
         "qwen3-vllm requires vLLM with Qwen3-ASR ForcedAligner support. "
-        "Install it on a CUDA/Linux host with: "
+        "Install it on a CUDA/Linux host with `uv sync --extra qwen3-vllm` "
+        "in an environment separate from `cu129`, or with: "
         "pip install 'whisperlivekit[qwen3-vllm]'. "
         f"Details: {reason}"
     )
@@ -493,7 +494,11 @@ class Qwen3VLLMOnlineProcessor:
             return []
 
         self._trim_buffer_if_needed()
+        cached_tokens = self._current_tokens
         tokens = self._aligned_tokens()
+        if not tokens and flush and cached_tokens:
+            tokens = cached_tokens
+            self._current_tokens = cached_tokens
         if not tokens:
             return []
 

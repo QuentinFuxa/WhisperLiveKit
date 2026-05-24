@@ -258,6 +258,9 @@ class AlignAtt(AlignAttBase):
             return True
         if self.state.never_fire:
             return False
+        if self.state.CIFLinear is None:
+            logger.warning("CIF end-of-word detection requested but no CIF model is loaded")
+            return False
         return fire_at_boundary(chunked_encoder_feature, self.state.CIFLinear)
 
     @torch.no_grad()

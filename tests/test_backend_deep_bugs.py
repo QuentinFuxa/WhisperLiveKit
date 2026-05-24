@@ -387,6 +387,75 @@ def test_alignatt_pending_utf8_tokens_preserve_original_timestamps():
     assert words[0].end == pytest.approx(4.12)
 
 
+def test_decoder_state_clean_cache_does_not_empty_cuda_cache(monkeypatch):
+    import torch
+
+    from whisperlivekit.simul_whisper.decoder_state import DecoderState
+
+    calls = {"empty_cache": 0}
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        torch.cuda,
+        "empty_cache",
+        lambda: calls.__setitem__("empty_cache", calls["empty_cache"] + 1),
+    )
+
+    state = DecoderState()
+    state.kv_cache["tensor"] = torch.zeros(1)
+
+    state.clean_cache()
+
+    assert state.kv_cache == {}
+    assert calls["empty_cache"] == 0
+
+
+def test_decoder_state_release_gpu_memory_empties_cuda_cache(monkeypatch):
+    import torch
+
+    from whisperlivekit.simul_whisper.decoder_state import DecoderState
+
+    calls = {"empty_cache": 0}
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        torch.cuda,
+        "empty_cache",
+        lambda: calls.__setitem__("empty_cache", calls["empty_cache"] + 1),
+    )
+
+    DecoderState().release_gpu_memory()
+
+    assert calls["empty_cache"] == 1
+
+
+def test_load_cif_without_checkpoint_skips_unused_linear(caplog):
+    from whisperlivekit.simul_whisper.eow_detection import load_cif
+
+    cfg = SimpleNamespace(cif_ckpt_path=None, never_fire=False)
+
+    cif_linear, always_fire, never_fire = load_cif(
+        cfg, n_audio_state=16, device="cpu"
+    )
+
+    assert cif_linear is None
+    assert always_fire is True
+    assert never_fire is False
+    assert "CIF end-of-word detection is disabled" in caplog.text
+
+
+def test_load_cif_without_checkpoint_preserves_never_fire():
+    from whisperlivekit.simul_whisper.eow_detection import load_cif
+
+    cfg = SimpleNamespace(cif_ckpt_path="", never_fire=True)
+
+    cif_linear, always_fire, never_fire = load_cif(
+        cfg, n_audio_state=16, device="cpu"
+    )
+
+    assert cif_linear is None
+    assert always_fire is False
+    assert never_fire is True
+
+
 def test_ctranslate2_storage_view_converts_to_tensor():
     ctranslate2 = pytest.importorskip("ctranslate2")
     from whisperlivekit.simul_whisper.simul_whisper import _encoder_features_to_tensor
@@ -506,6 +575,41 @@ def test_audio_processor_prunes_persistent_state_tokens():
 
     assert processor.state.tokens[0].end >= 20.0
     assert processor.state.tokens[-1].text == " w29"
+
+
+@pytest.mark.asyncio
+async def test_audio_processor_finish_commits_pending_buffer_when_backend_flush_is_empty():
+    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.metrics_collector import SessionMetrics
+    from whisperlivekit.timed_objects import State, Transcript
+
+    class EmptyFinishBackend:
+        def finish(self):
+            return [], 3.5
+
+        def get_buffer(self):
+            return Transcript()
+
+    processor = object.__new__(AudioProcessor)
+    processor.transcription = EmptyFinishBackend()
+    processor.state = State()
+    processor.state.buffer_transcription = Transcript(
+        start=0.55,
+        end=3.05,
+        text="Concord returned to its place amidst the tents",
+    )
+    processor.state.end_buffer = 3.5
+    processor.lock = asyncio.Lock()
+    processor.metrics = SessionMetrics()
+    processor.translation_queue = None
+    processor._prune_state_tokens = lambda: None
+
+    await processor._finish_transcription()
+
+    assert len(processor.state.new_tokens) == 1
+    assert processor.state.new_tokens[0].text == "Concord returned to its place amidst the tents"
+    assert processor.state.buffer_transcription.text == ""
+    assert processor.metrics.n_tokens_produced == 1
 
 
 def test_verbose_json_fallback_creates_segment_when_text_has_no_lines():

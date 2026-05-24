@@ -1,4 +1,6 @@
-<h1 align="center">WLK</h1>
+<p align="center">
+  <img width="330" alt="wlk" src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/wlk.png" />
+</p>
 <p align="center"><b>WhisperLiveKit: Ultra-low-latency, self-hosted speech-to-text with speaker identification</b></p>
 
 
@@ -108,6 +110,7 @@ See [docs/API.md](docs/API.md) for the complete API reference.
 | **Translation** | `uv sync --extra translation` | `pip install -e ".[translation]"` |
 | **Sentence tokenizer** | `uv sync --extra sentence_tokenizer` | `pip install -e ".[sentence_tokenizer]"` |
 | **Voxtral (HF backend)** | `uv sync --extra voxtral-hf` | `pip install -e ".[voxtral-hf]"` |
+| **Qwen3-ASR vLLM (CUDA)** | `uv sync --extra qwen3-vllm` | `pip install -e ".[qwen3-vllm]"` |
 | **Qwen3-ASR vLLM Metal (Apple Silicon)** | Install vLLM with the official vllm-metal script first, then `uv sync --extra qwen3-vllm-metal` | Install vLLM with the official vllm-metal script first, then `pip install -e ".[qwen3-vllm-metal]"` |
 | **Speaker diarization (Sortformer / NeMo)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
 | *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
@@ -120,9 +123,12 @@ uv sync --extra cu129 --extra diarization-sortformer
 
 # Profile B: Voxtral HF + translation
 uv sync --extra cu129 --extra voxtral-hf --extra translation
+
+# Profile C: Qwen3-ASR vLLM
+uv sync --extra qwen3-vllm
 ```
 
-`voxtral-hf` / `qwen3-vllm-metal` and `diarization-sortformer` are intentionally incompatible extras and must be installed in separate environments.
+`qwen3-vllm` uses vLLM's CUDA wheel stack and must be installed in a separate environment from `cu129`. `voxtral-hf` / `qwen3-vllm-metal` and `diarization-sortformer` are also intentionally incompatible extras and must be installed in separate environments.
 
 See **Parameters & Configuration** below on how to use them.
 
