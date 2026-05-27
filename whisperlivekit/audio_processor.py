@@ -789,24 +789,42 @@ class AudioProcessor:
         chunk_sample_start = self.total_pcm_samples
         chunk_sample_end = chunk_sample_start + num_samples
 
-        res = None
+        vad_events = []
         if self.args.vac:
-            res = self.vac(pcm_array)
+            vad_events = self.vac(pcm_array)
 
-        if res is not None:
-            if "start" in res and self.current_silence:
-                await self._end_silence(at_sample=res.get("start"))
+        active_slice_start = 0 if not self.current_silence else None
+        for event in vad_events:
+            if "start" in event and self.current_silence:
+                start_sample = event.get("start")
+                await self._end_silence(at_sample=start_sample)
+                if start_sample is None:
+                    active_slice_start = 0
+                else:
+                    active_slice_start = max(
+                        0,
+                        min(int(start_sample - chunk_sample_start), num_samples),
+                    )
 
-            if "end" in res and not self.current_silence:
-                pre_silence_chunk = self._slice_before_silence(
-                    pcm_array, chunk_sample_start, res.get("end")
-                )
-                if pre_silence_chunk is not None and pre_silence_chunk.size > 0:
-                    await self._enqueue_active_audio(pre_silence_chunk)
-                await self._begin_silence(at_sample=res.get("end"))
+            if "end" in event and not self.current_silence:
+                end_sample = event.get("end")
+                if end_sample is None:
+                    active_slice_end = num_samples
+                else:
+                    active_slice_end = max(
+                        0,
+                        min(int(end_sample - chunk_sample_start), num_samples),
+                    )
+                start_index = active_slice_start if active_slice_start is not None else 0
+                if active_slice_end > start_index:
+                    await self._enqueue_active_audio(pcm_array[start_index:active_slice_end])
+                await self._begin_silence(at_sample=end_sample)
+                active_slice_start = None
 
         if not self.current_silence:
-            await self._enqueue_active_audio(pcm_array)
+            start_index = active_slice_start if active_slice_start is not None else 0
+            if start_index < num_samples:
+                await self._enqueue_active_audio(pcm_array[start_index:])
 
         self.total_pcm_samples = chunk_sample_end
 

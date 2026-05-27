@@ -296,20 +296,13 @@ class FixedVADIterator(VADIterator):
 
     def __call__(self, x, return_seconds=False):
         self.buffer = np.append(self.buffer, x)
-        ret = None
+        events = []
         while len(self.buffer) >= 512:
             r = super().__call__(self.buffer[:512], return_seconds=return_seconds)
             self.buffer = self.buffer[512:]
-            if ret is None:
-                ret = r
-            elif r is not None:
-                if "end" in r:
-                    ret["end"] = r["end"]
-                if "start" in r:
-                    ret["start"] = r["start"]
-                    if "end" in ret:
-                        del ret["end"]
-        return ret if ret != {} else None
+            if r is not None:
+                events.append(r)
+        return events
 
 
 if __name__ == "__main__":
