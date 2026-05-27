@@ -1,10 +1,14 @@
+import logging
+
 import torch
 
 # code for the end-of-word detection based on the CIF model proposed in Simul-Whisper
 
+logger = logging.getLogger(__name__)
+
+
 def load_cif(cfg, n_audio_state, device):
     """cfg: AlignAttConfig, n_audio_state: int, device: torch.device"""
-    cif_linear = torch.nn.Linear(n_audio_state, 1)
     if cfg.cif_ckpt_path is None or not cfg.cif_ckpt_path:
         if cfg.never_fire:
             never_fire = True
@@ -12,11 +16,19 @@ def load_cif(cfg, n_audio_state, device):
         else:
             always_fire = True
             never_fire = False
-    else:
-        always_fire = False
-        never_fire = cfg.never_fire
-        checkpoint = torch.load(cfg.cif_ckpt_path)
-        cif_linear.load_state_dict(checkpoint)
+        logger.warning(
+            "No CIF checkpoint configured; CIF end-of-word detection is disabled "
+            "(always_fire=%s, never_fire=%s).",
+            always_fire,
+            never_fire,
+        )
+        return None, always_fire, never_fire
+
+    cif_linear = torch.nn.Linear(n_audio_state, 1)
+    always_fire = False
+    never_fire = cfg.never_fire
+    checkpoint = torch.load(cfg.cif_ckpt_path, map_location=device)
+    cif_linear.load_state_dict(checkpoint)
     cif_linear.to(device)
     return cif_linear, always_fire, never_fire
 

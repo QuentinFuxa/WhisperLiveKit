@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "whisperlivekit"
-version = "0.2.20"
+version = "0.2.21"
 description = "Real-time speech-to-text models"
 readme = "README.md"
 authors = [{ name = "Quentin Fuxa" }]
@@ -54,10 +54,11 @@ voxtral-hf = [
     "accelerate>=0.12",
 ]
 qwen3-vllm-metal = [
-    'vllm-metal[stt] @ https://github.com/vllm-project/vllm-metal/releases/download/v0.2.0-20260519-054638/vllm_metal-0.2.0-cp312-cp312-macosx_11_0_arm64.whl#sha256=ab3593599b17abfca486d34761f8b5239e2f43250479d5fdeee867f3b2351b93 ; python_version >= "3.12" and python_version < "3.13" and sys_platform == "darwin" and platform_machine == "arm64"',
+    'vllm-metal[stt]; python_version >= "3.12" and python_version < "3.13" and sys_platform == "darwin" and platform_machine == "arm64"',
 ]
 qwen3-vllm = [
     'vllm[audio]>=0.20.0; sys_platform == "linux"',
+    'torchvision; sys_platform == "linux" and platform_machine == "x86_64"',
 ]
 listen = ["sounddevice>=0.4.6"]
 cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
@@ -95,6 +96,10 @@ conflicts = [
     ],
     [
         { extra = "qwen3-vllm" },
+        { extra = "cu129" },
+    ],
+    [
+        { extra = "qwen3-vllm" },
         { extra = "diarization-diart" },
     ],
     [
@@ -104,6 +109,7 @@ conflicts = [
 ]
 
 [tool.uv.sources]
+vllm-metal = { url = "https://github.com/vllm-project/vllm-metal/releases/download/v0.2.0-20260519-054638/vllm_metal-0.2.0-cp312-cp312-macosx_11_0_arm64.whl" }
 torch = [
     { index = "pytorch-cpu", extra = "cpu", marker = "platform_system != 'Darwin'" },
     { index = "pytorch-cpu", extra = "diarization-diart", marker = "platform_system != 'Darwin'" },

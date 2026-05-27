@@ -15,7 +15,7 @@ from whisperlivekit.core import (
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.silero_vad_iterator import FixedVADIterator, OnnxWrapper, load_jit_vad
-from whisperlivekit.timed_objects import ChangeSpeaker, FrontData, Silence, State
+from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, FrontData, Silence, State, Transcript
 from whisperlivekit.tokens_alignment import TokensAlignment
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -343,6 +343,25 @@ class AudioProcessor:
                 final_tokens, end_time = await asyncio.to_thread(self.transcription.start_silence)
 
             final_tokens = final_tokens or []
+            _buffer_transcript = self.transcription.get_buffer()
+            if not final_tokens and self.state.buffer_transcription and self.state.buffer_transcription.text:
+                pending = self.state.buffer_transcription
+                text = pending.text.strip()
+                if text:
+                    start = pending.start if pending.start is not None else self.state.end_buffer
+                    end = pending.end if pending.end is not None else end_time
+                    if end is None or end < start:
+                        end = start
+                    final_tokens = [
+                        ASRToken(
+                            start=start,
+                            end=end,
+                            text=text,
+                            detected_language=pending.detected_language,
+                        )
+                    ]
+                    _buffer_transcript = Transcript()
+
             final_committed_end = final_tokens[-1].end if final_tokens else None
             async with self.lock:
                 self.state.end_transcription_processed = max(
@@ -357,7 +376,6 @@ class AudioProcessor:
             if final_tokens:
                 logger.info(f"Finish flushed {len(final_tokens)} tokens")
                 self.metrics.n_tokens_produced += len(final_tokens)
-                _buffer_transcript = self.transcription.get_buffer()
                 async with self.lock:
                     self.state.tokens.extend(final_tokens)
                     self.state.buffer_transcription = _buffer_transcript

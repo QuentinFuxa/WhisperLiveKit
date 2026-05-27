@@ -121,6 +121,8 @@ class AlignAttBase(ABC):
         self.state.pending_incomplete_tokens = []
         self.state.pending_incomplete_token_timestamps = []
         self.state.pending_retries = 0
+        if complete and hasattr(self.state, "release_gpu_memory"):
+            self.state.release_gpu_memory()
 
     def segments_len(self):
         return sum(s.shape[0] for s in self.state.segments) / 16000
