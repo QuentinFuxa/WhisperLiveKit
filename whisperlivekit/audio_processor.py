@@ -791,16 +791,26 @@ class AudioProcessor:
         for event in vad_events:
             if "start" in event and self.current_silence:
                 start_sample = int(event["start"])
-                start_offset = max(0, min(num_samples, start_sample - chunk_sample_start))
-                await self._end_silence(at_sample=start_sample)
+                # Clamp the start sample to the current chunk boundaries.
+                # This ensures we don't retrospectively end a silence period
+                # before the current chunk, preventing negative offsets and
+                # ensuring all active audio in the current chunk is captured.
+                start_sample_eff = max(chunk_sample_start, min(chunk_sample_end, start_sample))
+                start_offset = start_sample_eff - chunk_sample_start
+                await self._end_silence(at_sample=start_sample_eff)
                 last_offset = start_offset
 
             if "end" in event and not self.current_silence:
                 end_sample = int(event["end"])
-                end_offset = max(0, min(num_samples, end_sample - chunk_sample_start))
+                # Clamp the end sample to the current chunk boundaries.
+                # This prevents double-counting the VAD delay overlap, ensuring
+                # the sum of active audio and silence durations strictly equals
+                # the physical stream duration, thereby eliminating timestamp drift.
+                end_sample_eff = max(chunk_sample_start, min(chunk_sample_end, end_sample))
+                end_offset = end_sample_eff - chunk_sample_start
                 if end_offset > last_offset:
                     await self._enqueue_active_audio(pcm_array[last_offset:end_offset])
-                await self._begin_silence(at_sample=end_sample)
+                await self._begin_silence(at_sample=end_sample_eff)
                 last_offset = end_offset
 
         if not self.current_silence and last_offset < num_samples:
