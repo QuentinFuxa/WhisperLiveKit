@@ -288,13 +288,25 @@ class VADIterator:
 class FixedVADIterator(VADIterator):
     """
     Fixed VAD Iterator that handles variable-length audio chunks, not only exactly 512 frames at once.
+
+    Return contract:
+        ``__call__`` returns a ``list[dict]`` containing all single-frame VAD events
+        produced while consuming the input, in chronological order. Each event is
+        shaped like ``{"start": int}`` or ``{"end": int}``; an empty list means
+        no event was produced for this input.
+
+    Older versions merged all events from a single call into one dict. When an
+    ``end`` event was followed by a ``start`` event in the same call, the later
+    ``start`` could delete the earlier ``end`` and hide the silence boundary from
+    downstream processing. Callers now consume the ordered event list and split
+    audio around each boundary themselves.
     """
 
     def reset_states(self):
         super().reset_states()
         self.buffer = np.array([], dtype=np.float32)
 
-    def __call__(self, x, return_seconds=False):
+    def __call__(self, x, return_seconds=False) -> list[dict]:
         self.buffer = np.append(self.buffer, x)
         events = []
         while len(self.buffer) >= 512:
@@ -310,10 +322,10 @@ if __name__ == "__main__":
     vad = FixedVADIterator(OnnxWrapper(session=load_onnx_session()))
 
     audio_buffer = np.array([0] * 512, dtype=np.float32)
-    result = vad(audio_buffer)
-    print(f"   512 samples: {result}")
+    events = vad(audio_buffer)
+    print(f"   512 samples: events={events}")
 
     # test with 511 samples
     audio_buffer = np.array([0] * 511, dtype=np.float32)
-    result = vad(audio_buffer)
-    print(f"   511 samples: {result}")
+    events = vad(audio_buffer)
+    print(f"   511 samples: events={events}")

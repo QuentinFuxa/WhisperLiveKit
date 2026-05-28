@@ -193,17 +193,6 @@ class AudioProcessor:
         if self.args.diarization and self.diarization_queue:
             await self.diarization_queue.put(pcm_chunk.copy())
 
-    def _slice_before_silence(self, pcm_array: np.ndarray, chunk_sample_start: int, silence_sample: Optional[int]) -> Optional[np.ndarray]:
-        if silence_sample is None:
-            return None
-        relative_index = int(silence_sample - chunk_sample_start)
-        if relative_index <= 0:
-            return None
-        split_index = min(relative_index, len(pcm_array))
-        if split_index <= 0:
-            return None
-        return pcm_array[:split_index]
-
     def convert_pcm_to_float(self, pcm_buffer: Union[bytes, bytearray]) -> np.ndarray:
         """Convert PCM buffer in s16le format to normalized NumPy array."""
         return np.frombuffer(pcm_buffer, dtype=np.int16).astype(np.float32) / 32768.0
@@ -791,7 +780,7 @@ class AudioProcessor:
 
         vad_events = []
         if self.args.vac:
-            vad_events = self.vac(pcm_array)
+            vad_events = self.vac(pcm_array) or []
 
         active_slice_start = 0 if not self.current_silence else None
         for event in vad_events:
