@@ -782,38 +782,29 @@ class AudioProcessor:
         if self.args.vac:
             vad_events = self.vac(pcm_array) or []
 
-        active_slice_start = 0 if not self.current_silence else None
+        # Iterate over events in chronological order and segment the PCM chunk:
+        #   [last_offset, end_offset]   -> active audio (tail of speech)
+        #   [end_offset, start_offset]  -> silence (skip)
+        #   [start_offset, chunk_end]   -> active audio (start of new speech)
+        # This properly handles cases where both end and start events fall into the same chunk.
+        last_offset = 0
         for event in vad_events:
             if "start" in event and self.current_silence:
-                start_sample = event.get("start")
+                start_sample = int(event["start"])
+                start_offset = max(0, min(num_samples, start_sample - chunk_sample_start))
                 await self._end_silence(at_sample=start_sample)
-                if start_sample is None:
-                    active_slice_start = 0
-                else:
-                    active_slice_start = max(
-                        0,
-                        min(int(start_sample - chunk_sample_start), num_samples),
-                    )
+                last_offset = start_offset
 
             if "end" in event and not self.current_silence:
-                end_sample = event.get("end")
-                if end_sample is None:
-                    active_slice_end = num_samples
-                else:
-                    active_slice_end = max(
-                        0,
-                        min(int(end_sample - chunk_sample_start), num_samples),
-                    )
-                start_index = active_slice_start if active_slice_start is not None else 0
-                if active_slice_end > start_index:
-                    await self._enqueue_active_audio(pcm_array[start_index:active_slice_end])
+                end_sample = int(event["end"])
+                end_offset = max(0, min(num_samples, end_sample - chunk_sample_start))
+                if end_offset > last_offset:
+                    await self._enqueue_active_audio(pcm_array[last_offset:end_offset])
                 await self._begin_silence(at_sample=end_sample)
-                active_slice_start = None
+                last_offset = end_offset
 
-        if not self.current_silence:
-            start_index = active_slice_start if active_slice_start is not None else 0
-            if start_index < num_samples:
-                await self._enqueue_active_audio(pcm_array[start_index:])
+        if not self.current_silence and last_offset < num_samples:
+            await self._enqueue_active_audio(pcm_array[last_offset:])
 
         self.total_pcm_samples = chunk_sample_end
 
