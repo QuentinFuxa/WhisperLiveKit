@@ -1747,6 +1747,9 @@ class Qwen3ASRRealtimeNativeModel(nn.Module):
         eos_token_id: int | None = None,
         stop_token_ids: Sequence[int] | None = None,
         suppress_token_ids: Sequence[int] | None = None,
+        repetition_penalty: float = 1.0,
+        no_repeat_ngram_size: int = 0,
+        max_consecutive_text_tokens: int = 0,
     ) -> torch.Tensor:
         """Greedy full-hypothesis decode over cached finalized audio embeddings.
 
@@ -1813,6 +1816,12 @@ class Qwen3ASRRealtimeNativeModel(nn.Module):
             for token_id in (suppress_token_ids or ())
             if 0 <= int(token_id) < self.vocab_size
         ]
+        control_wait_token_id = (
+            int(self.wait_token_id)
+            if self.wait_token_id is not None
+            and int(self.wait_token_id) not in set(suppress_ids)
+            else None
+        )
 
         for _ in range(max_new_tokens):
             parts: list[torch.Tensor] = []
@@ -1831,6 +1840,28 @@ class Qwen3ASRRealtimeNativeModel(nn.Module):
             if suppress_ids:
                 logits = logits.clone()
                 logits[:, suppress_ids] = -torch.inf
+            token_history = [
+                [int(token_id) for token_id in row]
+                for row in generated[:, prompt_steps:].detach().cpu().tolist()
+            ]
+            consecutive_text_tokens = (
+                torch.tensor(
+                    [len(row) for row in token_history],
+                    dtype=torch.long,
+                    device=device,
+                )
+                if max_consecutive_text_tokens > 0
+                else None
+            )
+            logits = _apply_repetition_controls_to_logits(
+                logits,
+                token_history=token_history,
+                consecutive_text_tokens=consecutive_text_tokens,
+                repetition_penalty=float(repetition_penalty),
+                no_repeat_ngram_size=int(no_repeat_ngram_size),
+                max_consecutive_text_tokens=int(max_consecutive_text_tokens),
+                wait_token_id=control_wait_token_id,
+            )
             next_token = logits.argmax(dim=-1)
             if stop_ids:
                 if bool(finished.any().item()):
@@ -2304,6 +2335,9 @@ class Qwen3ASRRealtimeQwenDecoderModel(nn.Module):
         eos_token_id: int | None = None,
         stop_token_ids: Sequence[int] | None = None,
         suppress_token_ids: Sequence[int] | None = None,
+        repetition_penalty: float = 1.0,
+        no_repeat_ngram_size: int = 0,
+        max_consecutive_text_tokens: int = 0,
     ) -> torch.Tensor:
         """Greedy full-hypothesis decode over cached finalized audio embeddings.
 
@@ -2370,6 +2404,12 @@ class Qwen3ASRRealtimeQwenDecoderModel(nn.Module):
             for token_id in (suppress_token_ids or ())
             if 0 <= int(token_id) < self.vocab_size
         ]
+        control_wait_token_id = (
+            int(self.wait_token_id)
+            if self.wait_token_id is not None
+            and int(self.wait_token_id) not in set(suppress_ids)
+            else None
+        )
 
         for _ in range(max_new_tokens):
             parts: list[torch.Tensor] = []
@@ -2388,6 +2428,28 @@ class Qwen3ASRRealtimeQwenDecoderModel(nn.Module):
             if suppress_ids:
                 logits = logits.clone()
                 logits[:, suppress_ids] = -torch.inf
+            token_history = [
+                [int(token_id) for token_id in row]
+                for row in generated[:, prompt_steps:].detach().cpu().tolist()
+            ]
+            consecutive_text_tokens = (
+                torch.tensor(
+                    [len(row) for row in token_history],
+                    dtype=torch.long,
+                    device=device,
+                )
+                if max_consecutive_text_tokens > 0
+                else None
+            )
+            logits = _apply_repetition_controls_to_logits(
+                logits,
+                token_history=token_history,
+                consecutive_text_tokens=consecutive_text_tokens,
+                repetition_penalty=float(repetition_penalty),
+                no_repeat_ngram_size=int(no_repeat_ngram_size),
+                max_consecutive_text_tokens=int(max_consecutive_text_tokens),
+                wait_token_id=control_wait_token_id,
+            )
             next_token = logits.argmax(dim=-1)
             if stop_ids:
                 if bool(finished.any().item()):

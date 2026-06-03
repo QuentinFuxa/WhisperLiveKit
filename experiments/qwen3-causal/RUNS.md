@@ -4355,3 +4355,117 @@ Artifacts kept locally:
 
 The H100 instance `420813` was paused after downloading the lightweight
 artifacts. The 2.2 GB smoke `model.pt` was not downloaded or promoted.
+
+## 2026-06-03 - Causal KV Decode Controls + Adapter Distill Smokes
+
+Goal:
+
+- Evaluate whether the strict append-only `qwen_audio_causal_kv` backend can be
+  pushed toward usable ASR with conservative audio adaptation.
+- Add no-repeat/repetition controls to cached full-hypothesis decoding so WLK
+  evaluation is not dominated by endless greedy loops.
+
+Code change:
+
+- `CachedFullHypothesisConfig` now exposes:
+  - `repetition_penalty`
+  - `no_repeat_ngram_size`
+  - `max_consecutive_text_tokens`
+- `infer_cached_full_hypothesis.py` and `eval_cached_full_hypothesis.py` expose
+  matching CLI flags.
+- Full-hypothesis Qwen greedy decoding applies the same repetition control
+  helper already used by the frame-synchronous decoder.
+
+Validation:
+
+```text
+local:
+python3 -m py_compile qwen3_streaming/native_realtime_model.py \
+  qwen3_streaming/cached_full_hypothesis.py \
+  scripts/eval_cached_full_hypothesis.py \
+  scripts/infer_cached_full_hypothesis.py
+
+PYTHONPATH=experiments/qwen3-causal python3 -m pytest -q \
+  experiments/qwen3-causal/tests/test_native_realtime_model.py \
+  experiments/qwen3-causal/tests/test_cached_full_hypothesis.py
+
+31 passed
+
+H100:
+py_compile passed
+tests/test_native_realtime_model.py passed
+```
+
+WLK first20 teacher eval, limit 5, strict causal audio KV:
+
+| model / decode | WER final | RTF | final tokens | trigram repetition | cache violations | max recomputed context |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| direct causal greedy | 1.3907 | 2.4674 | 71.0 | 0.8986 | 0 | 0 |
+| direct causal + no-repeat3, rep 1.15 | 0.9151 | 0.8642 | 15.0 | 0.0000 | 0 | 0 |
+| adapter distill 50 + no-repeat3, rep 1.15 | 0.8585 | 1.0212 | 17.8 | 0.0000 | 0 | 0 |
+| adapter mix300 + no-repeat3, rep 1.15 | 0.8829 | 1.0119 | 15.6 | 0.0000 | 0 | 0 |
+
+Training smokes:
+
+```text
+adapter distill 50:
+data: qwen_aligned_fleurs_tiny
+trainable: zero-init post-audio adapter only
+steps: 50
+lr: 5e-6
+loss_decreased: true
+first_train_loss: 0.9311
+last_train_loss: 0.9207
+eval_loss: 4.2100
+train_qwen_ar_token_accuracy: 0.3236
+
+adapter mix300:
+data: qwen_aligned_mix_16s_teacher_filter_v0
+trainable: zero-init post-audio adapter only
+steps: 300
+lr: 5e-6
+loss_decreased: false
+first_train_loss: 0.9902
+last_train_loss: 1.0939
+eval_loss: 4.1702
+train_qwen_ar_token_accuracy: 0.3025
+```
+
+Qualitative result:
+
+- Direct causal recognizes short openings, then often loops:
+  `Hello everyone... I'm from the universe...`
+- No-repeat controls remove the runaway loops, but the hypotheses are still too
+  short and hallucinated.
+- The 50-step adapter smoke improves the 5-item WLK signal slightly, but not to
+  a usable ASR level.
+- The 300-step mixed-data adapter run does not improve over the 50-step smoke.
+
+Current status:
+
+- We have a mechanically functional strict causal audio path:
+  `max_recomputed_context_frames=0` and `cache_bound_violations=0`.
+- We do not yet have a functional causal ASR model. The best WLK first20
+  teacher WER observed here is still `0.8585` on only five examples.
+
+Decision:
+
+- Do not promote any checkpoint from these runs.
+- Do not continue adapter-only distillation as-is.
+- Next useful work should target the actual bottleneck: the frozen Qwen decoder
+  does not robustly interpret the causalized audio embeddings beyond the opening
+  phrase. A stronger but constrained adaptation is needed, likely with:
+  - decoder-side calibration or a tiny trainable bridge;
+  - stronger teacher-forced generation checks during training;
+  - WLK eval gates every short interval;
+  - no LoRA over the full audio tower until the adapter path beats the direct
+    causal baseline by a clear margin.
+
+Artifacts kept locally:
+
+- `runs/qwen_audio_causal_kv_direct_decode_v0/`
+- `runs/qwen_audio_causal_kv_adapter_distill50_v0/`
+- `runs/qwen_audio_causal_kv_adapter_mix300_v0/`
+
+The H100 instance `420815` was paused. Non-promoted `model.pt` files were
+deleted from `/tmp`.

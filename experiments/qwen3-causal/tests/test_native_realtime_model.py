@@ -303,6 +303,31 @@ def test_generate_full_hypothesis_from_cached_audio_runs_greedy_decoder():
     assert 0 not in tokens.reshape(-1).tolist()
 
 
+def test_generate_full_hypothesis_applies_no_repeat_ngram():
+    torch.manual_seed(0)
+    config = tiny_config()
+    model = Qwen3ASRRealtimeQwenDecoderModel(
+        config,
+        qwen_model_id="fake",
+        text_model=FakeQwenTextModel(vocab_size=8, hidden_size=config.d_model),
+        lm_head=torch.nn.Linear(config.d_model, 8, bias=False),
+        bos_token_id=1,
+        wait_token_id=0,
+    ).eval()
+    for param in model.lm_head.parameters():
+        torch.nn.init.zeros_(param)
+    frame_hidden = torch.randn(1, 3, config.d_model)
+
+    tokens = model.generate_full_hypothesis_from_cached_audio(
+        frame_hidden,
+        max_new_tokens=4,
+        suppress_token_ids=[0],
+        no_repeat_ngram_size=2,
+    )
+
+    assert tokens.tolist() == [[1, 1, 2, 1]]
+
+
 def test_generate_full_hypothesis_replaces_audio_prompt_placeholders():
     torch.manual_seed(0)
     config = tiny_config()

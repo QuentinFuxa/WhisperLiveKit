@@ -56,6 +56,9 @@ def parse_args() -> argparse.Namespace:
         default="repo_mel",
     )
     parser.add_argument("--max-new-tokens", type=int, default=128)
+    parser.add_argument("--repetition-penalty", type=float, default=1.0)
+    parser.add_argument("--no-repeat-ngram-size", type=int, default=0)
+    parser.add_argument("--max-consecutive-text-tokens", type=int, default=0)
     parser.add_argument("--hold-back-tokens", type=int, default=4)
     parser.add_argument("--hold-back-words", type=int, default=6)
     parser.add_argument("--stable-iterations", type=int, default=2)
@@ -157,6 +160,12 @@ def main() -> None:
         raise ValueError("--qwen-audio-right-context-ms must be >= 0")
     if args.max_new_tokens < 0:
         raise ValueError("--max-new-tokens must be >= 0")
+    if args.repetition_penalty <= 0.0:
+        raise ValueError("--repetition-penalty must be > 0")
+    if args.no_repeat_ngram_size < 0:
+        raise ValueError("--no-repeat-ngram-size must be >= 0")
+    if args.max_consecutive_text_tokens < 0:
+        raise ValueError("--max-consecutive-text-tokens must be >= 0")
     if args.hold_back_tokens < 0:
         raise ValueError("--hold-back-tokens must be >= 0")
     if args.hold_back_words < 0:
@@ -272,6 +281,9 @@ def main() -> None:
         word_start_token_id=word_start_token_id,
         eos_token_id=eos_token_id,
         max_new_tokens=args.max_new_tokens,
+        repetition_penalty=args.repetition_penalty,
+        no_repeat_ngram_size=args.no_repeat_ngram_size,
+        max_consecutive_text_tokens=args.max_consecutive_text_tokens,
         hold_back_tokens=args.hold_back_tokens,
         hold_back_words=args.hold_back_words,
         stable_iterations=args.stable_iterations,
@@ -331,6 +343,9 @@ def main() -> None:
         "events": len(streamer.events),
         "chunk_ms": args.chunk_ms,
         "max_new_tokens": args.max_new_tokens,
+        "repetition_penalty": args.repetition_penalty,
+        "no_repeat_ngram_size": args.no_repeat_ngram_size,
+        "max_consecutive_text_tokens": args.max_consecutive_text_tokens,
         "hold_back_tokens": args.hold_back_tokens,
         "hold_back_words": args.hold_back_words,
         "stable_iterations": args.stable_iterations,

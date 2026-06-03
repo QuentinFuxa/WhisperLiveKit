@@ -111,6 +111,9 @@ class CachedFullHypothesisConfig:
     commit_mode: str = "word"
     normalize_commit_match: bool = False
     suppress_token_ids: tuple[int, ...] = ()
+    repetition_penalty: float = 1.0
+    no_repeat_ngram_size: int = 0
+    max_consecutive_text_tokens: int = 0
     prompt_token_ids: Sequence[int] | None = None
     prompt_prefix_template: Sequence[int] | None = None
     audio_placeholder_token_id: int | None = None
@@ -126,6 +129,12 @@ class CachedFullHypothesisConfig:
             raise ValueError("min_commit_audio_sec must be >= 0")
         if self.commit_mode not in {"word", "token"}:
             raise ValueError("commit_mode must be 'word' or 'token'")
+        if self.repetition_penalty <= 0.0:
+            raise ValueError("repetition_penalty must be > 0")
+        if self.no_repeat_ngram_size < 0:
+            raise ValueError("no_repeat_ngram_size must be >= 0")
+        if self.max_consecutive_text_tokens < 0:
+            raise ValueError("max_consecutive_text_tokens must be >= 0")
 
 
 @dataclass(frozen=True)
@@ -187,6 +196,9 @@ class CachedFullHypothesisStreamer:
                 max_new_tokens=self.config.max_new_tokens,
                 eos_token_id=self.config.eos_token_id,
                 suppress_token_ids=list(self.config.suppress_token_ids),
+                repetition_penalty=self.config.repetition_penalty,
+                no_repeat_ngram_size=self.config.no_repeat_ngram_size,
+                max_consecutive_text_tokens=self.config.max_consecutive_text_tokens,
             )
             hypothesis_tokens = trim_at_stop(
                 _tensor_to_int_list(generated),
