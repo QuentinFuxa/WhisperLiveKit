@@ -4,8 +4,10 @@ torch = pytest.importorskip("torch")
 
 from qwen3_streaming.native_realtime_model import (  # noqa: E402
     LoRALinear,
+    Qwen3ASRRealtimeQwenAudioCausalModel,
     Qwen3ASRRealtimeQwenDecoderModel,
     Qwen3ASRRealtimeNativeModel,
+    QwenAudioCausalKVEncoder,
     QwenAudioSurgeryEncoder,
     QwenAudioSurgeryFrameAdapter,
     StreamingFrameAdapter,
@@ -418,6 +420,63 @@ def test_qwen_audio_surgery_adapter_residual_blocks_add_capacity():
     assert len(adapter.blocks) == 2
     assert sum(param.numel() for param in adapter.blocks.parameters()) > 0
     assert not torch.allclose(projected, hidden)
+
+
+def test_qwen_audio_causal_kv_encoder_is_append_only():
+    torch.manual_seed(0)
+    config = tiny_config()
+    encoder = QwenAudioCausalKVEncoder(
+        FakeQwenAudioTower(config.n_mels, config.d_model),
+        config,
+        left_context_frames=32,
+        chunk_frames=8,
+    ).eval()
+    mels = torch.randn(1, 32, config.n_mels)
+
+    full = encoder.forward_full(mels)
+    state = encoder.init_state()
+    outputs = []
+    cursor = 0
+    for size in [10, 6, 16]:
+        out, state = encoder.forward_chunk(mels[:, cursor : cursor + size, :], state)
+        outputs.append(out)
+        assert state.last_recomputed_context_frames == 0
+        assert state.last_recomputed_frames <= size + encoder.chunk_frames - 1
+        cursor += size
+    chunked = torch.cat(outputs, dim=1)
+
+    torch.testing.assert_close(chunked, full, rtol=1e-5, atol=1e-5)
+    assert state.frames_seen == 32
+    assert state.emitted_steps == 4
+    assert state.pending_frames == 0
+
+
+def test_qwen_audio_causal_model_cached_audio_never_recomputes_past():
+    torch.manual_seed(0)
+    config = tiny_config()
+    model = Qwen3ASRRealtimeQwenAudioCausalModel(
+        config,
+        qwen_model_id="fake",
+        audio_tower=FakeQwenAudioTower(config.n_mels, config.d_model),
+        text_model=FakeQwenTextModel(vocab_size=32, hidden_size=config.d_model),
+        lm_head=torch.nn.Linear(config.d_model, 32, bias=False),
+        bos_token_id=1,
+        wait_token_id=0,
+        audio_output_dim=config.d_model,
+    ).eval()
+    mels = torch.randn(1, 24, config.n_mels)
+    state = model.init_cached_audio_decode_state()
+
+    cached1, delta1, state = model.append_audio_to_cache(mels[:, :8, :], state)
+    cached2, delta2, state = model.append_audio_to_cache(mels[:, 8:24, :], state)
+
+    assert delta1.shape == (1, 1, config.d_model)
+    assert delta2.shape == (1, 2, config.d_model)
+    assert cached1.shape == (1, 1, config.d_model)
+    assert cached2.shape == (1, 3, config.d_model)
+    assert state.audio.last_recomputed_context_frames == 0
+    assert state.audio.last_recomputed_frames == 16
+    torch.testing.assert_close(cached2[:, :1, :], cached1)
 
 
 def test_token_repetition_stats_ignores_wait_and_counts_ngrams():

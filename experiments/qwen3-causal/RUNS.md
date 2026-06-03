@@ -4294,3 +4294,64 @@ Artifacts kept locally:
 
 The failed heavy `model.pt` artifacts were removed from the H100 after metrics
 were downloaded.
+
+## 2026-06-03 - Qwen Audio Causal KV Backend Smoke
+
+Goal:
+
+- Add a first native Qwen audio backend that is append-only at the audio tower
+  level: new mel frames are encoded, previous finalized audio states are reused,
+  and no right context is used.
+- This is a mechanical causal/KV validation smoke, not a promoted ASR-quality
+  checkpoint.
+
+Implementation:
+
+- Backend: `qwen_audio_causal_kv`
+- Model class: `Qwen3ASRRealtimeQwenAudioCausalModel`
+- Encoder: `QwenAudioCausalKVEncoder`
+- Training objective: `qwen_ar_ce`
+- Streaming audio chunks: 8 mel frames, about 80 ms
+- Trainable params in smoke: Qwen audio LoRA rank 4 over Q/K/V/O and MLP
+- Frozen: Qwen audio base weights, text decoder, LM head
+
+Validation:
+
+```text
+local:
+PYTHONPATH=experiments/qwen3-causal python3 -m pytest -q experiments/qwen3-causal/tests
+116 passed in 2.25s
+
+H100:
+decoder_backend=qwen_audio_causal_kv
+train_steps=1
+train_loss=3.40625
+eval_loss=4.48681640625
+eval qwen_ar_token_accuracy=0.2883
+```
+
+Interpretation:
+
+- The causal audio KV path loads the real `Qwen/Qwen3-ASR-0.6B` audio tower.
+- The backend can run a CUDA training/eval smoke without shape errors or NaNs.
+- The append-only invariant is covered by unit tests with fake towers:
+  finalized cached audio grows across chunks and `last_recomputed_context_frames`
+  stays at `0`.
+- This does not prove usable transcription quality. The smoke is only one step,
+  and the eval token accuracy is low.
+
+Current answer to "do we have a functional causal Qwen3-ASR?":
+
+- Functional as an experimental causal audio backend: yes.
+- Functional as a usable ASR model with acceptable WER: no, not yet.
+
+Artifacts kept locally:
+
+- `runs/qwen_audio_causal_kv_smoke_v0/train_metrics.json`
+- `runs/qwen_audio_causal_kv_smoke_v0/run_config.json`
+- `runs/qwen_audio_causal_kv_smoke_v0/realtime_config.json`
+- `runs/qwen_audio_causal_kv_smoke_v0/realtime_model_meta.json`
+- `runs/qwen_audio_causal_kv_smoke_v0/eval_predictions.jsonl`
+
+The H100 instance `420813` was paused after downloading the lightweight
+artifacts. The 2.2 GB smoke `model.pt` was not downloaded or promoted.

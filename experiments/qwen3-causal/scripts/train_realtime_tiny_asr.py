@@ -42,6 +42,7 @@ from qwen3_streaming.rnnt import (
 )
 from qwen3_streaming.native_realtime_model import (
     Qwen3ASRRealtimeNativeModel,
+    Qwen3ASRRealtimeQwenAudioCausalModel,
     Qwen3ASRRealtimeQwenAudioSurgeryModel,
     Qwen3ASRRealtimeQwenDecoderModel,
     configure_compact_ctc_head,
@@ -461,7 +462,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--decoder-backend",
-        choices=["native", "qwen", "qwen_audio_surgery"],
+        choices=["native", "qwen", "qwen_audio_surgery", "qwen_audio_causal_kv"],
         default="native",
     )
     parser.add_argument("--qwen-decoder-model", default="Qwen/Qwen3-ASR-0.6B")
@@ -622,6 +623,12 @@ def parse_float_csv(value: str) -> tuple[float, ...]:
 
 
 QWEN_AR_ALIGNMENT_LOSSES = {"qwen_ar_ce", "qwen_ar_context_distill"}
+QWEN_AUDIO_BACKENDS = {"qwen_audio_surgery", "qwen_audio_causal_kv"}
+QWEN_DECODER_BACKENDS = {"qwen", *QWEN_AUDIO_BACKENDS}
+QWEN_AUDIO_MODEL_TYPES = (
+    Qwen3ASRRealtimeQwenAudioSurgeryModel,
+    Qwen3ASRRealtimeQwenAudioCausalModel,
+)
 
 
 def resolve_alignment_loss(args: argparse.Namespace) -> str:
@@ -1829,6 +1836,16 @@ def qwen_ar_streaming_audio_frames_for_training(
         right_context_frames = int(getattr(model.audio_encoder, "right_context_frames", 0))
         if right_context_frames > 0:
             append_chunk(sample.new_zeros(1, right_context_frames, sample.shape[-1]))
+        flush_pending = getattr(model.audio_encoder, "flush_pending", None)
+        if callable(flush_pending):
+            audio_delta, audio_state = flush_pending(audio_state)
+            if int(audio_delta.shape[1]) > 0:
+                frame_delta, adapter_state = model.adapter.forward_chunk(
+                    audio_delta,
+                    adapter_state,
+                )
+                if int(frame_delta.shape[1]) > 0:
+                    chunks.append(frame_delta)
 
         if chunks:
             sample_hidden = torch.cat(chunks, dim=1)
@@ -1856,7 +1873,7 @@ def set_qwen_audio_left_context_sec(
         raise ValueError("Qwen audio left context must be > 0")
     audio_encoder = getattr(model, "audio_encoder", None)
     if audio_encoder is None or not hasattr(audio_encoder, "left_context_frames"):
-        raise ValueError("Qwen context distillation requires qwen_audio_surgery")
+        raise ValueError("Qwen context distillation requires a Qwen audio backend")
     config = getattr(model, "config", None)
     hop_ms = float(getattr(config, "mel_hop_ms", 10.0))
     left_frames = int(round(float(left_context_sec) * 1000.0 / hop_ms))
@@ -1944,7 +1961,7 @@ def qwen_ar_logits_from_frame_hidden(
 ) -> torch.Tensor:
     if not hasattr(model, "forward_qwen_ar_logits_from_cached_audio"):
         raise ValueError(
-            "--alignment-loss qwen_ar_ce requires the qwen_audio_surgery backend"
+            "--alignment-loss qwen_ar_ce requires a Qwen audio backend"
         )
     logits: list[torch.Tensor] = []
     for idx in range(frame_hidden.shape[0]):
@@ -2181,7 +2198,7 @@ def forward_qwen_ar_for_training(
         "forward_qwen_ar_logits_from_cached_audio",
     ):
         raise ValueError(
-            "--alignment-loss qwen_ar_ce requires the qwen_audio_surgery backend"
+            "--alignment-loss qwen_ar_ce requires a Qwen audio backend"
         )
     frame_hidden, preserve_loss = qwen_ar_audio_frames_for_training(
         model,
@@ -2835,9 +2852,9 @@ def main() -> None:
         raise ValueError("--qwen-audio-adapter-zero-init cannot be used with resume checkpoints")
     alignment_loss = resolve_alignment_loss(args)
     if alignment_loss in QWEN_AR_ALIGNMENT_LOSSES:
-        if args.decoder_backend != "qwen_audio_surgery" and not args.resume_from_checkpoint:
+        if args.decoder_backend not in QWEN_AUDIO_BACKENDS and not args.resume_from_checkpoint:
             raise ValueError(
-                f"--alignment-loss {alignment_loss} requires --decoder-backend qwen_audio_surgery"
+                f"--alignment-loss {alignment_loss} requires a Qwen audio backend"
             )
         if args.qwen_lora_rank > 0:
             raise ValueError(
@@ -2943,7 +2960,7 @@ def main() -> None:
     else:
         d_model = (
             qwen3_asr_text_hidden_size(args.qwen_decoder_model)
-            if args.decoder_backend in {"qwen", "qwen_audio_surgery"}
+            if args.decoder_backend in QWEN_DECODER_BACKENDS
             else args.d_model
         )
         config = RealtimeAudioConfig(
@@ -3147,10 +3164,10 @@ def main() -> None:
         )
         if alignment_loss in QWEN_AR_ALIGNMENT_LOSSES and not isinstance(
             model,
-            Qwen3ASRRealtimeQwenAudioSurgeryModel,
+            QWEN_AUDIO_MODEL_TYPES,
         ):
-            raise ValueError(f"{alignment_loss} resume checkpoint must use qwen_audio_surgery")
-        if isinstance(model, Qwen3ASRRealtimeQwenAudioSurgeryModel):
+            raise ValueError(f"{alignment_loss} resume checkpoint must use a Qwen audio backend")
+        if isinstance(model, QWEN_AUDIO_MODEL_TYPES):
             if args.freeze_qwen_audio and args.train_qwen_audio_last_n_layers:
                 raise ValueError(
                     "--freeze-qwen-audio and --train-qwen-audio-last-n-layers "
@@ -3186,11 +3203,11 @@ def main() -> None:
                         target_names=parse_csv(args.qwen_audio_lora_targets),
                     )
         elif args.qwen_audio_lora_rank > 0:
-            raise ValueError("--qwen-audio-lora-rank requires qwen_audio_surgery")
+            raise ValueError("--qwen-audio-lora-rank requires a Qwen audio backend")
         if isinstance(
             model,
             (
-                Qwen3ASRRealtimeQwenAudioSurgeryModel,
+                *QWEN_AUDIO_MODEL_TYPES,
                 Qwen3ASRRealtimeQwenDecoderModel,
             ),
         ):
@@ -3207,12 +3224,13 @@ def main() -> None:
                 )
             if alignment_loss in QWEN_AR_ALIGNMENT_LOSSES:
                 model.freeze_qwen_all()
-    elif args.decoder_backend in {"qwen", "qwen_audio_surgery"}:
-        model_cls = (
-            Qwen3ASRRealtimeQwenAudioSurgeryModel
-            if args.decoder_backend == "qwen_audio_surgery"
-            else Qwen3ASRRealtimeQwenDecoderModel
-        )
+    elif args.decoder_backend in QWEN_DECODER_BACKENDS:
+        if args.decoder_backend == "qwen_audio_surgery":
+            model_cls = Qwen3ASRRealtimeQwenAudioSurgeryModel
+        elif args.decoder_backend == "qwen_audio_causal_kv":
+            model_cls = Qwen3ASRRealtimeQwenAudioCausalModel
+        else:
+            model_cls = Qwen3ASRRealtimeQwenDecoderModel
         model = model_cls.from_qwen_pretrained(
             args.qwen_decoder_model,
             config=config,
@@ -3222,7 +3240,7 @@ def main() -> None:
             device_map="cpu",
         )
         model.emit_threshold = args.emit_threshold
-        if args.decoder_backend == "qwen_audio_surgery":
+        if args.decoder_backend in QWEN_AUDIO_BACKENDS:
             if args.qwen_audio_adapter_zero_init:
                 zeroed_blocks = zero_init_qwen_audio_adapter_blocks(model)
                 if zeroed_blocks <= 0:
@@ -3259,7 +3277,7 @@ def main() -> None:
                     target_names=parse_csv(args.qwen_audio_lora_targets),
                 )
         elif args.qwen_audio_lora_rank > 0:
-            raise ValueError("--qwen-audio-lora-rank requires qwen_audio_surgery")
+            raise ValueError("--qwen-audio-lora-rank requires a Qwen audio backend")
         if args.qwen_lora_rank > 0:
             if args.train_qwen_last_n_layers:
                 raise ValueError(
@@ -3323,8 +3341,8 @@ def main() -> None:
                 blank_logit_bias=args.rnnt_lite_blank_bias,
             )
     if alignment_loss in QWEN_AR_ALIGNMENT_LOSSES:
-        if not isinstance(model, Qwen3ASRRealtimeQwenAudioSurgeryModel):
-            raise ValueError(f"{alignment_loss} requires qwen_audio_surgery model weights")
+        if not isinstance(model, QWEN_AUDIO_MODEL_TYPES):
+            raise ValueError(f"{alignment_loss} requires Qwen audio model weights")
         model.freeze_qwen_all()
         freeze_auxiliary_prediction_heads(model)
     model = model.to(device)

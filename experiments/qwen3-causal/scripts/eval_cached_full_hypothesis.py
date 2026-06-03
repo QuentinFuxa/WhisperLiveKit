@@ -26,6 +26,7 @@ from qwen3_streaming.metrics import (
     word_error_rate,
 )
 from qwen3_streaming.native_realtime_model import (
+    Qwen3ASRRealtimeQwenAudioCausalModel,
     Qwen3ASRRealtimeQwenAudioSurgeryModel,
     _register_qwen3_asr_transformers,
     load_realtime_model,
@@ -42,6 +43,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--checkpoint", type=Path, default=None)
     parser.add_argument("--model-id", default=None)
+    parser.add_argument(
+        "--audio-backend",
+        choices=("qwen_audio_surgery", "qwen_audio_causal_kv"),
+        default="qwen_audio_surgery",
+        help="Audio backend used when loading --model-id directly.",
+    )
     parser.add_argument("--manifest-jsonl", type=Path, default=None)
     parser.add_argument("--audio-dir", type=Path, default=None)
     parser.add_argument("--glob", default="*.wav")
@@ -131,9 +138,14 @@ def _override_audio_context(model, args: argparse.Namespace) -> None:
             round(args.qwen_audio_left_context_sec * 1000.0 / model.config.mel_hop_ms)
         )
     if args.qwen_audio_right_context_ms is not None:
-        encoder.right_context_frames = int(
-            round(args.qwen_audio_right_context_ms / model.config.mel_hop_ms)
-        )
+        desired = int(round(args.qwen_audio_right_context_ms / model.config.mel_hop_ms))
+        try:
+            encoder.right_context_frames = desired
+        except AttributeError:
+            if int(getattr(encoder, "right_context_frames", 0)) != desired:
+                raise ValueError(
+                    "selected audio backend does not support non-zero right context"
+                ) from None
     if getattr(encoder, "left_context_frames", 1) <= 0:
         raise ValueError("qwen audio left context must be > 0 frames")
     if getattr(encoder, "right_context_frames", 0) < 0:
@@ -175,7 +187,12 @@ def _load_model_and_tokenizer(args: argparse.Namespace, device: torch.device):
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
         hf_config = AutoConfig.from_pretrained(tokenizer_source)
         text_config = hf_config.thinker_config.text_config
-        model = Qwen3ASRRealtimeQwenAudioSurgeryModel.from_qwen_pretrained(
+        model_cls = (
+            Qwen3ASRRealtimeQwenAudioCausalModel
+            if args.audio_backend == "qwen_audio_causal_kv"
+            else Qwen3ASRRealtimeQwenAudioSurgeryModel
+        )
+        model = model_cls.from_qwen_pretrained(
             str(args.model_id),
             config=_model_config_from_context_args(
                 args=args,
