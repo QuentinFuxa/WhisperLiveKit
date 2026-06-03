@@ -4649,14 +4649,14 @@ Artifacts kept locally:
 The H100 instance `420856` was paused. Non-promoted `model.pt` files were
 deleted from `/tmp`.
 
-## 2026-06-03 - Backend Parity Diagnostic: Recompute Causal vs Append-Only
+## 2026-06-03 - Backend Diagnostic: Recompute Window vs Append-Only
 
 Goal:
 
 - Separate two possible failure modes:
   - Qwen audio needs future/right context and cannot work causally.
-  - The strict append-only `qwen_audio_causal_kv` backend is not equivalent to
-    recomputing Qwen's audio tower with a causal/local window.
+  - The strict append-only `qwen_audio_causal_kv` backend loses the behavior
+    Qwen gets from recomputing its original local/offline audio tower.
 
 Setup:
 
@@ -4678,31 +4678,39 @@ Results:
 
 Interpretation:
 
-- Qwen does not collapse merely because `right_context=0`.
-- Recomputing a causal/local 15s window still gives usable quality:
-  `WER=0.2017`.
-- The strict append-only backend is the rupture point:
-  same model, same eval, same right context, but `WER=0.9065`.
-- Therefore the next priority is not more LoRA training. It is parity:
-  `qwen_audio_causal_kv` must reproduce `qwen_audio_surgery/right=0` hidden
-  states and transcripts before any further training can be interpreted.
+- Qwen does not collapse merely because output `right_context=0`.
+- Important nuance: `qwen_audio_surgery/right=0` is not strict causal audio
+  attention. It recomputes the whole local window through Qwen's original
+  offline/bidirectional audio tower, then emits all frames up to the current
+  audio time.
+- That still gives usable quality: `WER=0.2017`.
+- The strict append-only backend is the rupture point: same model, same eval,
+  same output right context, but `WER=0.9065`.
+- Therefore the next priority is not more LoRA training. It is understanding
+  how much mutable history Qwen needs, then either:
+  - implement a bounded mutable tail that recomputes only a small recent suffix;
+  - or train a genuinely causal audio tower/decoder pair so old embeddings no
+    longer need to be rewritten.
 
-Likely technical gap:
+Technical gap:
 
 - Existing tests prove append-only behavior using `FakeQwenAudioTower`.
-- They do not prove equivalence against the real Qwen audio tower.
-- The real tower path includes Qwen's conv stack, positional embedding,
-  attention mask semantics, normalization/projection, and length accounting.
-  Any mismatch there can destroy lexical identity while still satisfying the
-  "no recompute" invariant.
+- They do not prove quality parity with real Qwen, and strict parity with
+  `qwen_audio_surgery` is not expected because surgery recomputes an offline
+  bidirectional tower.
+- The real question is now empirical: how small can the mutable/recomputed tail
+  become before WER collapses?
 
 Decision:
 
-- Stop training strict causal LoRA until real-tower parity is proven.
-- Next useful implementation task: add a real-Qwen parity harness comparing:
-  `qwen_audio_surgery/right=0` recompute outputs vs `qwen_audio_causal_kv`
-  append-only outputs on the same mel stream, layer by layer if needed.
-- Only once hidden-state parity is close should we restart adaptation/training.
+- Stop training strict append-only LoRA as-is.
+- Next useful diagnostic: sweep bounded mutable tails, e.g. recompute only the
+  last `0.5s/1s/2s/4s` while keeping older embeddings fixed, and compare WER to
+  full 15s-window recompute.
+- If a small tail works, that is the practical realtime path.
+- If only a large tail works, strict no-recompute requires a real causal
+  training objective/architecture, not a small LoRA on the existing frozen
+  decoder path.
 
 Artifacts kept locally:
 
