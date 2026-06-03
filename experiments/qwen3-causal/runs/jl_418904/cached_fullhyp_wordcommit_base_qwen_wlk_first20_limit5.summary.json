@@ -1,0 +1,31 @@
+{
+  "count": 5,
+  "ok": 5,
+  "total_latency_sec": 71.780692858,
+  "latency_mean_sec": 14.356060760999995,
+  "wer_final_mean": 0.12108251996450754,
+  "wer_latest_mean": 0.12108251996450754,
+  "wer_stable_mean": 0.7102585034013605,
+  "cache_bound_violations": 0,
+  "final_tokens_mean": 59.2,
+  "latest_tokens_mean": 59.2,
+  "repetition": {
+    "text_token_count": 296,
+    "unique_text_token_count_sum": 234,
+    "unigram_total": 296,
+    "unigram_repeated": 62,
+    "unigram_repetition_ratio": 0.20945945945945946,
+    "bigram_total": 291,
+    "bigram_repeated": 6,
+    "bigram_repetition_ratio": 0.020618556701030927,
+    "trigram_total": 286,
+    "trigram_repeated": 1,
+    "trigram_repetition_ratio": 0.0034965034965034965
+  },
+  "chunk_ms": 1000.0,
+  "feature_mode": "qwen_processor",
+  "commit_mode": "word",
+  "finalize_mode": "latest",
+  "hold_back_words": 6,
+  "stable_iterations": 2
+}

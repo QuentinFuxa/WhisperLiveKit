@@ -1,0 +1,4296 @@
+# Jarvislab Runs
+
+## 2026-05-28 - Instance 417011, H100 IN2
+
+Status: paused after run.
+
+Remote workspace:
+
+```text
+/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100
+```
+
+Local artifacts:
+
+```text
+runs/jl_417011/
+```
+
+### Environment
+
+- GPU: NVIDIA H100 80GB HBM3
+- Driver: 580.126.20
+- Python: 3.10.12
+- vLLM: `0.21.1rc1.dev359+gd6b48f928`
+- Torch: `2.11.0+cu129`
+- Qwen-ASR package: `qwen-asr==0.0.6`
+
+Notes:
+
+- `python3.10-venv` and `python3.10-dev` were missing on the VM and were installed with `apt`.
+- `flash-attn` source install failed because the system CUDA detected by the build was 13.0 while vLLM/Torch used CUDA 12.9. The project bootstrap now skips standalone `flash-attn` by default.
+- vLLM eager mode was required. Without `--enforce-eager`, Torch Inductor/Triton failed during server startup.
+
+### REST Baselines
+
+Dataset: 21 WAV files from `/Users/quentin/Downloads/mcif-long-trans/audio`, uploaded to the VM.
+
+`Qwen/Qwen3-ASR-0.6B`, vLLM REST `/v1/audio/transcriptions`:
+
+```json
+{
+  "count": 21,
+  "ok": 21,
+  "latency_p50": 1.5519600119998813,
+  "latency_p95": 1.7457201429999714,
+  "latency_mean": 1.557243340714281,
+  "wer_mean": null
+}
+```
+
+`Qwen/Qwen3-ASR-1.7B`, vLLM REST `/v1/audio/transcriptions`:
+
+```json
+{
+  "count": 21,
+  "ok": 21,
+  "latency_p50": 1.576499947000002,
+  "latency_p95": 1.8398378930000945,
+  "latency_mean": 1.5858860170475986,
+  "wer_mean": null
+}
+```
+
+Observation: on this short WLK audio set, 0.6B and 1.7B REST latency are nearly identical on H100 in eager mode. Quality still needs reference transcripts or teacher comparison.
+
+### Realtime Baseline
+
+Server:
+
+```bash
+MODEL=Qwen/Qwen3-ASR-0.6B ENFORCE_EAGER=1 bash scripts/serve_vllm_realtime.sh
+```
+
+Architecture override in logs: `Qwen3ASRRealtimeGeneration`.
+
+Result:
+
+```json
+{
+  "count": 21,
+  "ok": 20,
+  "latency_p50": 7.434306622999884,
+  "latency_p95": 12.23092574999987,
+  "first_delta_p50": 1.0297667810000348,
+  "first_delta_p95": 1.1811898259998088,
+  "wer_mean": null,
+  "revision_words_mean": 364.3
+}
+```
+
+Failed file:
+
+```text
+ccpXHNfaoy.wav
+```
+
+Error:
+
+```text
+Qwen3ASRProcessor processing_error on a near-empty/silent audio chunk.
+```
+
+Notes:
+
+- First delta latency is good, around 1s.
+- Final Realtime completion is much slower than REST because the benchmark waits for the whole WebSocket finalization path.
+- `revision_words_mean` is not meaningful yet without references and better event aggregation; the script currently treats full generated text as revision when no reference exists.
+
+### Next Fixes
+
+- Harden `benchmark_realtime_ws.py` to skip all-zero chunks and aggregate Realtime events according to vLLM's exact event schema.
+- Add reference transcripts or compare 0.6B against 1.7B teacher outputs to compute WER/CER-like deltas.
+- Split training and serving into separate venvs if Qwen's official SFT script needs Torch 2.12 while vLLM nightly pins Torch 2.11.
+- Keep `--enforce-eager` as the default for baseline serving on this Jarvislab image.
+
+## 2026-05-28 - Instance 417029, Native Realtime Prototype
+
+Status: v0/v1 prototype completed; instance paused after artifact download.
+
+Remote workspace:
+
+```text
+/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100
+```
+
+Implemented and validated:
+
+- Causal PyTorch audio encoder with append-only KV cache.
+- 80 ms frame adapter.
+- Cached decoder scaffold.
+- Qwen tokenizer with `[P]` wait and `[W]` word-start tokens.
+- `from_pretrained()` reload path.
+- Greedy streaming inference CLI for WAV files.
+
+GPU tests:
+
+```text
+13 passed in 0.95s
+```
+
+Smoke synthetic checkpoint:
+
+```text
+runs/realtime_smoke_native_v0
+first_loss: 5.9592509269714355
+last_loss: 0.026107419282197952
+```
+
+First real-audio checkpoint, unweighted:
+
+```text
+runs/realtime_fleurs_tiny_v0
+train_examples: 96
+eval_examples: 16
+first_train_loss: 11.765230178833008
+last_train_loss: 2.4520552158355713
+eval_loss: 2.6229661256074905
+```
+
+This model collapsed to `[P]` at streaming inference, so it is retained only as
+a diagnostic artifact.
+
+First real-audio checkpoint, wait-weighted:
+
+```text
+runs/realtime_fleurs_tiny_v1_weighted
+train_examples: 256
+eval_examples: 32
+wait_loss_weight: 0.05
+valid_labels: 33458
+wait_ratio: 0.5948054277004005
+first_train_loss: 11.95308780670166
+last_train_loss: 3.788281202316284
+eval_loss: 4.651238292455673
+```
+
+Streaming reload check:
+
+```text
+checkpoint: runs/realtime_fleurs_tiny_v0
+vocab_size: 151707
+d_model: 192
+audio_layers: 3
+decoder_layers: 3
+80 mel frames -> 10 decoder steps
+```
+
+Known limitation:
+
+- The v1 model emits text tokens but quality is intentionally poor. It repeats
+  frequent Qwen tokens such as `the` and `de` because the decoder is still
+  trained from scratch on a tiny set with heuristic word timings. The next real
+  step is Qwen decoder initialization plus real WhisperX/MFA word alignments.
+
+## 2026-05-28 - Instance 417053, Qwen3 ForcedAligner Manifests
+
+Status: Qwen3 forced-alignment path implemented and validated; instance paused
+after artifact download.
+
+Source used:
+
+```text
+Qwen/Qwen3-ForcedAligner-0.6B
+```
+
+The official Qwen package exposes `Qwen3ForcedAligner.align(audio=..., text=...,
+language=...)`. It returned word-level timestamps in seconds on FLEURS examples.
+
+Example alignment:
+
+```json
+[
+  {"text": "bowen", "start_sec": 1.12, "end_sec": 1.44},
+  {"text": "island", "start_sec": 1.44, "end_sec": 1.84},
+  {"text": "is", "start_sec": 1.84, "end_sec": 2.08},
+  {"text": "popular", "start_sec": 2.08, "end_sec": 2.56}
+]
+```
+
+Artifacts:
+
+```text
+data/qwen_aligned_fleurs_tiny/train_manifest.jsonl
+data/qwen_aligned_fleurs_tiny/eval_manifest.jsonl
+runs/realtime_fleurs_qwen_aligned_v0
+```
+
+Alignment run:
+
+```text
+sources: fleurs_en, fleurs_fr
+train_records: 256
+eval_records: 32
+speed after warmup: roughly 20-26 utterances/sec on H100
+```
+
+Training run:
+
+```text
+runs/realtime_fleurs_qwen_aligned_v0
+train_steps: 500
+train_examples: 256
+eval_examples: 32
+valid_labels: 33458
+wait_labels: 19631
+text_or_word_labels: 13827
+wait_ratio: 0.586735608823002
+wait_loss_weight: 0.05
+first_train_loss: 11.883075714111328
+last_train_loss: 3.7703630924224854
+eval_loss: 4.720618575811386
+```
+
+Conclusion:
+
+- Qwen3-ForcedAligner works well enough to replace heuristic timestamps.
+- On this tiny run, quality did not materially improve because the decoder is
+  still trained from scratch. The next bottleneck is Qwen3-ASR 0.6B decoder /
+  token embedding / LM head initialization, not timestamp quality.
+
+## 2026-05-28 - Instance 417191, Longer Rank-32 LoRA FLEURS Run
+
+Status: completed; lightweight artifacts downloaded locally. Full `model.pt`
+remains on the H100 because the checkpoint is not quality-usable.
+
+Remote workspace:
+
+```text
+/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100
+```
+
+Local lightweight artifacts:
+
+```text
+runs/jl_417191/realtime_qwen_lora_r32_fleurs_16s_space_16k_v0/
+runs/jl_417191/realtime_qwen_lora_r32_fleurs_16s_space_16k_v0.log
+```
+
+Command:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --decoder-backend qwen \
+  --qwen-decoder-model Qwen/Qwen3-ASR-0.6B \
+  --output-dir runs/realtime_qwen_lora_r32_fleurs_16s_space_16k_v0 \
+  --train-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/eval_manifest.jsonl \
+  --steps 16000 \
+  --batch-size 2 \
+  --device cuda \
+  --audio-layers 4 \
+  --audio-heads 8 \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --emit-threshold 0.50 \
+  --qwen-lora-rank 32 \
+  --qwen-lora-alpha 64 \
+  --qwen-lora-dropout 0.05 \
+  --lr 5e-5 \
+  --no-word-start-token \
+  --max-audio-sec 16 \
+  --log-every 500
+```
+
+Metrics:
+
+```json
+{
+  "train_steps": 16000,
+  "train_examples": 2400,
+  "eval_examples": 240,
+  "trainable_params": 63842305,
+  "first_train_loss": 18.73767852783203,
+  "last_train_loss": 0.49518877267837524,
+  "eval_loss": 11.47832874059677,
+  "pred_wait_ratio": 0.7601311615639591,
+  "label_wait_ratio": 0.7639932993548847
+}
+```
+
+WLK 20 s threshold sweep on `data/wlk_audio/myfXyntFYL_20s.wav`:
+
+```text
+0.40: careeray som many any a gljing alleyailylogy linear...
+0.50: careeray som many any a gljing alleyaily linear...
+0.65: careeray som many any a gljing alley linear...
+0.80: careeray som many any a gljing alley linear...
+```
+
+Train-sample free streaming sanity check:
+
+```text
+reference:  whistler 1.5 hour drive from vancouver is expensive but well-known because of the 2010 winter olympics
+hypothesis: whistler 1 but drive vancouver culture culture is is expensive but wellknownamount because of the 2010 ten winter olympics
+```
+
+Eval-sample and WLK outputs remain unusable.
+
+Conclusion:
+
+- More training on the 2400-example FLEURS manifest makes the model memorize
+  train examples, but it does not generalize.
+- The separate emit gate is calibrated after the longer run: predicted wait/text
+  ratios now match label ratios closely. The blocker is content quality, not
+  threshold selection.
+- Next run should scale data before capacity: all available FLEURS plus
+  LibriSpeech/MLS/Common Voice with Qwen3-ForcedAligner, teacher transcripts
+  from Qwen3-ASR-1.7B, and periodic eval/checkpointing to avoid selecting an
+  overfit late step.
+
+## 2026-05-28 - Instance 417168, Larger FLEURS LoRA Runs
+
+Status: completed; instance paused after artifact download.
+
+Remote workspace:
+
+```text
+/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100
+```
+
+Local lightweight artifacts:
+
+```text
+runs/jl_417168/
+data/qwen_aligned_fleurs_16s_v0/{train_manifest.jsonl,eval_manifest.jsonl}
+```
+
+Full `model.pt` checkpoints remain on the paused H100 instance because each is
+about 1.3 GB.
+
+### Code fixes
+
+- `prepare_qwen_aligned_jsonl.py` now supports `--drop-long-audio`, so long
+  utterances are skipped instead of truncating audio while keeping the full
+  transcript.
+- Dataset audio is loaded with `datasets.Audio(decode=False)` plus `soundfile`,
+  avoiding the optional `torchcodec` dependency on the Jarvislab image.
+- `realtime_targets.py` now encodes non-initial words with a leading space. This
+  is required for Qwen's tokenizer; encoding each aligned word independently
+  produced joined-word targets and joined-word hypotheses.
+
+Validation:
+
+```text
+local:  9 passed, 1 skipped
+H100:   14 passed
+```
+
+### Manifest
+
+Command:
+
+```bash
+python scripts/prepare_qwen_aligned_jsonl.py \
+  --out-dir data/qwen_aligned_fleurs_16s_v0 \
+  --sources fleurs_en fleurs_fr \
+  --max-train-per-source 1200 \
+  --max-eval-per-source 120 \
+  --max-audio-sec 16 \
+  --drop-long-audio \
+  --device-map cuda:0 \
+  --dtype bfloat16 \
+  --allow-heuristic-fallback \
+  --skip-existing
+```
+
+Result:
+
+```json
+{
+  "train_records": 2400,
+  "eval_records": 240,
+  "alignment_source": "qwen3_forced_aligner",
+  "languages": {"train": {"en": 1200, "fr": 1200}, "eval": {"en": 120, "fr": 120}},
+  "train_avg_duration_sec": 10.282,
+  "train_max_duration_sec": 15.96,
+  "eval_avg_duration_sec": 9.405,
+  "eval_max_duration_sec": 15.48
+}
+```
+
+### LoRA run with old word-token targets
+
+Checkpoint:
+
+```text
+runs/realtime_qwen_lora_r16_fleurs_16s_v0
+```
+
+Metrics:
+
+```json
+{
+  "train_steps": 4000,
+  "train_examples": 2400,
+  "eval_examples": 240,
+  "first_train_loss": 19.37409210205078,
+  "last_train_loss": 5.621718406677246,
+  "eval_loss": 7.665455977121989,
+  "pred_wait_ratio": 0.6734504758170866,
+  "label_wait_ratio": 0.7237872908721531
+}
+```
+
+WLK 20 s inference was not usable and exposed the target bug:
+
+```text
+peopleherunonthatinisisofbethatthatolywaylyarchly...
+```
+
+### LoRA run with leading-space token targets
+
+Checkpoint:
+
+```text
+runs/realtime_qwen_lora_r16_fleurs_16s_space_v0
+```
+
+Metrics:
+
+```json
+{
+  "train_steps": 4000,
+  "train_examples": 2400,
+  "eval_examples": 240,
+  "first_train_loss": 18.869348526000977,
+  "last_train_loss": 6.341559410095215,
+  "eval_loss": 8.56280548175176,
+  "pred_wait_ratio": 0.6428342303168549,
+  "label_wait_ratio": 0.7639932993548847
+}
+```
+
+WLK 20 s inference at threshold 0.50:
+
+```text
+paredver were run than in is the may the that had a the easy muchchesterature...
+```
+
+Threshold sweep:
+
+```text
+0.50: long hallucinated pseudo-English
+0.60: shorter but still wrong
+0.70: shorter but still wrong
+0.80: "pared that hadchester the the used for is wrong work bombing the"
+0.90: "for is"
+```
+
+Conclusion:
+
+- The native causal pipeline is now end-to-end trainable with Qwen decoder
+  initialization, LoRA, Qwen3 forced alignments, and correct Qwen word-spacing
+  targets.
+- The model is not quality-usable yet. The current audio encoder and adapter are
+  still learning the acoustic-to-Qwen interface from scratch on only 2400 short
+  examples. Threshold tuning cannot fix the content errors.
+- Next useful step is scale and distillation: tens of thousands of aligned
+  examples, teacher transcripts/logits from Qwen3-ASR-1.7B, then a longer
+  staged run that first trains the causal audio path and only then expands LoRA
+  or unfreezes decoder blocks.
+
+## 2026-05-28 - Instance 417067, Qwen Decoder Initialization
+
+Status: Qwen decoder backend implemented and tested; instance paused after run
+inspection and artifact download.
+
+Remote workspace:
+
+```text
+/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100
+```
+
+Environment note:
+
+- The project `.venv` is a symlink to the Jarvislab base venv:
+  `/home/ubuntu/wlk-jarvis-min.Ckv6m0/.venv`.
+- CUDA check after repair: `torch 2.11.0+cu130`, CUDA available.
+- Remote tests after repair: `13 passed in 1.25s`.
+
+Implemented:
+
+- `Qwen3ASRRealtimeQwenDecoderModel`, a realtime causal model that keeps the
+  local causal audio encoder and 80 ms adapter, then drives Qwen3-ASR's
+  pretrained text decoder through `inputs_embeds`.
+- Qwen3-ASR 0.6B text hidden-size discovery from HF config.
+- `load_realtime_model()` dispatch for native vs Qwen-decoder checkpoints.
+- Training flags:
+  - `--decoder-backend qwen`
+  - `--qwen-decoder-model`
+  - `--qwen-dtype`
+  - `--freeze-qwen-layers`
+  - `--freeze-qwen-all`
+  - `--no-word-start-token`
+- Inference reload path for both native and Qwen-decoder checkpoints.
+
+Primary Qwen decoder run:
+
+```text
+runs/realtime_fleurs_qwen_decoder_v0
+train_steps: 500
+train_examples: 256
+eval_examples: 32
+valid_labels: 33458
+wait_labels: 19631
+text_or_word_labels: 13827
+wait_ratio: 0.586735608823002
+wait_loss_weight: 0.05
+decoder_backend: qwen
+total_params: 629218304
+trainable_params: 188750848
+first_train_loss: 18.125
+last_train_loss: 4.75
+eval_loss: 5.779296875
+```
+
+Eval diagnostic:
+
+```text
+pred_wait: 391
+pred_word: 3160
+pred_text: 0
+label_wait: 2090
+label_word: 562
+label_text: 899
+valid: 3551
+```
+
+Conclusion: with `[W]` enabled, the model learns the special word-start marker
+shortcut and emits no text.
+
+No-word-start run:
+
+```text
+runs/realtime_fleurs_qwen_decoder_no_w_v0
+train_steps: 1000
+wait_loss_weight: 0.05
+include_word_start: false
+first_train_loss: 17.625
+last_train_loss: 6.1875
+eval_loss: 7.9765625
+```
+
+Eval diagnostic:
+
+```text
+pred_wait: 3551
+pred_word: 0
+pred_text: 0
+label_wait: 2645
+label_word: 0
+label_text: 906
+valid: 3551
+```
+
+Conclusion: without `[W]`, the same objective collapses to pure wait tokens.
+
+Text-only diagnostic:
+
+```text
+runs/realtime_fleurs_qwen_decoder_text_only_v0
+train_steps: 1000
+wait_loss_weight: 0.0
+include_word_start: false
+first_train_loss: 17.25
+last_train_loss: 6.65625
+eval_loss: 8.78515625
+```
+
+Eval diagnostic:
+
+```text
+pred_wait: 0
+pred_word: 0
+pred_text: 3551
+label_wait: 2645
+label_word: 0
+label_text: 906
+valid: 3551
+```
+
+WLK 20s streaming reload check:
+
+```text
+checkpoint: runs/realtime_fleurs_qwen_decoder_text_only_v0
+audio: data/wlk_audio/myfXyntFYL_20s.wav
+tokens: 249
+audio_frames_seen: 1998
+decoder_steps_seen: 249
+chunk_ms: 320
+hypothesis: repeated "the/un/s" token pattern
+```
+
+Conclusion:
+
+- The causal model exists, loads, saves, reloads, and streams with append-only
+  audio frames and decoder cache.
+- Initializing the Qwen text decoder is necessary but not sufficient. With the
+  Qwen transformer frozen, the new causal audio encoder/adapter cannot yet map
+  audio frames into the pretrained text manifold.
+- The immediate next training step is to unfreeze at least the last Qwen decoder
+  blocks and use a better objective/schedule that avoids both wait collapse and
+  text-every-frame repetition. The architecture work should continue before any
+  vLLM or vllm-metal port.
+
+## 2026-05-28 - Instance 417126, Emit/Wait Gate
+
+Status: Qwen decoder emit-gate training completed; artifacts downloaded
+locally; instance paused after run.
+
+Remote workspace:
+
+```text
+/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100
+```
+
+Implemented:
+
+- Separate binary emit/wait gate on top of Qwen decoder hidden states.
+- Text CE only on non-wait frames when the gate is active.
+- `--train-qwen-last-n-layers` to unfreeze the last Qwen decoder blocks while
+  keeping the rest frozen.
+- Eval prediction stats for wait/text ratios.
+- `infer_realtime_checkpoint.py --emit-threshold` for post-training threshold
+  sweeps.
+
+Remote tests after sync:
+
+```text
+13 passed
+```
+
+Smoke diagnostics:
+
+```text
+runs/realtime_qwen_balanced_smoke
+loss_mode: balanced
+train_qwen_last_n_layers: 4
+pred_wait: 0
+pred_text: 3551
+```
+
+```text
+runs/realtime_qwen_emit_gate_smoke
+steps: 80
+emit_gate_wait_weight: 1.0
+pred_wait: 995
+pred_text: 2556
+label_wait: 2645
+label_text: 906
+```
+
+```text
+runs/realtime_qwen_emit_gate_w3_smoke
+steps: 120
+emit_gate_wait_weight: 3.0
+pred_wait: 3551
+pred_text: 0
+```
+
+```text
+runs/realtime_qwen_emit_gate_w15_smoke
+steps: 160
+emit_gate_wait_weight: 1.5
+pred_wait: 2575
+pred_text: 976
+label_wait: 2645
+label_text: 906
+```
+
+Primary run:
+
+```text
+runs/realtime_qwen_emit_gate_w15_v0
+train_steps: 2000
+train_examples: 256
+eval_examples: 32
+decoder_backend: qwen
+total_params: 629219329
+trainable_params: 251676673
+emit_gate_loss_weight: 1.0
+emit_gate_wait_weight: 1.5
+train_qwen_last_n_layers: 4
+first_train_loss: 19.1931095123291
+last_train_loss: 6.365322589874268
+eval_loss: 10.308069229125977
+loss_decreased: true
+```
+
+Default-threshold eval stats:
+
+```text
+threshold: 0.50
+valid: 3551
+pred_wait: 3202
+pred_text: 349
+label_wait: 2645
+label_text: 906
+pred_wait_ratio: 0.9017
+```
+
+Threshold sweep on eval:
+
+```text
+threshold 0.25 -> pred_wait_ratio 0.6745, pred_text_ratio 0.3255
+threshold 0.30 -> pred_wait_ratio 0.7308, pred_text_ratio 0.2692
+threshold 0.35 -> pred_wait_ratio 0.7840, pred_text_ratio 0.2160
+label_wait_ratio: 0.7449
+```
+
+WLK 20s streaming reload check at threshold 0.30:
+
+```text
+checkpoint: runs/realtime_qwen_emit_gate_w15_v0
+audio: data/wlk_audio/myfXyntFYL_20s.wav
+tokens: 249
+audio_frames_seen: 1998
+decoder_steps_seen: 249
+chunk_ms: 320
+emit_threshold: 0.30
+hypothesis: repeated "the/ed/country" token pattern
+```
+
+Conclusion:
+
+- The gate fixes the worst objective problem: wait/text emission is now
+  tunable instead of collapsing to pure wait or pure text.
+- The causal streaming invariant still holds: appending audio advances the
+  cached audio encoder and decoder by new frames/steps only.
+- ASR quality is not usable yet. The output remains high-frequency Qwen token
+  repetition, which means the new audio encoder/adapter has not learned a good
+  bridge into the Qwen text decoder manifold from this tiny FLEURS run.
+- Next useful step: train on a much larger aligned manifest, add teacher
+  distillation from Qwen3-ASR-1.7B logits/transcripts, and consider gradually
+  unfreezing more Qwen blocks only after the gate remains stable.
+
+## 2026-05-28 - Instance 417149, Qwen LoRA Adapters
+
+Status: LoRA training path implemented; rank 16 checkpoint and lightweight
+artifacts downloaded locally; instance paused after run.
+
+Remote workspace:
+
+```text
+/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100
+```
+
+Implemented:
+
+- Local `LoRALinear` wrapper for `nn.Linear`, without adding a PEFT dependency.
+- Qwen decoder LoRA injection on `q_proj`, `k_proj`, `v_proj`, `o_proj`,
+  `gate_proj`, `up_proj`, and `down_proj`.
+- LoRA checkpoint metadata so `load_realtime_model()` rebuilds wrappers before
+  loading the saved state dict.
+- Training flags:
+  - `--qwen-lora-rank`
+  - `--qwen-lora-alpha`
+  - `--qwen-lora-dropout`
+  - `--qwen-lora-targets`
+
+Tests:
+
+```text
+local: 9 passed, 1 skipped
+remote H100: 14 passed
+```
+
+Rank 8 smoke:
+
+```text
+runs/realtime_qwen_lora_r8_emit_gate_smoke
+steps: 300
+qwen_lora_rank: 8
+qwen_lora_alpha: 16
+qwen_lora_dropout: 0.05
+total_params: 634265601
+trainable_params: 38215681
+first_train_loss: 19.067916870117188
+last_train_loss: 8.060051918029785
+eval_loss: 8.822314441204071
+pred_wait: 1654
+pred_text: 1897
+label_wait: 2645
+label_text: 906
+pred_wait_ratio: 0.4658
+```
+
+Threshold sweep on rank 8 showed the gate needs a higher threshold after short
+training:
+
+```text
+threshold 0.65 -> pred_wait_ratio 0.6961, pred_text_ratio 0.3039
+threshold 0.70 -> pred_wait_ratio 0.8130, pred_text_ratio 0.1870
+label_wait_ratio: 0.7449
+```
+
+Rank 16 run:
+
+```text
+runs/realtime_qwen_lora_r16_emit_gate_v0
+steps: 2000
+qwen_lora_rank: 16
+qwen_lora_alpha: 32
+qwen_lora_dropout: 0.05
+total_params: 639311873
+trainable_params: 43261953
+first_train_loss: 18.60001564025879
+last_train_loss: 2.491319179534912
+eval_loss: 12.86189091205597
+pred_wait: 2679
+pred_text: 872
+label_wait: 2645
+label_text: 906
+pred_wait_ratio: 0.7544
+```
+
+WLK 20s streaming reload check at threshold 0.50:
+
+```text
+checkpoint: runs/realtime_qwen_lora_r16_emit_gate_v0
+audio: data/wlk_audio/myfXyntFYL_20s.wav
+tokens: 249
+audio_frames_seen: 1998
+decoder_steps_seen: 249
+chunk_ms: 320
+emit_threshold: 0.50
+hypothesis: mixed repeated pseudo-text, still not usable ASR
+```
+
+Conclusion:
+
+- LoRA is the right adaptation mechanism for the pretrained Qwen decoder side:
+  it cuts trainable parameters from about 251.7M in the last-4-layer unfreeze run
+  to about 43.3M with rank 16 while keeping the gate well calibrated.
+- LoRA on the causal audio embedder itself is not meaningful yet because that
+  embedder is new, not a pretrained module being adapted. The audio encoder and
+  frame adapter should continue training directly.
+- Quality is still bad. The model overfits the tiny 256-example FLEURS manifest
+  and emits pseudo-text rather than transcription. The next limiting factor is
+  a much larger aligned/distilled dataset, not more decoder capacity.
+
+## 2026-05-28 - Instance 417223, Qwen Audio Surgery Backend
+
+Status: `qwen_audio_surgery` backend implemented and smoke-tested on H100.
+
+Implemented:
+
+- `QwenAudioSurgeryEncoder`, a streaming wrapper around Qwen3-ASR's pretrained
+  `thinker.audio_tower`.
+- Bounded-window audio recompute with default `left_context=15s` and
+  `right_context=640ms`, plus a `strict_causal` diagnostic option.
+- `QwenAudioSurgeryFrameAdapter`, identity-initialized when Qwen audio output
+  dim matches the text hidden size (`1024 -> 1024`).
+- `Qwen3ASRRealtimeQwenAudioSurgeryModel`, sharing the existing Qwen decoder,
+  emit-gate, LoRA metadata, checkpoint save/load, and streaming contract.
+- Training flags:
+  - `--decoder-backend qwen_audio_surgery`
+  - `--qwen-audio-right-context-ms`
+  - `--qwen-audio-left-context-sec`
+  - `--qwen-audio-strict-causal`
+  - `--freeze-qwen-audio`
+  - `--train-qwen-audio-last-n-layers`
+
+Tests:
+
+```text
+local: 17 passed
+remote H100: 17 passed
+```
+
+Real Qwen shape smoke:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+audio_hidden_shape: [1, 26, 1024] for 200 mel frames
+hidden_shape: [1, 26, 1024]
+stream chunks 80/80/40 mel frames -> token steps 2, 10, 5
+```
+
+Bounded recompute smoke:
+
+```text
+left_context: 1500 mel frames
+right_context: 64 mel frames
+max_recompute_frames: 1564
+after encode 20s: recomputed 1564 frames, not 2000
+after append +1s: recomputed 1564 frames, not 2100
+emitted_steps: 242 -> 254
+```
+
+Training smoke:
+
+```text
+runs/jl_417223/realtime_qwen_audio_surgery_smoke
+train examples: 8
+eval examples: 4
+steps: 3
+freeze_qwen_all: true
+freeze_qwen_audio: true
+trainable_params: 1049601
+first_train_loss: 13.65472412109375
+last_train_loss: 11.640889167785645
+eval_loss: 10.684858322143555
+loss_decreased: true
+```
+
+Checkpoint reload check:
+
+```text
+checkpoint: runs/jl_417223/realtime_qwen_audio_surgery_smoke
+audio_frames_seen: 1114
+decoder_steps_seen: 131
+chunk_ms: 320
+hypothesis: repeated pseudo-text, expected after a 3-step smoke
+```
+
+Conclusion:
+
+- This is the right v2 direction: it no longer starts the audio embedder from
+  scratch. It reuses the pretrained Qwen audio tower and only adds a small,
+  identity-initialized projector/gate path for the first training stage.
+- The current implementation is bounded-window surgery, not yet a per-layer KV
+  cache inside Qwen audio attention. That is deliberate for Stage 0: it proves
+  the reuse/wiring and eliminates full-history re-embedding before deeper model
+  surgery.
+- Next step: compare chunked bounded-window output against an offline masked
+  reference, then run a longer Stage A with frozen Qwen decoder/audio tower
+  before trying LoRA on the last Qwen audio blocks.
+
+## 2026-05-28 - Instance 417230, Stage 0.5 + Stage A
+
+Status: Stage 0.5 validation and a short Stage A training run completed.
+
+Stage 0.5 validation:
+
+```text
+script: scripts/validate_qwen_audio_surgery.py
+audio: 5 WLK wavs copied to data/wlk_audio_stage05
+max_audio_sec: 30
+chunk_ms: 320
+left_context_sec: 15
+right_context_ms: 640
+max_allowed_recompute_frames: 1564
+max_observed_recompute_frames: 1564
+all_recompute_bounded: true
+mean_stream_chunk_ms: 6.733
+max_stream_chunk_ms: 59.711
+mean_peak_mem_gb: 1.846
+artifacts: runs/jl_417230/stage05/
+```
+
+Stage A command:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --decoder-backend qwen_audio_surgery \
+  --qwen-decoder-model Qwen/Qwen3-ASR-0.6B \
+  --qwen-dtype bfloat16 \
+  --output-dir runs/jl_417230/realtime_qwen_audio_surgery_stageA_1k_v0 \
+  --train-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/eval_manifest.jsonl \
+  --steps 1000 \
+  --batch-size 2 \
+  --device cuda \
+  --audio-heads 8 \
+  --qwen-audio-left-context-sec 15 \
+  --qwen-audio-right-context-ms 640 \
+  --freeze-qwen-all \
+  --freeze-qwen-audio \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --lr 1e-4 \
+  --no-word-start-token \
+  --max-audio-sec 16
+```
+
+Stage A metrics:
+
+```text
+checkpoint: runs/jl_417230/realtime_qwen_audio_surgery_stageA_1k_v0
+train_examples: 2400
+eval_examples: 240
+trainable_params: 1049601
+total_params: 783475713
+first_train_loss: 18.235950469970703
+last_train_loss: 4.23997688293457
+eval_loss: 5.25618989666303
+label_wait_ratio: 0.763998
+pred_wait_ratio: 0.731867
+loss_decreased: true
+```
+
+Qualitative eval:
+
+```text
+FLEURS hypotheses are still repeated pseudo-text, but much less degenerate than
+the scratch-audio runs. The gate learned a plausible wait/text ratio.
+```
+
+WLK 20s threshold sweep:
+
+```text
+threshold 0.50 -> "and then we have the second part of the story ..."
+threshold 0.65 -> "and the other two are the two most important things ..."
+threshold 0.75 -> "and the other two are isthe"
+tokens: 241
+audio_frames_seen: 1998
+decoder_steps_seen: 241
+```
+
+Conclusion:
+
+- Stage 0.5 passes: the backend is stable on multiple WLK wavs and never
+  recomputes beyond the configured local audio window.
+- Stage A learns the gate and lowers loss with only the projector/gate trainable.
+  Quality is still not usable ASR. This means frozen audio tower + frozen
+  decoder is too restrictive for text accuracy, but the pretrained audio tower
+  direction is healthier than the scratch encoder.
+- Next useful run: Stage B with Qwen audio tower mostly frozen but last 2-4
+  audio layers unfrozen, or LoRA on Qwen audio attention/MLP. Keep Qwen text
+  decoder frozen initially to isolate audio adaptation.
+
+## 2026-05-28 - Instance 417231, Stage B Probe + Longer Stage A
+
+Status: Stage B was tried and was trainable, but it did not clearly beat frozen
+Stage A. A longer Stage A run improved the eval loss more cleanly.
+
+Stage B smoke:
+
+```text
+checkpoint: runs/jl_417231/realtime_qwen_audio_surgery_stageB_smoke
+trainable_params: 41355393
+audio layers unfrozen: last 4 Qwen audio blocks
+first_train_loss: 18.53
+last_train_loss: 10.96
+eval_loss: 10.84
+result: backward/reload path works, no OOM on H100
+```
+
+Stage B full run:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --decoder-backend qwen_audio_surgery \
+  --qwen-decoder-model Qwen/Qwen3-ASR-0.6B \
+  --qwen-dtype bfloat16 \
+  --output-dir runs/jl_417231/realtime_qwen_audio_surgery_stageB_audio4_1500_v0 \
+  --train-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/eval_manifest.jsonl \
+  --steps 1500 \
+  --batch-size 2 \
+  --grad-acc 1 \
+  --device cuda \
+  --audio-heads 8 \
+  --qwen-audio-left-context-sec 15 \
+  --qwen-audio-right-context-ms 640 \
+  --freeze-qwen-all \
+  --train-qwen-audio-last-n-layers 4 \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --emit-threshold 0.5 \
+  --lr 2e-5 \
+  --no-word-start-token \
+  --max-audio-sec 16
+```
+
+Stage B metrics:
+
+```text
+checkpoint: runs/jl_417231/realtime_qwen_audio_surgery_stageB_audio4_1500_v0
+train_examples: 2400
+eval_examples: 240
+trainable_params: 41355393
+first_train_loss: 18.235950469970703
+last_train_loss: 4.8441386222839355
+eval_loss: 5.242083154122034
+pred_wait_ratio: 0.687458
+pred_text_ratio: 0.312542
+loss_decreased: true
+```
+
+Stage B WLK 20s threshold sweep:
+
+```text
+threshold 0.50 -> "le 1er janvier 1990 est le jour de l'annivers de la création le"
+threshold 0.65 -> "les deux parties ont été enfin enfin enfin"
+threshold 0.75 -> "les"
+tokens: 241
+audio_frames_seen: 1998
+decoder_steps_seen: 241
+```
+
+Longer Stage A run:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --decoder-backend qwen_audio_surgery \
+  --qwen-decoder-model Qwen/Qwen3-ASR-0.6B \
+  --qwen-dtype bfloat16 \
+  --output-dir runs/jl_417231/realtime_qwen_audio_surgery_stageA_4000_v1 \
+  --train-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/eval_manifest.jsonl \
+  --steps 4000 \
+  --batch-size 2 \
+  --grad-acc 1 \
+  --device cuda \
+  --audio-heads 8 \
+  --qwen-audio-left-context-sec 15 \
+  --qwen-audio-right-context-ms 640 \
+  --freeze-qwen-all \
+  --freeze-qwen-audio \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --emit-threshold 0.5 \
+  --lr 1e-4 \
+  --no-word-start-token \
+  --max-audio-sec 16
+```
+
+Longer Stage A metrics:
+
+```text
+checkpoint: runs/jl_417231/realtime_qwen_audio_surgery_stageA_4000_v1
+train_examples: 2400
+eval_examples: 240
+trainable_params: 1049601
+first_train_loss: 18.235950469970703
+last_train_loss: 4.132987976074219
+eval_loss: 5.046820811430613
+pred_wait_ratio: 0.710518
+pred_text_ratio: 0.289482
+loss_decreased: true
+```
+
+Longer Stage A WLK 20s threshold sweep:
+
+```text
+threshold 0.50 -> "the 1990 census showed that the city had 1,000 people ..."
+threshold 0.65 -> "the 100 most popular songs were released in 200 2 2"
+threshold 0.75 -> "the new new the"
+tokens: 241
+audio_frames_seen: 1998
+decoder_steps_seen: 241
+```
+
+Comparison:
+
+```text
+Stage A 1k eval_loss:       5.25618989666303
+Stage B audio4 eval_loss:   5.242083154122034
+Stage A 4k eval_loss:       5.046820811430613
+```
+
+Conclusion:
+
+- Stage B is mechanically valid, but opening 41M Qwen audio parameters did not
+  provide a clear win in this data/step regime.
+- Continuing Stage A was the better move: the frozen Qwen audio tower plus small
+  projector/gate still had undertrained capacity.
+- ASR quality remains unusable and repetitive. The useful signal is that the
+  causalized Qwen audio path trains stably, keeps bounded recompute, and now has
+  a stronger frozen-tower baseline.
+- Recommended next step: improve Stage A capacity before unfreezing Qwen audio
+  again, e.g. a residual MLP/projector adapter or checkpoint-resumed Stage A,
+  then retry Stage B only after the adapter baseline plateaus.
+
+## 2026-05-28 - Instance 417274, Stage A+ Residual Adapter
+
+Status: Stage A was reinforced with trainable residual adapter blocks while
+keeping Qwen audio and Qwen text frozen.
+
+Code changes:
+
+- `RealtimeAudioConfig` now has optional Qwen audio adapter settings:
+  `qwen_audio_adapter_hidden_dim`, `qwen_audio_adapter_layers`,
+  `qwen_audio_adapter_dropout`, and `qwen_audio_adapter_residual_scale`.
+- `QwenAudioSurgeryFrameAdapter` still defaults to the old identity-initialized
+  projection. When enabled, it adds RMSNorm + SwiGLU residual blocks after the
+  projection.
+- `scripts/train_realtime_tiny_asr.py` exposes the new flags. Old commands are
+  unchanged because the default adapter layer count is zero.
+
+Validation:
+
+```text
+local tests: 9 passed, 1 skipped
+H100 tests: 9 passed
+```
+
+Stage A+ smoke:
+
+```text
+checkpoint: runs/jl_417274/realtime_qwen_audio_surgery_stageAplus_smoke_adapter2x2048_v0
+adapter: 2 residual SwiGLU blocks, hidden_dim 2048, residual_scale 0.1
+trainable_params: 13634561
+first_train_loss: 11.991044998168945
+last_train_loss: 9.906524658203125
+eval_loss: 9.801168402036032
+result: backward/reload path works, no OOM on H100
+```
+
+Stage A+ full run:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --decoder-backend qwen_audio_surgery \
+  --qwen-decoder-model Qwen/Qwen3-ASR-0.6B \
+  --qwen-dtype bfloat16 \
+  --output-dir runs/jl_417274/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_4000_v0 \
+  --train-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/eval_manifest.jsonl \
+  --steps 4000 \
+  --batch-size 2 \
+  --grad-acc 1 \
+  --device cuda \
+  --audio-heads 8 \
+  --qwen-audio-left-context-sec 15 \
+  --qwen-audio-right-context-ms 640 \
+  --qwen-audio-adapter-hidden-dim 2048 \
+  --qwen-audio-adapter-layers 2 \
+  --qwen-audio-adapter-residual-scale 0.1 \
+  --freeze-qwen-all \
+  --freeze-qwen-audio \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --emit-threshold 0.5 \
+  --lr 5e-5 \
+  --no-word-start-token \
+  --max-audio-sec 16
+```
+
+Stage A+ metrics:
+
+```text
+checkpoint: runs/jl_417274/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_4000_v0
+train_examples: 2400
+eval_examples: 240
+trainable_params: 13634561
+first_train_loss: 11.991044998168945
+last_train_loss: 4.548867225646973
+eval_loss: 4.998533650239309
+pred_wait_ratio: 0.743344
+pred_text_ratio: 0.256656
+loss_decreased: true
+```
+
+WLK 20s threshold sweep:
+
+```text
+threshold 0.50 -> "the new rules which were introduced in 2014 by the european councilthe new rules which were"
+threshold 0.65 -> "the new law the new law"
+threshold 0.75 -> "we're here to help you youwe're here to help you"
+tokens: 241
+audio_frames_seen: 1998
+decoder_steps_seen: 241
+```
+
+Comparison:
+
+```text
+Stage A 1k eval_loss:         5.25618989666303
+Stage B audio4 eval_loss:     5.242083154122034
+Stage A 4k eval_loss:         5.046820811430613
+Stage A+ 2x2048 4k eval_loss: 4.998533650239309
+```
+
+Conclusion:
+
+- Reinforcing A did help: A+ is the best eval loss so far without unfreezing
+  Qwen audio.
+- The improvement is real but small, and qualitative ASR is still not usable.
+  Repetition and language drift remain.
+- Next useful experiment is not another shallow Stage B immediately. Better
+  candidates are a larger adapter variant, an adapter LR sweep, or a checkpoint
+  resume path so Stage A+ can continue training without restarting from scratch.
+
+## 2026-05-28 - Instance 417339, Stage A+ Resume
+
+Status: checkpoint resume was implemented and used to continue the best A+
+adapter run.
+
+Code changes:
+
+- `scripts/train_realtime_tiny_asr.py` now supports
+  `--resume-from-checkpoint CHECKPOINT_DIR`.
+- Resume loads `realtime_config.json`, model weights, and the checkpoint
+  tokenizer if available.
+- Optimizer state is not restored. The intended use is to resume weights with
+  an explicit lower LR.
+- Freeze flags must be passed again, because `requires_grad` is runtime state
+  and is not stored in `model.pt`.
+
+Validation:
+
+```text
+local tests: 9 passed, 1 skipped
+py_compile: scripts/train_realtime_tiny_asr.py OK
+H100 py_compile: scripts/train_realtime_tiny_asr.py OK
+```
+
+Resume +2k command:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --resume-from-checkpoint runs/jl_417274/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_4000_v0 \
+  --decoder-backend qwen_audio_surgery \
+  --qwen-decoder-model Qwen/Qwen3-ASR-0.6B \
+  --qwen-dtype bfloat16 \
+  --output-dir runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0 \
+  --train-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/eval_manifest.jsonl \
+  --steps 2000 \
+  --batch-size 2 \
+  --grad-acc 1 \
+  --device cuda \
+  --freeze-qwen-all \
+  --freeze-qwen-audio \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --emit-threshold 0.5 \
+  --lr 2e-5 \
+  --no-word-start-token \
+  --max-audio-sec 16
+```
+
+Resume +2k metrics:
+
+```text
+checkpoint: runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0
+trainable_params: 13634561
+first_train_loss: 4.355401039123535
+last_train_loss: 6.171995162963867
+eval_loss: 4.882986927032471
+pred_wait_ratio: 0.729551
+pred_text_ratio: 0.270449
+```
+
+Resume +4k command:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --resume-from-checkpoint runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0 \
+  --decoder-backend qwen_audio_surgery \
+  --qwen-decoder-model Qwen/Qwen3-ASR-0.6B \
+  --qwen-dtype bfloat16 \
+  --output-dir runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume4k_lr1e5_v0 \
+  --train-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/eval_manifest.jsonl \
+  --steps 2000 \
+  --batch-size 2 \
+  --grad-acc 1 \
+  --device cuda \
+  --freeze-qwen-all \
+  --freeze-qwen-audio \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --emit-threshold 0.5 \
+  --lr 1e-5 \
+  --no-word-start-token \
+  --max-audio-sec 16
+```
+
+Resume +4k metrics:
+
+```text
+checkpoint: runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume4k_lr1e5_v0
+trainable_params: 13634561
+first_train_loss: 4.2444634437561035
+last_train_loss: 5.983463287353516
+eval_loss: 4.856786131858826
+pred_wait_ratio: 0.697794
+pred_text_ratio: 0.302206
+```
+
+WLK 20s threshold sweep, +4k:
+
+```text
+threshold 0.50 -> "the 2010 census showed that the city had a population of 1,000 people ..."
+threshold 0.65 -> "the 2012 olympics will be the first time that the olympics will be held ..."
+threshold 0.75 -> "the 2012 olympics will be held in são barcelona ..."
+```
+
+Comparison:
+
+```text
+Stage A 1k eval_loss:           5.25618989666303
+Stage B audio4 eval_loss:       5.242083154122034
+Stage A 4k eval_loss:           5.046820811430613
+Stage A+ 2x2048 4k eval_loss:   4.998533650239309
+Stage A+ resume +2k eval_loss:  4.882986927032471
+Stage A+ resume +4k eval_loss:  4.856786131858826
+```
+
+Conclusion:
+
+- Continuing A+ still improves FLEURS eval loss, but the marginal gain is
+  shrinking.
+- The WLK output gets longer and more repetitive as training continues. The
+  model is over-optimizing the current aligned FLEURS objective rather than
+  learning robust ASR.
+- Do not spend more H100 time on blind continuation. The next useful step is to
+  improve targets and regularization: better/harder eval, more diverse data,
+  repetition penalty during realtime inference, or an auxiliary loss that
+  constrains over-emission.
+
+## 2026-05-28 - Stage A+ Anti-Repetition / Anti-Over-Emission
+
+Code changes:
+
+- Added token repetition metrics in `qwen3_streaming.metrics`.
+- Extended `infer_realtime_checkpoint.py` JSON with token counts, wait/text
+  ratios, hypothesis length, and unigram/bigram/trigram repetition stats.
+- Added streaming decoding controls, all disabled by default:
+  `--repetition-penalty`, `--no-repeat-ngram-size`, and
+  `--max-consecutive-text-tokens`.
+- Added training regularizers, disabled by default:
+  `--emit-rate-loss-weight` and `--text-label-smoothing`.
+
+Validation:
+
+```text
+local: python3 -m py_compile qwen3_streaming/metrics.py qwen3_streaming/native_realtime_model.py scripts/infer_realtime_checkpoint.py scripts/train_realtime_tiny_asr.py
+local: python3 -m pytest -q -> 9 passed, 2 skipped
+H100:  .venv/bin/python -m pytest -q -> 25 passed
+```
+
+Sweep target:
+
+```text
+checkpoint: runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume4k_lr1e5_v0
+audio: data/wlk_audio/myfXyntFYL_20s.wav
+artifacts: runs/jl_417352/stageAplus_antirepetition_sweep_resume4k/
+```
+
+Key sweep results:
+
+```text
+baseline th=0.65:
+  text_ratio=0.195021
+  trigram_repetition_ratio=0.200000
+  hyp="the 2012 olympics will be the first time that the olympics will be held in a city that is not in the united states nor in the united in the world where the olympics will be held"
+
+th=0.65, repetition_penalty=1.1, no_repeat_ngram_size=3, max_text=12:
+  text_ratio=0.053942
+  trigram_repetition_ratio=0.000000
+  hyp="the 2014 earthquake occurred in the sikkar"
+
+baseline th=0.75:
+  text_ratio=0.136929
+  trigram_repetition_ratio=0.258065
+  hyp="the 2012 olympics will be held in são barcelona and will be the first time that the 2012 olympics will be"
+
+th=0.75, repetition_penalty=1.2, no_repeat_ngram_size=3, max_text=12:
+  text_ratio=0.087137
+  trigram_repetition_ratio=0.000000
+  hyp="the 2014 world cup of football was the fifteenth edition and third time that a team"
+```
+
+The decoding controls meet the narrow repetition goal on WLK 20 s: trigram
+repetition drops by more than 30 percent, usually to zero. This is only a
+decoding guardrail; semantic ASR quality remains poor.
+
+Regularized resume command, corrected:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --output-dir runs/jl_417352/realtime_qwen_audio_surgery_stageAplus_antioveremit_resume1500_noword_v0 \
+  --resume-from-checkpoint runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0 \
+  --decoder-backend qwen_audio_surgery \
+  --train-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_fleurs_16s_v0/eval_manifest.jsonl \
+  --steps 1500 \
+  --lr 1e-5 \
+  --batch-size 2 \
+  --grad-acc 1 \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --emit-rate-loss-weight 0.2 \
+  --text-label-smoothing 0.05 \
+  --emit-threshold 0.5 \
+  --freeze-qwen-audio \
+  --freeze-qwen-all \
+  --no-word-start-token \
+  --max-audio-sec 16.0 \
+  --target-delay-sec 0.8
+```
+
+Regularized resume metrics:
+
+```text
+checkpoint: runs/jl_417352/realtime_qwen_audio_surgery_stageAplus_antioveremit_resume1500_noword_v0
+eval_loss: 5.730818569660187
+pred_text_ratio: 0.262109
+label_text_ratio: 0.235984
+repetition_trigram_repetition_ratio: 0.069075
+loss_decreased: false
+WLK th=0.75 baseline hyp="the new government government is a new"
+WLK th=0.75 + controls hyp="the new government administration will be"
+```
+
+Conclusion:
+
+- Keep the decoding controls and metrics.
+- Do not promote the regularized resume checkpoint. It improves emission rate
+  versus `resume2k` but fails the `eval_loss <= 5.0` gate and under-emits on
+  WLK.
+- The next useful training change is not another blind Stage A continuation.
+  It needs better targets/data or a more explicit quality signal.
+
+## 2026-05-28 - Stage A++ Data+Teacher Short Smoke
+
+Goal:
+
+- Stop repeating Stage A on the same FLEURS-only 2400-example set.
+- Test whether a more diverse aligned dataset plus Qwen3-ASR-1.7B teacher
+  filtering improves generalization.
+- Keep the budget short: one 1000-step smoke from `resume2k_lr2e5_v0`, then
+  decide by gates instead of extending the run.
+
+Code changes:
+
+- `prepare_qwen_aligned_jsonl.py` gained `--alignment-failure-mode` with
+  `error`, `skip`, and explicit legacy `heuristic`. The Stage A++ dataset uses
+  `skip`, so failed Qwen forced-alignment rows are dropped rather than filled
+  with heuristic timestamps.
+- `prepare_qwen_aligned_jsonl.py` now streams LibriSpeech clean-100 directly
+  from targeted parquet files to avoid downloading the full `clean` config.
+- Added `scripts/annotate_teacher_transcripts.py` for vLLM REST teacher
+  annotation with resumable JSONL output and optional worker concurrency.
+- Added `scripts/filter_teacher_manifest.py` to keep rows with no teacher
+  error and `teacher_wer <= 0.35`.
+- Added `scripts/make_audio_manifest.py` for WLK eval-only manifests.
+- Added `scripts/eval_realtime_checkpoint.py` for checkpoint eval on manifest
+  files with WER vs `teacher_text`, wait/text ratios, latency, and repetition
+  metrics.
+- Added tests for teacher annotation/filtering and audio manifest creation.
+
+Validation:
+
+```text
+local: python3 -m py_compile scripts/prepare_qwen_aligned_jsonl.py scripts/make_audio_manifest.py scripts/annotate_teacher_transcripts.py scripts/filter_teacher_manifest.py scripts/eval_realtime_checkpoint.py
+local: python3 -m pytest -q tests/test_teacher_pipeline.py -> 4 passed
+H100:  .venv/bin/python -m pytest -q -> 29 passed
+```
+
+H100 instance:
+
+```text
+original: 417352
+resumed:  417527
+workspace: /home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100
+teacher: Qwen/Qwen3-ASR-1.7B through vLLM /v1/audio/transcriptions
+```
+
+Aligned mixed data:
+
+```bash
+python scripts/prepare_qwen_aligned_jsonl.py \
+  --out-dir data/qwen_aligned_mix_16s_v0 \
+  --sources fleurs_en fleurs_fr librispeech_clean_100 \
+  --max-train-per-source 1200 \
+  --max-eval-per-source 120 \
+  --max-audio-sec 16 \
+  --drop-long-audio \
+  --device-map cuda:0 \
+  --dtype bfloat16 \
+  --alignment-failure-mode skip \
+  --skip-existing
+```
+
+Unfiltered aligned counts:
+
+```text
+train: 3600 rows, 1200 per source
+eval:  360 rows, 120 per source
+alignment_sources: qwen3_forced_aligner only
+missing word_alignments: 0
+```
+
+Teacher annotation:
+
+```text
+eval smoke 10: ok=10, errors=0, teacher_wer_mean=0.1502
+train full:   ok=3600, errors=0, teacher_wer_mean=0.1611
+eval full:    ok=360, errors=0, teacher_wer_mean=0.1761
+WLK eval:     ok=21, errors=0, teacher_latency_mean=12.93s
+```
+
+Teacher-filtered data:
+
+```text
+data/qwen_aligned_mix_16s_teacher_filter_v0/train_manifest.jsonl
+  input=3600 kept=3491 rejected=109
+  sources: librispeech_clean_100=1159, fleurs_en=1159, fleurs_fr=1173
+  alignment_sources: qwen3_forced_aligner=3491
+
+data/qwen_aligned_mix_16s_teacher_filter_v0/eval_manifest.jsonl
+  input=360 kept=339 rejected=21
+  sources: fleurs_fr=115, fleurs_en=117, librispeech_clean_100=107
+  alignment_sources: qwen3_forced_aligner=339
+```
+
+Data verdict:
+
+- Passes the minimum train/eval counts: 3491 train, 339 eval.
+- Teacher request error rate is 0 percent.
+- Final manifests contain no heuristic alignments.
+
+Baseline WLK teacher-eval with controlled decoding:
+
+```text
+checkpoint: runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0
+output: runs/jl_417527/wlk_teacher_eval_resume2k_controlled.summary.json
+emit_threshold=0.75, repetition_penalty=1.2, no_repeat_ngram_size=3, max_consecutive_text_tokens=12
+
+wer_mean: 0.9977377669826761
+text_token_ratio: 0.0015456299288107674
+wait_token_ratio: 0.9984543700711892
+trigram_repetition_ratio: 0.0
+```
+
+The controlled baseline almost never emits text on the 21 WLK files, so this
+metric mostly measures under-emission rather than repetition.
+
+Training smoke:
+
+```bash
+python scripts/train_realtime_tiny_asr.py \
+  --output-dir runs/jl_417527/realtime_qwen_audio_surgery_stageAplus_mix_teacher_filter_smoke_v0 \
+  --resume-from-checkpoint runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0 \
+  --decoder-backend qwen_audio_surgery \
+  --train-manifest-jsonl data/qwen_aligned_mix_16s_teacher_filter_v0/train_manifest.jsonl \
+  --eval-manifest-jsonl data/qwen_aligned_mix_16s_teacher_filter_v0/eval_manifest.jsonl \
+  --steps 1000 \
+  --lr 5e-6 \
+  --batch-size 2 \
+  --grad-acc 1 \
+  --emit-gate-loss-weight 1.0 \
+  --emit-gate-wait-weight 1.5 \
+  --emit-threshold 0.5 \
+  --freeze-qwen-audio \
+  --freeze-qwen-all \
+  --no-word-start-token \
+  --max-audio-sec 16.0 \
+  --target-delay-sec 0.8 \
+  --num-workers 0
+```
+
+Training metrics:
+
+```text
+checkpoint: runs/jl_417527/realtime_qwen_audio_surgery_stageAplus_mix_teacher_filter_smoke_v0
+train_examples: 3491
+eval_examples: 339
+trainable_params: 13634561
+first_train_loss: 4.6482625007629395
+last_train_loss: 3.5463759899139404
+loss_decreased: true
+eval_loss: 4.954030572666841
+pred_text_ratio: 0.31728045325779036
+label_text_ratio: 0.25648503027273234
+label_text_ratio + 0.05: 0.3064850302727323
+eval_trigram_repetition_ratio: 0.08649692067285596
+```
+
+WLK teacher-eval after smoke:
+
+```text
+checkpoint: runs/jl_417527/realtime_qwen_audio_surgery_stageAplus_mix_teacher_filter_smoke_v0
+output: runs/jl_417527/wlk_teacher_eval_mix_teacher_filter_smoke_controlled.summary.json
+emit_threshold=0.75, repetition_penalty=1.2, no_repeat_ngram_size=3, max_consecutive_text_tokens=12
+
+wer_mean: 0.9961079053215807
+relative WER improvement vs resume2k: about 0.16 percent
+text_token_ratio: 0.0019404988887259272
+wait_token_ratio: 0.9980595011112741
+trigram_repetition_ratio: 0.0
+```
+
+Conclusion:
+
+- The data+teacher pipeline itself worked and should be kept.
+- Do not promote the smoke checkpoint. It passes `eval_loss <= 5.0`, but misses
+  the `pred_text_ratio <= label_text_ratio + 0.05` gate by about 0.011 and is
+  nowhere near the requested 10 percent WLK teacher-WER improvement.
+- The main remaining failure is under-emission on WLK with controlled decoding:
+  both baseline and smoke emit almost all wait tokens.
+- Next step should diagnose the emit gate and frame-label distribution, not run
+  a longer continuation of this exact setup.
+
+## 2026-05-29 - Instance 417597, WLK Chunked Diagnostics
+
+Goal:
+
+- Re-check the WLK diagnosis after noticing that the previous WLK teacher-eval
+  used full 277-425 s WAVs while Stage A models were trained with
+  `max_audio_sec=16`.
+- Build WLK chunk manifests that match the training horizon.
+- Test whether domain teacher chunks can improve WLK behavior with a short
+  adapter run.
+
+Code changes:
+
+- Added `scripts/sweep_realtime_decoding.py` to sweep emit thresholds and
+  repetition controls while loading the checkpoint once.
+- Added `scripts/slice_audio_manifest.py` to slice existing manifest audio into
+  short WAV chunks.
+- Added `scripts/align_manifest_with_qwen.py` to add Qwen3 forced alignments to
+  an existing manifest using a chosen text field, e.g. `teacher_text`.
+- Added focused tests for sweep config generation and audio chunk span logic.
+
+Validation:
+
+```text
+local: python3 -m py_compile scripts/align_manifest_with_qwen.py scripts/slice_audio_manifest.py scripts/sweep_realtime_decoding.py
+local: python3 -m pytest -q tests/test_slice_audio_manifest.py tests/test_sweep_realtime_decoding.py tests/test_teacher_pipeline.py -> 9 passed
+H100:  .venv/bin/python -m pytest -q tests/test_slice_audio_manifest.py tests/test_sweep_realtime_decoding.py tests/test_teacher_pipeline.py -> 9 passed
+```
+
+First-20s WLK teacher eval:
+
+```text
+data/wlk_first20_teacher_1p7b_v0/manifest.jsonl
+  input_records: 21
+  output_records: 21
+  chunk_sec: 20
+
+teacher annotation:
+  ok: 21
+  errors: 0
+  teacher_latency_mean: 1.02s
+```
+
+`resume2k` baseline on first-20s:
+
+```text
+checkpoint: runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0
+threshold 0.60: WER=0.9655, text_ratio=0.0792, trigram_rep=0.0
+threshold 0.75: WER=0.9806, text_ratio=0.0251, trigram_rep=0.0
+```
+
+Stage A++ data+teacher smoke on first-20s:
+
+```text
+checkpoint: runs/jl_417527/realtime_qwen_audio_surgery_stageAplus_mix_teacher_filter_smoke_v0
+threshold 0.20: WER=1.9715, text_ratio=0.4734
+threshold 0.30: WER=1.5402, text_ratio=0.3596
+threshold 0.40: WER=1.2647, text_ratio=0.2962
+threshold 0.50: WER=1.0833, text_ratio=0.2298
+threshold 0.60: WER=0.9899, text_ratio=0.1496
+threshold 0.75: WER=0.9742, text_ratio=0.0338
+trigram_rep: 0.0 for all swept settings
+```
+
+Conclusion from first-20s:
+
+- The previous full-length WLK eval was out-of-distribution, but chunking does
+  not rescue the Stage A++ smoke. Its best first-20s WER is still worse than
+  `resume2k`.
+- Lower thresholds mostly create over-emission, not better transcripts.
+
+Full WLK 16 s chunk dataset:
+
+```text
+data/wlk_chunks16_teacher_1p7b_v0/manifest.jsonl
+  input_records: 21
+  output_records: 445
+  chunk_sec: 16
+
+teacher annotation:
+  ok: 445
+  errors: 0
+  teacher_latency_mean: 0.758s
+
+forced alignment:
+  input: 445
+  kept: 445
+  rejected: 0
+  alignment_sources: qwen3_forced_aligner=445
+
+parent split:
+  train: 338 chunks from 16 parent videos
+  eval: 107 chunks from 5 held-out parent videos
+```
+
+`resume2k` baseline on held-out WLK 16 s chunks:
+
+```text
+threshold: 0.60
+WER: 0.978724435613115
+text_token_ratio: 0.0666897199031764
+wait_token_ratio: 0.9333102800968236
+trigram_repetition_ratio: 0.0
+```
+
+Domain-adapter attempt 1:
+
+```text
+checkpoint: runs/jl_417597/realtime_qwen_audio_surgery_stageAplus_wlk16_teacher_domain_wait05_v0
+source: resume2k
+train: 338 WLK teacher chunks
+eval: 107 held-out WLK teacher chunks
+steps: 800
+lr: 1e-5
+emit_gate_wait_weight: 0.5
+freeze_qwen_audio: true
+freeze_qwen_all: true
+
+eval_loss: 5.185411815290098
+pred_text_ratio: 0.5605478932650837
+label_text_ratio: 0.19323190672543722
+eval_trigram_repetition_ratio: 0.25306787951600446
+
+threshold 0.75 WER: 1.2122575851311437
+threshold 0.75 text_ratio: 0.24215778293731166
+threshold 0.75 trigram_rep: 0.0
+```
+
+Domain-adapter attempt 2:
+
+```text
+checkpoint: runs/jl_417597/realtime_qwen_audio_surgery_stageAplus_wlk16_teacher_domain_wait10_v0
+source: resume2k
+train: 338 WLK teacher chunks
+eval: 107 held-out WLK teacher chunks
+steps: 500
+lr: 5e-6
+emit_gate_wait_weight: 1.0
+freeze_qwen_audio: true
+freeze_qwen_all: true
+
+eval_loss: 5.547862644548769
+pred_text_ratio: 0.42746101710981566
+label_text_ratio: 0.19323190672543722
+eval_trigram_repetition_ratio: 0.23192839338318605
+```
+
+Conclusion:
+
+- Do not promote either WLK domain checkpoint.
+- WLK pseudo-label fine-tuning with the current Stage A objective makes the emit
+  gate over-emit and reintroduces repetitions. It does not improve held-out WLK
+  WER.
+- The best checkpoint among these tests remains `resume2k` with threshold 0.60,
+  but it is still mostly wait tokens and not usable ASR.
+- Next useful change is architectural/objective-level: train the emit decision
+  as a calibrated CTC/RNNT-style blank-vs-token objective, or add a monotonic
+  alignment/blank head, instead of using the current per-frame greedy text CE
+  plus BCE gate.
+
+## 2026-05-29 - CTC-lite v1 Objective Smoke
+
+Implementation:
+
+- Added `--alignment-loss ctc` to `scripts/train_realtime_tiny_asr.py`.
+- Added a separate `ctc_head` on top of `audio_encoder.forward_full(mels)` plus
+  `adapter.forward_full(audio_hidden)`.
+- Kept the Qwen text decoder and LM head loaded/frozen for checkpoint
+  compatibility; CTC loss does not use `previous_input_ids`, `[W]`, or the emit
+  gate.
+- Added `--decode-mode ctc` to `scripts/eval_realtime_checkpoint.py`, with CTC
+  greedy collapse, optional blank-logit adjustment, and optional post-collapse
+  `no_repeat_ngram_size`.
+- Old checkpoints load with a newly initialized CTC head. For Qwen-backed
+  models the CTC weight starts from `lm_head.weight`; `[P]` gets a small blank
+  prior.
+
+H100:
+
+```text
+instance: 418187
+source checkpoint:
+  runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0
+train/eval:
+  data/qwen_aligned_mix_16s_teacher_filter_v0/train_manifest.jsonl
+  data/qwen_aligned_mix_16s_teacher_filter_v0/eval_manifest.jsonl
+run:
+  runs/jl_418187/realtime_qwen_audio_surgery_ctc_lite_mix1500_blankbias2_v0
+steps: 1500
+lr: 1e-5
+batch_size: 2
+freeze_qwen_audio: true
+freeze_qwen_all: true
+alignment_loss: ctc
+```
+
+Training metrics:
+
+```text
+first_train_loss: 50.4884
+last_train_loss: 8.0742
+eval_loss: 8.6752
+train_ctc_label_text_ratio: 0.2592
+eval_pred_text_ratio greedy: 0.0
+eval_wait_ratio greedy: 1.0
+```
+
+Interpretation: the CTC objective learns a much lower loss, but greedy decoding
+is dominated by blank. Suppressing blank at decode time recovers text, but the
+tokens are mostly repetitive and semantically weak.
+
+WLK first-20s eval:
+
+```text
+baseline resume2k threshold 0.60:
+  WER: 0.9655
+  text_ratio: 0.0792
+  trigram_rep: 0.0
+
+CTC greedy, blank_adjust 0:
+  WER: 1.0
+  text_ratio: 0.0
+
+CTC, blank_adjust -5:
+  WER: 0.9715
+  text_ratio: 0.2630
+  trigram_rep: 0.9489
+
+CTC, blank_adjust -5, no_repeat_ngram_size 3:
+  WER: 0.9726
+  text_ratio: 0.2630
+  trigram_rep: 0.0
+```
+
+WLK held-out chunks16 eval:
+
+```text
+baseline resume2k threshold 0.60:
+  WER: 0.9787
+  text_ratio: 0.0667
+  trigram_rep: 0.0
+
+CTC, blank_adjust -5:
+  WER: 0.9487
+  text_ratio: 0.3057
+  trigram_rep: 0.9454
+
+CTC, blank_adjust -5, no_repeat_ngram_size 3:
+  WER: 0.9536
+  text_ratio: 0.3057
+  trigram_rep: 0.0
+```
+
+Mixed public eval:
+
+```text
+CTC, blank_adjust -5:
+  WER: 0.9757
+  text_ratio: 0.1599
+  trigram_rep: 0.8825
+```
+
+Conclusion:
+
+- Do not promote the CTC-lite checkpoint.
+- Positive signal: CTC can reduce objective loss and improves WLK chunks16 WER
+  versus the weak `resume2k` baseline when blank is suppressed.
+- Negative signal: first-20s does not improve, mixed public WER is still bad,
+  and the text recovered from CTC is dominated by loops unless filtered.
+- Next useful step is not a longer run of the same setup. The CTC head needs a
+  better calibrated small-vocab/token-projection objective or RNNT-lite/joint
+  network so blank/token competition is learned without brute-force blank
+  suppression.
+
+## 2026-05-29 - Compact CTC / Monotonic Projection Smoke
+
+Implementation:
+
+- Added `--alignment-loss compact_ctc`, a compact CTC projection over the token
+  IDs actually observed in the aligned public manifests.
+- Added `configure_compact_ctc_head(...)` and checkpoint metadata so the compact
+  token-id mapping survives save/load.
+- Added `--decode-mode compact_ctc` to eval, with the same CTC greedy collapse,
+  blank-logit adjustment, and no-repeat post-filter.
+- Kept the audio surgery architecture and frozen Qwen decoder/audio settings.
+
+H100:
+
+```text
+instance: 418253
+source checkpoint:
+  runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0
+run:
+  runs/jl_418253/realtime_qwen_audio_surgery_compact_ctc_mix1500_vocab32768_blank1p5_v1
+steps: 1500
+lr: 1e-5
+compact_ctc_max_tokens: 32768
+compact_vocab_size: 11844
+compact_blank_bias: 1.5
+train_examples: 3491
+eval_examples: 339
+```
+
+Training metrics:
+
+```text
+first_train_loss: 24.1303
+last_train_loss: 8.1486
+eval_loss: 8.4835
+train_ctc_label_text_ratio: 0.2592
+eval_pred_text_ratio greedy: 0.0
+```
+
+Blank calibration:
+
+```text
+WLK first-20s, no repeat filter off:
+  blank_adjust -1/-2/-3: WER 1.0, text_ratio 0.0
+  blank_adjust -4: WER 0.9990, text_ratio 0.0004
+  blank_adjust -5: WER 1.0276, text_ratio 0.2043, trigram_rep 0.7025
+  blank_adjust -6/-7/-8: WER 1.1588, text_ratio 1.0
+```
+
+Controlled decoding:
+
+```text
+WLK first-20s baseline resume2k threshold 0.60:
+  WER: 0.9655
+
+Compact CTC, blank_adjust -5, no_repeat_ngram_size 3:
+  WER: 0.9616
+  text_ratio: 0.2043
+  trigram_rep: 0.0
+
+Compact CTC, blank_adjust -5.5, no_repeat_ngram_size 3:
+  WER: 0.9626
+  text_ratio: 1.0
+  trigram_rep: 0.0
+
+WLK chunks16 baseline resume2k threshold 0.60:
+  WER: 0.9787
+
+Compact CTC, blank_adjust -5, no_repeat_ngram_size 3:
+  WER: 0.9307
+  text_ratio: 0.2137
+  trigram_rep: 0.0
+
+Mixed public eval, blank_adjust -5, no_repeat_ngram_size 3:
+  WER: 0.9564
+  text_ratio: 0.1331
+  trigram_rep: 0.0
+```
+
+Conclusion:
+
+- This is a better probe than full-vocab CTC: chunks16 improves from the
+  previous CTC `0.9536` to `0.9307`, and first-20s barely beats `resume2k`.
+- It is not enough to promote. Greedy is still all blank, useful decoding needs
+  manual blank suppression, and unigram/bigram repetition remains high even when
+  trigram loops are blocked.
+- The next real step should be RNNT-lite or a joint monotonic head with an
+  explicit prediction/state branch, not more length on this CTC-only head.
+
+## 2026-05-29 - RNNT-lite / Aligned Joint Head Smoke
+
+Implementation:
+
+- Added `--alignment-loss rnnt_lite`, keeping the Qwen audio-surgery streaming
+  stack and adding a compact monotonic joint head.
+- Added `configure_rnnt_lite_head(...)` with checkpoint metadata for
+  `rnnt_lite_token_ids`, blank index, predictor dim, and joint dim.
+- The v1 loss is aligned frame CE over compact labels with a predictor state
+  equal to the previous nonblank compact token. This is not a full RNNT lattice;
+  it is a cheap joint/prediction-state probe.
+- Added `--decode-mode rnnt_lite` to the eval script. Streaming decode keeps
+  only `last_ctc_token_id`-style compact prediction state plus the existing
+  cached audio/adapter state.
+
+Validation:
+
+```text
+local:  python3 -m py_compile ... OK
+local:  python3 -m pytest -q -> 23 passed, 2 skipped
+H100:   python3 -m pytest -q -> 43 passed
+```
+
+H100:
+
+```text
+instance: 418299
+source checkpoint:
+  runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0
+run:
+  runs/jl_418299/realtime_qwen_audio_surgery_rnnt_lite_mix1500_blank0_wait10_v0
+steps: 1500
+lr: 1e-5
+batch_size: 2
+grad_acc: 1
+rnnt_lite_max_tokens: 32768
+compact_vocab_size: 11844
+rnnt_lite_blank_bias: 0.0
+wait_loss_weight: 1.0
+train_examples: 3491
+eval_examples: 339
+trainable_params: 195736517
+```
+
+Smoke sweep before full run:
+
+```text
+blank_bias 1.5, wait_weight 1.0:
+  eval_loss: 4.5
+  greedy: all blank
+
+blank_bias 0.0, wait_weight 0.5:
+  eval_loss: 5.9344
+  greedy: over-emits, text_ratio 0.874
+
+blank_bias 0.0, wait_weight 0.3:
+  eval_loss: 6.2250
+  greedy: over-emits, text_ratio 0.920
+
+blank_bias 0.0, wait_weight 1.0:
+  eval_loss: 5.5563
+  greedy: over-emits, text_ratio 0.815
+```
+
+Full run training metrics:
+
+```text
+first_train_loss: 9.375
+last_train_loss: 6.3125
+eval_loss: 6.2344
+greedy eval: all blank
+```
+
+Blank calibration on WLK first-20s:
+
+```text
+no repeat filter off:
+  blank_adjust 0/-1: WER 1.0, text_ratio 0.0
+  blank_adjust -1.8: WER 0.9991, text_ratio 0.0113, trigram_rep 0.8095
+  blank_adjust -2.0: WER 1.3839, text_ratio 0.5754, trigram_rep 0.8913
+  blank_adjust <= -2.2: WER 1.6816, text_ratio 1.0, trigram_rep 0.9036
+
+with no_repeat_ngram_size 3:
+  blank_adjust -1.8: WER 0.9991, text_ratio 0.0113, trigram_rep 0.0
+  blank_adjust -2.0: WER 0.9981, text_ratio 0.5754, trigram_rep 0.0
+  blank_adjust -2.2/-2.5: WER 0.9990, text_ratio 1.0, trigram_rep 0.0
+```
+
+Best controlled decode checked on held-out sets:
+
+```text
+RNNT-lite, blank_adjust -2.0, no_repeat_ngram_size 3:
+  WLK first-20s WER: 0.9981
+  WLK chunks16 WER: 0.9951
+  mixed public eval WER: 0.9986
+  trigram_rep: 0.0
+```
+
+Conclusion:
+
+- Do not promote the RNNT-lite v1 checkpoint.
+- The joint head is wired correctly and trains, but it still has a sharp
+  blank/token phase transition. Around the transition it either stays silent or
+  emits attractor fragments such as `errupt` / `or`.
+- This is worse than compact CTC on every useful WLK metric:
+  first-20s `0.9981` vs `0.9616`, chunks16 `0.9951` vs `0.9307`.
+- Next step should be a real monotonic criterion, not another calibrated
+  aligned-CE run: either implement a small-vocab RNNT forward-backward loss or
+  a CTC/attention monotonic alignment head where blank/token competition is
+  trained by marginalization instead of hard frame labels.
+
+## 2026-05-29 - RNNT Forward-Backward v1 Smoke
+
+Implementation:
+
+- Added `qwen3_streaming/rnnt.py` with exact log-space RNNT
+  forward-backward loss over a compact vocab.
+- Added `rnnt_prefix_targets(...)` to build the `U + 1` prediction states:
+  blank/BOS state followed by previous target tokens.
+- Added `--alignment-loss rnnt_fb`.
+- Reused the compact RNNT joint head from `rnnt_lite`, but changed training
+  from hard frame CE to marginalization over all blank/token paths.
+- Added `forward_rnnt_lite_joint_logits(...)` on the realtime models, producing
+  `[B, T, U + 1, Vcompact]` logits.
+- Added length normalization for RNNT-FB with
+  `--rnnt-fb-normalize-by-length/--no-rnnt-fb-normalize-by-length`; default is
+  on. Without this, loss magnitude is dominated by sequence length.
+- Added `--decode-mode rnnt_fb` as an eval alias for the same streaming compact
+  joint head.
+
+Validation:
+
+```text
+local: python3 -m py_compile qwen3_streaming/rnnt.py ... OK
+H100:  python3 -m pytest -q -> 46 passed
+```
+
+H100:
+
+```text
+instance: 418328
+source checkpoint:
+  runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0
+```
+
+RNNT-FB smoke without length normalization:
+
+```text
+run:
+  runs/jl_418328/realtime_qwen_audio_surgery_rnnt_fb_mix100_vocab4096_v0
+steps: 100
+compact_vocab_size: 4096
+train_examples after vocab filter: 257 / 3491
+eval_examples after vocab filter: 46 / 339
+first_train_loss: 359.2044
+last_train_loss: 854.9139
+eval_loss: 485.8917
+loss_decreased: false
+```
+
+RNNT-FB normalized, capped vocab:
+
+```text
+run:
+  runs/jl_418328/realtime_qwen_audio_surgery_rnnt_fb_mix60_vocab4096_norm_v0
+steps: 60
+compact_vocab_size: 4096
+train_examples after vocab filter: 257 / 3491
+eval_examples after vocab filter: 46 / 339
+first_train_loss: 7.9823
+last_train_loss: 6.3487
+eval_loss: 6.3697
+loss_decreased: true
+eval_pred_text_ratio: 0.3048
+eval_label_text_ratio: 0.3123
+```
+
+RNNT-FB normalized, full manifest vocab:
+
+```text
+run:
+  runs/jl_418328/realtime_qwen_audio_surgery_rnnt_fb_mix20_vocabfull_norm_v0
+steps: 20
+compact_vocab_size: 11844
+train_examples: 3491
+eval_examples: 339
+first_train_loss: 9.0233
+last_train_loss: 8.5847
+eval_loss: 8.5747
+loss_decreased: true
+```
+
+WLK first-20s streaming eval:
+
+```text
+4096-vocab normalized checkpoint:
+  blank_adjust 0.0, no_repeat_ngram_size 3:
+    WER: 1.0
+    text_ratio: 0.8471
+    trigram_rep: 0.0
+  blank_adjust 0.5, no_repeat_ngram_size 3:
+    WER: 1.0
+    text_ratio: 0.0022
+
+full-vocab normalized checkpoint:
+  blank_adjust 0.0/0.5/1.0, no_repeat_ngram_size 3:
+    WER: 1.0
+    text_ratio: 1.0
+  blank_adjust 2.0, no_repeat_ngram_size 3:
+    WER: 1.0
+    text_ratio: 0.0041
+  blank_adjust >= 3.0:
+    WER: 1.0
+    text_ratio: 0.0
+```
+
+Conclusion:
+
+- The true RNNT forward-backward objective is now implemented and trainable.
+- Length normalization is required. Without it, the smoke is noisy and does not
+  reduce loss; with it, loss decreases cleanly.
+- `Vcompact=4096` is too small for the mixed data: it drops 3234/3491 train
+  examples and produces bad WLK fragments.
+- `Vcompact=11844` keeps the full manifest but is expensive: several steps take
+  10-18 seconds because logits scale as `T * (U + 1) * Vcompact`.
+- The current checkpoints are not quality checkpoints. Free decoding still
+  flips between over-emission and silence under blank-bias sweeps.
+
+Next useful step:
+
+- Keep `rnnt_fb` as the correct objective path.
+- Optimize memory/speed before a longer run:
+  compute RNNT log-probs in chunks over `U` or use a fused/torchaudio-style
+  RNNT loss if available.
+- Add a proper RNNT greedy/beam decoder with multiple symbols per frame and
+  calibrated blank prior during training, instead of relying on the old
+  one-symbol-per-frame eval loop.
+- Then run a real `11844` vocab checkpoint for hundreds/thousands of steps.
+
+## RNNT Greedy Decoder + Blank Prior Smoke
+
+Instance: Jarvislab `418364`
+
+Code change:
+
+- Added true RNNT greedy decoding with up to `max_symbols_per_frame` nonblank
+  emissions per frame.
+- Added `rnnt_forced_advance_count` to detect nonblank loops that only stop
+  because the per-frame cap is hit.
+- `decode-mode=rnnt_fb` now uses this true RNNT greedy path; `rnnt_lite`
+  remains the old one-symbol-per-frame path.
+
+Validation:
+
+```text
+H100 targeted tests: 9 passed
+H100 full tests:     48 passed
+```
+
+Checkpoint smoke:
+
+```text
+run:
+  runs/jl_418364/realtime_qwen_audio_surgery_rnnt_fb_mix20_vocabfull_norm_blank2_v0
+source checkpoint:
+  runs/jl_417339/realtime_qwen_audio_surgery_stageAplus_adapter2x2048_resume2k_lr2e5_v0
+steps: 20
+compact_vocab_size: 11844
+rnnt_lite_blank_bias: 2.0
+first_train_loss: 7.3269
+last_train_loss: 7.0886
+eval_loss: 6.9925
+eval_pred_text_ratio: 0.0011
+eval_label_text_ratio: 0.2623
+loss_decreased: true
+```
+
+WLK first-20s true RNNT greedy, coarse sweep:
+
+```text
+max_symbols_per_frame=1:
+  adj  0.0: WER 1.0000, text_ratio 0.0036, forced 18
+  adj -0.5: WER 1.0000, text_ratio 0.8062, forced 4080
+  adj -1.0: WER 1.0026, text_ratio 1.0000, forced 5061
+
+max_symbols_per_frame=2:
+  adj  0.0: WER 1.0000, text_ratio 0.0039, forced 2
+  adj -0.5: WER 1.0186, text_ratio 0.8524, forced 3732
+  adj -1.0: WER 1.0685, text_ratio 1.0000, forced 5061
+
+max_symbols_per_frame=4:
+  adj  0.0: WER 1.0000, text_ratio 0.0039, forced 0
+  adj -0.5: WER 1.0617, text_ratio 0.9158, forced 3659
+  adj -1.0: WER 1.2630, text_ratio 1.0000, forced 5061
+
+max_symbols_per_frame=8:
+  adj  0.0: WER 1.0000, text_ratio 0.0039, forced 0
+  adj -0.5: WER 1.1958, text_ratio 0.9444, forced 3377
+  adj -1.0: WER 1.6210, text_ratio 1.0000, forced 5061
+```
+
+Fine blank sweep:
+
+```text
+max_symbols_per_frame=1:
+  adj -0.1: WER 1.0000, text_ratio 0.0231, forced 117
+  adj -0.2: WER 1.0000, text_ratio 0.1130, forced 572
+  adj -0.3: WER 1.0000, text_ratio 0.2498, forced 1264
+  adj -0.4: WER 1.0000, text_ratio 0.5819, forced 2945
+
+max_symbols_per_frame=2:
+  adj -0.1: WER 1.0000, text_ratio 0.0156, forced 16
+  adj -0.2: WER 1.0000, text_ratio 0.0792, forced 152
+  adj -0.3: WER 1.0000, text_ratio 0.4001, forced 1174
+  adj -0.4: WER 0.9990, text_ratio 0.6167, forced 2186
+```
+
+Qualitative samples at the "best" calibrated points are still unusable. They
+emit fragments such as `pton`, `AINEDerteULAR...`, `URITYchezichage...` rather
+than transcript text.
+
+Conclusion:
+
+- The proper RNNT greedy decoder confirms the earlier diagnosis instead of
+  fixing it.
+- A positive blank prior stops over-emission but collapses to silence.
+- Suppressing blank even slightly reintroduces forced-advance loops and
+  nonsensical Qwen subword fragments.
+- `max_symbols_per_frame > 1` is necessary for real RNNT decoding, but with
+  this checkpoint it mostly increases the amount of bad text.
+
+Next useful step:
+
+- Do not promote this checkpoint.
+- Do not just run longer from the same objective unchanged.
+- Add an explicit duration / emission prior inside training, or move to a
+  monotonic marginal loss with stronger blank calibration.
+- Keep the true RNNT greedy decoder and forced-advance metric as diagnostics
+  for future runs.
+
+## RNNT-FB Duration Prior Smoke
+
+Instance: Jarvislab `418383`
+
+Code change:
+
+- Added `rnnt_token_frames` targets derived from aligned word emissions while
+  preserving the exact CTC target token order.
+- Added optional `label_frame_targets` to `rnnt_forward_backward_loss`.
+- Added a soft squared-distance label-emission prior controlled by:
+  `--rnnt-duration-prior-weight`, `--rnnt-duration-prior-sigma-frames`, and
+  `--rnnt-duration-prior-max-penalty`.
+- Default behavior is unchanged when `rnnt_duration_prior_weight=0`.
+
+Validation:
+
+```text
+H100 targeted tests: 13 passed
+H100 full tests:     52 passed
+```
+
+Runs:
+
+```text
+A:
+  blank_bias: 1.0
+  duration_weight: 0.3
+  sigma_frames: 6
+  first_train_loss: 8.2505
+  last_train_loss: 6.0586
+  eval_loss: 6.1431
+  eval_pred_text_ratio: 0.0
+  eval_label_text_ratio: 0.2623
+
+B:
+  blank_bias: 1.0
+  duration_weight: 0.7
+  sigma_frames: 6
+  first_train_loss: 8.2796
+  last_train_loss: 6.0901
+  eval_loss: 6.1758
+  eval_pred_text_ratio: 0.0
+  eval_label_text_ratio: 0.2623
+
+C:
+  blank_bias: 1.5
+  duration_weight: 0.7
+  sigma_frames: 8
+  first_train_loss: 7.8353
+  last_train_loss: 5.6576
+  eval_loss: 5.7596
+  eval_pred_text_ratio: 0.0
+  eval_label_text_ratio: 0.2623
+```
+
+WLK first-20s true RNNT greedy:
+
+```text
+All A/B/C sweeps:
+  max_symbols_per_frame: 1 or 2
+  blank_adjust: -0.2, 0.0, 0.2
+  WER: 1.0
+  text_ratio: 0.0
+  wait_ratio: 1.0
+  forced_advance_count: 0
+```
+
+Operational note:
+
+- The first A attempt filled the 100GB disk while saving `model.pt`.
+- Old remote `model.pt` files were deleted except the required source
+  checkpoint. Final runs delete each smoke `model.pt` after WLK eval; only logs,
+  configs, tokenizers, predictions, and metrics are retained.
+
+Conclusion:
+
+- The duration prior is wired correctly: loss decreases and forced-advance loops
+  disappear.
+- This specific prior + blank-bias combination over-corrects into a blank
+  attractor. The model no longer over-emits; it emits nothing.
+- None of A/B/C meets the promotion criteria because `text_ratio=0.0` on mixed
+  eval and WLK.
+
+Next useful step:
+
+- Do not continue these runs.
+- Try the opposite calibration: no positive blank bias, weaker duration prior,
+  and/or a target emission-rate term inside RNNT rather than only a path timing
+  prior.
+- Candidate next smoke: `blank_bias=0.0`, `duration_weight=0.05/0.1`, plus a
+  mild blank logit penalty during training or a nonblank prior tied to
+  `target_length / input_length`.
+
+## RNNT-FB Nonblank Rate Calibration Smoke
+
+Instance: Jarvislab `418456`
+
+Code change:
+
+- Added optional RNNT-FB nonblank-rate regularization controlled by
+  `--rnnt-nonblank-rate-loss-weight`.
+- The regularizer computes the mean lattice `1 - P(blank)` and targets
+  `target_tokens / (frames + target_tokens)`.
+- Added metrics for `rnnt_nonblank_rate_loss`, `rnnt_pred_nonblank_rate`, and
+  `rnnt_target_nonblank_rate` in train/eval output.
+- Default behavior is unchanged when the weight is `0`.
+
+Validation:
+
+```text
+Local py_compile:        passed
+Local tests:             skipped locally, no torch
+H100 targeted tests:     16 passed
+H100 tests directory:    55 passed
+```
+
+Runs:
+
+```text
+A:
+  blank_bias: 0.0
+  duration_weight: 0.0
+  nonblank_rate_weight: 0.5
+  first_train_loss: 9.3832
+  last_train_loss: 7.1481
+  eval_loss: 7.1784
+  train_pred_nonblank_rate: 0.999503
+  train_target_nonblank_rate: 0.200820
+  eval_pred_nonblank_rate: 0.998898
+  eval_target_nonblank_rate: 0.208347
+  eval_pred_text_ratio: 0.0000278
+
+B:
+  blank_bias: 0.0
+  duration_weight: 0.05
+  nonblank_rate_weight: 0.5
+  first_train_loss: 9.4074
+  last_train_loss: 7.1672
+  eval_loss: 7.1945
+  train_pred_nonblank_rate: 0.999504
+  train_target_nonblank_rate: 0.200820
+  eval_pred_nonblank_rate: 0.998898
+  eval_target_nonblank_rate: 0.208347
+  eval_pred_text_ratio: 0.0000278
+
+C:
+  blank_bias: 0.0
+  duration_weight: 0.1
+  nonblank_rate_weight: 1.0
+  first_train_loss: 9.7796
+  last_train_loss: 7.5200
+  eval_loss: 7.5183
+  train_pred_nonblank_rate: 0.999504
+  train_target_nonblank_rate: 0.200820
+  eval_pred_nonblank_rate: 0.998899
+  eval_target_nonblank_rate: 0.208347
+  eval_pred_text_ratio: 0.0000278
+```
+
+WLK first-20s true RNNT greedy:
+
+```text
+All A/B/C sweeps:
+  max_symbols_per_frame: 1 or 2
+  blank_adjust: 0.0, 0.5, 1.0
+  WER: 1.0
+  text_ratio: 0.0
+  forced_advance_count: 0
+  trigram_repetition_ratio: 0.0
+```
+
+Conclusion:
+
+- The regularizer is wired and test-covered, but this formulation does not fix
+  greedy emission.
+- The key diagnostic is that `1 - P(blank)` is already near `1.0`; the mass is
+  spread across thousands of nonblank classes while blank remains the top single
+  class for decoding.
+- Therefore, a total nonblank-probability target is the wrong control variable
+  for this model. It lowers/raises aggregate probability mass, but it does not
+  create a winning text-token margin.
+- None of A/B/C is promotable.
+
+Next useful step:
+
+- Stop RNNT calibration based on aggregate `1 - P(blank)`.
+- Move to a margin-aware or monotonic objective:
+  - either a blank-vs-best-nonblank margin/rank loss around aligned token frames;
+  - or the planned monotonic marginal loss banded by token/frame windows.
+- Keep `rnnt_nonblank_rate_loss` only as a diagnostic/optional ablation, not as
+  the main next direction.
+
+## RNNT-FB Target Margin Smoke
+
+Instance: Jarvislab `418489`
+
+Code change:
+
+- Added optional aligned-window RNNT target margin losses:
+  - `--rnnt-target-blank-margin-loss-weight`
+  - `--rnnt-target-other-margin-loss-weight`
+  - `--rnnt-target-margin-window-frames`
+  - `--rnnt-target-blank-margin`
+  - `--rnnt-target-other-margin`
+- The loss uses `word_alignments -> rnnt_token_frames`, then compares each
+  aligned target token against blank and the strongest competing nonblank in a
+  small frame window.
+- Default behavior is unchanged when both margin weights are `0`.
+
+Validation:
+
+```text
+Local py_compile:        passed
+Local tests:             skipped locally, no torch
+H100 targeted tests:     19 passed
+H100 tests directory:    58 passed
+```
+
+Runs:
+
+```text
+M1:
+  blank_margin_weight: 0.5
+  other_margin_weight: 0.0
+  window_frames: 2
+  first_train_loss: 9.7246
+  last_train_loss: 8.4015
+  eval_loss: 8.4681
+  eval_pred_text_ratio: 1.0000
+  eval_trigram_repetition_ratio: 0.5556
+  best_wlk_wer: 0.9534
+  best_wlk_text_ratio: 0.9025
+  best_wlk_forced_advance_count: 4148
+
+M2:
+  blank_margin_weight: 0.5
+  other_margin_weight: 0.1
+  window_frames: 2
+  first_train_loss: 9.9484
+  last_train_loss: 8.6478
+  eval_loss: 8.7215
+  eval_pred_text_ratio: 0.7628
+  eval_trigram_repetition_ratio: 0.2192
+  best_wlk_wer: 0.9528
+  best_wlk_text_ratio: 0.8685
+  best_wlk_forced_advance_count: 3880
+
+M3:
+  blank_margin_weight: 0.2
+  other_margin_weight: 0.2
+  window_frames: 2
+  first_train_loss: 9.7514
+  last_train_loss: 8.0733
+  eval_loss: 8.1122
+  eval_pred_text_ratio: 0.1094
+  eval_trigram_repetition_ratio: 0.1324
+  best_wlk_wer: 0.9664
+  best_wlk_text_ratio: 0.1699
+  best_wlk_forced_advance_count: 445
+
+M4:
+  blank_margin_weight: 0.2
+  other_margin_weight: 0.5
+  window_frames: 2
+  first_train_loss: 10.4227
+  last_train_loss: 8.8121
+  eval_loss: 8.8390
+  eval_pred_text_ratio: 0.3184
+  eval_trigram_repetition_ratio: 0.0689
+  best_wlk_wer: 0.9894
+  best_wlk_text_ratio: 0.2545
+  best_wlk_forced_advance_count: 1288
+```
+
+Conclusion:
+
+- The blank-vs-target margin works as a diagnostic and escapes the all-blank
+  attractor.
+- The competing-nonblank margin reduces verbosity/repetition on mixed eval, but
+  WLK quality remains poor. Outputs are still dominated by fragments such as
+  `the`, `2 M`, `an`, and malformed subwords.
+- M1/M2 get superficially lower WER by over-emitting many wrong tokens. M3 has
+  the cleanest emission control, but still no useful transcript quality. M4
+  improves mixed-eval repetition over M3, but regresses WLK WER.
+- None of M1-M4 is promotable. Smoke `model.pt` files are deleted; JSON metrics
+  and prediction artifacts are retained.
+
+Next useful step:
+
+- Do not spend more H100 time on this exact RNNT calibration family.
+- The next experiment should train token identity more directly:
+  - aligned-window CE or sampled softmax over target plus hard negatives;
+  - or the banded monotonic marginal loss where each target token is allowed a
+    local time window, rather than only adding margin terms to RNNT logits.
+- Keep the RNNT-FB path as infrastructure, but treat the current joint head as
+  undertrained for lexical identity.
+
+## Aligned-Window Token Identity Smoke
+
+Instance: Jarvislab `418873`
+
+Code change:
+
+- Added `--alignment-loss aligned_window_ce` on the compact CTC projection.
+- Added `--alignment-loss aligned_window_sampled_ce` with hard-negative sampled
+  denominators.
+- Added CLI controls:
+  - `--aligned-window-frames`
+  - `--aligned-window-blank-loss-weight`
+  - `--aligned-window-sampled-hard-negatives`
+- WLK eval can use `--decode-mode aligned_window_ce` and
+  `aligned_window_sampled_ce`; both decode through the compact CTC head.
+
+Validation:
+
+```text
+Local py_compile:        passed
+Local tests:             skipped locally, no torch
+H100 targeted tests:     23 passed
+H100 tests directory:    62 passed
+Sampled CE smoke:        2 steps, save/eval path passed
+```
+
+Runs:
+
+```text
+A:
+  alignment_loss: aligned_window_ce
+  window_frames: 3
+  blank_loss_weight: 0.05
+  steps: 300
+  first_train_loss: 9.8489
+  last_train_loss: 9.0159
+  eval_loss: 8.7150
+  eval_pred_text_ratio: 1.0000
+  eval_label_text_ratio: 0.2623
+  eval_target_blank_margin: 0.6777
+  eval_target_other_margin: -3.7138
+  WLK best WER: 0.9826
+  WLK output pattern: "the"
+
+B:
+  alignment_loss: aligned_window_ce
+  window_frames: 5
+  blank_loss_weight: 0.02
+  steps: 300
+  first_train_loss: 9.5672
+  last_train_loss: 8.7583
+  eval_loss: 8.4562
+  eval_pred_text_ratio: 1.0000
+  eval_label_text_ratio: 0.2623
+  eval_target_blank_margin: 0.9523
+  eval_target_other_margin: -3.6532
+  WLK best WER: 0.9826
+  WLK output pattern: "the"
+```
+
+WLK first-20s sweeps:
+
+```text
+A/B:
+  blank_adjust: 0.0, 0.5, 1.0, 1.5, 2.0, 3.0
+  text_token_ratio: 1.0 for every setting
+  trigram_repetition_ratio: 0.0 after CTC collapse
+  hypothesis: one collapsed token, consistently "the"
+```
+
+Conclusion:
+
+- The implementation is wired and fast, but the objective collapses to the most
+  frequent lexical token instead of learning audio-conditioned identity.
+- Positive blank adjustment cannot recover a useful operating point because the
+  frame argmax is dominated by one nonblank token before CTC collapse.
+- Run C was not launched because A/B did not produce plausible words.
+- These checkpoints are not promotable; model weights are deleted after metrics
+  capture.
+
+Next useful step:
+
+- Stop pure aligned-window CE on the compact head.
+- Add an explicit anti-frequency-collapse term before any longer training:
+  - class-balanced token CE or inverse-frequency weights;
+  - optional per-example negative sampling that always includes frequent tokens
+    such as `the`;
+  - monitor top-1 token histogram and entropy per eval batch.
+- If that still collapses, move to a stronger projection/prediction head rather
+  than extending the same head.
+
+## Aligned-Window Anti-Frequency Smoke
+
+Instance: Jarvislab `418884`
+
+Code change:
+
+- Added class-balanced target weighting for `aligned_window_*` losses:
+  `--aligned-window-token-weighting {none,inverse_sqrt,inverse}`.
+- Added weight bounds:
+  `--aligned-window-min-token-weight`,
+  `--aligned-window-max-token-weight`.
+- Added frequent hard negatives for sampled CE:
+  `--aligned-window-frequent-negative-count`.
+- Added eval diagnostics for compact top-1 histograms:
+  `top1_total`, `top1_unique`, `top1_entropy`, `top1_top`.
+
+Validation:
+
+```text
+Local py_compile:        passed
+Local tests:             skipped locally, no torch
+H100 targeted tests:     25 passed
+H100 tests directory:    64 passed
+```
+
+Runs:
+
+```text
+C1:
+  alignment_loss: aligned_window_ce
+  token_weighting: inverse_sqrt
+  window_frames: 3
+  blank_loss_weight: 0.2
+  steps: 300
+  first_train_loss: 12.2182
+  last_train_loss: 17.1059
+  eval_loss: 11.2190
+  eval_pred_text_ratio: 0.9165
+  eval_top1_unique: 3
+  eval_top1_top: compact 11 / token 6 at 91.0%, blank 8.4%
+  WLK best WER: 0.9980
+  WLK output pattern: punctuation/apostrophes
+
+C2:
+  alignment_loss: aligned_window_sampled_ce
+  token_weighting: inverse_sqrt
+  sampled_hard_negatives: 128
+  frequent_negative_count: 64
+  window_frames: 3
+  blank_loss_weight: 0.2
+  steps: 300
+  first_train_loss: 6.8221
+  last_train_loss: 9.3874
+  eval_loss: 6.4750
+  eval_pred_text_ratio: 0.0036
+  eval_top1_unique: 46
+  eval_top1_top: blank at 99.6%
+  WLK best WER: 1.0 at blank decode, >3.2 when blank is suppressed
+```
+
+WLK first-20s:
+
+```text
+C1:
+  blank_adjust 0.0: WER 0.9980, text_ratio 0.8860
+  blank_adjust 1.0/3.0: WER 1.0, text_ratio 0.0
+
+C2:
+  blank_adjust 0.0: WER 1.0, text_ratio 0.0014
+  blank_adjust -1.0/-2.0/-3.0: WER 3.2359, text_ratio 1.0
+```
+
+Conclusion:
+
+- The anti-frequency plumbing works and exposes the failure mode clearly.
+- Inverse-frequency weighting breaks the previous `the` collapse, but does not
+  recover audio-conditioned lexical identity.
+- Full CE shifts to punctuation/nonblank collapse; sampled CE with frequent
+  negatives shifts to blank collapse. Suppressing blank at decode time produces
+  fluent-looking but unrelated token soup.
+- No checkpoint is promotable; run C beyond 300 steps is not justified.
+
+Next useful step:
+
+- Stop using a shallow compact CTC head as the only lexical classifier.
+- Add a stronger token-identity head before more training:
+  - two-layer MLP or lightweight prediction network over audio frames;
+  - keep class-balanced diagnostics;
+  - optionally initialize from Qwen embeddings/LM head but train enough capacity
+    to separate lexical classes.
+- A useful next smoke is a compact-frame transformer/prediction head trained with
+  balanced aligned-window CE, not more weighting on the current linear head.
+
+## Cached Full-Hypothesis Streaming Pivot
+
+Date: 2026-05-30
+
+Reason:
+
+- The RNNT/CTC/aligned-window smokes control blank/text rate, but they do not
+  recover useful lexical identity.
+- The more pragmatic next path is to keep the pretrained Qwen decoder path and
+  solve the streaming cost directly:
+  - cache finalized audio embeddings;
+  - rerun a full text hypothesis on each update;
+  - commit only stable hypothesis prefixes.
+
+Code change:
+
+- Added `CachedAudioDecodeState`.
+- Added `append_audio_to_cache(mels, state)`:
+  - uses the existing Qwen audio surgery chunk encoder;
+  - appends only newly finalized frame embeddings;
+  - preserves the bounded recompute window via `last_recomputed_frames`.
+- Added `generate_full_hypothesis_from_cached_audio(...)`:
+  - greedy full-hypothesis decode over cached finalized audio embeddings;
+  - reruns the text decoder per update;
+  - intentionally does not try to cache/reuse decoder KV yet.
+- Added `qwen3_streaming/stable_commit.py`:
+  - token LCP;
+  - hold-back tokens;
+  - stable-over-N-iterations commit;
+  - final flush commit.
+- Added `scripts/infer_cached_full_hypothesis.py`:
+  - chunks a WAV;
+  - caches audio embeddings incrementally;
+  - decodes a full hypothesis each chunk;
+  - outputs committed/stable-prefix events.
+
+Validation:
+
+```text
+Local py_compile:
+  qwen3_streaming/native_realtime_model.py
+  qwen3_streaming/stable_commit.py
+  scripts/infer_cached_full_hypothesis.py
+  passed
+
+Local pytest:
+  28 passed, 2 skipped
+```
+
+H100 status:
+
+```text
+jl resume 418884 -y
+-> Insufficient balance
+```
+
+No H100 smoke was run because the Jarvislab instance could not be resumed.
+
+Follow-up after balance refill:
+
+```text
+jl resume 418884 -y
+-> instance changed to 418889, H100 running at 217.18.55.82
+
+H100 py_compile:
+  qwen3_streaming/native_realtime_model.py
+  qwen3_streaming/stable_commit.py
+  scripts/infer_cached_full_hypothesis.py
+  passed
+
+H100 targeted tests:
+  25 passed
+
+H100 full tests:
+  73 passed
+```
+
+Smoke results:
+
+```text
+Checkpoint StageA resume2k + repo_mel + naive audio-prefix decode:
+  final_text: "None"
+  cached_steps: 249
+  audio_frames_seen: 2062
+  last_recomputed_frames: 1564
+
+Checkpoint StageA resume2k + Qwen prompt + Qwen processor features:
+  final_text: "Hey! Hey! My name is. My name is..."
+  trigram_repetition_ratio: 0.5556
+  cached_steps: 250
+  audio_frames_seen: 2064
+  last_recomputed_frames: 1564
+
+Base Qwen/Qwen3-ASR-0.6B + Qwen prompt + Qwen processor features:
+  stable_committed_text:
+    "Hello everyone. My name is Ilyal, and I will give you a short"
+  last full hypothesis at flush:
+    "Hello everyone. My name is Ilyich Bilad, and I will give an short overview
+    of the paper \"Prompting Parm from Translation: Assessing Strategies and
+    Performance.\" This is joint work with my colleagues from Google Translate.
+    Parm is a 540 billion parameters large language model presented last year
+    in 2022."
+  cached_steps: 250
+  audio_frames_seen: 2064
+  last_recomputed_frames: 1564
+
+Official qwen-asr package baseline, same 20 s WAV:
+  "Hello everyone. My name is Adil Bilad, and I will give an short overview of
+  the paper \"Prompting Parm from Translation: Assessing Strategies and
+  Performance.\" This is joint work with my colleagues from Google Translate.
+  Parm is a five hundred forty billion parameters language model presented last
+  year in two thousand twenty-two. Its."
+```
+
+Interpretation:
+
+- The audio cache works: `last_recomputed_frames=1564` is exactly the bounded
+  `15 s left context + 640 ms right context`, while cached audio steps grow
+  monotonically.
+- The naive prefix decode was wrong because it bypassed Qwen-ASR's real prompt
+  layout and used the repo's mel frontend.
+- Using the real Qwen prompt and official processor features makes the cached
+  full-hypothesis path qualitatively close to the official 0.6B baseline.
+- The old StageA adapter checkpoint is not compatible with this full-hypothesis
+  Qwen decoder path; it reintroduces repetition.
+- The stable-prefix committer is too strict for final output: it correctly
+  avoids revisions, but it can lock an early wording (`"you a short"`) while the
+  later full hypothesis improves to `"an short overview..."`. The eval script
+  must report both stable committed text and latest full hypothesis.
+
+Current interpretation:
+
+- This is a real runtime/wiring win for the base Qwen path: cached streaming
+  audio plus full-hypothesis decode can stay close to official Qwen-ASR output
+  on the WLK 20 s fixture.
+- It directly attacks the original streaming cost: old finalized audio frames
+  are cached and not re-embedded from the full 0:t window.
+- The remaining recompute is bounded to the Qwen audio surgery window and the
+  right-context tail. Text decoding is still full-hypothesis rerun per update.
+
+Next gate:
+
+- Update the inference summary to report both stable committed text and latest
+  full hypothesis.
+- Evaluate more WLK first-20s fixtures with base `Qwen/Qwen3-ASR-0.6B`,
+  `--feature-mode qwen_processor`, and the Qwen prompt.
+- Tune commit policy at word level instead of token level; keep a final mode
+  that can revise the last unstable phrase.
+- Only after that, decide whether we need a small training step. The old StageA
+  checkpoints should not be reused for this full-hypothesis path.
+
+## Word-Level Stable Commit
+
+Date: 2026-05-30
+
+Reason:
+
+- Token-level LCP committed a too-specific early phrase:
+  `"Hello everyone. My name is Ilyal, and I will give you a short"`.
+- The later full hypothesis was much better, so the streaming layer needs a
+  stable committed prefix plus a separately revisable display tail.
+
+Code change:
+
+- Added `StableTextCommitState` and `update_stable_text_commit(...)`.
+- Added word-like text units, hold-back words, stable-over-N iterations, and a
+  final mode that can revise the last unstable phrase.
+- `scripts/infer_cached_full_hypothesis.py` now supports:
+  - `--commit-mode {word,token}`;
+  - `--hold-back-words`;
+  - `--finalize-mode {latest,stable}`;
+  - event fields `display`, `unstable`, `candidate`;
+  - summary fields `final_display_text` and `stable_committed_text`.
+
+Validation:
+
+```text
+Local py_compile:
+  qwen3_streaming/stable_commit.py
+  scripts/infer_cached_full_hypothesis.py
+  passed
+
+Local tests:
+  32 passed, 2 skipped
+
+H100 instance:
+  418889 -> resumed as 418900
+
+H100 targeted stable commit tests:
+  9 passed
+
+H100 full tests:
+  77 passed
+```
+
+H100 smoke:
+
+```text
+command:
+  scripts/infer_cached_full_hypothesis.py
+  --model-id Qwen/Qwen3-ASR-0.6B
+  --audio data/wlk_audio/myfXyntFYL_20s.wav
+  --feature-mode qwen_processor
+  --prompt-mode qwen_asr
+  --commit-mode word
+  --finalize-mode latest
+  --hold-back-words 6
+  --stable-iterations 2
+
+final_text:
+  "Hello everyone. My name is Ilyich Bilad, and I will give an short overview
+  of the paper \"Prompting Parm from Translation: Assessing Strategies and
+  Performance.\" This is joint work with my colleagues from Google Translate.
+  Parm is a 540 billion parameters large language model presented last year
+  in 2022."
+
+stable_committed_text before final latest revision:
+  "Hello everyone. My name is Ilyal, and I will give"
+
+cache:
+  cached_steps: 250
+  audio_frames_seen: 2064
+  last_recomputed_frames: 1564
+
+repetition:
+  bigram_repetition_ratio: 0.0
+  trigram_repetition_ratio: 0.0
+```
+
+Artifacts:
+
+- `runs/jl_418900/cached_fullhyp_wordcommit_base_qwen_myf_20s_summary.json`
+- `runs/jl_418900/cached_fullhyp_wordcommit_base_qwen_myf_20s_events.jsonl`
+
+Conclusion:
+
+- The v1 runtime shape is now coherent:
+  incremental Qwen audio embeddings, cached finalized audio prefix,
+  full-hypothesis Qwen decode, stable committed prefix, and revisable display
+  tail.
+- The final output can use the latest full hypothesis while the streaming UI can
+  expose only the committed prefix as immutable.
+- Remaining work is evaluation breadth and commit policy tuning, not RNNT/CTC.
+
+## Cached Full-Hypothesis Batch Eval
+
+Date: 2026-05-30
+
+Code change:
+
+- Added `scripts/eval_cached_full_hypothesis.py`.
+- Loads the cached full-hypothesis model once, then evaluates a manifest or
+  audio directory.
+- Outputs JSONL rows plus a summary with:
+  - WER vs `teacher_text` / `raw_text` / `text`;
+  - final/latest/stable text WER;
+  - cache bound violations;
+  - n-gram repetition;
+  - latency and token counts.
+
+Validation:
+
+```text
+Local py_compile:
+  scripts/eval_cached_full_hypothesis.py
+  passed
+
+Local tests:
+  32 passed, 2 skipped
+
+H100 instance:
+  418900 -> resumed as 418904
+
+H100 py_compile:
+  scripts/eval_cached_full_hypothesis.py
+  scripts/infer_cached_full_hypothesis.py
+  qwen3_streaming/stable_commit.py
+  passed
+
+H100 stable commit tests:
+  9 passed
+
+H100 full tests:
+  77 passed
+```
+
+Eval setup:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+manifest: data/wlk_first20_teacher_1p7b_v0/manifest.teacher.jsonl
+items: 21 first-20s WLK chunks
+reference: Qwen3-ASR-1.7B teacher_text
+chunk_ms: 1000
+feature_mode: qwen_processor
+prompt_mode: qwen_asr
+commit_mode: word
+finalize_mode: latest
+hold_back_words: 6
+stable_iterations: 2
+```
+
+Full 21-item result:
+
+```text
+ok: 21 / 21
+total_latency_sec: 314.19
+latency_mean_sec: 14.96
+wer_final_mean: 0.1682
+wer_latest_mean: 0.1682
+wer_stable_mean: 0.7130
+cache_bound_violations: 0
+final_tokens_mean: 60.52
+bigram_repetition_ratio: 0.0200
+trigram_repetition_ratio: 0.0033
+```
+
+Worst rows are normal ASR disagreements against the 1.7B teacher, not cache
+failures:
+
+```text
+QTlIuodOsA: WER 0.3333
+myfXyntFYL: WER 0.3214
+miPjvjWOvI: WER 0.2979
+rOwZgUjcwB: WER 0.2857
+krJSAnVcGR: WER 0.2500
+```
+
+Artifacts:
+
+- `runs/jl_418904/cached_fullhyp_wordcommit_base_qwen_wlk_first20_full.jsonl`
+- `runs/jl_418904/cached_fullhyp_wordcommit_base_qwen_wlk_first20_full.summary.json`
+- `runs/jl_418904/cached_fullhyp_wordcommit_base_qwen_wlk_first20_limit5.jsonl`
+- `runs/jl_418904/cached_fullhyp_wordcommit_base_qwen_wlk_first20_limit5.summary.json`
+
+Interpretation:
+
+- The cache invariant is now verified across the whole WLK first-20s diagnostic:
+  every row stays at or below `1564` recomputed frames.
+- Final/latest quality is close enough to the 1.7B teacher to justify this
+  v1 path.
+- Stable committed text is intentionally conservative and therefore has high
+  WER if scored as a final transcript. It should be treated as immutable UI
+  prefix, while `display/final_text` carries the revisable tail.
+
+Next useful step:
+
+- Tune `hold_back_words` and `stable_iterations` using the batch script:
+  - lower hold-back improves committed coverage but risks visible revisions;
+  - `finalize-mode latest` should remain the default for final transcript.
+- Add streaming-specific metrics from event histories: time-to-first-display,
+  time-to-first-committed-word, committed coverage over time, and revision count.
+
+## Cached Full-Hypothesis Streaming Metrics + Commit Tuning
+
+Date: 2026-05-30
+
+Status: H100 instance `418909` paused after artifact download.
+
+Code changes:
+
+- Added per-event streaming metrics to `scripts/eval_cached_full_hypothesis.py`.
+- Added `scripts/tune_stable_commit_from_events.py` to replay saved hypotheses
+  and tune commit policy without rerunning ASR.
+- Added optional normalized text-unit matching for stable commit comparison.
+  Default behavior is unchanged.
+
+Eval setup:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+manifest: data/wlk_first20_teacher_1p7b_v0/manifest.teacher.jsonl
+items: 21 first-20s WLK chunks
+chunk_ms: 1000
+feature_mode: qwen_processor
+commit_mode: word
+finalize_mode: latest
+hold_back_words: 6
+stable_iterations: 2
+```
+
+Streaming metrics:
+
+```text
+ok: 21 / 21
+wer_final_mean: 0.1682
+wer_latest_mean: 0.1682
+wer_stable_mean: 0.7130
+cache_bound_violations: 0
+first_display_sec_mean: 1.0952
+first_commit_sec_mean: 12.4187
+stable_coverage_ratio_mean: 0.3355
+display_revision_events_mean: 17.4762
+display_revision_words_mean: 104.0952
+committed_revision_events_total: 0
+bigram_repetition_ratio: 0.0200
+trigram_repetition_ratio: 0.0033
+```
+
+Replay tuning result:
+
+```text
+Best low-risk current policy:
+  hold_back_words: 6
+  stable_iterations: 2
+  first_commit_sec_mean: 12.42
+  stable_coverage_ratio_mean: 0.3355
+  stable_final_prefix_mismatch_count: 2 / 21
+
+More aggressive policy:
+  hold_back_words: 1
+  stable_iterations: 1
+  first_commit_sec_mean: 4.48
+  stable_coverage_ratio_mean: 0.4808
+  stable_final_prefix_mismatch_count: 13 / 21
+
+Strict zero-mismatch policy:
+  hold_back_words: 1
+  stable_iterations: 3
+  first_commit_sec_mean: 15.66
+  stable_coverage_ratio_mean: 0.1359
+  stable_final_prefix_mismatch_count: 0 / 21
+```
+
+Interpretation:
+
+- First display is already good: roughly `1s`.
+- Final/latest transcript quality remains good against the 1.7B teacher.
+- Immutable commit is the unresolved product tradeoff:
+  - aggressive commit is fast but freezes too many wrong prefixes;
+  - strict commit is safe but nearly useless before finalization;
+  - current `hold_back_words=6`, `stable_iterations=2` is conservative but
+    still has 2 final-prefix mismatches on this 21-item WLK set.
+- Normalized punctuation/spacing matching did not improve the aggregate
+  tradeoff on this batch, so it should remain off by default for now.
+
+Artifacts:
+
+- `runs/jl_418909/cached_fullhyp_wordcommit_base_qwen_wlk_first20_streammetrics.jsonl`
+- `runs/jl_418909/cached_fullhyp_wordcommit_base_qwen_wlk_first20_streammetrics.summary.json`
+- `runs/jl_418909/events_first20/*.jsonl`
+- `runs/jl_418909/stable_commit_tuning_grid.jsonl`
+- `runs/jl_418909/stable_commit_tuning_grid_normalized.jsonl`
+
+## Commit Delay Tuning
+
+Date: 2026-05-30
+
+Code change:
+
+- Added `allow_commit` to stable token/text commit updates.
+- Added `--min-commit-audio-sec` to:
+  - `scripts/infer_cached_full_hypothesis.py`;
+  - `scripts/eval_cached_full_hypothesis.py`;
+  - `scripts/tune_stable_commit_from_events.py`.
+
+Rationale:
+
+- The false immutable prefixes are not only punctuation/spacing artifacts.
+- Main failure cases are lexical corrections of early names or formulaic intro
+  text, for example:
+  - `Ilyal` -> `Ilyich Bilad`;
+  - `Yu Xinjiang` -> `Yu Xin Zhang`;
+  - `Hi, and I'm` -> `Hi, I'm`.
+- A minimum commit delay keeps the fast revisable display path unchanged while
+  preventing early false immutable commits.
+
+Offline replay result on the same WLK first-20s event histories:
+
+```text
+Best zero-final-prefix-mismatch policy found:
+  hold_back_words: 2
+  stable_iterations: 2
+  min_commit_audio_sec: 12.0
+  first_commit_sec_mean: 15.8853
+  stable_coverage_ratio_mean: 0.3527
+  stable_word_count_mean: 15.95
+  stable_final_prefix_mismatch_count: 0 / 21
+
+Previous zero-mismatch policy without min delay:
+  hold_back_words: 1
+  stable_iterations: 3
+  first_commit_sec_mean: 15.6629
+  stable_coverage_ratio_mean: 0.1359
+  stable_final_prefix_mismatch_count: 0 / 21
+
+Previous default:
+  hold_back_words: 6
+  stable_iterations: 2
+  min_commit_audio_sec: 0.0
+  first_commit_sec_mean: 12.4187
+  stable_coverage_ratio_mean: 0.3355
+  stable_final_prefix_mismatch_count: 2 / 21
+```
+
+Interpretation:
+
+- `min_commit_audio_sec=12` is a better safety gate than simply increasing
+  `stable_iterations`.
+- It does not solve early immutable streaming latency; first immutable commit is
+  still late on 20s clips.
+- The practical v1 UI should therefore distinguish:
+  - fast `display` text from the latest full hypothesis;
+  - conservative `committed` text for irreversible UI/actions;
+  - final transcript from `finalize-mode latest`.
+
+Artifact:
+
+- `runs/jl_418909/stable_commit_tuning_grid_minsec.jsonl`
+
+## Objective Audit: Incremental Audio Encoder v1
+
+Date: 2026-05-30
+
+Status:
+
+- H100 instance `418909` resumed as `418918` for verification, then paused.
+
+Code changes:
+
+- Added explicit recompute diagnostics to `QwenAudioSurgeryState`:
+  - `last_input_frames`;
+  - `last_recomputed_context_frames`.
+- Added those fields to cached full-hypothesis inference/eval event JSON.
+- Added summary fields in batch eval:
+  - `max_last_recomputed_frames`;
+  - `max_recomputed_context_frames`;
+  - `cache_bound_frames`.
+- Added the same context-recompute metric to
+  `scripts/validate_qwen_audio_surgery.py`.
+- Strengthened tests to verify that cached finalized audio embeddings remain
+  append-only and that Qwen audio surgery recomputation remains bounded.
+
+Verification:
+
+```text
+Local:
+  python3 -m py_compile ...
+  python3 -m pytest -q
+  44 passed, 2 skipped
+
+H100 418918 targeted:
+  .venv/bin/python -m py_compile ...
+  .venv/bin/python -m pytest -q tests/test_native_realtime_model.py \
+    tests/test_stable_commit.py tests/test_tune_stable_commit_from_events.py \
+    tests/test_streaming_metrics.py
+  41 passed
+
+H100 418918 full:
+  .venv/bin/python -m pytest -q
+  89 passed
+```
+
+Audit against the pivot objective:
+
+```text
+Qwen autoregressive decoder:
+  implemented for cached audio full-hypothesis decode.
+
+Cached finalized audio embeddings:
+  implemented; tests verify previously cached frame embeddings stay unchanged
+  when new audio is appended.
+
+Right-context finalization:
+  implemented via Qwen audio surgery `right_context_frames`, default 640 ms.
+
+Avoid full-window recompute:
+  implemented as bounded-window recomputation, not full-audio recomputation.
+  WLK first-20s H100 result had max_last_recomputed_frames=1564 for
+  2064 seen frames, with cache_bound_violations=0.
+
+Encode only new chunk + tail:
+  partially implemented. The current tail is a bounded local window
+  `left_context + right_context`, current default about 2.64s. This is not yet true
+  per-layer audio KV append-only.
+
+Stable prefix commit:
+  implemented with token/text LCP, hold-back, stable-iteration gating,
+  optional normalized matching, and optional minimum audio time before commit.
+```
+
+Remaining gap before calling the objective fully done:
+
+- The audio tower still calls the pretrained Qwen audio encoder on a bounded
+  mel window every update. It does not yet replace Qwen audio self-attention
+  with real streaming attention/KV cache.
+- Therefore the v1 is a pragmatic cached full-hypothesis prototype with bounded
+  recompute, not the final “append only Qwen audio KV” implementation.
+
+## Audio Context Override Smoke
+
+Date: 2026-05-30
+
+Status:
+
+- H100 instance `418918` resumed as `418920`, then paused after verification.
+
+Code change:
+
+- Added context override flags to cached full-hypothesis inference/eval:
+  - `--qwen-audio-left-context-sec`;
+  - `--qwen-audio-right-context-ms`.
+- Defaults were unchanged at this point: 15s left context and 640ms right
+  context. They were changed later after the WLK context sweep.
+- Batch summaries now report the effective context frame counts.
+
+Validation:
+
+```text
+Local:
+  python3 -m py_compile scripts/eval_cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py qwen3_streaming/realtime_config.py
+  python3 -m pytest -q tests/test_realtime_config.py tests/test_stable_commit.py \
+    tests/test_tune_stable_commit_from_events.py
+  21 passed
+
+H100 418920 targeted:
+  .venv/bin/python -m py_compile ...
+  .venv/bin/python -m pytest -q tests/test_realtime_config.py \
+    tests/test_native_realtime_model.py tests/test_stable_commit.py \
+    tests/test_tune_stable_commit_from_events.py
+  41 passed
+
+H100 418920 full:
+  .venv/bin/python -m pytest -q
+  92 passed
+```
+
+Real smoke, WLK first item only:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+left_context_sec: 2.0
+right_context_ms: 640
+qwen_audio_left_context_frames: 200
+qwen_audio_right_context_frames: 64
+cache_bound_frames: 264
+max_last_recomputed_frames: 264
+max_recomputed_context_frames: 200
+cache_bound_violations: 0
+wer_final_mean: 0.0217
+first_display_sec_mean: 1.0
+first_commit_sec_mean: 16.0
+stable_coverage_ratio_mean: 0.6222
+```
+
+Interpretation:
+
+- The override works and proves the v1 can reduce recompute from the default
+  1564-frame bound to a 264-frame bound for this setting.
+- This is still bounded-window recompute, but now the tail size is measurable
+  and tunable. The next useful experiment is a 21-item WLK sweep over left
+  contexts such as 1s, 2s, 4s, 8s, 15s while holding right context at 640ms.
+
+Artifacts:
+
+- `runs/jl_418920/context_override_smoke_left2s_limit1.jsonl`
+- `runs/jl_418920/context_override_smoke_left2s_limit1.summary.json`
+- `runs/jl_418920/context_override_smoke_events/*.jsonl`
+
+## Audio Left-Context Sweep on WLK First-20s
+
+Date: 2026-05-30
+
+Status:
+
+- H100 instance `418920` resumed as `418924`.
+- Full sweep completed, artifacts downloaded, instance paused.
+
+Code change:
+
+- Added `scripts/summarize_cached_context_sweep.py` to aggregate context sweep
+  `.summary.json` files into JSON and Markdown tables.
+- Added tests in `tests/test_summarize_cached_context_sweep.py`.
+
+Validation:
+
+```text
+Local:
+  python3 -m pytest -q
+  49 passed, 2 skipped
+
+H100 targeted:
+  .venv/bin/python -m py_compile scripts/eval_cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py \
+    scripts/summarize_cached_context_sweep.py qwen3_streaming/realtime_config.py
+  .venv/bin/python -m pytest -q tests/test_summarize_cached_context_sweep.py \
+    tests/test_realtime_config.py tests/test_native_realtime_model.py
+  25 passed
+```
+
+Eval setup:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+manifest: data/wlk_first20_teacher_1p7b_v0/manifest.teacher.jsonl
+items: 21 first-20s WLK chunks
+reference: Qwen3-ASR-1.7B teacher_text
+right_context_ms: 640
+left_context_sec sweep: 1, 2, 4, 8, 15
+chunk_ms: 1000
+feature_mode: qwen_processor
+commit_mode: word
+finalize_mode: latest
+hold_back_words: 2
+stable_iterations: 2
+min_commit_audio_sec: 12
+```
+
+Result:
+
+```text
+| left_s | right_ms | recompute | ctx_recompute | WER    | WER_delta | first_display | first_commit | stable_cov |
+| ------ | -------- | --------- | ------------- | ------ | --------- | ------------- | ------------ | ---------- |
+| 1.00   | 640      | 164       | 100           | 0.1662 | -0.0020   | 1.0952        | 15.5760      | 0.3341     |
+| 2.00   | 640      | 264       | 200           | 0.1534 | -0.0148   | 1.0952        | 14.1538      | 0.2959     |
+| 4.00   | 640      | 464       | 400           | 0.1562 | -0.0121   | 1.0952        | 14.5714      | 0.2776     |
+| 8.00   | 640      | 864       | 800           | 0.1538 | -0.0145   | 1.0952        | 15.6629      | 0.3515     |
+| 15.00  | 640      | 1564      | 1500          | 0.1682 | +0.0000   | 1.0952        | 15.8853      | 0.3527     |
+```
+
+Interpretation:
+
+- `left_context=2s` is the best point in this sweep:
+  - best WER against the 1.7B teacher: `0.1534`;
+  - recompute bound `264` frames instead of `1564` at 15s;
+  - same first display latency as 15s.
+- `left_context=1s` is also viable on WER but slightly worse than 2s.
+- Larger contexts do not improve quality on this WLK first-20s diagnostic.
+- This gives a pragmatic v1 default candidate, now applied in code:
+  - `left_context_sec=2.0`;
+  - `right_context_ms=640`;
+  - still bounded-window recompute, not true audio KV append-only.
+
+Artifacts:
+
+- `runs/jl_418924/context_sweep_wlk_first20/*.jsonl`
+- `runs/jl_418924/context_sweep_wlk_first20/*.summary.json`
+- `runs/jl_418924/context_sweep_wlk_first20/summary.json`
+- `runs/jl_418924/context_sweep_wlk_first20/summary.md`
+
+## Default Audio Context Update
+
+Date: 2026-05-30
+
+Status:
+
+- H100 instance `418924` resumed as `418934`.
+- Default-context smoke artifacts downloaded, instance paused.
+
+Code change:
+
+- Changed the experimental Qwen audio surgery default left context from `15s`
+  to `2s` in `RealtimeAudioConfig`.
+- Updated CLI defaults in:
+  - `scripts/validate_qwen_audio_surgery.py`;
+  - `scripts/train_realtime_tiny_asr.py`.
+- Explicit CLI overrides still allow larger contexts, including the old 15s
+  setting.
+
+Rationale:
+
+- The WLK first-20s sweep showed `left_context=2s`, `right_context=640ms` as
+  the best measured point:
+  - `WER=0.1534` vs `0.1682` at 15s;
+  - recompute bound `264` frames vs `1564` at 15s.
+- This makes the default v1 behavior closer to the target shape:
+  new chunk plus small bounded tail, cached finalized audio embeddings, and
+  normal Qwen autoregressive full-hypothesis decode.
+
+Validation:
+
+```text
+Local:
+  python3 -m pytest -q
+  50 passed, 2 skipped
+
+H100 targeted:
+  .venv/bin/python -m py_compile qwen3_streaming/realtime_config.py \
+    scripts/validate_qwen_audio_surgery.py scripts/train_realtime_tiny_asr.py
+  .venv/bin/python -m pytest -q tests/test_realtime_config.py \
+    tests/test_native_realtime_model.py
+  24 passed
+```
+
+Default no-override smoke, WLK first item only:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+explicit context override: none
+qwen_audio_left_context_frames: 200
+qwen_audio_right_context_frames: 64
+cache_bound_frames: 264
+max_last_recomputed_frames: 264
+max_recomputed_context_frames: 200
+cache_bound_violations: 0
+wer_final_mean: 0.0217
+first_display_sec_mean: 1.0
+```
+
+Artifacts:
+
+- `runs/jl_418934/default_left2s_smoke_limit1.jsonl`
+- `runs/jl_418934/default_left2s_smoke_limit1.summary.json`
+- `runs/jl_418934/default_left2s_smoke_events/*.jsonl`
+
+## Cached Full-Hypothesis Runtime Extraction
+
+Date: 2026-05-30
+
+Status:
+
+- H100 instance `418934` resumed as `418937`.
+- Refactored runtime smoke artifacts downloaded, instance paused.
+
+Code change:
+
+- Added `qwen3_streaming/cached_full_hypothesis.py`.
+- Extracted the stateful v1 runtime from the CLI scripts:
+  - audio embedding cache state;
+  - full-hypothesis Qwen decode;
+  - token/word stable-prefix commit;
+  - finalization behavior;
+  - per-chunk event payloads.
+- Updated:
+  - `scripts/infer_cached_full_hypothesis.py`;
+  - `scripts/eval_cached_full_hypothesis.py`.
+- Added `tests/test_cached_full_hypothesis.py`.
+
+Validation:
+
+```text
+Local:
+  python3 -m pytest -q
+  54 passed, 2 skipped
+
+H100 targeted:
+  .venv/bin/python -m py_compile qwen3_streaming/cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py scripts/eval_cached_full_hypothesis.py
+  .venv/bin/python -m pytest -q tests/test_cached_full_hypothesis.py \
+    tests/test_native_realtime_model.py tests/test_realtime_config.py
+  28 passed
+```
+
+Refactored runtime smoke, WLK first item only:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+qwen_audio_left_context_frames: 200
+qwen_audio_right_context_frames: 64
+cache_bound_frames: 264
+max_last_recomputed_frames: 264
+max_recomputed_context_frames: 200
+cache_bound_violations: 0
+wer_final_mean: 0.0217
+first_display_sec_mean: 1.0
+first_commit_sec_mean: 16.0
+stable_coverage_ratio_mean: 0.6222
+```
+
+Interpretation:
+
+- The v1 path is now a reusable stateful runtime, not just duplicated CLI
+  logic.
+- This is the unit to plug into a server or future vLLM/vllm-metal stateful
+  path: append mel/audio chunks, update cached finalized audio embeddings,
+  decode a complete Qwen hypothesis, emit `display` and conservative
+  `committed` text.
+
+Artifacts:
+
+- `runs/jl_418937/refactored_streamer_smoke_limit1.jsonl`
+- `runs/jl_418937/refactored_streamer_smoke_limit1.summary.json`
+- `runs/jl_418937/refactored_streamer_smoke_events/*.jsonl`
+
+## Full-Length WLK Smoke: Context/Latency Tradeoff
+
+Date: 2026-05-30
+
+Status:
+
+- H100 instance `418937` resumed as `418938`.
+- Long-audio artifacts downloaded.
+- H100 instance `418938` paused.
+
+Code change:
+
+- Fixed long-audio feature extraction in:
+  - `scripts/infer_cached_full_hypothesis.py`;
+  - `scripts/eval_cached_full_hypothesis.py`.
+- `WhisperFeatureExtractor` defaults to a 30s chunk length for Qwen ASR
+  features. The cached full-hypothesis path now passes `truncation=False`
+  explicitly; otherwise full WLK files silently evaluate only the first ~30s.
+- Added per-item and summary real-time factor metrics to
+  `scripts/eval_cached_full_hypothesis.py`:
+  - `audio_duration_sec`;
+  - `realtime_factor`;
+  - `audio_duration_total_sec`;
+  - `realtime_factor_mean`;
+  - `realtime_factor_total`.
+
+Validation:
+
+```text
+Local:
+  python3 -m py_compile scripts/eval_cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py
+  python3 -m pytest -q
+  54 passed, 2 skipped
+
+H100 targeted:
+  .venv/bin/python -m py_compile scripts/eval_cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py
+  .venv/bin/python -m pytest -q tests/test_cached_full_hypothesis.py \
+    tests/test_native_realtime_model.py tests/test_realtime_config.py
+  28 passed
+```
+
+Initial bug-finding smoke:
+
+```text
+input: WLK full EqmWoxNDIr.wav, 301.0s
+feature extraction before fix: audio_frames_seen=3064 (~30.6s)
+result: WER=0.9073, final_tokens=80
+```
+
+After `truncation=False`, the same file sees the full audio:
+
+```text
+audio_frames_seen=30164
+```
+
+Context sweep on one full WLK file:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+manifest: data/wlk_teacher_1p7b_v0/manifest.teacher.jsonl
+item: EqmWoxNDIr, 301.0s
+chunk_ms: 10000
+right_context: 640ms
+max_new_tokens: 2048
+reference: Qwen/Qwen3-ASR-1.7B teacher transcript
+```
+
+| left context | recompute bound | RTF | final WER | final tokens |
+| --- | ---: | ---: | ---: | ---: |
+| 2s | 264 frames | 0.320 | 0.850 | 155 |
+| 4s | 464 frames | 0.601 | 0.665 | 293 |
+| 8s | 864 frames | 1.425 | 0.324 | 595 |
+| 15s | 1564 frames | 2.073 | 0.126 | 724 |
+
+Interpretation:
+
+- The bounded-window audio cache is working mechanically:
+  `cache_bound_violations=0` for all runs.
+- The 2s default from the 20s sweep is too aggressive for full-length talks:
+  it is fast, but it loses too much long-range audio context and produces a
+  short, skipped hypothesis.
+- The old 15s left context restores usable final quality on this 301s file,
+  but it is slower than real time on H100 with the current full-hypothesis
+  decode loop.
+- The main bottleneck is now clear:
+  - audio recompute is bounded by `left_context + right_context`;
+  - decoder work is still full-hypothesis repeated for every chunk;
+  - conservative stable-prefix commit performs poorly on long audio because
+    full hypotheses revise heavily across chunks.
+- This means the current v1 is a useful correctness probe, not the final
+  realtime design. To get real realtime quality, the next step is either:
+  - deeper Qwen audio surgery with a larger effective context but cheaper
+    incremental KV reuse; or
+  - segment-level serving with committed audio/text windows so the decoder does
+    not repeatedly regenerate the whole transcript.
+
+Artifacts:
+
+- `runs/jl_418938/cached_fullhyp_wlk_full_limit1_left2s.summary.json`
+- `runs/jl_418938/cached_fullhyp_wlk_full_limit1_left2s_notrunc_chunk10s.summary.json`
+- `runs/jl_418938/cached_fullhyp_wlk_full_limit1_left4s_notrunc_chunk10s.summary.json`
+- `runs/jl_418938/cached_fullhyp_wlk_full_limit1_left8s_notrunc_chunk10s.summary.json`
+- `runs/jl_418938/cached_fullhyp_wlk_full_limit1_left15s_notrunc_chunk10s.summary.json`
+
+## Segmented Cached Full-Hypothesis Streamer
+
+Date: 2026-05-30
+
+Status:
+
+- H100 instance `418938` resumed as `418957`.
+- Full WLK 21-audio segmented eval completed.
+- Artifacts downloaded.
+- H100 instance `418957` paused.
+
+Code change:
+
+- Added `SegmentedCachedFullHypothesisStreamer` in
+  `qwen3_streaming/cached_full_hypothesis.py`.
+- The base streamer remains the default.
+- The segmented streamer:
+  - keeps the same Qwen autoregressive full-hypothesis decode inside the active
+    window;
+  - finalizes a completed segment;
+  - appends the segment text/tokens to global completed output;
+  - trims `state.frame_hidden` to `segment_keep_tail_steps`;
+  - resets stable-prefix state for the next active segment;
+  - preserves global `display`, `committed`, and final transcript text.
+- Added CLI flags to `scripts/infer_cached_full_hypothesis.py` and
+  `scripts/eval_cached_full_hypothesis.py`:
+  - `--segment-max-cached-steps`;
+  - `--segment-keep-tail-steps`;
+  - `--segment-finalize-mode {latest,stable}`.
+- Added summary metrics:
+  - `segments_finalized_mean`;
+  - `dropped_cached_steps_total`.
+- Added unit tests for manual rollover and automatic cache trimming.
+
+Validation:
+
+```text
+Local:
+  python3 -m py_compile qwen3_streaming/cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py \
+    scripts/eval_cached_full_hypothesis.py
+  python3 -m pytest -q
+  56 passed, 2 skipped
+
+H100 targeted:
+  .venv/bin/python -m py_compile qwen3_streaming/cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py \
+    scripts/eval_cached_full_hypothesis.py
+  .venv/bin/python -m pytest -q tests/test_cached_full_hypothesis.py \
+    tests/test_native_realtime_model.py tests/test_realtime_config.py
+  30 passed
+```
+
+Real-model segmented smoke:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+manifest: data/wlk_first20_teacher_1p7b_v0/manifest.teacher.jsonl
+limit: 1
+chunk_ms: 2000
+left_context: 15s
+right_context: 640ms
+segment_max_cached_steps: 20
+segment_keep_tail_steps: 0
+
+ok: 1
+RTF: 0.204
+WER final: 0.2609
+segments_finalized: 9
+dropped_cached_steps_total: 242
+latest_tokens_mean: 3.0
+final_tokens_mean: 65.0
+```
+
+This proves the segment accumulator works with the real Qwen model: the active
+window ends with only a few latest tokens, while the final transcript still
+contains the completed segment tokens.
+
+Full-length single-item comparison:
+
+```text
+item: EqmWoxNDIr.wav, 301.0s
+reference: Qwen/Qwen3-ASR-1.7B teacher transcript
+chunk_ms: 10000
+left_context: 15s
+right_context: 640ms
+```
+
+| mode | segment_max_cached_steps | RTF | final WER | final tokens |
+| --- | ---: | ---: | ---: | ---: |
+| global full-hypothesis | 0 | 2.073 | 0.126 | 724 |
+| segmented | 200 | 0.127 | 0.139 | 717 |
+
+Interpretation:
+
+- The segmented path preserves nearly the same final quality on this file.
+- It is about 16x faster than the global full-hypothesis loop on the same
+  H100 run (`RTF 2.073 -> 0.127`).
+- This directly addresses the previous bottleneck: the audio tower can keep a
+  large 15s left context, while the Qwen text decoder no longer regenerates the
+  entire talk every chunk.
+
+Full WLK 21-audio eval:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+manifest: data/wlk_teacher_1p7b_v0/manifest.teacher.jsonl
+items: 21 full WLK audios
+total audio duration: 7105.5s
+chunk_ms: 10000
+left_context: 15s
+right_context: 640ms
+segment_max_cached_steps: 200
+segment_keep_tail_steps: 0
+segment_finalize_mode: latest
+```
+
+Results:
+
+```text
+ok: 21/21
+total latency: 1040.7s
+RTF total: 0.1465
+RTF mean: 0.1462
+WER final mean: 0.1534
+WER stable mean: 0.1665
+cache_bound_violations: 0
+max_last_recomputed_frames: 1564
+segments_finalized_mean: 16.7
+dropped_cached_steps_total: 87457
+first_display_sec_mean: 10.0
+first_commit_sec_mean: 30.0
+committed_revision_events_total: 0
+```
+
+Best/worst WER examples:
+
+```text
+best:
+  wJAPXMIoIG  WER=0.0909  RTF=0.1430
+  rxrToXvRyM  WER=0.1112  RTF=0.1582
+  ICWfTnUMio  WER=0.1234  RTF=0.1597
+
+worst:
+  xhjBHGVOyQ  WER=0.1927  RTF=0.1411
+  ccpXHNfaoy  WER=0.1946  RTF=0.1228
+  UOlPKyCVgg  WER=0.2646  RTF=0.1613
+```
+
+Current conclusion:
+
+- This is the first v1 path that looks structurally viable for long streaming:
+  Qwen audio tower with large context, bounded audio recompute, normal Qwen
+  autoregressive decode, and stable/segmented commit.
+- The remaining rough edge is semantic: segment boundaries can still drop or
+  alter local context, and `segment_keep_tail_steps=0` avoids duplication at the
+  cost of hard boundaries.
+- The next engineering step is to tune segment size/tail/prompt context:
+  - `segment_max_cached_steps` sweep, likely 120/160/200/240;
+  - small tail sweep, likely 0/8/16/32 steps;
+  - optional previous-segment text as prompt context, if it improves boundary
+    continuity without causing duplication.
+
+Artifacts:
+
+- `runs/jl_418957/segmented_streamer_first20_limit1.jsonl`
+- `runs/jl_418957/segmented_streamer_first20_limit1.summary.json`
+- `runs/jl_418957/segmented_streamer_first20_limit1_events/*.jsonl`
+- `runs/jl_418957/segmented_streamer_full_limit1_left15s_seg200.jsonl`
+- `runs/jl_418957/segmented_streamer_full_limit1_left15s_seg200.summary.json`
+- `runs/jl_418957/segmented_streamer_full_wlk21_left15s_seg200.jsonl`
+- `runs/jl_418957/segmented_streamer_full_wlk21_left15s_seg200.summary.json`
+
+## Segmented Boundary Tuning: Prompt Context, Tail, Segment Length
+
+Date: 2026-05-30
+
+Status:
+
+- H100 instance `418957` resumed as `418958`.
+- Boundary tuning runs completed and downloaded.
+- H100 instance `418958` paused.
+
+Code change:
+
+- Added optional dynamic segment prompt context to
+  `SegmentedCachedFullHypothesisStreamer`.
+- New CLI flags in `scripts/infer_cached_full_hypothesis.py` and
+  `scripts/eval_cached_full_hypothesis.py`:
+  - `--segment-prompt-context-words`;
+  - `--segment-prompt-context-prefix`.
+- When enabled, each active segment prompt is rebuilt with the last N words of
+  completed transcript in the Qwen system context.
+- Added unit coverage for:
+  - trailing text context extraction;
+  - dynamic Qwen prompt construction with audio placeholder expansion.
+
+Validation:
+
+```text
+Local:
+  python3 -m py_compile qwen3_streaming/cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py \
+    scripts/eval_cached_full_hypothesis.py
+  python3 -m pytest -q
+  58 passed, 2 skipped
+
+H100 targeted:
+  .venv/bin/python -m py_compile qwen3_streaming/cached_full_hypothesis.py \
+    scripts/infer_cached_full_hypothesis.py \
+    scripts/eval_cached_full_hypothesis.py
+  .venv/bin/python -m pytest -q tests/test_cached_full_hypothesis.py \
+    tests/test_native_realtime_model.py tests/test_realtime_config.py
+  32 passed
+```
+
+Limit-5 boundary sweep:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+manifest: data/wlk_teacher_1p7b_v0/manifest.teacher.jsonl
+limit: 5 full WLK audios
+chunk_ms: 10000
+left_context: 15s
+right_context: 640ms
+segment_finalize_mode: latest
+```
+
+| segment steps | tail steps | prompt ctx words | RTF | WER |
+| ---: | ---: | ---: | ---: | ---: |
+| 120 | 0 | 0 | 0.105 | 0.163 |
+| 200 | 0 | 0 | 0.148 | 0.144 |
+| 200 | 0 | 40 | 0.159 | 0.208 |
+| 200 | 16 | 0 | 0.161 | 0.186 |
+| 200 | 16 | 40 | 0.167 | 0.222 |
+| 160 | 0 | 40 | 0.158 | 0.208 |
+| 360 | 0 | 0 | 0.196 | 0.137 |
+
+Interpretation:
+
+- Prompting the next segment with previous transcript text hurts this Qwen ASR
+  path. It increases repetitions and worsens WER on the limit-5 sample.
+- Carrying an audio embedding tail also hurts with the current naive stitching;
+  it likely duplicates boundary content.
+- Short 10s-ish segments are fastest, but quality drops.
+- 30s-ish segments (`segment_max_cached_steps=360`) are the best quality point
+  in this sweep, at higher but still sub-real-time cost.
+
+Full WLK 21-audio eval for the best quality candidate:
+
+```text
+segment_max_cached_steps: 360
+segment_keep_tail_steps: 0
+segment_prompt_context_words: 0
+```
+
+Results:
+
+```text
+ok: 21/21
+total audio duration: 7105.5s
+total latency: 1365.4s
+RTF total: 0.1922
+WER final mean: 0.1473
+WER stable mean: 0.1736
+cache_bound_violations: 0
+segments_finalized_mean: 10.95
+committed_revision_events_total: 0
+```
+
+Comparison with previous full WLK `seg200`:
+
+| config | RTF total | WER final mean | segments finalized mean |
+| --- | ---: | ---: | ---: |
+| seg200, tail0, ctx0 | 0.1465 | 0.1534 | 16.71 |
+| seg360, tail0, ctx0 | 0.1922 | 0.1473 | 10.95 |
+
+Current recommendation:
+
+- Keep prompt context disabled for now.
+- Keep audio tail disabled until there is overlap-aware de-duplication.
+- Use `seg200` as the low-latency default.
+- Use `seg360` when quality matters more than latency; it is still comfortably
+  faster than real time on H100.
+
+Next useful work:
+
+- Add overlap-aware boundary stitching before retrying audio tails.
+- Try chunk-level finalization/commit with smaller `chunk_ms` once the server
+  interface exists, because current 10s chunks make first display/commit coarse.
+- Then wrap the segmented streamer in a minimal stateful serving API.
+
+Artifacts:
+
+- `runs/jl_418958/segmented_context_sweep_seg120_tail0_ctx0_limit5.summary.json`
+- `runs/jl_418958/segmented_context_sweep_seg200_tail0_ctx0_limit5.summary.json`
+- `runs/jl_418958/segmented_context_sweep_seg200_tail0_ctx40_limit5.summary.json`
+- `runs/jl_418958/segmented_context_sweep_seg200_tail16_ctx0_limit5.summary.json`
+- `runs/jl_418958/segmented_context_sweep_seg200_tail16_ctx40_limit5.summary.json`
+- `runs/jl_418958/segmented_context_sweep_seg160_tail0_ctx40_limit5.summary.json`
+- `runs/jl_418958/segmented_context_sweep_seg360_tail0_ctx0_limit5.summary.json`
+- `runs/jl_418958/segmented_full_wlk21_left15s_seg360_tail0_ctx0.summary.json`
+
+## 2026-05-31 - Qwen AR CE audio-adapter Stage A
+
+Goal: test the GPU-first plan where the normal Qwen autoregressive decoder stays
+frozen and the streaming-local-context audio path is trained with teacher-forced
+transcript CE. This is meant to adapt the audio side to `left_context=8s`,
+`right_context=640ms` before attempting shorter contexts or audio LoRA.
+
+Implementation landed:
+
+- `--alignment-loss qwen_ar_ce` in `scripts/train_realtime_tiny_asr.py`.
+- Qwen ASR prompt + audio placeholders are used for teacher forcing.
+- CE labels are active only on transcript assistant tokens; prompt/audio prefix
+  positions are not labels.
+- Qwen text decoder and LM head are frozen for this objective.
+- Per-sample prompt language is read from manifests.
+- Qwen audio LoRA support added separately via `--qwen-audio-lora-rank`.
+  Default audio LoRA targets match the audio tower names:
+  `q_proj,k_proj,v_proj,out_proj,fc1,fc2`.
+
+Validation:
+
+```text
+local: python3 -m pytest -q -> 58 passed, 2 skipped
+H100: python -m pytest -q -> 105 passed
+H100 targeted qwen_ar/audio_lora tests -> passed
+```
+
+Smoke results:
+
+```text
+qwen_ar_ce smoke, 20 train / 4 eval, 3 steps:
+first_train_loss: 4.6875
+last_train_loss: 4.59375
+eval_loss: 4.3359
+
+audio LoRA smoke, rank=2:
+loaded checkpoint with qwen_audio_lora_config: true
+default matched audio LoRA modules after target fix: 108
+```
+
+Stage A run:
+
+```text
+run: runs/qwen_ar_ce_stageA_left8_adapter2x2048_v0
+base: Qwen/Qwen3-ASR-0.6B
+objective: qwen_ar_ce
+left_context: 8s
+right_context: 640ms
+adapter: 2 layers, hidden_dim=2048, residual_scale=0.1
+freeze: Qwen audio tower + Qwen text decoder/LM head
+steps: 1500
+batch_size: 2
+lr: 1e-4
+trainable_params: 13.6M
+
+first_train_loss: 5.34375
+last_train_loss: 3.3125
+eval_loss: 3.3429
+train qwen_ar_token_accuracy mean: 0.365
+eval qwen_ar_token_accuracy mean: 0.370
+```
+
+WLK first20 eval, `left=8s`, `seg200`, `right=640ms`, 21 chunks of 20s:
+
+| model | RTF total | WER final mean | WER stable mean | trigram repetition | cache violations |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline Qwen 0.6B | 0.5476 | 0.1884 | 0.2879 | 0.0016 | 0 |
+| Stage A qwen_ar_ce | 0.3056 | 1.1145 | 0.9602 | 0.5048 | 0 |
+
+Interpretation:
+
+- The teacher-forced AR CE wiring works and optimizes the public eval loss.
+- But this Stage A checkpoint is not promotable: WLK quality collapses into
+  generic/repetitive text even though RTF improves.
+- Do not continue to Stage B (`left=4s/2s`) from this checkpoint.
+- Likely issue: training only a post-audio adapter with full teacher-forced CE
+  changes the embedding distribution in a way the frozen Qwen decoder can exploit
+  on labels but not robustly decode in streaming full-hypothesis mode.
+
+Next recommendation:
+
+- Retry with a much smaller adapter update before LoRA:
+  `lr=1e-5`, fewer steps, and regularize against the baseline audio embeddings
+  with an L2/KL-style distillation term.
+- Add a WLK-first20 eval gate during training before running full 1500-step
+  jobs.
+- If that still fails, move adaptation deeper but constrained: low-rank audio
+  LoRA with very small LR and a baseline-output preservation loss.
+
+Artifacts kept locally:
+
+- `runs/qwen_ar_ce_stageA_left8_adapter2x2048_v0/train_metrics.json`
+- `runs/qwen_ar_ce_stageA_left8_adapter2x2048_v0/eval_predictions.jsonl`
+- `runs/qwen_ar_ce_stageA_left8_adapter2x2048_v0/wlk_eval/left8_seg200_first20.jsonl`
+- `runs/qwen_ar_ce_stage0_baseline/wlk_left8_seg200_first20.jsonl`
+
+The failed heavy `model.pt` artifacts were removed from the H100 after metrics
+were downloaded.

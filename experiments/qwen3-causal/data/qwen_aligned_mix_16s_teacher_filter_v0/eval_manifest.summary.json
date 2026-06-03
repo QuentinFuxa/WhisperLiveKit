@@ -1,0 +1,17 @@
+{
+  "input": 360,
+  "kept": 339,
+  "rejected": 21,
+  "max_teacher_wer": 0.35,
+  "reject_reasons": {
+    "teacher_wer": 21
+  },
+  "sources": {
+    "fleurs_fr": 115,
+    "fleurs_en": 117,
+    "librispeech_clean_100": 107
+  },
+  "alignment_sources": {
+    "qwen3_forced_aligner": 339
+  }
+}

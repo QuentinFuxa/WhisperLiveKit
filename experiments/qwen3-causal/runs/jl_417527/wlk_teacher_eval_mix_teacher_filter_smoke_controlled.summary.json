@@ -1,0 +1,30 @@
+{
+  "count": 21,
+  "ok": 21,
+  "errors": 0,
+  "wer_mean": 0.9961079053215807,
+  "latency_p50": 70.07337937800003,
+  "latency_p95": 80.78597644999991,
+  "latency_mean": 68.64547568804767,
+  "tokens": 88637,
+  "text_token_ratio": 0.0019404988887259272,
+  "wait_token_ratio": 0.9980595011112741,
+  "repetition": {
+    "text_token_count": 172,
+    "unique_text_token_count_sum": 172,
+    "unigram_total": 172,
+    "unigram_repeated": 0,
+    "unigram_repetition_ratio": 0.0,
+    "bigram_total": 151,
+    "bigram_repeated": 0,
+    "bigram_repetition_ratio": 0.0,
+    "trigram_total": 130,
+    "trigram_repeated": 0,
+    "trigram_repetition_ratio": 0.0
+  },
+  "checkpoint": "runs/jl_417527/realtime_qwen_audio_surgery_stageAplus_mix_teacher_filter_smoke_v0",
+  "emit_threshold": 0.75,
+  "repetition_penalty": 1.2,
+  "no_repeat_ngram_size": 3,
+  "max_consecutive_text_tokens": 12
+}

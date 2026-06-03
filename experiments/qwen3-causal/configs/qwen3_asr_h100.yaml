@@ -1,0 +1,37 @@
+project: qwen3-asr-streaming-h100
+models:
+  student: Qwen/Qwen3-ASR-0.6B
+  teacher: Qwen/Qwen3-ASR-1.7B
+native_realtime:
+  status: experimental
+  mel_bins: 128
+  mel_hop_ms: 10
+  decoder_step_ms: 80
+  audio_window_sec: 15
+  wait_token: "[P]"
+  word_start_token: "[W]"
+  target_delay_ms:
+    min: 240
+    max: 2400
+    step: 80
+  stages:
+    - freeze_decoder_train_audio_encoder_adapter
+    - partial_or_full_decoder_unfreeze
+data:
+  output_dir: data/public_realtime
+  sources:
+    - fleurs_en
+    - fleurs_fr
+    - librispeech_clean_100
+  requires_word_timestamps: true
+  fallback_alignment: whisperx_or_mfa
+acceptance:
+  max_wer_delta_abs_en: 0.5
+  max_wer_delta_abs_fr: 1.0
+  min_stable_word_latency_gain: 0.30
+  max_revision_rate: 0.05
+  first_delta_p50_sec: 1.0
+serving:
+  host: 0.0.0.0
+  port: 8000
+  gpu_memory_utilization: 0.85

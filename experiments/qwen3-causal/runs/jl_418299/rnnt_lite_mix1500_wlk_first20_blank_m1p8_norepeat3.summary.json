@@ -1,0 +1,32 @@
+{
+  "count": 21,
+  "ok": 21,
+  "errors": 0,
+  "wer_mean": 0.9991015274034142,
+  "latency_p50": 0.38667639400000553,
+  "latency_p95": 0.3909144939999578,
+  "latency_mean": 0.4483896837142809,
+  "tokens": 5061,
+  "text_token_ratio": 0.011262596324836989,
+  "wait_token_ratio": 0.988737403675163,
+  "repetition": {
+    "text_token_count": 23,
+    "unique_text_token_count_sum": 9,
+    "unigram_total": 23,
+    "unigram_repeated": 14,
+    "unigram_repetition_ratio": 0.6086956521739131,
+    "bigram_total": 15,
+    "bigram_repeated": 6,
+    "bigram_repetition_ratio": 0.4,
+    "trigram_total": 8,
+    "trigram_repeated": 0,
+    "trigram_repetition_ratio": 0.0
+  },
+  "checkpoint": "runs/jl_418299/realtime_qwen_audio_surgery_rnnt_lite_mix1500_blank0_wait10_v0",
+  "decode_mode": "rnnt_lite",
+  "ctc_blank_logit_adjust": -1.8,
+  "emit_threshold": 0.5,
+  "repetition_penalty": 1.0,
+  "no_repeat_ngram_size": 3,
+  "max_consecutive_text_tokens": 0
+}

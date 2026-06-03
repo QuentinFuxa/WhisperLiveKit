@@ -1,0 +1,8 @@
+{
+  "input_records": 21,
+  "output_records": 445,
+  "chunk_sec": 16.0,
+  "stride_sec": 16.0,
+  "min_chunk_sec": 8.0,
+  "max_chunks_per_audio": null
+}
