@@ -4544,3 +4544,107 @@ Artifacts kept locally:
 
 The H100 instance `420839` was paused. Non-promoted `model.pt` files were
 deleted from `/tmp`.
+
+## 2026-06-03 - Strict Causal Audio LoRA Diagnostics
+
+Goal:
+
+- Test whether LoRA on the Qwen audio tower can make the strict append-only
+  `qwen_audio_causal_kv` path learn lexical identity while keeping the Qwen text
+  decoder frozen.
+- Use only existing training/eval code in this branch.
+
+Common setup:
+
+```text
+backend: qwen_audio_causal_kv
+loss: qwen_ar_ce
+trainable: Qwen audio tower LoRA rank 8 + zero-init audio adapter
+decoder / LM head: frozen
+streaming train chunk frames: 32
+eval chunk: 320 ms
+decode controls: repetition_penalty=1.15, no_repeat_ngram_size=3
+```
+
+Public mix smoke:
+
+```text
+output: runs/qwen_audio_causal_kv_lora8_mix120_ce_cf32_v0/
+data: qwen_aligned_mix_16s_teacher_filter_v0
+steps: 120
+lr: 1e-5
+trainable_params: 15,955,968
+first_train_loss: 4.5625
+last_train_loss: 2.7378
+eval_loss: 3.7982
+eval token accuracy: 0.3291
+```
+
+WLK chunks eval, 20 held-out chunks:
+
+```json
+{
+  "wer_final_mean": 0.9099421475504256,
+  "realtime_factor_mean": 1.0005624510348599,
+  "cache_bound_violations": 0,
+  "max_recomputed_context_frames": 0,
+  "trigram_repetition_ratio": 0.0
+}
+```
+
+WLK-domain diagnostic smoke:
+
+```text
+output: runs/qwen_audio_causal_kv_lora8_wlk200_ce_cf32_v0/
+data: wlk_chunks16_teacher_aligned_split_v0
+steps: 200
+lr: 1e-5
+trainable_params: 15,955,968
+first_train_loss: 4.7813
+last_train_loss: 3.4339
+eval_loss: 3.6288
+eval token accuracy: 0.3370
+```
+
+WLK chunks eval, 20 held-out chunks:
+
+```json
+{
+  "wer_final_mean": 0.9072655230996075,
+  "realtime_factor_mean": 0.9936728690488577,
+  "cache_bound_violations": 0,
+  "max_recomputed_context_frames": 0,
+  "trigram_repetition_ratio": 0.0
+}
+```
+
+Qualitative result:
+
+- Both runs learn under teacher forcing: loss decreases and token accuracy is
+  around 0.33.
+- Neither run improves streaming ASR quality. WER stays around 0.91, worse than
+  the previous strict causal WLK smoke at 0.8963 and far from usable.
+- Outputs are still short/hallucinated. Examples include:
+  - `What is my special place?`
+  - `So what is first? First, you know.`
+- The cache invariant remains good: no past context recomputation and no cache
+  bound violations.
+
+Decision:
+
+- Do not promote either checkpoint.
+- Audio LoRA + frozen Qwen decoder is not enough for strict causal Qwen3-ASR.
+- The current evidence points to a deeper mismatch: the offline Qwen decoder is
+  not robustly decoding the strict causalized audio representation even when the
+  audio side is adapted. The next meaningful step likely requires either
+  decoder-side adaptation or a model/objective designed for stream-synchronous
+  emission, which cannot be tested further with the current `qwen_ar_*` code path
+  because it freezes the Qwen text decoder.
+
+Artifacts kept locally:
+
+- `runs/qwen_audio_causal_kv_lora8_mix120_ce_cf32_v0/`
+- `runs/qwen_audio_causal_kv_lora8_wlk200_ce_cf32_v0/`
+
+The H100 instance `420856` was paused. Non-promoted `model.pt` files were
+deleted from `/tmp`.
