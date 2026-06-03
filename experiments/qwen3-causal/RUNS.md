@@ -4648,3 +4648,67 @@ Artifacts kept locally:
 
 The H100 instance `420856` was paused. Non-promoted `model.pt` files were
 deleted from `/tmp`.
+
+## 2026-06-03 - Backend Parity Diagnostic: Recompute Causal vs Append-Only
+
+Goal:
+
+- Separate two possible failure modes:
+  - Qwen audio needs future/right context and cannot work causally.
+  - The strict append-only `qwen_audio_causal_kv` backend is not equivalent to
+    recomputing Qwen's audio tower with a causal/local window.
+
+Setup:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B
+data: 20 held-out WLK 16s chunks
+decode: repetition_penalty=1.15, no_repeat_ngram_size=3
+chunk: 320 ms
+left_context: 15s
+```
+
+Results:
+
+| backend | right context | WER | RTF | max recomputed context frames | final tokens mean |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qwen_audio_surgery` | 640 ms | 0.1547 | 1.5256 | 1532 | 39.55 |
+| `qwen_audio_surgery` | 0 ms | 0.2017 | 1.6940 | 1468 | 38.95 |
+| `qwen_audio_causal_kv` | 0 ms | 0.9065 | 1.0147 | 0 | 15.15 |
+
+Interpretation:
+
+- Qwen does not collapse merely because `right_context=0`.
+- Recomputing a causal/local 15s window still gives usable quality:
+  `WER=0.2017`.
+- The strict append-only backend is the rupture point:
+  same model, same eval, same right context, but `WER=0.9065`.
+- Therefore the next priority is not more LoRA training. It is parity:
+  `qwen_audio_causal_kv` must reproduce `qwen_audio_surgery/right=0` hidden
+  states and transcripts before any further training can be interpreted.
+
+Likely technical gap:
+
+- Existing tests prove append-only behavior using `FakeQwenAudioTower`.
+- They do not prove equivalence against the real Qwen audio tower.
+- The real tower path includes Qwen's conv stack, positional embedding,
+  attention mask semantics, normalization/projection, and length accounting.
+  Any mismatch there can destroy lexical identity while still satisfying the
+  "no recompute" invariant.
+
+Decision:
+
+- Stop training strict causal LoRA until real-tower parity is proven.
+- Next useful implementation task: add a real-Qwen parity harness comparing:
+  `qwen_audio_surgery/right=0` recompute outputs vs `qwen_audio_causal_kv`
+  append-only outputs on the same mel stream, layer by layer if needed.
+- Only once hidden-state parity is close should we restart adaptation/training.
+
+Artifacts kept locally:
+
+- `runs/qwen_audio_backend_compare_wlk20_v0/surgery_r640.summary.json`
+- `runs/qwen_audio_backend_compare_wlk20_v0/surgery_r0.summary.json`
+- `runs/qwen_audio_backend_compare_wlk20_v0/causal_kv_r0.summary.json`
+- Matching JSONL prediction files for all three runs.
+
+The H100 instance `420865` was paused.
