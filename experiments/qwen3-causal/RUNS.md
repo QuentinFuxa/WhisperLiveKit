@@ -4469,3 +4469,78 @@ Artifacts kept locally:
 
 The H100 instance `420815` was paused. Non-promoted `model.pt` files were
 deleted from `/tmp`.
+
+## 2026-06-03 - Causal KV WLK Chunk Fine-Tune Smoke
+
+Goal:
+
+- Test whether training directly on WLK-style 16s chunks can make the strict
+  append-only `qwen_audio_causal_kv` path usable without changing code again.
+- Keep WLK as a diagnostic/eval set and avoid promoting a checkpoint unless
+  streaming quality improves clearly.
+
+Data:
+
+```text
+train chunks: 338
+eval chunks: 107
+audio chunks written remotely: 445
+alignment source: Qwen3 ForcedAligner manifests
+```
+
+Training:
+
+```text
+output: runs/qwen_audio_causal_kv_wlk_last2_300_v0/
+backend: qwen_audio_causal_kv
+loss: qwen_ar_context_distill
+steps: 300
+lr: 1e-6
+trainable: last 2 Qwen audio layers + zero-init adapter
+decoder / LM head: frozen
+first_train_loss: 3.5698
+last_train_loss: 2.7273
+eval_loss: 3.9705
+eval token accuracy: 0.3156
+```
+
+WLK chunks eval, 20 held-out chunks, no-repeat3 + repetition penalty 1.15:
+
+```json
+{
+  "wer_final_mean": 0.8962655764363544,
+  "realtime_factor_mean": 0.9593619788569075,
+  "cache_bound_violations": 0,
+  "max_recomputed_context_frames": 0,
+  "first_display_sec_mean": 0.32,
+  "first_commit_sec_mean": 5.722352941176471,
+  "trigram_repetition_ratio": 0.0
+}
+```
+
+Qualitative result:
+
+- The causal cache invariant still holds: no past audio context is recomputed.
+- The anti-repeat decoding keeps trigram repetition at zero.
+- The model is still not a functional ASR model. Outputs remain short and
+  hallucinated, for example: `The the me is all, so we love.`
+- Teacher-forced training improves loss, but greedy streaming decode does not
+  acquire reliable lexical identity.
+
+Decision:
+
+- Do not promote the checkpoint.
+- Do not call the current branch a working causal Qwen3-ASR model.
+- Treat the branch as an experimental causal runtime plus negative training
+  evidence. The next substantial step should revisit the modeling assumption,
+  not run longer versions of this same objective.
+
+Artifacts kept locally:
+
+- `runs/qwen_audio_causal_kv_wlk_last2_300_v0/train_metrics.json`
+- `runs/qwen_audio_causal_kv_wlk_last2_300_v0/eval_predictions.jsonl`
+- `runs/qwen_audio_causal_kv_wlk_last2_300_v0/chunks16_eval_limit20_norepeat3.jsonl`
+- `runs/qwen_audio_causal_kv_wlk_last2_300_v0/chunks16_eval_limit20_norepeat3.summary.json`
+
+The H100 instance `420839` was paused. Non-promoted `model.pt` files were
+deleted from `/tmp`.
