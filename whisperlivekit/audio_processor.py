@@ -193,17 +193,6 @@ class AudioProcessor:
         if self.args.diarization and self.diarization_queue:
             await self.diarization_queue.put(pcm_chunk.copy())
 
-    def _slice_before_silence(self, pcm_array: np.ndarray, chunk_sample_start: int, silence_sample: Optional[int]) -> Optional[np.ndarray]:
-        if silence_sample is None:
-            return None
-        relative_index = int(silence_sample - chunk_sample_start)
-        if relative_index <= 0:
-            return None
-        split_index = min(relative_index, len(pcm_array))
-        if split_index <= 0:
-            return None
-        return pcm_array[:split_index]
-
     def convert_pcm_to_float(self, pcm_buffer: Union[bytes, bytearray]) -> np.ndarray:
         """Convert PCM buffer in s16le format to normalized NumPy array."""
         return np.frombuffer(pcm_buffer, dtype=np.int16).astype(np.float32) / 32768.0
@@ -789,24 +778,43 @@ class AudioProcessor:
         chunk_sample_start = self.total_pcm_samples
         chunk_sample_end = chunk_sample_start + num_samples
 
-        res = None
+        vad_events = []
         if self.args.vac:
-            res = self.vac(pcm_array)
+            vad_events = self.vac(pcm_array) or []
 
-        if res is not None:
-            if "start" in res and self.current_silence:
-                await self._end_silence(at_sample=res.get("start"))
+        # Iterate over events in chronological order and segment the PCM chunk:
+        #   [last_offset, end_offset]   -> active audio (tail of speech)
+        #   [end_offset, start_offset]  -> silence (skip)
+        #   [start_offset, chunk_end]   -> active audio (start of new speech)
+        # This properly handles cases where both end and start events fall into the same chunk.
+        last_offset = 0
+        for event in vad_events:
+            if "start" in event and self.current_silence:
+                start_sample = int(event["start"])
+                # Clamp the start sample to the current chunk boundaries.
+                # This ensures we don't retrospectively end a silence period
+                # before the current chunk, preventing negative offsets and
+                # ensuring all active audio in the current chunk is captured.
+                start_sample_eff = max(chunk_sample_start, min(chunk_sample_end, start_sample))
+                start_offset = start_sample_eff - chunk_sample_start
+                await self._end_silence(at_sample=start_sample_eff)
+                last_offset = start_offset
 
-            if "end" in res and not self.current_silence:
-                pre_silence_chunk = self._slice_before_silence(
-                    pcm_array, chunk_sample_start, res.get("end")
-                )
-                if pre_silence_chunk is not None and pre_silence_chunk.size > 0:
-                    await self._enqueue_active_audio(pre_silence_chunk)
-                await self._begin_silence(at_sample=res.get("end"))
+            if "end" in event and not self.current_silence:
+                end_sample = int(event["end"])
+                # Clamp the end sample to the current chunk boundaries.
+                # This prevents double-counting the VAD delay overlap, ensuring
+                # the sum of active audio and silence durations strictly equals
+                # the physical stream duration, thereby eliminating timestamp drift.
+                end_sample_eff = max(chunk_sample_start, min(chunk_sample_end, end_sample))
+                end_offset = end_sample_eff - chunk_sample_start
+                if end_offset > last_offset:
+                    await self._enqueue_active_audio(pcm_array[last_offset:end_offset])
+                await self._begin_silence(at_sample=end_sample_eff)
+                last_offset = end_offset
 
-        if not self.current_silence:
-            await self._enqueue_active_audio(pcm_array)
+        if not self.current_silence and last_offset < num_samples:
+            await self._enqueue_active_audio(pcm_array[last_offset:])
 
         self.total_pcm_samples = chunk_sample_end
 
