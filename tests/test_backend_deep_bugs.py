@@ -456,6 +456,81 @@ def test_load_cif_without_checkpoint_preserves_never_fire():
     assert never_fire is True
 
 
+def test_nllw_language_code_maps_whisper_chinese_aliases():
+    from whisperlivekit.core import _nllw_language_code
+
+    assert _nllw_language_code("zh") == "zh-CN"
+    assert _nllw_language_code("zh_Hans") == "zh-CN"
+    assert _nllw_language_code("zh-Hant") == "zh-TW"
+    assert _nllw_language_code("en") == "en"
+    assert _nllw_language_code("eng_Latn") == "eng_Latn"
+    assert _nllw_language_code("auto") == "auto"
+
+
+def test_transcription_engine_uses_nllw_source_language_alias(monkeypatch):
+    import sys
+
+    from whisperlivekit.config import WhisperLiveKitConfig
+    from whisperlivekit.core import TranscriptionEngine
+
+    load_calls = []
+
+    def fake_load_model(src_langs, **kwargs):
+        load_calls.append((src_langs, kwargs))
+        return object()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "nllw",
+        SimpleNamespace(load_model=fake_load_model),
+    )
+
+    TranscriptionEngine.reset()
+    try:
+        engine = TranscriptionEngine(
+            config=WhisperLiveKitConfig(
+                transcription=False,
+                vac=False,
+                lan="zh",
+                target_language="eng_Latn",
+            )
+        )
+    finally:
+        TranscriptionEngine.reset()
+
+    assert load_calls == [
+        (["zh-CN"], {"nllb_backend": "transformers", "nllb_size": "600M"})
+    ]
+    assert engine.args.lan == "zh"
+
+
+def test_online_translation_factory_uses_nllw_language_aliases(monkeypatch):
+    import sys
+
+    from whisperlivekit.core import online_translation_factory
+
+    calls = []
+
+    class FakeOnlineTranslation:
+        def __init__(self, translation_model, input_languages, output_languages):
+            calls.append((translation_model, input_languages, output_languages))
+
+    monkeypatch.setitem(
+        sys.modules,
+        "nllw",
+        SimpleNamespace(OnlineTranslation=FakeOnlineTranslation),
+    )
+
+    translation_model = object()
+    result = online_translation_factory(
+        SimpleNamespace(lan="zh", target_language="zh"),
+        translation_model,
+    )
+
+    assert isinstance(result, FakeOnlineTranslation)
+    assert calls == [(translation_model, ["zh-CN"], ["zh-CN"])]
+
+
 def test_ctranslate2_storage_view_converts_to_tensor():
     ctranslate2 = pytest.importorskip("ctranslate2")
     from whisperlivekit.simul_whisper.simul_whisper import _encoder_features_to_tensor
