@@ -6,6 +6,15 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def parse_cors_origins(origins: Optional[str]) -> list[str]:
+    """Parse comma-separated CORS origins for FastAPI."""
+    if origins is None:
+        return []
+    if isinstance(origins, (list, tuple)):
+        return [str(origin).strip() for origin in origins if str(origin).strip()]
+    return [origin.strip() for origin in str(origins).split(",") if origin.strip()]
+
+
 @dataclass
 class WhisperLiveKitConfig:
     """Single source of truth for all WhisperLiveKit configuration.
@@ -26,6 +35,7 @@ class WhisperLiveKitConfig:
     ssl_certfile: Optional[str] = None
     ssl_keyfile: Optional[str] = None
     forwarded_allow_ips: Optional[str] = None
+    cors_origins: str = ""
     transcription: bool = True
     vad: bool = True
     pcm_input: bool = False

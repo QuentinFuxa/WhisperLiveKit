@@ -709,6 +709,40 @@ def test_verbose_json_fallback_creates_segment_when_text_has_no_lines():
     ]
 
 
+def test_parse_cors_origins_defaults_to_disabled():
+    from whisperlivekit.config import parse_cors_origins
+
+    assert parse_cors_origins(None) == []
+    assert parse_cors_origins("") == []
+    assert parse_cors_origins("   ") == []
+
+
+def test_parse_cors_origins_accepts_comma_separated_values():
+    from whisperlivekit.config import parse_cors_origins
+
+    assert parse_cors_origins("https://app.example, http://localhost:3000") == [
+        "https://app.example",
+        "http://localhost:3000",
+    ]
+    assert parse_cors_origins("*") == ["*"]
+
+
+def test_parse_args_accepts_cors_origins(monkeypatch):
+    import sys
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["wlk", "--cors-origins", "https://app.example,http://localhost:3000"],
+    )
+
+    from whisperlivekit.parse_args import parse_args
+
+    config = parse_args()
+
+    assert config.cors_origins == "https://app.example,http://localhost:3000"
+
+
 class FakeFFmpegManager:
     def __init__(self, chunks=None):
         from whisperlivekit.ffmpeg_manager import FFmpegState

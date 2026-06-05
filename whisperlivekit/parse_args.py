@@ -191,6 +191,13 @@ def parse_args():
     parser.add_argument("--ssl-keyfile", type=str, help="Path to the SSL private key file.", default=None)
     parser.add_argument("--forwarded-allow-ips", type=str, help="Allowed ips for reverse proxying.", default=None)
     parser.add_argument(
+        "--cors-origins",
+        type=str,
+        default="",
+        dest="cors_origins",
+        help="Comma-separated list of allowed CORS origins. Empty disables CORS; use '*' to allow all origins.",
+    )
+    parser.add_argument(
         "--pcm-input",
         action="store_true",
         default=False,

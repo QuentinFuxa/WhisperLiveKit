@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
+from whisperlivekit.config import parse_cors_origins
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger().setLevel(logging.WARNING)
@@ -26,7 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=parse_cors_origins(config.cors_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

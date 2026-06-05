@@ -251,6 +251,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--ssl-certfile` | Path to the SSL certificate file (for HTTPS support) | `None` |
 | `--ssl-keyfile` | Path to the SSL private key file (for HTTPS support) | `None` |
 | `--forwarded-allow-ips` | Ip or Ips allowed to reverse proxy the whisperlivekit-server. Supported types are  IP Addresses (e.g. 127.0.0.1), IP Networks (e.g. 10.100.0.0/16), or Literals (e.g. /path/to/socket.sock) | `None` |
+| `--cors-origins` | Comma-separated list of allowed CORS origins. Empty disables CORS; use `*` to allow all origins. | empty |
 | `--pcm-input` | raw PCM (s16le) data is expected as input and FFmpeg will be bypassed. Frontend will use AudioWorklet instead of MediaRecorder | `False` |
 | `--lora-path` | Path or Hugging Face repo ID for LoRA adapter weights (e.g., `qfuxa/whisper-base-french-lora`). Only works with native Whisper backend (`--backend whisper`) | `None` |
 
