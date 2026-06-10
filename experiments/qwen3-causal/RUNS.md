@@ -5099,3 +5099,44 @@ strict causal (any mutable tail): ~0.90    -- closed: needs training
 
 Artifacts: `runs/jl_20260610/` (sweep JSONLs+summaries, latency evals, offline
 baselines, logs). Instance 424446 paused after the session.
+
+## 2026-06-10 - D0: Untrained Block-Bidirectional Causal-KV Eval
+
+The strict-causal goal is active again. D0 measures the standard
+streaming-encoder attention pattern — bidirectional within the processed
+block, causal KV to the frozen prefix, append-only, latency = block size —
+without any training (`--qwen-audio-block-bidirectional`). Same protocol as
+the mutable-tail sweep (20 held-out WLK 16s chunks, left 15s, decode
+controls, explicit English). Instance 424446 -> 424637, run `r_acdf90c2`.
+
+| config (untrained, append-only) | WER final | RTF |
+| --- | ---: | ---: |
+| strict causal, 320ms (reference) | 0.9065 | 0.898 |
+| strict causal, block 1s (control) | 0.9083 | 0.289 |
+| strict causal, block 2s (control) | 0.9032 | 0.154 |
+| bidir block 320ms | 0.7868 | 1.179 |
+| bidir block 1s | 0.7239 | 0.412 |
+| bidir block 2s | 0.6742 | 0.215 |
+| bidir block 1s + mutable tail 1s | 0.6498 | 0.425 |
+| bidir block 2s + mutable tail 2s | 0.6623 | 0.222 |
+| surgery bidirectional window 15s (reference) | 0.20 | — |
+
+Findings:
+
+- The strict-mask controls stay at ~0.90 for every block size: the gains
+  below are purely from intra-block bidirectionality, confirming the
+  mutable-tail verdict from the other direction.
+- Untrained block-bidirectionality recovers ~28 percent relative
+  (0.91 -> 0.65 at block 1s + tail 1s), monotone in block size.
+- It is NOT sufficient untrained: 0.65 is far from the 0.20 bidirectional
+  window. Training (D1) is required.
+
+Decision: D1 (causal/block-bidirectional tower distilled toward offline
+tower embeddings, audio-only data, teacher computed on the fly, frozen
+decoder as the eval gate) starts from the block-bidir + mutable-tail
+execution (0.65) rather than strict causal (0.91) — about a third of the
+gap is closed for free, and the residual training task is to teach the
+tower to encode block-boundary context, not to relearn attention from
+scratch.
+
+Artifacts: `runs/jl_d0_blockbidir/`. Instance 424637 paused.
