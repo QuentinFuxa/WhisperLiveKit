@@ -48,6 +48,17 @@ def parse_args() -> argparse.Namespace:
         default=96,
         help="Bidirectional block size in mel frames; must be a multiple of 8 (conv block). 96 = 0.96s.",
     )
+    parser.add_argument(
+        "--mix-block-frames",
+        default=None,
+        help="Comma list (e.g. 96,192): sample the block size per step from these. "
+        "Batches are padded to the largest value; overrides --block-frames.",
+    )
+    parser.add_argument(
+        "--mix-block-probs",
+        default=None,
+        help="Comma list of sampling probabilities matching --mix-block-frames (default uniform).",
+    )
     parser.add_argument("--left-context-sec", type=float, default=15.0)
     parser.add_argument("--max-audio-sec", type=float, default=16.0)
     parser.add_argument("--cosine-weight", type=float, default=0.5)
@@ -60,6 +71,21 @@ def parse_args() -> argparse.Namespace:
         "train.clean.100,train.clean.360,train.other.500 with --dataset-config all).",
     )
     parser.add_argument("--shuffle-buffer", type=int, default=1000)
+    parser.add_argument(
+        "--seed-base",
+        type=int,
+        default=2,
+        help="Offset added to the per-epoch shuffle seed (avoid replaying a previous run's order).",
+    )
+    parser.add_argument("--dataset2", default=None, help="Second streaming corpus to interleave.")
+    parser.add_argument("--dataset2-config", default=None)
+    parser.add_argument("--dataset2-split", default="train")
+    parser.add_argument(
+        "--dataset2-prob",
+        type=float,
+        default=0.35,
+        help="Sampling probability of --dataset2 in the interleave.",
+    )
     parser.add_argument(
         "--lr-end-ratio",
         type=float,
@@ -77,14 +103,69 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gate-every", type=int, default=500)
     parser.add_argument(
         "--gate-chunk-ms",
-        type=float,
-        default=960.0,
-        help="Gate streaming chunk; keep = block-frames * 10 for train/serve parity.",
+        default="960",
+        help="Comma list of gate streaming chunk sizes in ms (e.g. 960,1920). "
+        "A best checkpoint is kept per size, plus tower_last.pt.",
     )
     parser.add_argument("--language", required=True, help="e.g. English (gate prompts)")
     parser.add_argument("--log-every", type=int, default=25)
     parser.add_argument("--device", default="cuda")
     return parser.parse_args()
+
+
+def parse_block_sizes(args) -> list[int]:
+    if args.mix_block_frames:
+        sizes = [int(s) for s in str(args.mix_block_frames).split(",") if s.strip()]
+    else:
+        sizes = [int(args.block_frames)]
+    for size in sizes:
+        if size % 8 != 0 or size <= 0:
+            raise SystemExit(f"block size {size} must be a positive multiple of 8")
+    return sizes
+
+
+def parse_block_probs(args, n: int) -> list[float]:
+    if not args.mix_block_probs:
+        return [1.0 / n] * n
+    probs = [float(s) for s in str(args.mix_block_probs).split(",") if s.strip()]
+    if len(probs) != n or abs(sum(probs) - 1.0) > 1e-6:
+        raise SystemExit("--mix-block-probs must match --mix-block-frames and sum to 1")
+    return probs
+
+
+def assert_dataset2_yields_audio(args) -> None:
+    """Fail loudly if the second corpus streams nothing usable (sr filter etc.)."""
+    if not args.dataset2:
+        return
+    import io
+
+    import soundfile as sf
+
+    import datasets.config as dsconfig
+
+    dsconfig.TORCHCODEC_AVAILABLE = False
+    from datasets import Audio, load_dataset
+
+    ds = load_dataset(
+        args.dataset2, args.dataset2_config, split=args.dataset2_split, streaming=True
+    )
+    ds = ds.cast_column("audio", Audio(decode=False))
+    usable = 0
+    for idx, item in enumerate(ds):
+        if idx >= 20:
+            break
+        try:
+            audio, sr = sf.read(io.BytesIO(item["audio"]["bytes"]), dtype="float32")
+        except Exception:
+            continue
+        if sr == 16_000 and audio.shape[0] >= 16_000:
+            usable += 1
+    if usable < 5:
+        raise SystemExit(
+            f"--dataset2 {args.dataset2} yielded {usable}/20 usable 16kHz samples; "
+            "refusing to train silently on the primary corpus only"
+        )
+    print(json.dumps({"dataset2_probe_usable": usable}))
 
 
 def build_model(args) -> tuple[Qwen3ASRRealtimeQwenAudioCausalModel, object, object]:
@@ -124,24 +205,35 @@ def data_batches(args, feature_extractor):
     dsconfig.TORCHCODEC_AVAILABLE = False
     from datasets import Audio, load_dataset
 
+    pad_to = max(parse_block_sizes(args))
     max_frames = int(args.max_audio_sec * 100)
-    max_frames -= max_frames % args.block_frames
+    max_frames -= max_frames % pad_to
 
     splits = [s.strip() for s in args.dataset_split.split(",") if s.strip()]
     epoch = 0
     while True:  # loop epochs indefinitely; --steps bounds training
+        from datasets import interleave_datasets
+
         parts = [
             load_dataset(args.dataset, args.dataset_config, split=split, streaming=True)
             for split in splits
         ]
         if len(parts) > 1:
-            from datasets import interleave_datasets
-
             ds = interleave_datasets(parts, stopping_strategy="all_exhausted")
         else:
             ds = parts[0]
+        if args.dataset2:
+            ds2 = load_dataset(
+                args.dataset2, args.dataset2_config, split=args.dataset2_split, streaming=True
+            )
+            ds = interleave_datasets(
+                [ds.select_columns(["audio"]), ds2.select_columns(["audio"])],
+                probabilities=[1.0 - args.dataset2_prob, args.dataset2_prob],
+                seed=epoch + args.seed_base,
+                stopping_strategy="all_exhausted",
+            )
         if args.shuffle_buffer > 0:
-            ds = ds.shuffle(buffer_size=args.shuffle_buffer, seed=epoch)
+            ds = ds.shuffle(buffer_size=args.shuffle_buffer, seed=epoch + args.seed_base)
         epoch += 1
         ds = ds.cast_column("audio", Audio(decode=False))
         batch, lengths = [], []
@@ -167,7 +259,7 @@ def data_batches(args, feature_extractor):
             lengths.append(frames)
             if len(batch) == args.batch_size:
                 longest = max(lengths)
-                longest += (-longest) % args.block_frames
+                longest += (-longest) % pad_to
                 mels = np.zeros((len(batch), longest, 128), dtype=np.float32)
                 for i, feat in enumerate(batch):
                     mels[i, : feat.shape[0], :] = feat
@@ -214,31 +306,62 @@ def main() -> None:
         floor = args.lr * args.lr_end_ratio
         return floor + (args.lr - floor) * 0.5 * (1.0 + math.cos(math.pi * progress))
 
+    import random
+
+    random.seed(args.seed_base)
+    block_sizes = parse_block_sizes(args)
+    block_probs = parse_block_probs(args, len(block_sizes))
+    gate_chunks = [float(s) for s in str(args.gate_chunk_ms).split(",") if s.strip()]
+    assert_dataset2_yields_audio(args)
+
     left_context_steps = model.audio_encoder.left_context_steps
     print(json.dumps({
         "trainable_params": n_trainable,
         "left_context_steps": left_context_steps,
-        "block_frames": args.block_frames,
+        "block_sizes": block_sizes,
+        "block_probs": block_probs,
+        "gate_chunks": gate_chunks,
     }))
 
-    def run_gate() -> float:
-        wer = gate_eval(
-            model,
-            tokenizer,
-            processor,
-            manifest=args.gate_manifest,
-            limit=args.gate_limit,
-            chunk_ms=args.gate_chunk_ms,
-            language=args.language,
-            device=device,
-        )
+    def run_gates() -> dict[float, float]:
+        wers = {}
+        for chunk_ms in gate_chunks:
+            wers[chunk_ms] = gate_eval(
+                model,
+                tokenizer,
+                processor,
+                manifest=args.gate_manifest,
+                limit=args.gate_limit,
+                chunk_ms=chunk_ms,
+                language=args.language,
+                device=device,
+            )
         student_tower.train()
-        return wer
+        return wers
 
-    gate0 = run_gate()
-    best_wer = gate0
-    history = [{"step": 0, "gate_wer": gate0}]
-    print(f"step 0 gate_wer={gate0:.4f} (untrained)")
+    def save_tower(name: str, step: int, wers: dict[float, float]) -> None:
+        torch.save(
+            {
+                "tower_state_dict": student_tower.state_dict(),
+                "step": step,
+                "gate_wer": min(wers.values()),
+                "gate_wers": {str(k): v for k, v in wers.items()},
+                "block_frames": block_sizes,
+                "left_context_sec": args.left_context_sec,
+                "model_id": args.model_id,
+            },
+            args.output_dir / name,
+        )
+
+    gates0 = run_gates()
+    best_by_chunk = dict(gates0)
+    history = [{"step": 0, "gate_wers": {str(k): v for k, v in gates0.items()}}]
+    print(
+        "step 0 "
+        + " ".join(f"gate@{int(c)}={w:.4f}" for c, w in gates0.items())
+        + " (untrained)",
+        flush=True,
+    )
 
     batches = data_batches(args, processor.feature_extractor)
     started = time.time()
@@ -248,10 +371,11 @@ def main() -> None:
         for group in optimizer.param_groups:
             group["lr"] = lr_at(step)
 
+        step_block = random.choices(block_sizes, weights=block_probs, k=1)[0]
         student = block_bidirectional_forward(
             student_tower,
             mels,
-            block_frames=args.block_frames,
+            block_frames=step_block,
             left_context_steps=left_context_steps,
             lengths=lengths,
         )
@@ -279,37 +403,45 @@ def main() -> None:
             )
 
         if step % args.gate_every == 0 or step == args.steps:
-            wer = run_gate()
-            history.append({"step": step, "gate_wer": wer, "loss": float(loss)})
-            print(f"step {step} gate_wer={wer:.4f} (best {best_wer:.4f})", flush=True)
-            if wer < best_wer:
-                best_wer = wer
-                torch.save(
-                    {
-                        "tower_state_dict": student_tower.state_dict(),
-                        "step": step,
-                        "gate_wer": wer,
-                        "block_frames": args.block_frames,
-                        "left_context_sec": args.left_context_sec,
-                        "model_id": args.model_id,
-                    },
-                    args.output_dir / "tower_best.pt",
-                )
+            wers = run_gates()
+            history.append(
+                {
+                    "step": step,
+                    "gate_wers": {str(k): v for k, v in wers.items()},
+                    "loss": float(loss),
+                }
+            )
+            print(
+                f"step {step} "
+                + " ".join(f"gate@{int(c)}={w:.4f}" for c, w in wers.items())
+                + " (best "
+                + " ".join(f"@{int(c)}={w:.4f}" for c, w in best_by_chunk.items())
+                + ")",
+                flush=True,
+            )
+            for chunk_ms, wer in wers.items():
+                if wer < best_by_chunk[chunk_ms]:
+                    best_by_chunk[chunk_ms] = wer
+                    save_tower(f"tower_best_{int(chunk_ms)}.pt", step, wers)
+            save_tower("tower_last.pt", step, wers)
             (args.output_dir / "history.json").write_text(json.dumps(history, indent=2))
 
     (args.output_dir / "final_metrics.json").write_text(
         json.dumps(
             {
                 "steps": args.steps,
-                "gate_wer_untrained": gate0,
-                "gate_wer_best": best_wer,
+                "gate_wers_untrained": {str(k): v for k, v in gates0.items()},
+                "gate_wers_best": {str(k): v for k, v in best_by_chunk.items()},
                 "trainable_params": n_trainable,
                 "history": history,
             },
             indent=2,
         )
     )
-    print(json.dumps({"gate_wer_untrained": gate0, "gate_wer_best": best_wer}))
+    print(json.dumps({
+        "gate_wers_untrained": {str(k): v for k, v in gates0.items()},
+        "gate_wers_best": {str(k): v for k, v in best_by_chunk.items()},
+    }))
 
 
 if __name__ == "__main__":

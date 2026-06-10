@@ -122,6 +122,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--audio-position-offset",
+        type=int,
+        default=0,
+        help=(
+            "Debug: initialize the causal encoder's global step counter at this "
+            "offset, shifting all sinusoidal positions/KV bookkeeping. Probes "
+            "position-extrapolation sensitivity on long sessions."
+        ),
+    )
+    parser.add_argument(
         "--tower-state-dict",
         type=Path,
         default=None,
@@ -367,6 +377,8 @@ def _run_one(
         )
     else:
         streamer = CachedFullHypothesisStreamer(model, tokenizer, config)
+    if args.audio_position_offset:
+        streamer.state.audio.emitted_steps = int(args.audio_position_offset)
 
     with torch.no_grad():
         for start in range(0, mel.shape[0], chunk_frames):
