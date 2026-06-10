@@ -252,7 +252,15 @@ def data_batches(args, feature_extractor):
         epoch += 1
         ds = ds.cast_column("audio", Audio(decode=False))
         batch, lengths = [], []
-        for item in ds:
+        iterator = iter(ds)
+        while True:
+            try:
+                item = next(iterator)
+            except StopIteration:
+                break
+            except Exception as exc:  # transient hub/CDN errors: restart the epoch stream
+                print(f"data stream error ({type(exc).__name__}); restarting epoch", flush=True)
+                break
             audio, sr = sf.read(io.BytesIO(item["audio"]["bytes"]), dtype="float32")
             if audio.ndim > 1:
                 audio = audio.mean(axis=1)
