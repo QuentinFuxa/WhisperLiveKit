@@ -1270,12 +1270,15 @@ class Qwen3ASRRealtimeQwenDecoderModel(nn.Module):
         repetition_penalty: float = 1.0,
         no_repeat_ngram_size: int = 0,
         max_consecutive_text_tokens: int = 0,
+        use_decoder_kv_cache: bool = True,
     ) -> torch.Tensor:
         """Greedy full-hypothesis decode over cached finalized audio embeddings.
 
-        This intentionally reruns the text decoder on the full cached audio prefix
-        for each streaming update. The saving comes from not recomputing the old
-        audio tower outputs; decoder caching across revisions is a later step.
+        With ``use_decoder_kv_cache`` (default) the prefix is forwarded once and
+        tokens decode incrementally over a KV cache — greedy-parity with the
+        legacy per-token full re-forward at O(P + T) instead of O(T * (P + T))
+        forwarded positions. Falls back to the legacy loop when the text model
+        does not return a cache.
         """
         if frame_hidden.ndim != 3:
             raise ValueError("frame_hidden must have shape [batch, steps, hidden]")
@@ -1343,6 +1346,191 @@ class Qwen3ASRRealtimeQwenDecoderModel(nn.Module):
             else None
         )
 
+        parts: list[torch.Tensor] = []
+        if fixed_prefix is not None:
+            parts.append(fixed_prefix)
+        elif frame_hidden.shape[1] > 0:
+            parts.append(frame_hidden.to(dtype=self.embed_tokens.weight.dtype))
+        if generated.shape[1] > 0:
+            parts.append(self.embed_tokens(generated))
+        if not parts:
+            return generated[:, prompt_steps:]
+
+        if not use_decoder_kv_cache:
+            return self._generate_uncached_full_hypothesis(
+                fixed_prefix=fixed_prefix,
+                frame_hidden=frame_hidden,
+                generated=generated,
+                prompt_steps=prompt_steps,
+                finished=finished,
+                stop_ids=stop_ids,
+                suppress_ids=suppress_ids,
+                control_wait_token_id=control_wait_token_id,
+                max_new_tokens=max_new_tokens,
+                eos_token_id=eos_token_id,
+                repetition_penalty=repetition_penalty,
+                no_repeat_ngram_size=no_repeat_ngram_size,
+                max_consecutive_text_tokens=max_consecutive_text_tokens,
+            )
+
+        outputs = self.text_model(inputs_embeds=torch.cat(parts, dim=1), use_cache=True)
+        past = getattr(outputs, "past_key_values", None)
+        if past is None:
+            return self._generate_uncached_full_hypothesis(
+                fixed_prefix=fixed_prefix,
+                frame_hidden=frame_hidden,
+                generated=generated,
+                prompt_steps=prompt_steps,
+                finished=finished,
+                stop_ids=stop_ids,
+                suppress_ids=suppress_ids,
+                control_wait_token_id=control_wait_token_id,
+                max_new_tokens=max_new_tokens,
+                eos_token_id=eos_token_id,
+                repetition_penalty=repetition_penalty,
+                no_repeat_ngram_size=no_repeat_ngram_size,
+                max_consecutive_text_tokens=max_consecutive_text_tokens,
+            )
+        logits = self.lm_head(outputs.last_hidden_state[:, -1, :])
+        return self._greedy_decode_with_cache(
+            past=past,
+            logits=logits,
+            generated=generated,
+            prompt_steps=prompt_steps,
+            finished=finished,
+            stop_ids=stop_ids,
+            suppress_ids=suppress_ids,
+            control_wait_token_id=control_wait_token_id,
+            max_new_tokens=max_new_tokens,
+            eos_token_id=eos_token_id,
+            repetition_penalty=repetition_penalty,
+            no_repeat_ngram_size=no_repeat_ngram_size,
+            max_consecutive_text_tokens=max_consecutive_text_tokens,
+        )
+
+    def _control_logits_and_pick(
+        self,
+        logits: torch.Tensor,
+        *,
+        generated: torch.Tensor,
+        prompt_steps: int,
+        finished: torch.Tensor,
+        stop_ids: set[int],
+        suppress_ids: list[int],
+        control_wait_token_id: int | None,
+        eos_token_id: int | None,
+        repetition_penalty: float,
+        no_repeat_ngram_size: int,
+        max_consecutive_text_tokens: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Shared per-step logits controls + argmax + stop handling."""
+        device = logits.device
+        if suppress_ids:
+            logits = logits.clone()
+            logits[:, suppress_ids] = -torch.inf
+        token_history = [
+            [int(token_id) for token_id in row]
+            for row in generated[:, prompt_steps:].detach().cpu().tolist()
+        ]
+        consecutive_text_tokens = (
+            torch.tensor(
+                [len(row) for row in token_history],
+                dtype=torch.long,
+                device=device,
+            )
+            if max_consecutive_text_tokens > 0
+            else None
+        )
+        logits = _apply_repetition_controls_to_logits(
+            logits,
+            token_history=token_history,
+            consecutive_text_tokens=consecutive_text_tokens,
+            repetition_penalty=float(repetition_penalty),
+            no_repeat_ngram_size=int(no_repeat_ngram_size),
+            max_consecutive_text_tokens=int(max_consecutive_text_tokens),
+            wait_token_id=control_wait_token_id,
+        )
+        next_token = logits.argmax(dim=-1)
+        if stop_ids:
+            if bool(finished.any().item()):
+                stop_fill_id = (
+                    int(eos_token_id) if eos_token_id is not None else min(stop_ids)
+                )
+                next_token = torch.where(
+                    finished,
+                    torch.full_like(next_token, stop_fill_id),
+                    next_token,
+                )
+            finished_next = torch.tensor(
+                [int(token_id) in stop_ids for token_id in next_token.tolist()],
+                dtype=torch.bool,
+                device=device,
+            )
+            finished = finished | finished_next
+        return next_token, finished
+
+    def _greedy_decode_with_cache(
+        self,
+        *,
+        past,
+        logits: torch.Tensor,
+        generated: torch.Tensor,
+        prompt_steps: int,
+        finished: torch.Tensor,
+        stop_ids: set[int],
+        suppress_ids: list[int],
+        control_wait_token_id: int | None,
+        max_new_tokens: int,
+        eos_token_id: int | None,
+        repetition_penalty: float,
+        no_repeat_ngram_size: int,
+        max_consecutive_text_tokens: int,
+    ) -> torch.Tensor:
+        """Incremental greedy loop over a prefilled KV cache."""
+        for step in range(max_new_tokens):
+            next_token, finished = self._control_logits_and_pick(
+                logits,
+                generated=generated,
+                prompt_steps=prompt_steps,
+                finished=finished,
+                stop_ids=stop_ids,
+                suppress_ids=suppress_ids,
+                control_wait_token_id=control_wait_token_id,
+                eos_token_id=eos_token_id,
+                repetition_penalty=repetition_penalty,
+                no_repeat_ngram_size=no_repeat_ngram_size,
+                max_consecutive_text_tokens=max_consecutive_text_tokens,
+            )
+            generated = torch.cat([generated, next_token[:, None]], dim=1)
+            if bool(finished.all().item()) or step == max_new_tokens - 1:
+                break
+            outputs = self.text_model(
+                inputs_embeds=self.embed_tokens(next_token[:, None]),
+                past_key_values=past,
+                use_cache=True,
+            )
+            past = getattr(outputs, "past_key_values", past)
+            logits = self.lm_head(outputs.last_hidden_state[:, -1, :])
+        return generated[:, prompt_steps:]
+
+    def _generate_uncached_full_hypothesis(
+        self,
+        *,
+        fixed_prefix: torch.Tensor | None,
+        frame_hidden: torch.Tensor,
+        generated: torch.Tensor,
+        prompt_steps: int,
+        finished: torch.Tensor,
+        stop_ids: set[int],
+        suppress_ids: list[int],
+        control_wait_token_id: int | None,
+        max_new_tokens: int,
+        eos_token_id: int | None,
+        repetition_penalty: float,
+        no_repeat_ngram_size: int,
+        max_consecutive_text_tokens: int,
+    ) -> torch.Tensor:
+        """Legacy O(T*(P+T)) loop: full re-forward per token (parity fallback)."""
         for _ in range(max_new_tokens):
             parts: list[torch.Tensor] = []
             if fixed_prefix is not None:
@@ -1357,48 +1545,19 @@ class Qwen3ASRRealtimeQwenDecoderModel(nn.Module):
             decoder_inputs = torch.cat(parts, dim=1)
             outputs = self.text_model(inputs_embeds=decoder_inputs, use_cache=False)
             logits = self.lm_head(outputs.last_hidden_state[:, -1, :])
-            if suppress_ids:
-                logits = logits.clone()
-                logits[:, suppress_ids] = -torch.inf
-            token_history = [
-                [int(token_id) for token_id in row]
-                for row in generated[:, prompt_steps:].detach().cpu().tolist()
-            ]
-            consecutive_text_tokens = (
-                torch.tensor(
-                    [len(row) for row in token_history],
-                    dtype=torch.long,
-                    device=device,
-                )
-                if max_consecutive_text_tokens > 0
-                else None
-            )
-            logits = _apply_repetition_controls_to_logits(
+            next_token, finished = self._control_logits_and_pick(
                 logits,
-                token_history=token_history,
-                consecutive_text_tokens=consecutive_text_tokens,
-                repetition_penalty=float(repetition_penalty),
-                no_repeat_ngram_size=int(no_repeat_ngram_size),
-                max_consecutive_text_tokens=int(max_consecutive_text_tokens),
-                wait_token_id=control_wait_token_id,
+                generated=generated,
+                prompt_steps=prompt_steps,
+                finished=finished,
+                stop_ids=stop_ids,
+                suppress_ids=suppress_ids,
+                control_wait_token_id=control_wait_token_id,
+                eos_token_id=eos_token_id,
+                repetition_penalty=repetition_penalty,
+                no_repeat_ngram_size=no_repeat_ngram_size,
+                max_consecutive_text_tokens=max_consecutive_text_tokens,
             )
-            next_token = logits.argmax(dim=-1)
-            if stop_ids:
-                if bool(finished.any().item()):
-                    stop_fill_id = (
-                        int(eos_token_id) if eos_token_id is not None else min(stop_ids)
-                    )
-                    next_token = torch.where(
-                        finished,
-                        torch.full_like(next_token, stop_fill_id),
-                        next_token,
-                    )
-                finished_next = torch.tensor(
-                    [int(token_id) in stop_ids for token_id in next_token.tolist()],
-                    dtype=torch.bool,
-                    device=device,
-                )
-                finished = finished | finished_next
             generated = torch.cat([generated, next_token[:, None]], dim=1)
             if bool(finished.all().item()):
                 break

@@ -18,7 +18,33 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+import math
+
 from .native_realtime_model import _module_device_dtype
+
+
+def sinusoidal_positions(
+    table: torch.Tensor,
+    *,
+    offset: int,
+    length: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Positions [offset, offset+length) — table lookup with analytic
+    extrapolation beyond the table (mirrors the causal encoder)."""
+    if offset + length <= table.shape[0]:
+        return table[offset : offset + length, :].to(device=device, dtype=dtype)
+    dim = int(table.shape[1])
+    half = dim // 2
+    inv = torch.exp(
+        -math.log(10000.0)
+        / float(max(1, half - 1))
+        * torch.arange(half, device=device, dtype=torch.float32)
+    )
+    positions = torch.arange(offset, offset + length, device=device, dtype=torch.float32)
+    scaled = positions[:, None] * inv[None, :]
+    return torch.cat([scaled.sin(), scaled.cos()], dim=1).to(dtype=dtype)
 
 
 def conv_blocks_batched(
@@ -26,6 +52,7 @@ def conv_blocks_batched(
     mels: torch.Tensor,
     *,
     chunk_frames: int = 8,
+    position_offset: int = 0,
 ) -> torch.Tensor:
     """Per-block conv stem + positional embedding, vectorized over blocks.
 
@@ -57,9 +84,13 @@ def conv_blocks_batched(
 
     table = tower.positional_embedding.positional_embedding
     total_steps = n_blocks * steps_per_block
-    if total_steps > table.shape[0]:
-        raise ValueError("sequence longer than the positional embedding table")
-    pos = table[:total_steps, :].to(device=x.device, dtype=x.dtype)
+    pos = sinusoidal_positions(
+        table,
+        offset=int(position_offset),
+        length=total_steps,
+        device=x.device,
+        dtype=x.dtype,
+    )
     return x + pos.unsqueeze(0)
 
 
@@ -87,6 +118,7 @@ def block_bidirectional_forward(
     block_frames: int = 100,
     left_context_steps: int,
     lengths: torch.Tensor | None = None,
+    position_offset: int = 0,
 ) -> torch.Tensor:
     """Full-sequence differentiable forward under the streaming mask.
 
@@ -97,7 +129,9 @@ def block_bidirectional_forward(
     """
     if block_frames % chunk_frames != 0:
         raise ValueError("block_frames must be a multiple of chunk_frames")
-    hidden = conv_blocks_batched(tower, mels, chunk_frames=chunk_frames)
+    hidden = conv_blocks_batched(
+        tower, mels, chunk_frames=chunk_frames, position_offset=position_offset
+    )
     batch, total_steps, _ = hidden.shape
     # conv emits a fixed number of steps per chunk_frames block
     steps_per_chunk = total_steps * chunk_frames // mels.shape[1]
