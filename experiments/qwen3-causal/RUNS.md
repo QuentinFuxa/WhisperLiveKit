@@ -5180,3 +5180,45 @@ production point) is now a scale problem: more hours, more diversity
 Artifacts: `runs/jl_d1_smoke/{history.json,final_metrics.json}` local;
 `runs/jl_d1_smoke/tower_best.pt` (746MB, step 2500, gate 0.4225) kept on the
 paused instance.
+
+## 2026-06-10 - D1 Full EN: Gate 0.2492, Distillation Scales
+
+Run `r_1dd1c3c2` on instance 424662 (paused after). Resumed from the smoke
+checkpoint (gate 0.4225); LibriSpeech 960h (clean-100 + clean-360 + other-500,
+shuffled interleave, audio only); 60k steps, batch 8, lr 2e-5 warmup 500 with
+cosine decay to 2e-6; ~2.8h H100 fp32 (~6.4 steps/s, ~1.3 epochs).
+
+| step | gate WER (frozen decoder, 10 WLK chunks, 960ms) |
+| ---: | ---: |
+| 0 (= smoke best) | 0.4225 |
+| 5000 | 0.3257 |
+| 10000 | 0.3457 |
+| 15000 | 0.2949 |
+| 20000 | 0.3045 |
+| 25000 | 0.2831 |
+| 30000 | 0.2849 |
+| 35000 | 0.2595 |
+| 40000 | 0.2958 |
+| 45000 | 0.2613 |
+| 50000 | 0.2593 |
+| 55000 | 0.2647 |
+| 60000 | **0.2492** |
+
+Verdict:
+
+- Target <= 0.30 cleared by 15k; the LR decay kept paying to the very end —
+  best gate is the final step. Embedding distillation has NOT plateaued at
+  this scale.
+- The strict-causal trajectory so far, all on the same 10-chunk gate:
+  strict 0.91 -> block-bidir untrained 0.755 -> smoke 0.4225 -> full EN
+  0.2492. The untrained bidirectional-window reference (0.20) is nearly
+  matched by a fully append-only, 1s-latency tower with the decoder
+  untouched.
+- Remaining gap candidates, in order: D2 (teacher-forced CE + decoder LoRA
+  co-adaptation, the decoder has never seen these embeddings), more data
+  diversity (FR via MLS, spontaneous speech), longer training (the curve was
+  still descending).
+
+Artifacts: `runs/jl_d1_full_en/{history.json,final_metrics.json}` local;
+`runs/jl_d1_full_en/tower_best.pt` (746MB, step 60000, gate 0.2492) on the
+paused instance.
