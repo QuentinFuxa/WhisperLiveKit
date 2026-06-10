@@ -4720,3 +4720,141 @@ Artifacts kept locally:
 - Matching JSONL prediction files for all three runs.
 
 The H100 instance `420865` was paused.
+
+## 2026-06-01/02 - Stage0 Baseline Left-Context Sweep on Full WLK
+
+Date of runs: 2026-06-01/02. Repatriated and documented: 2026-06-10 from
+instances `wlk-gpu-check-in2` and `qwen-ar-distill-left12`.
+
+Setup:
+
+```text
+model: Qwen/Qwen3-ASR-0.6B, untrained, cached full-hypothesis segmented streamer
+manifest: data/wlk_teacher_1p7b_v0/manifest.teacher.jsonl (21 full WLK audios)
+chunk_ms: 10000
+right_context: 640ms
+segment_max_cached_steps: 200
+language: English (explicit)
+```
+
+Results:
+
+| left context | WER final mean | RTF mean | cache violations |
+| --- | ---: | ---: | ---: |
+| 2s | 0.8502 | 0.0643 | 0 |
+| 4s | 0.6798 | 0.0795 | 0 |
+| 8s | 0.3243 | 0.1018 | 0 |
+| 12s | 0.1575 | 0.1013 | 0 |
+| 15s (jl_418957) | 0.1534 | 0.1462 | 0 |
+
+Interpretation:
+
+- Long-form quality saturates around `left_context=12s`: WER 0.1575 vs 0.1534
+  at 15s, at roughly 30 percent lower RTF.
+- `left12 / seg200 / chunk10s` is the new recommended v1 operating point.
+- Below 8s the bounded window loses too much context on long talks; the curve
+  is steep between 4s and 12s.
+
+Artifacts:
+
+- `runs/qwen_ar_ce_stage0_baseline/wlk_full_left{2,4,8,12}_seg200_chunk10s.{jsonl,summary.json}`
+
+## 2026-06-01/02 - Preserve-Regularized Audio Adaptation (left8/left12)
+
+Date of runs: 2026-06-01/02. Repatriated and documented: 2026-06-10.
+
+Goal: follow-up to the 2026-05-31 recommendation. Train only the audio-side
+projector/adapter with `qwen_ar_ce` plus an L2 preservation loss against the
+frozen baseline audio embeddings (`--qwen-ar-audio-preserve-loss-weight`,
+reference `projection`), to adapt the audio path to shorter left contexts
+without collapsing WLK streaming quality.
+
+Runs and WLK first20 evals (21 chunks, chunk 1s, seg200, English):
+
+| run | lr | preserve weight | steps | WER final | WER stable |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline left8 (stage0) | - | - | - | 0.1884 | 0.2879 |
+| left8 zero-adapter streaming | 5e-6 | 1000 | 200 | 0.1894 | 0.2926 |
+| left8 preserve-proj streaming | 1e-5 | 100 | 200 | 1.3498 | 1.1189 |
+| left8 preserve-proj | 1e-5 | 100 | 500 | 1.2493 | 0.8951 |
+
+Full WLK left12 (21 full audios, chunk 10s, seg200):
+
+| run | WER final | RTF |
+| --- | ---: | ---: |
+| baseline left12 (stage0) | 0.1575 | 0.1013 |
+| left12 zero-adapter lr5e-6 preserve1000, 500 steps | 0.1589 | 0.0950 |
+
+Interpretation:
+
+- The preservation loss controls the failure mode but not the outcome:
+  - strong preservation (weight 1000, lr 5e-6) keeps WLK quality intact and
+    delivers no improvement; the trained model is functionally the identity;
+  - weaker preservation (weight 100, lr 1e-5) collapses WLK streaming quality
+    exactly like the unregularized Stage A run.
+- Audio-side-only adaptation with a frozen Qwen decoder has now failed across
+  four mechanisms: plain adapter CE, audio LoRA, context distillation, and
+  preserve-regularized CE. This line is closed; see the 2026-06-03 backend
+  diagnostic for the structural explanation.
+
+Artifacts (lightweight only; `model.pt` checkpoints stay on the paused
+instances, none are promoted):
+
+- `runs/qwen_ar_ce_stageA_left8_streaming_zero_adapter_lr5e6_preserve1000_200_v0/`
+- `runs/qwen_ar_ce_stageA_left8_streaming_preserve_proj_lr1e5_200_v0/`
+- `runs/qwen_ar_ce_stageA_left8_preserve_proj_lr1e5_500_v0/`
+- `runs/qwen_ar_ce_stageA_left12_streaming_zero_adapter_lr5e6_preserve1000_500_v0/wlk_eval/`
+- `runs/qwen_ar_ce_smoke_v0/`, `runs/qwen_ar_ce_audio_lora_smoke_v0/`
+
+## 2026-06-10 - Audit: Context-Distill Stage A/B Eval Was Language-Corrupted
+
+The previously imported context-distillation comparison
+(`runs/qwen_ar_context_distill_stageB_summary_table.json`, runs
+`qwen_ar_context_distill_stageA_left8_6_lora_v0` and
+`qwen_ar_context_distill_stageB_left6_4_lora_v0`) reported:
+
+```text
+baseline left8/6/4: WER 0.4456 / 0.4546 / 0.4323
+stageA  left8/6/4:  WER 0.4246 / 0.4295 / 0.4289
+stageB  left6/4:    WER 0.5131 / 0.5261
+```
+
+Audit result: these WERs are invalid as absolute numbers. The eval ran without
+an explicit English language directive in the Qwen prompt. On WLK items with
+accented non-native English speakers, the model auto-switched to French
+(`"Hi, je suis Myra et aujourd'hui je vais parler de notre article..."` for
+English audio). Per-item comparison against the clean stage0 baseline shows the
+same decode config and near-identical hypotheses on unaffected items
+(EqmWoxNDIr: 0.1739 in both), while affected items differ by up to 0.8 WER
+(rxrToXvRyM: 0.906 corrupted vs 0.113 clean). The clean English-prompt baseline
+at left8/chunk1s is WER 0.1884, far below every number in the corrupted table.
+
+Consequences:
+
+- The earlier note "Stage A context distillation improved WLK first-20
+  slightly at left=8s/6s" is withdrawn. No promotable conclusion can be drawn
+  from these runs in either direction.
+- Stage B left6/4 regression is also unproven, although consistent with the
+  preserve-run evidence that shorter contexts plus audio-only training fail.
+- Any future eval must pass an explicit `--language` (or per-item manifest
+  language). Auto language detection is unstable on accented WLK audio and
+  silently destroys WER comparability.
+
+## 2026-06-10 - Repatriation Sweep and Instance State
+
+All remaining qwen3 instances were resumed, inspected, drained of lightweight
+artifacts, and paused again:
+
+- `qwen-context-distill-smoke` (L4, 422507 -> 424402): staging box; RUNS.md and
+  runs/ strictly older than the local import; nothing new repatriated. Holds
+  heavy tarballs (`wlk_audio_full.tgz`, dataset archives) that are reproducible.
+- `qwen-ar-distill-left12` (H100, 419641 -> 424403): left12 preserve run
+  `wlk_eval` and stage0 `wlk_full_left12` baseline repatriated.
+- `wlk-gpu-check-in2` (H100, 419199 -> 424404): left8 preserve runs, smoke
+  runs, and the full stage0 left-context sweep repatriated. Still holds the
+  project venv, FLEURS/mix aligned datasets with audio (~2GB), WLK audio/chunk
+  data, and non-promoted `model.pt` checkpoints.
+- `alignatt-enzh-clean` (A100): unrelated project, untouched.
+
+Local `experiments/qwen3-causal` in WhisperLiveKit is now the single source of
+truth for code, manifests, run metrics, and this run log.

@@ -21,8 +21,16 @@ Excluded:
 - virtual environments and cache directories;
 - archived tarballs.
 
-Latest useful result:
-- Stage A context distillation improved WLK first-20 slightly at `left=8s/6s`.
-- Stage B `{6s,4s}` regressed and is not promoted.
-- The current direction should shift from chunk/local recompute to a true
-  append-only audio KV cache if we want Voxtral-like behavior.
+Latest useful result (updated 2026-06-10 after repatriation audit, see RUNS.md):
+- The context-distill Stage A/B WER table was language-corrupted (no explicit
+  English prompt; accented items auto-switched to French). Its conclusions are
+  withdrawn.
+- Preserve-regularized audio-only adaptation (left8/left12) either matches the
+  identity or collapses; the audio-side-only training line is closed.
+- Best validated v1: untrained Qwen3-ASR-0.6B + segmented cached
+  full-hypothesis streamer at `left12/seg200/chunk10s`: WER 0.1575, RTF 0.10
+  on 21 full WLK audios.
+- Strict append-only audio (`qwen_audio_causal_kv`) remains broken (WER 0.91
+  vs 0.20 for windowed recompute at the same zero right context). The open
+  question is the bounded mutable-tail sweep proposed in the 2026-06-03
+  backend diagnostic.
