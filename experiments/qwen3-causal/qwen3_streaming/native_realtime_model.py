@@ -38,6 +38,11 @@ class QwenAudioCausalKVState:
     last_recomputed_frames: int = 0
     last_recomputed_context_frames: int = 0
     pending_frames: int = 0
+    # Bounded mutable tail bookkeeping: conv blocks whose output steps are
+    # still re-computable, as (mel_block, output_steps) pairs, plus the number
+    # of currently mutable output steps. emitted_steps counts frozen steps.
+    tail_blocks: list[tuple[torch.Tensor, int]] = field(default_factory=list)
+    mutable_steps: int = 0
 
 
 @dataclass
@@ -405,6 +410,7 @@ class QwenAudioCausalKVEncoder(nn.Module):
         *,
         left_context_frames: int | None = None,
         chunk_frames: int | None = None,
+        mutable_tail_sec: float | None = None,
     ) -> None:
         super().__init__()
         self.audio_tower = audio_tower
@@ -424,6 +430,17 @@ class QwenAudioCausalKVEncoder(nn.Module):
         self.left_context_steps = max(
             1,
             self.output_steps_for_mel_frames(self.left_context_frames),
+        )
+        tail_sec = (
+            config.qwen_audio_mutable_tail_sec
+            if mutable_tail_sec is None
+            else float(mutable_tail_sec)
+        )
+        if tail_sec < 0.0:
+            raise ValueError("mutable_tail_sec must be >= 0")
+        tail_frames = int(round(tail_sec * 1000.0 / config.mel_hop_ms))
+        self.mutable_tail_steps = (
+            self.output_steps_for_mel_frames(tail_frames) if tail_frames > 0 else 0
         )
 
     @property
@@ -708,6 +725,217 @@ class QwenAudioCausalKVEncoder(nn.Module):
             )
         return hidden_states, next_cache
 
+    def _attention_tail(
+        self,
+        attn: nn.Module,
+        hidden_states: torch.Tensor,
+        cache: AudioLayerCache,
+        *,
+        position_offset: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Attention over [frozen cache + tail] WITHOUT updating the cache.
+
+        Returns the attention output plus the tail's per-layer key/value
+        states so the caller can freeze a leading slice of them later.
+        """
+        batch, length, _ = hidden_states.shape
+        num_heads = int(attn.num_heads)
+        head_dim = int(attn.head_dim)
+        query_states = attn.q_proj(hidden_states).reshape(
+            batch, length, num_heads, head_dim
+        ).transpose(1, 2)
+        key_states = attn.k_proj(hidden_states).reshape(
+            batch, length, num_heads, head_dim
+        ).transpose(1, 2)
+        value_states = attn.v_proj(hidden_states).reshape(
+            batch, length, num_heads, head_dim
+        ).transpose(1, 2)
+
+        past_k = cache.key
+        past_v = cache.value
+        past_len = 0 if past_k is None else int(past_k.shape[-2])
+        if past_k is not None and past_v is not None:
+            all_k = torch.cat([past_k.to(key_states.device), key_states], dim=-2)
+            all_v = torch.cat([past_v.to(value_states.device), value_states], dim=-2)
+        else:
+            all_k = key_states
+            all_v = value_states
+
+        total_len = int(all_k.shape[-2])
+        cache_start_pos = int(position_offset) - past_len
+        q_positions = torch.arange(
+            int(position_offset),
+            int(position_offset) + length,
+            device=hidden_states.device,
+        )
+        k_positions = torch.arange(
+            cache_start_pos,
+            cache_start_pos + total_len,
+            device=hidden_states.device,
+        )
+        allowed = k_positions[None, :] <= q_positions[:, None]
+        allowed &= k_positions[None, :] >= (
+            q_positions[:, None] - self.left_context_steps + 1
+        )
+
+        scores = torch.matmul(
+            query_states.float(),
+            all_k.float().transpose(-2, -1),
+        ) * float(attn.scaling)
+        scores = scores.masked_fill(
+            ~allowed[None, None, :, :],
+            torch.finfo(scores.dtype).min,
+        )
+        weights = F.softmax(scores, dim=-1)
+        weights = F.dropout(
+            weights,
+            p=float(getattr(attn, "attention_dropout", 0.0)),
+            training=self.training,
+        )
+        context = torch.matmul(weights.to(dtype=all_v.dtype), all_v)
+        context = context.transpose(1, 2).contiguous().view(batch, length, -1)
+        output = attn.out_proj(context.to(dtype=attn.out_proj.weight.dtype))
+        return output.to(dtype=hidden_states.dtype), key_states, value_states
+
+    def _layer_tail(
+        self,
+        layer: nn.Module,
+        hidden_states: torch.Tensor,
+        cache: AudioLayerCache,
+        *,
+        position_offset: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        residual = hidden_states
+        normed = layer.self_attn_layer_norm(hidden_states)
+        attn_out, tail_k, tail_v = self._attention_tail(
+            layer.self_attn,
+            normed,
+            cache,
+            position_offset=position_offset,
+        )
+        hidden_states = residual + F.dropout(
+            attn_out,
+            p=float(getattr(layer, "dropout", 0.0)),
+            training=self.training,
+        )
+        residual = hidden_states
+        hidden_states = layer.final_layer_norm(hidden_states)
+        hidden_states = layer.fc1(hidden_states)
+        hidden_states = layer.activation_fn(hidden_states)
+        hidden_states = F.dropout(
+            hidden_states,
+            p=float(getattr(layer, "activation_dropout", 0.0)),
+            training=self.training,
+        )
+        hidden_states = layer.fc2(hidden_states)
+        hidden_states = residual + F.dropout(
+            hidden_states,
+            p=float(getattr(layer, "dropout", 0.0)),
+            training=self.training,
+        )
+        if hidden_states.dtype == torch.float16:
+            clamp_value = torch.finfo(hidden_states.dtype).max - 1000
+            hidden_states = torch.clamp(
+                hidden_states,
+                min=-clamp_value,
+                max=clamp_value,
+            )
+        return hidden_states, tail_k, tail_v
+
+    def _encode_mutable_tail(
+        self,
+        ready_mels: torch.Tensor,
+        state: QwenAudioCausalKVState,
+    ) -> torch.Tensor:
+        """Recompute the mutable tail plus new blocks over the frozen KV prefix.
+
+        Returns hidden states for ALL current tail steps (the re-computed
+        previously-mutable ones followed by the new ones). Leading tail blocks
+        are frozen into the per-layer KV caches whenever the remaining tail
+        exceeds ``mutable_tail_steps``.
+        """
+        if not self._has_qwen_audio_internals():
+            raise ValueError(
+                "the bounded mutable tail requires direct access to Qwen audio "
+                "tower internals (conv/layers); the generic fallback path "
+                "cannot freeze per-layer KV"
+            )
+        layers = getattr(self.audio_tower, "layers")
+        if not state.layer_caches:
+            state.layer_caches = [AudioLayerCache() for _ in range(len(layers))]
+        if len(state.layer_caches) != len(layers):
+            raise ValueError("Qwen causal audio cache layer count mismatch")
+
+        new_blocks: list[torch.Tensor] = []
+        for start in range(0, int(ready_mels.shape[1]), self.chunk_frames):
+            new_blocks.append(ready_mels[:, start : start + self.chunk_frames, :])
+
+        # Conv each block at its deterministic position (frozen steps offset).
+        position = int(state.emitted_steps)
+        conv_outputs: list[torch.Tensor] = []
+        block_entries: list[tuple[torch.Tensor, int]] = []
+        for mel_block, _ in state.tail_blocks:
+            hidden = self._conv_one_block(mel_block, position_offset=position)
+            conv_outputs.append(hidden)
+            block_entries.append((mel_block, int(hidden.shape[1])))
+            position += int(hidden.shape[1])
+        for mel_block in new_blocks:
+            hidden = self._conv_one_block(mel_block, position_offset=position)
+            conv_outputs.append(hidden)
+            block_entries.append((mel_block.detach(), int(hidden.shape[1])))
+            position += int(hidden.shape[1])
+        if not conv_outputs:
+            device, _ = _module_device_dtype(self.audio_tower)
+            return ready_mels.new_zeros(
+                ready_mels.shape[0], 0, self.config.d_model
+            ).to(device=device)
+
+        hidden_states = torch.cat(conv_outputs, dim=1)
+        position_offset = int(state.emitted_steps)
+        tail_kv: list[tuple[torch.Tensor, torch.Tensor]] = []
+        for layer, cache in zip(layers, state.layer_caches, strict=True):
+            hidden_states, tail_k, tail_v = self._layer_tail(
+                layer,
+                hidden_states,
+                cache,
+                position_offset=position_offset,
+            )
+            tail_kv.append((tail_k, tail_v))
+
+        tower = self.audio_tower
+        hidden_states = tower.ln_post(hidden_states)
+        hidden_states = tower.proj1(hidden_states)
+        hidden_states = tower.act(hidden_states)
+        hidden_states = tower.proj2(hidden_states)
+
+        # Freeze leading blocks until the remaining tail fits the budget.
+        total_steps = sum(steps for _, steps in block_entries)
+        freeze_steps = 0
+        freeze_blocks = 0
+        while (
+            freeze_blocks < len(block_entries)
+            and total_steps - freeze_steps - block_entries[freeze_blocks][1]
+            >= self.mutable_tail_steps
+        ):
+            freeze_steps += block_entries[freeze_blocks][1]
+            freeze_blocks += 1
+        if freeze_steps > 0:
+            for cache, (tail_k, tail_v) in zip(
+                state.layer_caches, tail_kv, strict=True
+            ):
+                new_k = tail_k[:, :, :freeze_steps, :].detach()
+                new_v = tail_v[:, :, :freeze_steps, :].detach()
+                if cache.key is not None and cache.value is not None:
+                    new_k = torch.cat([cache.key.to(new_k.device), new_k], dim=-2)
+                    new_v = torch.cat([cache.value.to(new_v.device), new_v], dim=-2)
+                keep = min(int(new_k.shape[-2]), self.left_context_steps)
+                cache.key = new_k[:, :, -keep:, :]
+                cache.value = new_v[:, :, -keep:, :]
+            state.emitted_steps += freeze_steps
+        state.tail_blocks = block_entries[freeze_blocks:]
+        state.mutable_steps = total_steps - freeze_steps
+        return hidden_states
+
     def _encode_ready_mels(
         self,
         mels: torch.Tensor,
@@ -802,6 +1030,22 @@ class QwenAudioCausalKVEncoder(nn.Module):
         ready = buffer[:, :ready_frames, :]
         state.mel_buffer = buffer[:, ready_frames:, :].detach()
         state.pending_frames = int(state.mel_buffer.shape[1])
+
+        if self.mutable_tail_steps > 0:
+            tail_mel_frames = sum(
+                int(block.shape[1]) for block, _ in state.tail_blocks
+            )
+            if ready.shape[1] == 0 and tail_mel_frames == 0:
+                state.last_recomputed_frames = 0
+                state.last_recomputed_context_frames = 0
+                empty = mels.new_zeros(mels.shape[0], 0, self.config.d_model)
+                return empty, state
+            # Recompute cost = previously-emitted tail mels + new mels.
+            state.last_recomputed_frames = tail_mel_frames + int(ready.shape[1])
+            state.last_recomputed_context_frames = tail_mel_frames
+            hidden = self._encode_mutable_tail(ready, state)
+            return hidden.to(device=mels.device), state
+
         state.last_recomputed_frames = int(ready.shape[1])
         state.last_recomputed_context_frames = 0
 
@@ -1266,5 +1510,49 @@ class Qwen3ASRRealtimeQwenAudioCausalModel(Qwen3ASRRealtimeQwenAudioSurgeryModel
             adapter=adapter,
             audio_backend="qwen_audio_causal_kv",
         )
+
+    @torch.no_grad()
+    def append_audio_to_cache(
+        self,
+        mels: torch.Tensor,
+        state: CachedAudioDecodeState | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, CachedAudioDecodeState]:
+        """Append audio; with a bounded mutable tail, overwrite the tail.
+
+        The strict append-only path (mutable_tail_steps == 0) is inherited.
+        With a mutable tail, the encoder re-emits hidden states for the
+        previously-mutable steps plus the new ones, so the corresponding
+        slice of ``state.frame_hidden`` is replaced rather than appended.
+        """
+        if int(getattr(self.audio_encoder, "mutable_tail_steps", 0)) <= 0:
+            return super().append_audio_to_cache(mels, state)
+
+        if state is None:
+            state = self.init_cached_audio_decode_state()
+        previous_mutable = int(getattr(state.audio, "mutable_steps", 0))
+        audio_hidden, state.audio = self.audio_encoder.forward_chunk(
+            mels, state.audio
+        )
+        tail_hidden = self.adapter._project(audio_hidden).detach()
+
+        if state.frame_hidden is None:
+            frozen_prefix = tail_hidden.new_zeros(
+                tail_hidden.shape[0], 0, tail_hidden.shape[2]
+            )
+        else:
+            keep = int(state.frame_hidden.shape[1]) - previous_mutable
+            if keep < 0:
+                raise ValueError(
+                    "cached frame_hidden shorter than the previous mutable tail"
+                )
+            frozen_prefix = state.frame_hidden[:, :keep, :]
+        state.frame_hidden = torch.cat(
+            [frozen_prefix.to(tail_hidden.device), tail_hidden], dim=1
+        )
+        state.adapter.audio_frames_seen += int(mels.shape[1])
+        state.adapter.decoder_steps_seen = int(state.frame_hidden.shape[1])
+
+        delta = tail_hidden[:, previous_mutable:, :]
+        return state.frame_hidden, delta, state
 
 

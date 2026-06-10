@@ -49,6 +49,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--qwen-audio-left-context-sec", type=float, default=None)
     parser.add_argument("--qwen-audio-right-context-ms", type=int, default=None)
     parser.add_argument(
+        "--qwen-audio-mutable-tail-sec",
+        type=float,
+        default=None,
+        help=(
+            "Bounded mutable tail for --audio-backend qwen_audio_causal_kv: "
+            "steps younger than this stay re-computable each chunk; older "
+            "steps freeze into the per-layer KV cache. 0 = strict append-only."
+        ),
+    )
+    parser.add_argument(
         "--feature-mode",
         choices=("repo_mel", "qwen_processor"),
         default="repo_mel",
@@ -136,7 +146,11 @@ def _model_config_from_context_args(
     args: argparse.Namespace,
     d_model: int,
 ) -> RealtimeAudioConfig | None:
-    if args.qwen_audio_left_context_sec is None and args.qwen_audio_right_context_ms is None:
+    if (
+        args.qwen_audio_left_context_sec is None
+        and args.qwen_audio_right_context_ms is None
+        and args.qwen_audio_mutable_tail_sec is None
+    ):
         return None
     config_kwargs = {"d_model": int(d_model), "audio_window_sec": 15.0}
     if args.qwen_audio_left_context_sec is not None:
@@ -146,6 +160,10 @@ def _model_config_from_context_args(
     if args.qwen_audio_right_context_ms is not None:
         config_kwargs["qwen_audio_right_context_ms"] = int(
             args.qwen_audio_right_context_ms
+        )
+    if args.qwen_audio_mutable_tail_sec is not None:
+        config_kwargs["qwen_audio_mutable_tail_sec"] = float(
+            args.qwen_audio_mutable_tail_sec
         )
     return RealtimeAudioConfig(**config_kwargs)
 

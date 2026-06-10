@@ -19,6 +19,10 @@ class RealtimeAudioConfig:
     qwen_audio_right_context_ms: int = 640
     qwen_audio_left_context_sec: float = 2.0
     qwen_audio_strict_causal: bool = False
+    # Bounded mutable tail for the causal-KV backend: encoder steps younger
+    # than this stay re-computable on every chunk; older steps freeze into the
+    # per-layer KV cache. 0 = strict append-only (no recompute at all).
+    qwen_audio_mutable_tail_sec: float = 0.0
     qwen_audio_adapter_hidden_dim: int = 0
     qwen_audio_adapter_layers: int = 0
     qwen_audio_adapter_dropout: float = 0.0
@@ -75,6 +79,8 @@ class RealtimeAudioConfig:
             raise ValueError("qwen_audio_adapter_dropout must be in [0, 1)")
         if self.qwen_audio_adapter_residual_scale < 0.0:
             raise ValueError("qwen_audio_adapter_residual_scale must be >= 0")
+        if self.qwen_audio_mutable_tail_sec < 0.0:
+            raise ValueError("qwen_audio_mutable_tail_sec must be >= 0")
 
     @property
     def frames_per_decoder_step(self) -> int:
