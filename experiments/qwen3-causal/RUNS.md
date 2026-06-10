@@ -4935,3 +4935,40 @@ Note: the previously committed
 6-item partial run from instance 424404 that overwrote the complete 21-item
 file from 424403 during repatriation; the full file is restored in this
 commit. All numbers above use the 21-item file.
+
+## 2026-06-10 - Dead Code Cleanup (Phase 1)
+
+Removed the abandoned experiment lines from the workspace (history stays in
+git and in this log):
+
+- modules: `qwen3_streaming/ctc.py`, `qwen3_streaming/rnnt.py`;
+  `realtime_targets.py` trimmed to `WordAlignment` +
+  `heuristic_word_alignments` (still used by manifest prep).
+- scripts: `train_realtime_tiny_asr.py` (4106 lines), `train_realtime_smoke.py`,
+  `eval_realtime_checkpoint.py`, `infer_realtime_checkpoint.py`,
+  `sweep_realtime_decoding.py`, `train_qwen3_sft.sh`, `prepare_public_jsonl.py`.
+- tests of those lines: `test_ctc.py`, `test_realtime_targets.py`,
+  `test_training_losses.py`, `test_sweep_realtime_decoding.py`; the scratch
+  encoder / LoRA / save-load tests inside `test_native_realtime_model.py`.
+- `native_realtime_model.py` trimmed 3055 -> ~1270 lines: deleted the scratch
+  causal encoder stack, `CachedDecoder`, `Qwen3ASRRealtimeNativeModel`,
+  LoRA wrappers, CTC/RNNT heads, training forwards, `stream_chunk`,
+  checkpoint save/load, and `load_realtime_model`. Kept: surgery + causal-KV
+  encoders/models, the cached-audio decode entry points
+  (`init_cached_audio_decode_state` / `append_audio_to_cache` /
+  `generate_full_hypothesis_from_cached_audio`), repetition-control helpers,
+  and transformers registration. The base model `__init__` now requires an
+  explicit `audio_encoder`/`adapter`/`audio_backend`.
+- eval/infer scripts lost their `--checkpoint` path (no promoted checkpoints
+  exist; training is gone).
+
+Deliberate deviations from the cleanup list: kept
+`tune_stable_commit_from_events.py` and its test (it tunes the validated
+stable-commit path from event JSONLs), and kept the trimmed
+`realtime_targets.py` for data tooling.
+
+Validation: `PYTHONPATH=. python3 -m pytest -q tests` -> 64 passed; pyflakes
+clean over `qwen3_streaming/`, `scripts/`, `tests/`.
+
+README.md rewritten around the validated v1 path, the closed adaptation line,
+and the open mutable-tail question.

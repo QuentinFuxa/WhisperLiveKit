@@ -21,7 +21,6 @@ from qwen3_streaming.native_realtime_model import (
     Qwen3ASRRealtimeQwenAudioCausalModel,
     Qwen3ASRRealtimeQwenAudioSurgeryModel,
     _register_qwen3_asr_transformers,
-    load_realtime_model,
 )
 from qwen3_streaming.realtime_config import RealtimeAudioConfig
 from qwen3_streaming.realtime_features import (
@@ -37,7 +36,6 @@ def parse_args() -> argparse.Namespace:
             "only stable token prefixes."
         )
     )
-    parser.add_argument("--checkpoint", type=Path, default=None)
     parser.add_argument("--model-id", default=None)
     parser.add_argument(
         "--audio-backend",
@@ -196,45 +194,37 @@ def main() -> None:
     if args.segment_prompt_context_words < 0:
         raise ValueError("--segment-prompt-context-words must be >= 0")
 
-    if args.checkpoint is None and args.model_id is None:
-        raise ValueError("pass --checkpoint or --model-id")
-    if args.checkpoint is not None and args.model_id is not None:
-        raise ValueError("pass only one of --checkpoint or --model-id")
+    if args.model_id is None:
+        raise ValueError("pass --model-id")
 
     device = torch.device(args.device)
-    if args.checkpoint is not None:
-        model = load_realtime_model(args.checkpoint, map_location="cpu").to(device)
-        tokenizer_source = args.checkpoint / "tokenizer"
-    else:
-        _register_qwen3_asr_transformers()
-        from transformers import AutoConfig
+    _register_qwen3_asr_transformers()
+    from transformers import AutoConfig
 
-        tokenizer_source = str(args.model_id)
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
-        hf_config = AutoConfig.from_pretrained(tokenizer_source)
-        text_config = hf_config.thinker_config.text_config
-        model_cls = (
-            Qwen3ASRRealtimeQwenAudioCausalModel
-            if args.audio_backend == "qwen_audio_causal_kv"
-            else Qwen3ASRRealtimeQwenAudioSurgeryModel
-        )
-        model = model_cls.from_qwen_pretrained(
-            str(args.model_id),
-            config=_model_config_from_context_args(
-                args=args,
-                d_model=int(text_config.hidden_size),
-            ),
-            bos_token_id=(
-                int(tokenizer.eos_token_id) if tokenizer.eos_token_id is not None else 0
-            ),
-            wait_token_id=None,
-            dtype=torch.bfloat16,
-            device_map="cpu",
-        ).to(device)
+    tokenizer_source = str(args.model_id)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
+    hf_config = AutoConfig.from_pretrained(tokenizer_source)
+    text_config = hf_config.thinker_config.text_config
+    model_cls = (
+        Qwen3ASRRealtimeQwenAudioCausalModel
+        if args.audio_backend == "qwen_audio_causal_kv"
+        else Qwen3ASRRealtimeQwenAudioSurgeryModel
+    )
+    model = model_cls.from_qwen_pretrained(
+        str(args.model_id),
+        config=_model_config_from_context_args(
+            args=args,
+            d_model=int(text_config.hidden_size),
+        ),
+        bos_token_id=(
+            int(tokenizer.eos_token_id) if tokenizer.eos_token_id is not None else 0
+        ),
+        wait_token_id=None,
+        dtype=torch.bfloat16,
+        device_map="cpu",
+    ).to(device)
     _override_audio_context(model, args)
     model.eval()
-    if not hasattr(model, "append_audio_to_cache"):
-        raise TypeError("checkpoint model does not support cached audio decoding")
 
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)
     wait_token_id = added_token_id(tokenizer, "[P]")
@@ -338,7 +328,6 @@ def main() -> None:
         ignored_token_ids={wait_token_id, word_start_token_id, -100},
     )
     payload = {
-        "checkpoint": str(args.checkpoint),
         "model_id": args.model_id,
         "audio": str(args.audio),
         "final_text": final.final_text,
