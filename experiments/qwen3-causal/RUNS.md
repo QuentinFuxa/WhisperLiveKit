@@ -5299,3 +5299,43 @@ instance. WS2 runs on reshuffled LS-960 alone; diversity retry later.
 
 Artifacts: `runs/jl_ws1/`. Checkpoint backed up to
 `~/Downloads/qwen3_checkpoints/` locally (no HF auth on the machine).
+
+## 2026-06-11 - WS2 Interrupted Mid-Run (Instance Paused Externally)
+
+WS2 ("D1-continue": mixed blocks 96/192 + position-offset augmentation
+log-uniform [1,6000] @ p=0.5 + triple gate) ran as two parts on instance
+424892:
+
+- Part 1 (`r_e1a643fd`, lr 1e-5 cosine, target 60k steps): died at ~step
+  20.5k on a transient HF CDN 408 while streaming LibriSpeech (no retry in
+  the dataloader — since fixed: the epoch stream now restarts on transient
+  errors). Checkpoints saved at step 20000.
+- Part 2 (`r_e446787b`, resumed from part-1 `tower_last.pt`, lr 7.5e-6 ->
+  1e-6, target 40k more steps): healthy at ~step 600+ (6.85 steps/s, offset
+  loss spikes visibly shrinking), then the instance was paused externally
+  around 00:30-01:15 local.
+
+Gate trajectory so far (10 chunks, fp32, teacher refs, legacy norm):
+
+| step (cumulative) | gate@960 | gate@1920 | gate@960@off4000 |
+| ---: | ---: | ---: | ---: |
+| 0 (D1 resume) | 0.2492 | 0.2651 | 0.8828 |
+| 5000 | 0.2595 | 0.2652 | 0.4066 |
+| 10000 | 0.2656 | 0.2615 | 0.3779 |
+| 15000 | 0.2536 | 0.2490 | 0.4093 |
+| 20000 | 0.2514 | **0.2408** | **0.3681** |
+
+Reading at the interruption point: base quality intact (abort rule never
+triggered), 1920ms gate IMPROVING past the 960 one (the block mix works),
+and position invariance largely learned (0.88 -> 0.37 at offset 4000) with
+~39k steps of budget still to spend.
+
+To resume (instance data intact on the paused machine):
+
+```bash
+jl resume <wlk-gpu-check-in2 id>   # new machine id after resume
+# part-2 checkpoints: runs/jl_ws2_mix_pos_p2/tower_last.pt (if any gate point
+# was reached in part 2) else part-1 runs/jl_ws2_mix_pos/tower_last.pt (step 20k)
+# relaunch scripts/train_tower_distill.py with --resume-tower <that checkpoint>,
+# --steps <remaining>, lr continuing the cosine (~7.5e-6 from 20k).
+```
