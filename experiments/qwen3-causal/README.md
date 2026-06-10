@@ -25,12 +25,13 @@ against a frozen Qwen decoder failed four ways (adapter CE, audio LoRA,
 context distillation, preserve-regularized CE): strong regularization
 reproduces the identity, weak regularization collapses WLK quality.
 
-**Open question — how much mutable history does the audio tower need?**
-Strict append-only audio (`qwen_audio_causal_kv` backend, zero recompute)
-collapses to WER 0.91 while a recomputed window at the same zero right
-context holds 0.20. The decisive unrun experiment is the bounded
-mutable-tail sweep: freeze per-layer KV older than T seconds, recompute only
-the last T, sweep T in {0, 0.5, 1, 2, 4, 8, 12}s.
+**Settled — the causal mask is the blocker, not recompute.** The bounded
+mutable-tail sweep (2026-06-10, `--qwen-audio-mutable-tail-sec`) is flat at
+WER ~0.90 from zero recompute to full per-chunk recompute under a causal
+mask, while bidirectional windowed recompute holds 0.20 at the same zero
+output right-context. The audio tower requires bidirectional intra-window
+attention; a strict-causal Qwen3-ASR exists only through training (joint
+distillation with causal masks), not inference engineering.
 
 ## Layout
 
@@ -88,12 +89,14 @@ PYTHONPATH=. python3 -m pytest -q tests
 
 Model tests use fake towers/decoders and run on CPU.
 
-## Next steps
+## Status
 
-1. Promote the validated runtime as the `qwen3-streaming` WhisperLiveKit
-   backend (in progress, see `whisperlivekit/qwen3_streaming/`).
-2. GPU session: offline 0.6B/1.7B upper bounds vs human references, the
-   bounded mutable-tail sweep, and a realistic-latency eval at chunk 1-2s.
-3. Decide the strict-causal path from the sweep result: engineering
-   (append-mostly cache with small mutable tail) vs joint distillation
-   training vs staying on the bounded-window v1.
+1. The validated runtime ships as the `qwen3-streaming` WhisperLiveKit
+   backend (`whisperlivekit/qwen3_streaming/`): WER 0.084 vs MCIF human
+   references at chunk 2s, RTF 0.29 on H100, first display 2s. Offline
+   one-pass decoding scores worse on long-form (0.6B 0.207, 1.7B 0.120).
+2. The only remaining path to a strictly causal (Voxtral-style) Qwen3-ASR is
+   a training project: distill the offline teacher into a causal-masked
+   tower + decoder jointly, at real data scale. Every inference-side
+   shortcut and every audio-side-only training variant has been tried and
+   recorded in RUNS.md.

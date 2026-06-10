@@ -21,17 +21,19 @@ Excluded:
 - virtual environments and cache directories;
 - archived tarballs.
 
-Latest useful result (updated 2026-06-10 after repatriation audit, see RUNS.md):
-- The context-distill Stage A/B WER table was language-corrupted (no explicit
-  English prompt; accented items auto-switched to French). Its conclusions are
-  withdrawn.
-- Preserve-regularized audio-only adaptation (left8/left12) either matches the
-  identity or collapses; the audio-side-only training line is closed.
-- Best validated v1: untrained Qwen3-ASR-0.6B + segmented cached
-  full-hypothesis streamer at `left12/seg200/chunk10s`: WER 0.110 vs MCIF
-  human references with Whisper normalization (0.158 under the old
-  teacher-ref/legacy-norm scoring), RTF 0.10 on 21 full WLK audios.
-- Strict append-only audio (`qwen_audio_causal_kv`) remains broken (WER 0.91
-  vs 0.20 for windowed recompute at the same zero right context). The open
-  question is the bounded mutable-tail sweep proposed in the 2026-06-03
-  backend diagnostic.
+Final state (2026-06-10, see RUNS.md for the full session log):
+- The causal question is settled by the bounded mutable-tail sweep: WER stays
+  flat at ~0.90 from zero recompute to full per-chunk recompute under a causal
+  mask, while bidirectional windowed recompute holds 0.20. The audio tower
+  requires bidirectional intra-window attention; a strict-causal Qwen3-ASR
+  exists only through training (joint causal-mask distillation), not through
+  inference engineering.
+- The validated bounded-window runtime was promoted as the WhisperLiveKit
+  `qwen3-streaming` backend. At its defaults (left12/seg200/chunk2s) it scores
+  WER 0.084 vs MCIF human references (whisper normalization) at RTF 0.29 on
+  H100, first display at 2s.
+- Offline one-pass decoding degrades badly on long-form audio (0.6B: 0.207,
+  1.7B: 0.120 vs the same references) — the segmented streamer beats both.
+- Historical caveats: the context-distill Stage A/B table was
+  language-corrupted (withdrawn), and preserve-regularized audio-only
+  adaptation either reproduced the identity or collapsed (line closed).

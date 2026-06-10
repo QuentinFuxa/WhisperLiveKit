@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100/scripts/offline_baseline.py", line 17, in <module>
+    from rescore_jsonl import legacy_normalize, safe_wer, whisper_normalize  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/qwen3-asr-streaming-h100/qwen3-asr-streaming-h100/scripts/rescore_jsonl.py", line 24, in <module>
+    from whisper_normalizer.english import EnglishTextNormalizer
+ModuleNotFoundError: No module named 'whisper_normalizer'

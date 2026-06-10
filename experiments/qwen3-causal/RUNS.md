@@ -5005,3 +5005,97 @@ monotonic line timestamps.
 
 Defaults encode the re-audited operating point: left12 / right 640ms / seg200
 / chunk 2s with self-pacing.
+
+## 2026-06-10 - H100 Session: Mutable-Tail Sweep, Offline Baselines, Latency (Phase 3)
+
+Instance `wlk-gpu-check-in2` (424404 -> 424446), runs `r_bdd820b3` and
+`r_bec09e55`. Code synced from the cleaned local workspace; 22 targeted tests
+passed on the H100 before the experiments.
+
+### Bounded mutable-tail sweep — the causal question is settled
+
+Protocol identical to the 2026-06-03 backend diagnostic: 20 held-out WLK 16s
+chunks, `qwen_audio_causal_kv`, chunk 320ms, left context 15s, decode controls
+(repetition penalty 1.15, no-repeat-3), explicit English. The new
+`--qwen-audio-mutable-tail-sec` keeps encoder steps younger than T
+re-computable each chunk over the frozen per-layer KV prefix.
+
+| mutable tail | WER final | RTF | max recomputed context frames |
+| ---: | ---: | ---: | ---: |
+| 0s (strict) | 0.9065 | 0.898 | 0 |
+| 0.5s | 0.8960 | 0.913 | 56 |
+| 1s | 0.9023 | 0.936 | 104 |
+| 2s | 0.9020 | 0.931 | 208 |
+| 4s | 0.9032 | 0.984 | 416 |
+| 8s | 0.9050 | 0.924 | 832 |
+| 12s | 0.9050 | 0.938 | 1248 |
+| 16s (full recompute) | 0.9050 | 0.944 | 1568 |
+
+The curve is FLAT. tail=0 reproduces the 06-03 strict baseline exactly
+(0.9065), and even recomputing the entire 16s window on every chunk under the
+causal mask (tail=16) stays at 0.905 — while the surgery backend (bidirectional
+attention within the window, same zero output right-context) holds 0.20.
+
+**Verdict: the failure of the strict-causal path is the causal attention mask
+itself, not the absence of recompute.** Qwen3-ASR's audio tower requires
+bidirectional intra-window attention. No inference-time engineering recovers
+it; a genuinely causal Qwen3-ASR requires training (joint distillation of a
+causal-masked tower + decoder from the offline teacher). The mutable-tail
+engineering shortcut is dead; the bounded-window surgery path is the
+practical realtime design.
+
+### Offline full-file baselines vs MCIF human references
+
+Official `qwen_asr.Qwen3ASRModel.transcribe`, one pass over each full WLK
+file (277-425s), explicit English, scored with Whisper normalization:
+
+| model | WER (human, whisper-norm) | WER (human, legacy) | mean latency |
+| --- | ---: | ---: | ---: |
+| Qwen3-ASR-0.6B offline one-pass | 0.2075 | 0.2660 | 56.7s |
+| Qwen3-ASR-1.7B offline one-pass | 0.1202 | 0.1736 | 83.6s |
+
+Naive one-pass long-form decoding degrades severely (drift/skips over 5-7
+minute files). The segmented streamer at 0.6B (0.0843 below) beats both — the
+segmentation is not a streaming compromise, it is also the better long-form
+decoding strategy.
+
+### Latency / chunk-size eval, surgery left12/seg200, full WLK 21 audios
+
+| config | WER (teacher, legacy) | WER (human, whisper) | RTF | first display | first commit |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| chunk 10s (stage0 ref) | 0.1575 | 0.1101 | 0.10 | 10.0s | 30.0s |
+| chunk 2s | 0.1367 | 0.0843 | 0.29 | 2.0s | 18.7s |
+| chunk 1s (limit 5) | 0.1202 | 0.0705 | 0.58 | 1.0s | 14.0s |
+
+Shorter chunks improve BOTH latency and quality (more frequent hypothesis
+updates make the stable-prefix commit and segment boundaries finer).
+Committed-revision events: 3 total across 7105s of audio at chunk 2s;
+cache_bound_violations 0 everywhere. The promoted backend default (chunk 2s
+with self-pacing) is validated: WER 0.084 vs human references at RTF 0.29 on
+H100.
+
+### left15 vs left12 against human references (Phase 0 leftover)
+
+Per-item JSONLs from jl_418957/418958 repatriated and rescored:
+
+| config | WER (human, whisper-norm) |
+| --- | ---: |
+| left15 / seg200 / chunk10s | 0.1083 |
+| left15 / seg360 / chunk10s | 0.1090 |
+| left12 / seg200 / chunk10s | 0.1101 |
+
+left12 == left15 within noise; the left12 default stands.
+
+### Updated overall picture (0.6B unless noted, human refs, whisper norm)
+
+```text
+offline 0.6B one-pass:            0.2075
+offline 1.7B one-pass:            0.1202
+streaming left12/seg200/chunk10s: 0.1101   RTF 0.10
+streaming left12/seg200/chunk2s:  0.0843   RTF 0.29   display 2.0s
+streaming left12/seg200/chunk1s:  0.0705*  RTF 0.58   display 1.0s  (*5 files)
+strict causal (any mutable tail): ~0.90    -- closed: needs training
+```
+
+Artifacts: `runs/jl_20260610/` (sweep JSONLs+summaries, latency evals, offline
+baselines, logs). Instance 424446 paused after the session.
