@@ -128,3 +128,63 @@ def test_teacher_forward_handles_variable_lengths():
     assert teacher.shape[1] == 8  # longest sample: 64 frames -> 8 steps
     # Padded tail of the short sample is zero.
     assert torch.all(teacher[1, 4:, :] == 0)
+
+
+def test_position_offset_changes_student_but_extrapolates_consistently():
+    torch.manual_seed(0)
+    tower = TinyQwenAudioTower().eval()
+    torch.manual_seed(5)
+    mels = torch.randn(1, 64, N_MELS)
+
+    with torch.no_grad():
+        base = block_bidirectional_forward(
+            tower, mels, block_frames=32, left_context_steps=100
+        )
+        shifted = block_bidirectional_forward(
+            tower, mels, block_frames=32, left_context_steps=100, position_offset=4000
+        )
+    # Offset positions change the additive sinusoids -> outputs must differ.
+    assert not torch.allclose(base, shifted, atol=1e-4)
+
+    # Beyond-table extrapolation must agree with the causal encoder's math.
+    from qwen3_streaming.native_realtime_model import QwenAudioCausalKVEncoder
+    from qwen3_streaming.tower_distill import sinusoidal_positions
+
+    encoder = QwenAudioCausalKVEncoder(
+        tower, tiny_config(qwen_audio_block_bidirectional=True)
+    )
+    table = tower.positional_embedding.positional_embedding
+    via_helper = sinusoidal_positions(
+        table, offset=4090, length=12, device=mels.device, dtype=torch.float32
+    )
+    via_encoder = encoder._position_embedding(
+        offset=4090, length=12, device=mels.device, dtype=torch.float32
+    )
+    torch.testing.assert_close(via_helper, via_encoder, rtol=1e-5, atol=1e-5)
+
+
+def test_offset_streaming_matches_offset_training_forward():
+    torch.manual_seed(0)
+    tower = TinyQwenAudioTower().eval()
+    config = tiny_config(qwen_audio_block_bidirectional=True)
+    encoder = QwenAudioCausalKVEncoder(tower, config).eval()
+    torch.manual_seed(6)
+    mels = torch.randn(1, 64, N_MELS)
+
+    state = encoder.init_state()
+    state.emitted_steps = 4000
+    streamed = []
+    for start in range(0, 64, 32):
+        hidden, state = encoder.forward_chunk(mels[:, start : start + 32, :], state)
+        streamed.append(hidden)
+    streamed = torch.cat(streamed, dim=1)
+
+    with torch.no_grad():
+        trained = block_bidirectional_forward(
+            tower,
+            mels,
+            block_frames=32,
+            left_context_steps=encoder.left_context_steps,
+            position_offset=4000,
+        )
+    torch.testing.assert_close(trained, streamed, rtol=1e-4, atol=1e-4)

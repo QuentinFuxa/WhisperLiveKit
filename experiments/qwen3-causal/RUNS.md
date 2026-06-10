@@ -5258,3 +5258,44 @@ simultaneously). Pseudo-label CE at LS scale stays as a later option if the
 tower path saturates above target.
 
 Artifacts: `runs/jl_d2a_lora/history.json` local; no checkpoint promoted.
+
+## 2026-06-10 - WS1: D1 Checkpoint Eval — Position Extrapolation Collapse Found
+
+Instance 424892, run `r_8191bfd0`. Checkpoint `runs/jl_d1_full_en/tower_best.pt`
+loaded via `--tower-state-dict`, bf16, decode controls rp1.15/ngram3, English.
+
+| eval | WER (teacher, legacy) | RTF |
+| --- | ---: | ---: |
+| gate reproduction (10 chunks, 960ms) | 0.2512 | 0.55 |
+| 20 chunks, 960ms | 0.2428 | 0.53 |
+| 20 chunks, 1920ms | 0.2445 | 0.31 |
+| 20 chunks, 960ms, position offset 1300 | **0.9367** | 0.30 |
+| 20 chunks, 960ms, position offset 4000 | **0.8629** | 0.33 |
+| full files limit 5, 960ms, seg200 | **0.9451** | 0.17 |
+| full files limit 5, 1920ms, seg200 | **0.9525** | 0.09 |
+
+Findings:
+
+- bf16 drift vs the fp32 training gate is negligible (0.2512 vs 0.2492).
+- The 96-frame-trained tower already serves at 1920ms blocks with no loss
+  (0.2445 vs 0.2428) — good news for the 2s operating point.
+- **Position extrapolation collapse confirmed**: the causal encoder assigns
+  global positions (`emitted_steps`), trained only on 0-200. At offsets
+  1300/4000 — and therefore on any audio beyond ~16s — WER collapses to ~0.9.
+  The long-file evals fail for exactly this reason, not segmentation.
+- The D0 untrained block-bidir results and all D1 gates were silently
+  protected by 16s chunks; this is the first probe outside the trained range.
+
+Decision: position-offset augmentation is now mandatory in the D1-continue
+run. Implemented: `position_offset` in the parallel training forward
+(extrapolation parity-tested against the encoder, including streaming-at-
+offset-4000 == training-at-offset-4000), per-step log-uniform offset sampling
+(`--position-offset-max 6000 --position-offset-prob 0.5`, teacher stays at 0
+— forces position-invariant embeddings), and a third gate at offset 4000.
+
+Corpus-2 note: voxpopuli (script dataset) is dead under datasets 4.8.5;
+peoples_speech and mls_eng both hung on HF metadata resolution from the
+instance. WS2 runs on reshuffled LS-960 alone; diversity retry later.
+
+Artifacts: `runs/jl_ws1/`. Checkpoint backed up to
+`~/Downloads/qwen3_checkpoints/` locally (no HF auth on the machine).

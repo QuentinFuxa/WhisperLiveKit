@@ -57,6 +57,7 @@ def gate_eval(
     chunk_ms: float,
     language: str,
     device,
+    position_offset: int = 0,
 ) -> float:
     """Streaming WER over the first ``limit`` manifest rows."""
     import soundfile as sf
@@ -82,6 +83,8 @@ def gate_eval(
             return_tensors="pt",
         )["input_features"][0].T.to(device)
         streamer = CachedFullHypothesisStreamer(model, tokenizer, config)
+        if position_offset:
+            streamer.state.audio.emitted_steps = int(position_offset)
         for start in range(0, features.shape[0], chunk_frames):
             streamer.append_mel_chunk(
                 features[start : start + chunk_frames, :].unsqueeze(0)

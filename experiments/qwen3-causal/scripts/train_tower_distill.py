@@ -323,10 +323,10 @@ def main() -> None:
         "gate_chunks": gate_chunks,
     }))
 
-    def run_gates() -> dict[float, float]:
-        wers = {}
+    def run_gates() -> dict[str, float]:
+        wers: dict[str, float] = {}
         for chunk_ms in gate_chunks:
-            wers[chunk_ms] = gate_eval(
+            wers[str(int(chunk_ms))] = gate_eval(
                 model,
                 tokenizer,
                 processor,
@@ -336,16 +336,28 @@ def main() -> None:
                 language=args.language,
                 device=device,
             )
+        if args.gate_position_offset > 0:
+            wers[f"{int(gate_chunks[0])}@off{args.gate_position_offset}"] = gate_eval(
+                model,
+                tokenizer,
+                processor,
+                manifest=args.gate_manifest,
+                limit=args.gate_limit,
+                chunk_ms=gate_chunks[0],
+                language=args.language,
+                device=device,
+                position_offset=args.gate_position_offset,
+            )
         student_tower.train()
         return wers
 
-    def save_tower(name: str, step: int, wers: dict[float, float]) -> None:
+    def save_tower(name: str, step: int, wers: dict[str, float]) -> None:
         torch.save(
             {
                 "tower_state_dict": student_tower.state_dict(),
                 "step": step,
                 "gate_wer": min(wers.values()),
-                "gate_wers": {str(k): v for k, v in wers.items()},
+                "gate_wers": dict(wers),
                 "block_frames": block_sizes,
                 "left_context_sec": args.left_context_sec,
                 "model_id": args.model_id,
@@ -355,10 +367,10 @@ def main() -> None:
 
     gates0 = run_gates()
     best_by_chunk = dict(gates0)
-    history = [{"step": 0, "gate_wers": {str(k): v for k, v in gates0.items()}}]
+    history = [{"step": 0, "gate_wers": dict(gates0)}]
     print(
         "step 0 "
-        + " ".join(f"gate@{int(c)}={w:.4f}" for c, w in gates0.items())
+        + " ".join(f"gate@{c}={w:.4f}" for c, w in gates0.items())
         + " (untrained)",
         flush=True,
     )
@@ -372,12 +384,18 @@ def main() -> None:
             group["lr"] = lr_at(step)
 
         step_block = random.choices(block_sizes, weights=block_probs, k=1)[0]
+        step_offset = 0
+        if args.position_offset_max > 0 and random.random() < args.position_offset_prob:
+            step_offset = int(
+                math.exp(random.uniform(0.0, math.log(args.position_offset_max)))
+            )
         student = block_bidirectional_forward(
             student_tower,
             mels,
             block_frames=step_block,
             left_context_steps=left_context_steps,
             lengths=lengths,
+            position_offset=step_offset,
         )
         teacher = teacher_forward(teacher_tower, mels, lengths)
         lengths_steps = torch.tensor(
@@ -405,24 +423,20 @@ def main() -> None:
         if step % args.gate_every == 0 or step == args.steps:
             wers = run_gates()
             history.append(
-                {
-                    "step": step,
-                    "gate_wers": {str(k): v for k, v in wers.items()},
-                    "loss": float(loss),
-                }
+                {"step": step, "gate_wers": dict(wers), "loss": float(loss)}
             )
             print(
                 f"step {step} "
-                + " ".join(f"gate@{int(c)}={w:.4f}" for c, w in wers.items())
+                + " ".join(f"gate@{c}={w:.4f}" for c, w in wers.items())
                 + " (best "
-                + " ".join(f"@{int(c)}={w:.4f}" for c, w in best_by_chunk.items())
+                + " ".join(f"@{c}={w:.4f}" for c, w in best_by_chunk.items())
                 + ")",
                 flush=True,
             )
-            for chunk_ms, wer in wers.items():
-                if wer < best_by_chunk[chunk_ms]:
-                    best_by_chunk[chunk_ms] = wer
-                    save_tower(f"tower_best_{int(chunk_ms)}.pt", step, wers)
+            for key, wer in wers.items():
+                if wer < best_by_chunk[key]:
+                    best_by_chunk[key] = wer
+                    save_tower(f"tower_best_{key.replace('@', '_')}.pt", step, wers)
             save_tower("tower_last.pt", step, wers)
             (args.output_dir / "history.json").write_text(json.dumps(history, indent=2))
 
@@ -430,8 +444,8 @@ def main() -> None:
         json.dumps(
             {
                 "steps": args.steps,
-                "gate_wers_untrained": {str(k): v for k, v in gates0.items()},
-                "gate_wers_best": {str(k): v for k, v in best_by_chunk.items()},
+                "gate_wers_untrained": dict(gates0),
+                "gate_wers_best": dict(best_by_chunk),
                 "trainable_params": n_trainable,
                 "history": history,
             },
@@ -439,8 +453,8 @@ def main() -> None:
         )
     )
     print(json.dumps({
-        "gate_wers_untrained": {str(k): v for k, v in gates0.items()},
-        "gate_wers_best": {str(k): v for k, v in best_by_chunk.items()},
+        "gate_wers_untrained": dict(gates0),
+        "gate_wers_best": dict(best_by_chunk),
     }))
 
 
