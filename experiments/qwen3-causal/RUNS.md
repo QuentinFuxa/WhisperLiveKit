@@ -4858,3 +4858,80 @@ artifacts, and paused again:
 
 Local `experiments/qwen3-causal` in WhisperLiveKit is now the single source of
 truth for code, manifests, run metrics, and this run log.
+
+## 2026-06-10 - Re-Audit Against MCIF Human References (Phase 0)
+
+Motivation: all historical evals scored against Qwen3-ASR-1.7B teacher
+transcripts with minimal normalization (lowercase + whitespace; punctuation
+counted as errors). Human references exist in the MCIF long-form set
+(`ref/en.txt`, 919 segment lines mapped 1:1 to `audio-segments.yaml`, 21 wavs,
+contiguous groups, monotonic offsets — verified).
+
+New tooling:
+
+- `scripts/build_mcif_reference_manifest.py` ->
+  `data/mcif_refs/manifest.human.jsonl` (per-wav concatenated human reference
+  plus per-segment offsets, so time-windowed references for chunked evals can
+  be derived).
+- `scripts/rescore_jsonl.py`: rescores existing per-item JSONLs under
+  2 reference sets (teacher = row's own `reference`, human = MCIF) x
+  2 normalizers (legacy, Whisper EnglishTextNormalizer via
+  `whisper-normalizer`). No GPU needed.
+
+Full WLK 21 audios, chunk 10s, seg200 (stage0 baseline curve):
+
+| left context | WER orig (teacher, legacy) | teacher + whisper-norm | human + legacy | human + whisper-norm |
+| --- | ---: | ---: | ---: | ---: |
+| 2s | 0.8502 | 0.8281 | 0.8514 | 0.8287 |
+| 4s | 0.6798 | 0.6419 | 0.6853 | 0.6460 |
+| 8s | 0.3243 | 0.2636 | 0.3440 | 0.2768 |
+| 12s | 0.1575 | 0.0937 | 0.1867 | 0.1101 |
+
+First-20s chunks (windowed human refs, midpoint segment selection) and
+preserve runs:
+
+| run | teacher+whisper | human+whisper |
+| --- | ---: | ---: |
+| baseline left2 first20 | 0.1054 | 0.1662 |
+| baseline left4 first20 | 0.1093 | 0.1699 |
+| baseline left8 first20 | 0.1232 | 0.1693 |
+| preserve zero-adapter lr5e-6 left8 | 0.1258 | 0.1737 |
+| preserve proj lr1e-5 200 | 1.3113 | 1.3142 |
+| preserve proj lr1e-5 500 | 1.1903 | 1.1819 |
+| left12 preserve, full WLK | 0.0950 | 0.1129 |
+| left12 baseline, full WLK | 0.0937 | 0.1101 |
+
+Verdicts:
+
+- The left-context curve shape and the left12 saturation HOLD under human
+  references and proper normalization. left12/seg200 remains the operating
+  point.
+- The true quality is better than historically reported: WER 0.110 vs human
+  references (0.094 vs teacher) instead of the headline 0.158 — legacy
+  normalization (punctuation/case) inflated WER by roughly 30-40 percent
+  relative at the good end of the curve.
+- Teacher references were a reasonable proxy: human-ref WER tracks teacher-ref
+  WER within ~0.01-0.02 on full-length audio.
+- Preserve-run verdicts survive re-scoring: lr5e-6/weight1000 is the identity
+  (0.1737 vs baseline 0.1693), lr1e-5/weight100 collapses (1.18-1.31), and the
+  trained left12 run adds nothing over baseline (0.1129 vs 0.1101). The
+  audio-side-only adaptation line stays closed.
+- Caveat: windowed first20 human references are midpoint-based, so chunk-edge
+  words inflate absolute WER slightly; use them for relative comparisons.
+
+Eval hardening:
+
+- `eval_cached_full_hypothesis.py` and `infer_cached_full_hypothesis.py` now
+  REQUIRE `--language` (no silent default) and the eval script accepts
+  `--reference-field` (e.g. `human_text`).
+
+Open items deferred to the GPU session: left15 per-item JSONLs
+(`jl_418957/418958`) only exist on `wlk-gpu-check-in2`, so the left12-vs-left15
+confirmation against human refs and the offline full-file upper bound
+(0.6B/1.7B) are still pending.
+
+Note: the previously committed
+`runs/qwen_ar_ce_stage0_baseline/wlk_full_left12_seg200_chunk10s.jsonl` was a
+6-item partial run from instance 424404 that overwrote the complete 21-item
+file from 424403 during repatriation; the full file is restored in this
+commit. All numbers above use the 21-item file.

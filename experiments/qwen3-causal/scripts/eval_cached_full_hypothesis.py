@@ -85,8 +85,25 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--commit-mode", choices=("word", "token"), default="word")
     parser.add_argument("--finalize-mode", choices=("latest", "stable"), default="latest")
-    parser.add_argument("--language", default="English")
+    parser.add_argument(
+        "--language",
+        required=True,
+        help=(
+            "Explicit language for the Qwen prompt, e.g. 'English'. Required: "
+            "auto language detection flips accented audio to the wrong language "
+            "and silently corrupts WER comparability (see RUNS.md 2026-06-10)."
+        ),
+    )
     parser.add_argument("--context", default="")
+    parser.add_argument(
+        "--reference-field",
+        default=None,
+        help=(
+            "Manifest field to use as the reference (e.g. human_text, "
+            "teacher_text). Default keeps the historical fallback chain "
+            "teacher_text -> raw_text -> text."
+        ),
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--events-dir", type=Path, default=None)
     return parser.parse_args()
@@ -99,11 +116,14 @@ def _load_items(args: argparse.Namespace) -> list[dict[str, Any]]:
             for line in handle:
                 if line.strip():
                     record = json.loads(line)
-                    reference = (
-                        record.get("teacher_text")
-                        or record.get("raw_text")
-                        or record.get("text")
-                    )
+                    if args.reference_field:
+                        reference = record.get(args.reference_field)
+                    else:
+                        reference = (
+                            record.get("teacher_text")
+                            or record.get("raw_text")
+                            or record.get("text")
+                        )
                     items.append(
                         {
                             "id": str(record.get("id") or Path(record["audio"]).stem),

@@ -81,7 +81,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--prompt-text", default=None)
     parser.add_argument("--context", default="")
-    parser.add_argument("--language", default=None)
+    parser.add_argument(
+        "--language",
+        required=True,
+        help=(
+            "Explicit language for the Qwen prompt, e.g. 'English'. Required: "
+            "auto language detection flips accented audio to the wrong "
+            "language (see RUNS.md 2026-06-10)."
+        ),
+    )
     parser.add_argument("--no-default-bos", action="store_true")
     parser.add_argument("--no-flush-right-context", action="store_true")
     parser.add_argument("--allow-realtime-specials", action="store_true")

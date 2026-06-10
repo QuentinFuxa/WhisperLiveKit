@@ -28,8 +28,9 @@ Latest useful result (updated 2026-06-10 after repatriation audit, see RUNS.md):
 - Preserve-regularized audio-only adaptation (left8/left12) either matches the
   identity or collapses; the audio-side-only training line is closed.
 - Best validated v1: untrained Qwen3-ASR-0.6B + segmented cached
-  full-hypothesis streamer at `left12/seg200/chunk10s`: WER 0.1575, RTF 0.10
-  on 21 full WLK audios.
+  full-hypothesis streamer at `left12/seg200/chunk10s`: WER 0.110 vs MCIF
+  human references with Whisper normalization (0.158 under the old
+  teacher-ref/legacy-norm scoring), RTF 0.10 on 21 full WLK audios.
 - Strict append-only audio (`qwen_audio_causal_kv`) remains broken (WER 0.91
   vs 0.20 for windowed recompute at the same zero right context). The open
   question is the bounded mutable-tail sweep proposed in the 2026-06-03
