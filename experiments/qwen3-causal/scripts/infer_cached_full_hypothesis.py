@@ -49,6 +49,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--qwen-audio-left-context-sec", type=float, default=None)
     parser.add_argument("--qwen-audio-right-context-ms", type=int, default=None)
     parser.add_argument(
+        "--qwen-audio-block-bidirectional",
+        action="store_true",
+        help=(
+            "Causal-KV backend: attend bidirectionally within each processed "
+            "block (block size = --chunk-ms), causally to the frozen KV "
+            "prefix. Append-only; latency = block size."
+        ),
+    )
+    parser.add_argument(
         "--qwen-audio-mutable-tail-sec",
         type=float,
         default=None,
@@ -150,6 +159,7 @@ def _model_config_from_context_args(
         args.qwen_audio_left_context_sec is None
         and args.qwen_audio_right_context_ms is None
         and args.qwen_audio_mutable_tail_sec is None
+        and not args.qwen_audio_block_bidirectional
     ):
         return None
     config_kwargs = {"d_model": int(d_model), "audio_window_sec": 15.0}
@@ -165,6 +175,8 @@ def _model_config_from_context_args(
         config_kwargs["qwen_audio_mutable_tail_sec"] = float(
             args.qwen_audio_mutable_tail_sec
         )
+    if args.qwen_audio_block_bidirectional:
+        config_kwargs["qwen_audio_block_bidirectional"] = True
     return RealtimeAudioConfig(**config_kwargs)
 
 

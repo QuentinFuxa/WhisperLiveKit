@@ -273,3 +273,45 @@ def test_strict_mode_unchanged_at_model_level():
     torch.testing.assert_close(cached2[:, : cached1.shape[1], :], cached1)
     assert delta2.shape[1] == cached2.shape[1] - cached1.shape[1]
     assert state.audio.last_recomputed_context_frames == 0
+
+
+def test_block_bidirectional_sees_future_within_block_only():
+    torch.manual_seed(9)
+    mels = torch.randn(1, 32, N_MELS)
+    altered = mels.clone()
+    altered[:, 16:, :] += 1.0  # change only the second half of the block
+
+    for flag, expect_change in ((False, False), (True, True)):
+        torch.manual_seed(0)
+        tower = TinyQwenAudioTower().eval()
+        config = tiny_config(qwen_audio_block_bidirectional=flag)
+        encoder = QwenAudioCausalKVEncoder(tower, config).eval()
+
+        out_a, _ = encoder.forward_chunk(mels, encoder.init_state())
+        out_b, _ = encoder.forward_chunk(altered, encoder.init_state())
+        # First half steps: 16 frames -> 2 steps
+        changed = not torch.allclose(out_a[:, :2, :], out_b[:, :2, :], atol=1e-5)
+        assert changed == expect_change, (
+            f"flag={flag}: early-step dependence on later block content "
+            f"should be {expect_change}"
+        )
+
+
+def test_block_bidirectional_stays_append_only_across_blocks():
+    torch.manual_seed(0)
+    tower = TinyQwenAudioTower().eval()
+    config = tiny_config(qwen_audio_block_bidirectional=True)
+    encoder = QwenAudioCausalKVEncoder(tower, config).eval()
+    torch.manual_seed(10)
+    mels = torch.randn(1, 64, N_MELS)
+
+    state = encoder.init_state()
+    first, state = encoder.forward_chunk(mels[:, :32, :], state)
+    second, state = encoder.forward_chunk(mels[:, 32:, :], state)
+
+    # Emitted steps from block 1 are frozen; block 2 only appends.
+    state2 = encoder.init_state()
+    first_again, _ = encoder.forward_chunk(mels[:, :32, :], state2)
+    torch.testing.assert_close(first, first_again, rtol=1e-5, atol=1e-5)
+    assert state.last_recomputed_context_frames == 0
+    assert second.shape[1] == 4  # 32 frames -> 4 steps

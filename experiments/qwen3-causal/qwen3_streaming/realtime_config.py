@@ -23,6 +23,11 @@ class RealtimeAudioConfig:
     # than this stay re-computable on every chunk; older steps freeze into the
     # per-layer KV cache. 0 = strict append-only (no recompute at all).
     qwen_audio_mutable_tail_sec: float = 0.0
+    # Intra-block bidirectional attention for the causal-KV backend: steps in
+    # the currently processed block attend to every step of that block (plus
+    # the causal KV prefix). Still append-only; latency = block size. This is
+    # the standard streaming-encoder attention pattern (chunked attention).
+    qwen_audio_block_bidirectional: bool = False
     qwen_audio_adapter_hidden_dim: int = 0
     qwen_audio_adapter_layers: int = 0
     qwen_audio_adapter_dropout: float = 0.0

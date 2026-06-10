@@ -442,6 +442,9 @@ class QwenAudioCausalKVEncoder(nn.Module):
         self.mutable_tail_steps = (
             self.output_steps_for_mel_frames(tail_frames) if tail_frames > 0 else 0
         )
+        self.block_bidirectional = bool(
+            getattr(config, "qwen_audio_block_bidirectional", False)
+        )
 
     @property
     def right_context_frames(self) -> int:
@@ -650,9 +653,17 @@ class QwenAudioCausalKVEncoder(nn.Module):
             cache_start_pos + total_len,
             device=hidden_states.device,
         )
-        allowed = k_positions[None, :] <= q_positions[:, None]
-        allowed &= k_positions[None, :] >= (
-            q_positions[:, None] - self.left_context_steps + 1
+        if self.block_bidirectional and length > 0:
+            # Chunked-attention pattern: every query in the current block sees
+            # every key of the block (bidirectional within block), plus the
+            # frozen causal prefix. Still append-only; latency = block size.
+            block_max = int(position_offset) + length - 1
+            allowed = k_positions[None, :] <= block_max
+        else:
+            allowed = k_positions[None, :] <= q_positions[:, None]
+        allowed = allowed & (
+            k_positions[None, :]
+            >= (q_positions[:, None] - self.left_context_steps + 1)
         )
 
         scores = torch.matmul(
@@ -773,9 +784,17 @@ class QwenAudioCausalKVEncoder(nn.Module):
             cache_start_pos + total_len,
             device=hidden_states.device,
         )
-        allowed = k_positions[None, :] <= q_positions[:, None]
-        allowed &= k_positions[None, :] >= (
-            q_positions[:, None] - self.left_context_steps + 1
+        if self.block_bidirectional and length > 0:
+            # Chunked-attention pattern: every query in the current block sees
+            # every key of the block (bidirectional within block), plus the
+            # frozen causal prefix. Still append-only; latency = block size.
+            block_max = int(position_offset) + length - 1
+            allowed = k_positions[None, :] <= block_max
+        else:
+            allowed = k_positions[None, :] <= q_positions[:, None]
+        allowed = allowed & (
+            k_positions[None, :]
+            >= (q_positions[:, None] - self.left_context_steps + 1)
         )
 
         scores = torch.matmul(
