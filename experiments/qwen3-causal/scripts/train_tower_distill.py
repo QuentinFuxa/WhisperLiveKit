@@ -72,6 +72,21 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--shuffle-buffer", type=int, default=1000)
     parser.add_argument(
+        "--position-offset-max",
+        type=int,
+        default=0,
+        help="If > 0, with probability --position-offset-prob each step trains the "
+        "student at a global position offset sampled log-uniformly in [1, max] "
+        "(teacher stays at 0) — position invariance for long sessions.",
+    )
+    parser.add_argument("--position-offset-prob", type=float, default=0.5)
+    parser.add_argument(
+        "--gate-position-offset",
+        type=int,
+        default=0,
+        help="If > 0, also gate at this audio position offset (long-session probe).",
+    )
+    parser.add_argument(
         "--seed-base",
         type=int,
         default=2,
