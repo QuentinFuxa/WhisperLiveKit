@@ -121,6 +121,18 @@ def parse_args() -> argparse.Namespace:
             "teacher_text -> raw_text -> text."
         ),
     )
+    parser.add_argument(
+        "--tower-state-dict",
+        type=Path,
+        default=None,
+        help="Load a D1 tower_best.pt checkpoint into the audio tower.",
+    )
+    parser.add_argument(
+        "--lora-state-dict",
+        type=Path,
+        default=None,
+        help="Wrap the text decoder with LoRA and load a D2 lora_best.pt checkpoint.",
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--events-dir", type=Path, default=None)
     return parser.parse_args()
@@ -250,6 +262,29 @@ def _load_model_and_tokenizer(args: argparse.Namespace, device: torch.device):
         dtype=torch.bfloat16,
         device_map="cpu",
     ).to(device)
+    if args.tower_state_dict is not None:
+        payload = torch.load(args.tower_state_dict, map_location="cpu", weights_only=True)
+        model.audio_encoder.audio_tower.load_state_dict(payload["tower_state_dict"])
+        print(f"loaded tower checkpoint: {args.tower_state_dict} "
+              f"(step {payload.get('step')}, gate {payload.get('gate_wer')})")
+    if args.lora_state_dict is not None:
+        from qwen3_streaming.lora import add_lora_to_linear_modules
+
+        payload = torch.load(args.lora_state_dict, map_location="cpu", weights_only=True)
+        add_lora_to_linear_modules(
+            model.text_model,
+            target_names=tuple(payload.get("lora_targets") or ()),
+            rank=int(payload["lora_rank"]),
+            alpha=float(payload["lora_alpha"]),
+        )
+        missing, unexpected = model.text_model.load_state_dict(
+            payload["lora_state_dict"], strict=False
+        )
+        if unexpected:
+            raise RuntimeError(f"unexpected LoRA keys: {unexpected[:5]}")
+        model.to(device)
+        print(f"loaded LoRA checkpoint: {args.lora_state_dict} "
+              f"(step {payload.get('step')}, gate {payload.get('gate_wer')})")
     _override_audio_context(model, args)
     model.eval()
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_source)

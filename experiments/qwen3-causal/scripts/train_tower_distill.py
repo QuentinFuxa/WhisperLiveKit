@@ -21,13 +21,7 @@ from pathlib import Path
 
 import torch
 
-from qwen3_streaming.cached_full_hypothesis import (
-    CachedFullHypothesisConfig,
-    CachedFullHypothesisStreamer,
-    added_token_id,
-    qwen_asr_prompt_text,
-)
-from qwen3_streaming.metrics import word_error_rate
+from qwen3_streaming.gate import gate_eval
 from qwen3_streaming.native_realtime_model import (
     Qwen3ASRRealtimeQwenAudioCausalModel,
     _register_qwen3_asr_transformers,
@@ -181,65 +175,6 @@ def data_batches(args, feature_extractor):
                 batch, lengths = [], []
 
 
-@torch.no_grad()
-def gate_eval(model, tokenizer, processor, args) -> float:
-    """Frozen-decoder streaming WER on held-out WLK chunks."""
-    import soundfile as sf
-
-    model.eval()
-    wait_id = added_token_id(tokenizer, "[P]")
-    word_id = added_token_id(tokenizer, "[W]")
-    suppress = [wait_id, word_id]
-    for token in ("<|audio_start|>", "<|audio_pad|>", "<|audio_end|>", "<|im_start|>"):
-        tid = tokenizer.convert_tokens_to_ids(token)
-        if isinstance(tid, int) and tid >= 0:
-            suppress.append(tid)
-    prompt_template = tokenizer.encode(
-        qwen_asr_prompt_text(context="", language=args.language),
-        add_special_tokens=False,
-    )
-    config = CachedFullHypothesisConfig(
-        wait_token_id=wait_id,
-        word_start_token_id=word_id,
-        eos_token_id=int(tokenizer.eos_token_id),
-        max_new_tokens=256,
-        repetition_penalty=1.15,
-        no_repeat_ngram_size=3,
-        suppress_token_ids=tuple(suppress),
-        prompt_prefix_template=prompt_template,
-        audio_placeholder_token_id=int(tokenizer.convert_tokens_to_ids("<|audio_pad|>")),
-    )
-
-    rows = [
-        json.loads(line)
-        for line in args.gate_manifest.read_text().splitlines()
-        if line.strip()
-    ][: args.gate_limit]
-    chunk_frames = int(round(args.gate_chunk_ms / 10.0))
-    wers = []
-    for row in rows:
-        audio, sr = sf.read(row["audio"], dtype="float32")
-        features = processor.feature_extractor(
-            audio,
-            sampling_rate=sr,
-            padding=True,
-            truncation=False,
-            return_attention_mask=True,
-            return_tensors="pt",
-        )["input_features"][0].T.to(args.device)
-        streamer = CachedFullHypothesisStreamer(model, tokenizer, config)
-        for start in range(0, features.shape[0], chunk_frames):
-            streamer.append_mel_chunk(
-                features[start : start + chunk_frames, :].unsqueeze(0)
-            )
-        final = streamer.finalize(finalize_mode="latest")
-        wer = word_error_rate(row.get("teacher_text") or row.get("text") or "", final.final_text)
-        if wer is not None:
-            wers.append(wer)
-    model.train()
-    return sum(wers) / len(wers) if wers else float("nan")
-
-
 def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -286,7 +221,21 @@ def main() -> None:
         "block_frames": args.block_frames,
     }))
 
-    gate0 = gate_eval(model, tokenizer, processor, args)
+    def run_gate() -> float:
+        wer = gate_eval(
+            model,
+            tokenizer,
+            processor,
+            manifest=args.gate_manifest,
+            limit=args.gate_limit,
+            chunk_ms=args.gate_chunk_ms,
+            language=args.language,
+            device=device,
+        )
+        student_tower.train()
+        return wer
+
+    gate0 = run_gate()
     best_wer = gate0
     history = [{"step": 0, "gate_wer": gate0}]
     print(f"step 0 gate_wer={gate0:.4f} (untrained)")
@@ -330,7 +279,7 @@ def main() -> None:
             )
 
         if step % args.gate_every == 0 or step == args.steps:
-            wer = gate_eval(model, tokenizer, processor, args)
+            wer = run_gate()
             history.append({"step": step, "gate_wer": wer, "loss": float(loss)})
             print(f"step {step} gate_wer={wer:.4f} (best {best_wer:.4f})", flush=True)
             if wer < best_wer:
