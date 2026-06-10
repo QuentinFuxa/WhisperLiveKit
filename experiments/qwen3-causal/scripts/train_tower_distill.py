@@ -48,17 +48,45 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--warmup-steps", type=int, default=200)
-    parser.add_argument("--block-frames", type=int, default=100, help="1s blocks")
+    parser.add_argument(
+        "--block-frames",
+        type=int,
+        default=96,
+        help="Bidirectional block size in mel frames; must be a multiple of 8 (conv block). 96 = 0.96s.",
+    )
     parser.add_argument("--left-context-sec", type=float, default=15.0)
     parser.add_argument("--max-audio-sec", type=float, default=16.0)
     parser.add_argument("--cosine-weight", type=float, default=0.5)
     parser.add_argument("--dataset", default="openslr/librispeech_asr")
     parser.add_argument("--dataset-config", default="clean")
-    parser.add_argument("--dataset-split", default="train.100")
+    parser.add_argument(
+        "--dataset-split",
+        default="train.100",
+        help="Split name, or comma-separated splits to interleave (e.g. "
+        "train.clean.100,train.clean.360,train.other.500 with --dataset-config all).",
+    )
+    parser.add_argument("--shuffle-buffer", type=int, default=1000)
+    parser.add_argument(
+        "--lr-end-ratio",
+        type=float,
+        default=1.0,
+        help="Cosine-decay the LR to this fraction of --lr by --steps (1.0 = constant).",
+    )
+    parser.add_argument(
+        "--resume-tower",
+        type=Path,
+        default=None,
+        help="Load a tower_best.pt checkpoint into the student tower before training.",
+    )
     parser.add_argument("--gate-manifest", type=Path, required=True)
     parser.add_argument("--gate-limit", type=int, default=10)
     parser.add_argument("--gate-every", type=int, default=500)
-    parser.add_argument("--gate-chunk-ms", type=float, default=1000.0)
+    parser.add_argument(
+        "--gate-chunk-ms",
+        type=float,
+        default=960.0,
+        help="Gate streaming chunk; keep = block-frames * 10 for train/serve parity.",
+    )
     parser.add_argument("--language", required=True, help="e.g. English (gate prompts)")
     parser.add_argument("--log-every", type=int, default=25)
     parser.add_argument("--device", default="cuda")
@@ -105,10 +133,22 @@ def data_batches(args, feature_extractor):
     max_frames = int(args.max_audio_sec * 100)
     max_frames -= max_frames % args.block_frames
 
+    splits = [s.strip() for s in args.dataset_split.split(",") if s.strip()]
+    epoch = 0
     while True:  # loop epochs indefinitely; --steps bounds training
-        ds = load_dataset(
-            args.dataset, args.dataset_config, split=args.dataset_split, streaming=True
-        )
+        parts = [
+            load_dataset(args.dataset, args.dataset_config, split=split, streaming=True)
+            for split in splits
+        ]
+        if len(parts) > 1:
+            from datasets import interleave_datasets
+
+            ds = interleave_datasets(parts, stopping_strategy="all_exhausted")
+        else:
+            ds = parts[0]
+        if args.shuffle_buffer > 0:
+            ds = ds.shuffle(buffer_size=args.shuffle_buffer, seed=epoch)
+        epoch += 1
         ds = ds.cast_column("audio", Audio(decode=False))
         batch, lengths = [], []
         for item in ds:
@@ -210,6 +250,14 @@ def main() -> None:
     model, tokenizer, processor = build_model(args)
     student_tower = model.audio_encoder.audio_tower
     teacher_tower = copy.deepcopy(student_tower).eval().requires_grad_(False)
+    if args.resume_tower is not None:
+        payload = torch.load(args.resume_tower, map_location="cpu", weights_only=True)
+        student_tower.load_state_dict(payload["tower_state_dict"])
+        print(json.dumps({
+            "resumed_from": str(args.resume_tower),
+            "resumed_step": payload.get("step"),
+            "resumed_gate_wer": payload.get("gate_wer"),
+        }))
     for module in (model.text_model, model.lm_head, model.adapter):
         module.eval()
         for param in module.parameters():
@@ -220,10 +268,16 @@ def main() -> None:
     n_trainable = sum(p.numel() for p in trainable)
     optimizer = torch.optim.AdamW(trainable, lr=args.lr, weight_decay=0.01)
 
+    import math
+
     def lr_at(step: int) -> float:
         if step < args.warmup_steps:
             return args.lr * (step + 1) / args.warmup_steps
-        return args.lr
+        if args.lr_end_ratio >= 1.0:
+            return args.lr
+        progress = (step - args.warmup_steps) / max(1, args.steps - args.warmup_steps)
+        floor = args.lr * args.lr_end_ratio
+        return floor + (args.lr - floor) * 0.5 * (1.0 + math.cos(math.pi * progress))
 
     left_context_steps = model.audio_encoder.left_context_steps
     print(json.dumps({
