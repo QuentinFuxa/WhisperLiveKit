@@ -5140,3 +5140,43 @@ tower to encode block-boundary context, not to relearn attention from
 scratch.
 
 Artifacts: `runs/jl_d0_blockbidir/`. Instance 424637 paused.
+
+## 2026-06-10 - D1 Smoke: Tower Distillation GATE PASSED
+
+Run `r_715553ad` on instance 424647 (paused after). Student = audio tower
+under the block-bidirectional streaming mask (96-frame blocks = 0.96s, left
+15s), trained with the parity-proven parallel forward
+(`qwen3_streaming/tower_distill.py`); teacher = frozen original tower,
+offline, computed on the fly; loss = masked MSE + 0.5 x cosine distance on
+output embeddings; data = LibriSpeech train-clean-100 streamed, audio only.
+
+```text
+steps: 3000   batch: 8   lr: 1e-5 (200 warmup)   ~20 min H100 fp32
+audio seen: ~67 hours-equivalent
+gate: frozen-decoder streaming WER, 10 held-out WLK chunks, chunk 960ms
+```
+
+| step | gate WER (frozen decoder) | cos distance |
+| ---: | ---: | ---: |
+| 0 (untrained) | 0.7554 | — |
+| 500 | 0.6822 | 0.122 |
+| 1000 | 0.5346 | — |
+| 1500 | 0.4686 | — |
+| 2000 | 0.4596 | — |
+| 2500 | **0.4225** | — |
+| 3000 | 0.4255 | 0.054 |
+
+Verdict: GATE PASSED (target < 0.5, near the < 0.4 stretch goal). Matching
+offline embeddings transfers directly to frozen-decoder streaming WER:
+-44 percent relative in 20 GPU-minutes on 100h of audio, with the decoder,
+LM head and adapter untouched. The curve is still descending at 2500 and
+flattens only at this tiny data scale (LS-clean-100 loops).
+
+This validates the D1 mechanism. The remaining gap to the bidirectional
+window (0.42 -> 0.20 untrained-window reference, then toward the 0.084
+production point) is now a scale problem: more hours, more diversity
+(EN+FR), an LR schedule, and afterwards D2 (CE + decoder LoRA co-adaptation).
+
+Artifacts: `runs/jl_d1_smoke/{history.json,final_metrics.json}` local;
+`runs/jl_d1_smoke/tower_best.pt` (746MB, step 2500, gate 0.4225) kept on the
+paused instance.
