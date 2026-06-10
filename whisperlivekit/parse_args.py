@@ -147,8 +147,8 @@ def parse_args():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal"],
-        help="Select the ASR backend implementation. Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon.",
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"],
+        help="Select the ASR backend implementation. Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-streaming' for Qwen3-ASR through plain HF Transformers with a bounded-recompute audio cache (CUDA/MPS/CPU, no vLLM; requires an explicit --language).",
     )
     parser.add_argument(
         "--no-vac",
@@ -245,6 +245,97 @@ def parse_args():
         default=True,
         dest="trim_sentence_buffer",
         help="Disable Qwen3 vllm-metal buffer trimming at committed sentence boundaries.",
+    )
+
+    # Qwen3 streaming backend arguments
+    qwen3_streaming_group = parser.add_argument_group(
+        'Qwen3 streaming backend arguments (only used with --backend qwen3-streaming)'
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-chunk-sec",
+        type=float,
+        default=2.0,
+        dest="qwen3_streaming_chunk_sec",
+        help="Minimum seconds of new audio per decode update. Decodes self-pace upward on slow hardware.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-left-context-sec",
+        type=float,
+        default=12.0,
+        dest="qwen3_streaming_left_context_sec",
+        help="Audio tower left context window in seconds (bounded recompute). Quality saturates around 12s on long-form audio.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-right-context-ms",
+        type=int,
+        default=640,
+        dest="qwen3_streaming_right_context_ms",
+        help="Audio tower right context in milliseconds before an encoder step is finalized.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-segment-max-steps",
+        type=int,
+        default=200,
+        dest="qwen3_streaming_segment_max_steps",
+        help="Cached decoder steps before the active segment is finalized and rolled (200 steps = ~15s of audio).",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-segment-keep-tail-steps",
+        type=int,
+        default=0,
+        dest="qwen3_streaming_segment_keep_tail_steps",
+        help="Audio embedding steps carried over after a segment roll (0 = hard boundary, validated default).",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-hold-back-words",
+        type=int,
+        default=6,
+        dest="qwen3_streaming_hold_back_words",
+        help="Trailing words held back from commitment until stable.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-stable-iterations",
+        type=int,
+        default=2,
+        dest="qwen3_streaming_stable_iterations",
+        help="Consecutive identical hypothesis prefixes required before committing.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-max-new-tokens",
+        type=int,
+        default=256,
+        dest="qwen3_streaming_max_new_tokens",
+        help="Max tokens per full-hypothesis decode (bounds one segment's text).",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-device",
+        type=str,
+        default="auto",
+        choices=["auto", "cuda", "mps", "cpu"],
+        dest="qwen3_streaming_device",
+        help="Device for the Qwen3 streaming model.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-dtype",
+        type=str,
+        default="auto",
+        choices=["auto", "bfloat16", "float16", "float32"],
+        dest="qwen3_streaming_dtype",
+        help="Model dtype. auto = bfloat16 on CUDA, float16 on MPS, float32 on CPU.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-context",
+        type=str,
+        default="",
+        dest="qwen3_streaming_context",
+        help="Optional system-prompt context (terminology, names) for the Qwen ASR prompt.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-prompt-context-words",
+        type=int,
+        default=0,
+        dest="qwen3_streaming_prompt_context_words",
+        help="Trailing transcript words injected into the next segment prompt (0 = disabled; enabling measured worse).",
     )
 
     # SimulStreaming-specific arguments

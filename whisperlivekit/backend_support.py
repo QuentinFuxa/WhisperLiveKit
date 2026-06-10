@@ -34,6 +34,15 @@ def voxtral_hf_backend_available():
     return module_available("transformers")
 
 
+def qwen3_streaming_backend_available():
+    """Return True if the Qwen3 streaming (HF Transformers) backend is available."""
+    return (
+        module_available("torch")
+        and module_available("transformers")
+        and module_available("qwen_asr")
+    )
+
+
 
 def faster_backend_available(warn_on_missing = False):
     available = module_available("faster_whisper")

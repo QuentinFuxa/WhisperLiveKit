@@ -83,6 +83,20 @@ class WhisperLiveKitConfig:
     holdback_words: Optional[int] = None
     trim_sentence_buffer: bool = True
 
+    # Qwen3 streaming backend (HF Transformers, bounded-recompute cache)
+    qwen3_streaming_chunk_sec: float = 2.0
+    qwen3_streaming_left_context_sec: float = 12.0
+    qwen3_streaming_right_context_ms: int = 640
+    qwen3_streaming_segment_max_steps: int = 200
+    qwen3_streaming_segment_keep_tail_steps: int = 0
+    qwen3_streaming_hold_back_words: int = 6
+    qwen3_streaming_stable_iterations: int = 2
+    qwen3_streaming_max_new_tokens: int = 256
+    qwen3_streaming_device: str = "auto"
+    qwen3_streaming_dtype: str = "auto"
+    qwen3_streaming_context: str = ""
+    qwen3_streaming_prompt_context_words: int = 0
+
     def __post_init__(self):
         # .en model suffix forces English
         if self.model_size and self.model_size.endswith(".en"):

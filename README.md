@@ -112,6 +112,7 @@ For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLi
 | **Sentence tokenizer** | `uv sync --extra sentence_tokenizer` | `pip install -e ".[sentence_tokenizer]"` |
 | **Voxtral (HF backend)** | `uv sync --extra voxtral-hf` | `pip install -e ".[voxtral-hf]"` |
 | **Qwen3-ASR vLLM (CUDA)** | `uv sync --extra qwen3-vllm` | `pip install -e ".[qwen3-vllm]"` |
+| **Qwen3-ASR streaming (HF, CUDA/MPS/CPU)** | `uv sync --extra qwen3-streaming` | `pip install -e ".[qwen3-streaming]"` |
 | **Qwen3-ASR vLLM Metal (Apple Silicon)** | Install vLLM with the official vllm-metal script first, then `uv sync --extra qwen3-vllm-metal` | Install vLLM with the official vllm-metal script first, then `pip install -e ".[qwen3-vllm-metal]"` |
 | **Speaker diarization (Sortformer / NeMo)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
 | *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
@@ -172,6 +173,31 @@ wlk --backend voxtral
 
 Voxtral uses its own streaming policy and does not use LocalAgreement or SimulStreaming.
 See [BENCHMARK.md](BENCHMARK.md) for performance numbers.
+
+### Qwen3-ASR streaming (HF Transformers)
+
+`qwen3-streaming` runs Qwen3-ASR through plain HF Transformers with a
+bounded-recompute audio cache: the pretrained audio tower only re-encodes a
+local window (default 12 s) per update, cached audio embeddings are
+append-only, and text is committed with a stable-prefix rule. Works on CUDA,
+Apple Silicon (MPS) and CPU — no vLLM required.
+
+```bash
+pip install -e ".[qwen3-streaming]"
+wlk --backend qwen3-streaming --language en
+```
+
+Notes:
+- An explicit `--language` is required (automatic detection switches language
+  mid-stream on accented audio).
+- Word timestamps are interpolated estimates (~1 s precision) — good enough
+  for lines and diarization alignment. Use `--backend qwen3-vllm`
+  (ForcedAligner) when exact word timing matters.
+- Decode pacing self-adjusts to the hardware; on GPUs slower than real time
+  the update cadence grows instead of lagging. Plan one realtime session per
+  GPU.
+- Defaults encode the validated operating point (12 s left context, ~15 s
+  segments); see `--help` for the `--qwen3-streaming-*` knobs.
 
 ### Usage Examples
 
@@ -243,7 +269,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--target-language` | If sets, translates using [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting). [200 languages available](docs/supported_languages.md). If you want to translate to english, you can also use `--direct-english-translation`. The STT model will try to directly output the translation. | `None` |
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
-| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon) | `auto` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU) | `auto` |
 | `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
 | `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |

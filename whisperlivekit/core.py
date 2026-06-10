@@ -111,7 +111,28 @@ class TranscriptionEngine:
         }
 
         if config.transcription:
-            if config.backend == "qwen3-vllm":
+            if config.backend == "qwen3-streaming":
+                from whisperlivekit.qwen3_streaming import Qwen3StreamingASR
+                qwen3_streaming_params = {
+                    "qwen3_streaming_chunk_sec": config.qwen3_streaming_chunk_sec,
+                    "qwen3_streaming_left_context_sec": config.qwen3_streaming_left_context_sec,
+                    "qwen3_streaming_right_context_ms": config.qwen3_streaming_right_context_ms,
+                    "qwen3_streaming_segment_max_steps": config.qwen3_streaming_segment_max_steps,
+                    "qwen3_streaming_segment_keep_tail_steps": config.qwen3_streaming_segment_keep_tail_steps,
+                    "qwen3_streaming_hold_back_words": config.qwen3_streaming_hold_back_words,
+                    "qwen3_streaming_stable_iterations": config.qwen3_streaming_stable_iterations,
+                    "qwen3_streaming_max_new_tokens": config.qwen3_streaming_max_new_tokens,
+                    "qwen3_streaming_device": config.qwen3_streaming_device,
+                    "qwen3_streaming_dtype": config.qwen3_streaming_dtype,
+                    "qwen3_streaming_context": config.qwen3_streaming_context,
+                    "qwen3_streaming_prompt_context_words": config.qwen3_streaming_prompt_context_words,
+                }
+                self.tokenizer = None
+                self.asr = Qwen3StreamingASR(
+                    **transcription_common_params, **qwen3_streaming_params
+                )
+                logger.info("Using Qwen3-ASR streaming (HF Transformers) backend")
+            elif config.backend == "qwen3-vllm":
                 from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMASR
                 self.tokenizer = None
                 self.asr = Qwen3VLLMASR(**transcription_common_params)
@@ -188,7 +209,7 @@ class TranscriptionEngine:
 
         self.translation_model = None
         if config.target_language:
-            if config.backend in {"qwen3-vllm", "qwen3-vllm-metal"}:
+            if config.backend in {"qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"}:
                 raise ValueError(f"{config.backend} supports transcription only; translation is not supported.")
             if config.lan == 'auto' and config.backend_policy != "simulstreaming":
                 raise ValueError('Translation cannot be set with language auto when transcription backend is not simulstreaming')
@@ -220,6 +241,9 @@ def online_factory(args, asr, language=None):
         asr = SessionASRProxy(asr, language)
 
     backend = getattr(args, 'backend', None)
+    if backend == "qwen3-streaming":
+        from whisperlivekit.qwen3_streaming import Qwen3StreamingOnlineProcessor
+        return Qwen3StreamingOnlineProcessor(asr)
     if backend == "qwen3-vllm":
         from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMOnlineProcessor
         return Qwen3VLLMOnlineProcessor(asr)

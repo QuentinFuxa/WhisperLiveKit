@@ -60,6 +60,12 @@ qwen3-vllm = [
     'vllm[audio]>=0.20.0; sys_platform == "linux"',
     'torchvision; sys_platform == "linux" and platform_machine == "x86_64"',
 ]
+qwen3-streaming = [
+    "qwen-asr>=0.0.6",
+    "transformers>=4.57",
+    "torch>=2.0.0",
+    "accelerate>=0.12",
+]
 listen = ["sounddevice>=0.4.6"]
 cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
 cu129 = [
@@ -105,6 +111,10 @@ conflicts = [
     [
         { extra = "qwen3-vllm-metal" },
         { extra = "diarization-sortformer" },
+    ],
+    [
+        { extra = "qwen3-streaming" },
+        { extra = "voxtral-hf" },
     ],
 ]
 

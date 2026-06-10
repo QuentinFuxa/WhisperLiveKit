@@ -4972,3 +4972,36 @@ clean over `qwen3_streaming/`, `scripts/`, `tests/`.
 
 README.md rewritten around the validated v1 path, the closed adaptation line,
 and the open mutable-tail question.
+
+## 2026-06-10 - Promotion: qwen3-streaming Backend in WhisperLiveKit (Phase 2)
+
+The validated runtime was promoted into `whisperlivekit/qwen3_streaming/` as a
+first-class backend (`--backend qwen3-streaming`):
+
+- `streamer.py` / `stable_commit.py`: ports of the validated cached
+  full-hypothesis streamers and stable-commit logic.
+- `model.py`: surgery-only inference subset of `native_realtime_model.py`
+  (bounded-recompute encoder; the causal-KV encoder stays in experiments for
+  the mutable-tail sweep).
+- `features.py`: new `StreamingMelExtractor` — incremental Whisper-mel with
+  sample-exact frame parity vs one-shot extraction (window-local clamp is the
+  one documented approximation).
+- `asr.py` / `online.py`: shared model holder (HF Transformers, CUDA/MPS/CPU,
+  explicit-language required) and per-session online processor (self-pacing
+  decode cadence, interpolated word timestamps, append-only emission across
+  segment rollovers).
+- Wiring: config fields, CLI group `--qwen3-streaming-*`, core routing,
+  `qwen3-streaming` pip extra (uv conflict with voxtral-hf).
+
+Validation:
+
+```text
+pytest tests/ -> 116 passed, 1 skipped
+  (new: 21 streamer/stable-commit, 4 mel parity, 12 processor contract)
+E2E on Apple Silicon (MPS, fp16, Qwen/Qwen3-ASR-0.6B, real audio through the
+full WLK pipeline): 1 passed in 17.6s, WER < 0.35 on librispeech_short,
+monotonic line timestamps.
+```
+
+Defaults encode the re-audited operating point: left12 / right 640ms / seg200
+/ chunk 2s with self-pacing.
