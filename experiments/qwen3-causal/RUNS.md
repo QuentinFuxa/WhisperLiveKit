@@ -5222,3 +5222,39 @@ Verdict:
 Artifacts: `runs/jl_d1_full_en/{history.json,final_metrics.json}` local;
 `runs/jl_d1_full_en/tower_best.pt` (746MB, step 60000, gate 0.2492) on the
 paused instance.
+
+## 2026-06-10 - D2a: Decoder LoRA CE Overfits — Decoder Is Not the Bottleneck
+
+Run `r_9a56ed44` on instance 424784 (stopped at ~step 1500 of 4000, machine
+paused). LoRA r16/a32 on all decoder projections (10.1M trainable, 196
+modules), teacher-forced CE on the existing teacher manifests (3,829 rows,
+~15h: qwen_aligned_mix_16s_teacher_filter_v0 + WLK chunks train split),
+frozen D1 tower (`tower_best.pt`, gate 0.2492).
+
+```text
+step 0    gate 0.2492   (exact LoRA no-op resume sanity)
+step 25   train acc 0.9445
+step 500  gate 0.2669   train acc ~0.97
+step 1000 gate 0.2556   train acc ~0.99
+step 1500 train acc 1.0000, loss 0.005  -> stopped (pure memorization)
+```
+
+Findings:
+
+- Teacher-forced token accuracy was already 0.92-0.96 BEFORE any training:
+  the decoder largely understands the distilled causal embeddings. CE has
+  almost nothing to teach it except style memorization of 15h of text.
+- The gate degraded while train accuracy saturated — immediate overfit on
+  the small CE set, exactly the failure mode anticipated in the plan risks.
+
+Verdict: decoder co-adaptation is NOT the current bottleneck. The remaining
+gap (0.2492 vs 0.20 window-untrained vs ~0.13 window at this chunk size) is
+on the tower/embedding side, where D1 was still descending at 60k steps.
+
+Decision: do not pursue CE-on-small-data. Next lever is D1-continue at
+larger scale and diversity — resume the tower from `tower_best.pt` with a
+fresh LR cycle and add Multilingual LibriSpeech French (serves the FR goal
+simultaneously). Pseudo-label CE at LS scale stays as a later option if the
+tower path saturates above target.
+
+Artifacts: `runs/jl_d2a_lora/history.json` local; no checkpoint promoted.
