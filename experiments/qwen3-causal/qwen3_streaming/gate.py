@@ -15,6 +15,7 @@ import torch
 from .cached_full_hypothesis import (
     CachedFullHypothesisConfig,
     CachedFullHypothesisStreamer,
+    SegmentedCachedFullHypothesisStreamer,
     added_token_id,
     qwen_asr_prompt_text,
 )
@@ -58,6 +59,7 @@ def gate_eval(
     language: str,
     device,
     position_offset: int = 0,
+    segment_max_cached_steps: int = 0,
 ) -> float:
     """Streaming WER over the first ``limit`` manifest rows."""
     import soundfile as sf
@@ -82,7 +84,17 @@ def gate_eval(
             return_attention_mask=True,
             return_tensors="pt",
         )["input_features"][0].T.to(device)
-        streamer = CachedFullHypothesisStreamer(model, tokenizer, config)
+        if segment_max_cached_steps > 0:
+            streamer = SegmentedCachedFullHypothesisStreamer(
+                model,
+                tokenizer,
+                config,
+                segment_max_cached_steps=segment_max_cached_steps,
+                segment_finalize_mode="latest",
+                segment_prompt_language=language,
+            )
+        else:
+            streamer = CachedFullHypothesisStreamer(model, tokenizer, config)
         if position_offset:
             streamer.state.audio.emitted_steps = int(position_offset)
         for start in range(0, features.shape[0], chunk_frames):

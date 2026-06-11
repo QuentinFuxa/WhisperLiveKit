@@ -72,6 +72,30 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--shuffle-buffer", type=int, default=1000)
     parser.add_argument(
+        "--concat-min-sec",
+        type=float,
+        default=0.0,
+        help="If > 0, concatenate streamed utterances into long samples whose "
+        "target length is sampled log-uniformly in [min, max] seconds — trains "
+        "long block chains (the long-form drift fix).",
+    )
+    parser.add_argument("--concat-max-sec", type=float, default=96.0)
+    parser.add_argument(
+        "--batch-frame-budget",
+        type=int,
+        default=13000,
+        help="With concatenation: pack samples into a batch until this many mel "
+        "frames (keeps step compute roughly constant across lengths).",
+    )
+    parser.add_argument(
+        "--long-gate-manifest",
+        type=Path,
+        default=None,
+        help="Optional full-file manifest for a chain-robustness gate (segmented, no reset).",
+    )
+    parser.add_argument("--long-gate-limit", type=int, default=3)
+    parser.add_argument("--long-gate-every", type=int, default=10000)
+    parser.add_argument(
         "--position-offset-max",
         type=int,
         default=0,
@@ -221,7 +245,10 @@ def data_batches(args, feature_extractor):
     from datasets import Audio, load_dataset
 
     pad_to = max(parse_block_sizes(args))
-    max_frames = int(args.max_audio_sec * 100)
+    cap_sec = (
+        args.concat_max_sec if args.concat_min_sec > 0 else args.max_audio_sec
+    )
+    max_frames = int(cap_sec * 100)
     max_frames -= max_frames % pad_to
 
     splits = [s.strip() for s in args.dataset_split.split(",") if s.strip()]
@@ -252,6 +279,49 @@ def data_batches(args, feature_extractor):
         epoch += 1
         ds = ds.cast_column("audio", Audio(decode=False))
         batch, lengths = [], []
+        import math as _math
+        import random as _random
+
+        rng = _random.Random(epoch + args.seed_base)
+
+        def draw_target_frames() -> int:
+            lo, hi = args.concat_min_sec, args.concat_max_sec
+            sec = _math.exp(rng.uniform(_math.log(lo), _math.log(hi)))
+            frames = int(sec * 100)
+            return max(8, frames - frames % 8)
+
+        concat_parts: list = []
+        concat_frames = 0
+        concat_target = draw_target_frames() if args.concat_min_sec > 0 else 0
+
+        def flush_batch():
+            nonlocal batch, lengths
+            if not batch:
+                return None
+            longest = max(lengths)
+            longest += (-longest) % pad_to
+            mels = np.zeros((len(batch), longest, 128), dtype=np.float32)
+            for i, feat in enumerate(batch):
+                mels[i, : feat.shape[0], :] = feat
+            out = torch.from_numpy(mels), torch.tensor(lengths)
+            batch, lengths = [], []
+            return out
+
+        def push_sample(features):
+            frames = int(features.shape[0])
+            if args.concat_min_sec > 0:
+                budget_hit = (
+                    sum(lengths) + frames > args.batch_frame_budget and batch
+                )
+            else:
+                budget_hit = len(batch) >= args.batch_size
+            out = flush_batch() if budget_hit else None
+            batch.append(features)
+            lengths.append(frames)
+            if args.concat_min_sec <= 0 and len(batch) == args.batch_size:
+                out = out or flush_batch()
+            return out
+
         iterator = iter(ds)
         while True:
             try:
@@ -278,16 +348,20 @@ def data_batches(args, feature_extractor):
             frames -= frames % 8  # conv block granularity
             if frames < 100:
                 continue
-            batch.append(features[:frames])
-            lengths.append(frames)
-            if len(batch) == args.batch_size:
-                longest = max(lengths)
-                longest += (-longest) % pad_to
-                mels = np.zeros((len(batch), longest, 128), dtype=np.float32)
-                for i, feat in enumerate(batch):
-                    mels[i, : feat.shape[0], :] = feat
-                yield torch.from_numpy(mels), torch.tensor(lengths)
-                batch, lengths = [], []
+            if args.concat_min_sec > 0:
+                concat_parts.append(features[:frames])
+                concat_frames += frames
+                if concat_frames >= concat_target:
+                    sample = np.concatenate(concat_parts, axis=0)
+                    concat_parts, concat_frames = [], 0
+                    concat_target = draw_target_frames()
+                    out = push_sample(sample)
+                    if out is not None:
+                        yield out
+            else:
+                out = push_sample(features[:frames])
+                if out is not None:
+                    yield out
 
 
 def main() -> None:
@@ -374,6 +448,21 @@ def main() -> None:
         student_tower.train()
         return wers
 
+    def run_long_gate() -> float:
+        wer = gate_eval(
+            model,
+            tokenizer,
+            processor,
+            manifest=args.long_gate_manifest,
+            limit=args.long_gate_limit,
+            chunk_ms=gate_chunks[0],
+            language=args.language,
+            device=device,
+            segment_max_cached_steps=200,
+        )
+        student_tower.train()
+        return wer
+
     def save_tower(name: str, step: int, wers: dict[str, float]) -> None:
         torch.save(
             {
@@ -445,6 +534,10 @@ def main() -> None:
 
         if step % args.gate_every == 0 or step == args.steps:
             wers = run_gates()
+            if args.long_gate_manifest is not None and (
+                step % args.long_gate_every == 0 or step == args.steps
+            ):
+                wers["long"] = run_long_gate()
             history.append(
                 {"step": step, "gate_wers": dict(wers), "loss": float(loss)}
             )
@@ -457,6 +550,8 @@ def main() -> None:
                 flush=True,
             )
             for key, wer in wers.items():
+                if key not in best_by_chunk:
+                    best_by_chunk[key] = wer
                 if wer < best_by_chunk[key]:
                     best_by_chunk[key] = wer
                     save_tower(f"tower_best_{key.replace('@', '_')}.pt", step, wers)
