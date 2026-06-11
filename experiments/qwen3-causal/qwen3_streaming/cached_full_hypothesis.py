@@ -395,6 +395,11 @@ class SegmentedCachedFullHypothesisStreamer(CachedFullHypothesisStreamer):
     segment_prompt_base_context: str = ""
     segment_prompt_language: str | None = None
     segment_prompt_context_prefix: str = "Previous transcript context:"
+    # Reset the audio encoder state (positions + per-layer KV) when a segment
+    # rolls. Bounds the encoder's chain length to one segment: long sessions
+    # become sequences of segment-length encodes, trading cross-segment
+    # acoustic context for trained-regime fidelity.
+    reset_encoder_on_rollover: bool = False
     completed_text: str = ""
     completed_tokens: list[int] = field(default_factory=list)
     segments_finalized: int = 0
@@ -558,6 +563,13 @@ class SegmentedCachedFullHypothesisStreamer(CachedFullHypothesisStreamer):
         self.completed_tokens.extend(segment_final.final_tokens)
         self.segments_finalized += 1
         self._trim_cached_audio_window()
+        if self.reset_encoder_on_rollover:
+            frames_seen = int(getattr(self.state.audio, "frames_seen", 0))
+            pending = getattr(self.state.audio, "mel_buffer", None)
+            self.state.audio = self.model.audio_encoder.init_state()
+            self.state.audio.frames_seen = frames_seen
+            if pending is not None:
+                self.state.audio.mel_buffer = pending
         self._reset_active_segment_state()
         return segment_final
 

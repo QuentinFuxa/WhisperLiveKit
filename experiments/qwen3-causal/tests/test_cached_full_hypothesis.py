@@ -208,3 +208,40 @@ def test_segmented_streamer_builds_dynamic_prompt_from_completed_tail():
     assert "Previous transcript context:" in tokenizer.last_encoded_text
     assert "world today" in tokenizer.last_encoded_text
     assert "language English<asr_text>" in tokenizer.last_encoded_text
+
+
+def test_segment_rollover_can_reset_encoder_state():
+    class AudioState:
+        def __init__(self, emitted_steps=0, frames_seen=0):
+            self.emitted_steps = emitted_steps
+            self.frames_seen = frames_seen
+            self.mel_buffer = None
+
+    class DecodeState:
+        def __init__(self):
+            self.audio = AudioState(emitted_steps=4321, frames_seen=999)
+            self.frame_hidden = None
+
+    class Encoder:
+        def init_state(self):
+            return AudioState()
+
+    class Model:
+        audio_encoder = Encoder()
+
+        def init_cached_audio_decode_state(self):
+            return DecodeState()
+
+    config = CachedFullHypothesisConfig(wait_token_id=99, word_start_token_id=98)
+    streamer = SegmentedCachedFullHypothesisStreamer(
+        Model(),
+        FakeTokenizer(),
+        config,
+        segment_max_cached_steps=2,
+        reset_encoder_on_rollover=True,
+    )
+    streamer.roll_segment()
+
+    # Encoder positions restarted; stream-time bookkeeping preserved.
+    assert streamer.state.audio.emitted_steps == 0
+    assert streamer.state.audio.frames_seen == 999

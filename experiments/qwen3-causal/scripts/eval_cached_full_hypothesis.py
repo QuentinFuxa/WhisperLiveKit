@@ -144,6 +144,12 @@ def parse_args() -> argparse.Namespace:
         help="Wrap the text decoder with LoRA and load a D2 lora_best.pt checkpoint.",
     )
     parser.add_argument(
+        "--encoder-reset-on-rollover",
+        action="store_true",
+        help="Reset encoder positions/KV at each segment rollover (bounds the "
+        "causal chain length to one segment; counters long-form drift).",
+    )
+    parser.add_argument(
         "--decoder-cache",
         choices=("on", "off"),
         default="on",
@@ -380,6 +386,7 @@ def _run_one(
             segment_prompt_context_words=args.segment_prompt_context_words,
             segment_prompt_base_context=args.context,
             segment_prompt_language=args.language,
+            reset_encoder_on_rollover=args.encoder_reset_on_rollover,
             segment_prompt_context_prefix=args.segment_prompt_context_prefix,
         )
     else:
