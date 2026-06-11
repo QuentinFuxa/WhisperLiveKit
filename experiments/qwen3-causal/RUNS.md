@@ -5339,3 +5339,71 @@ jl resume <wlk-gpu-check-in2 id>   # new machine id after resume
 # relaunch scripts/train_tower_distill.py with --resume-tower <that checkpoint>,
 # --steps <remaining>, lr continuing the cosine (~7.5e-6 from 20k).
 ```
+
+## 2026-06-11 - Session B: WS2 Final, KV-Cache Parity, Chain-Drift Fix, Long-Form Causal Works
+
+Instance 424892 -> 424993 (paused after). Runs `r_e1a643fd`/`r_fa4f0e3f`
+(WS2 parts), `r_719b4463` (evals), `r_92cafe07` (reset evals).
+
+### WS2 complete (60k cumulative steps in 3 parts: HF-CDN crash at 20.5k,
+### balance-pause at ~21k, clean 40k finish)
+
+Mixed blocks 96/192 (50/50), position offsets log-uniform [1,6000] @ p=0.5,
+triple gate, LS-960 reshuffled, lr 1e-5 -> 1e-6 (cosine across parts):
+
+| cumulative step | gate@960 | gate@1920 | gate@960@off4000 |
+| ---: | ---: | ---: | ---: |
+| 0 (D1) | 0.2492 | 0.2651 | 0.8828 |
+| 20000 | 0.2514 | 0.2408 | 0.3681 |
+| 40000 | 0.2201 | 0.2194 | 0.2977 |
+| 60000 (final = best) | **0.2117** | **0.2031** | 0.2742 |
+
+20-chunk confirmation: @960 0.2325, @1920 0.2113. gate@1920 reaches parity
+with the untrained windowed-bidirectional right=0 reference (0.2017).
+Checkpoint `runs/jl_ws2_mix_pos_p2b/tower_last.pt`, backed up locally.
+
+### Decoder KV-cache V1: GPU parity exact, RTF gain real
+
+5 chunks, cache off vs on: WER identical (0.1807), **5/5 final texts
+byte-identical**, RTF 0.658 -> 0.516 (-22 percent on short chunks; the gain
+grows with prefix size). Default ON everywhere now.
+
+### Long-form chain-drift: diagnosed and countered
+
+With position invariance learned (off4000 gate 0.27), the 21-file eval STILL
+collapsed (~0.95) — transcripts start clean and degrade mid-file
+("...My name is Jingwei from the University of Science and Technology of
+China..." -> "Do do do do. So, so, so. Oh, oh, oh!"). Root cause: training
+sequences chain at most 2-3 blocks (16s); serving chains 300+ blocks through
+the per-layer KV, and representation drift compounds. Positions were only the
+first of two long-form failure modes.
+
+Immediate fix shipped: `reset_encoder_on_rollover` — encoder positions + KV
+restart at each ~15s segment roll (decoder text flow untouched). Every block
+stays within the trained regime; cross-segment acoustic context is the cost.
+
+| 21 full MCIF files | WER (teacher, legacy) | WER (human, whisper) | RTF |
+| --- | ---: | ---: | ---: |
+| causal, no reset, 960 | 0.9492 | — | 0.176 |
+| causal + reset, 960 | 0.2619 | 0.1957 | 0.531 |
+| causal + reset, 1920 | **0.2485** | **0.1870** | 0.289 |
+| surgery windowed (prod, chunk 2s) | 0.1367 | 0.0843 | 0.293 |
+| offline one-pass 0.6B | — | 0.2075 | — |
+| offline one-pass 1.7B | — | 0.1202 | — |
+
+**The append-only causal model now works on long-form audio** — 0.1870 vs
+human references, BETTER than offline one-pass 0.6B (0.2075) and ~2.2x from
+the windowed production point (0.0843), at equal RTF (0.29).
+
+### Next
+
+1. WS2c: long-sequence training (concatenate streamed utterances to 16-96s,
+   12-19 chained blocks) — the principled fix for chain drift, to retire the
+   reset and recover cross-segment context.
+2. WS4: causal mode in the qwen3-streaming backend
+   (--qwen3-streaming-audio-backend causal + tower checkpoint).
+3. French (MLS) on top of the same recipe.
+
+Artifacts: `runs/jl_sessionB/`, `runs/jl_ws2_mix_pos_p2b/{history,final_metrics}.json`,
+rescore in `runs/rescore_mcif_v0/sessionB_reset.json`. Checkpoints on the
+paused machine + `~/Downloads/qwen3_checkpoints/`.

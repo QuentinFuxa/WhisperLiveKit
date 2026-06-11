@@ -1,0 +1,406 @@
+[
+  {
+    "jsonl": "runs/jl_sessionB/full21_seg200_960_reset.jsonl",
+    "items": 21,
+    "items_with_human_ref": 21,
+    "wer_final_original_mean": 0.2619243605707637,
+    "wer_teacher_legacy_mean": 0.2619243605707637,
+    "wer_teacher_whisper_mean": 0.18538267950614126,
+    "wer_human_legacy_mean": 0.27133073280176745,
+    "wer_human_whisper_mean": 0.19569731474540808,
+    "wer_stable_human_whisper_mean": 0.21212773222704656,
+    "per_item": [
+      {
+        "audio_id": "EqmWoxNDIr",
+        "wer_teacher_legacy": 0.24281150159744408,
+        "wer_teacher_whisper": 0.1974921630094044,
+        "wer_human_legacy": 0.22152886115444617,
+        "wer_human_whisper": 0.18153846153846154,
+        "wer_final_original": 0.24281150159744408,
+        "wer_stable_human_whisper": 0.18461538461538463
+      },
+      {
+        "audio_id": "ERmKpJPPDc",
+        "wer_teacher_legacy": 0.30315500685871055,
+        "wer_teacher_whisper": 0.19973890339425587,
+        "wer_human_legacy": 0.32786885245901637,
+        "wer_human_whisper": 0.23890339425587467,
+        "wer_final_original": 0.30315500685871055,
+        "wer_stable_human_whisper": 0.2689295039164491
+      },
+      {
+        "audio_id": "DyXpuURBMP",
+        "wer_teacher_legacy": 0.22147001934235977,
+        "wer_teacher_whisper": 0.14849624060150377,
+        "wer_human_legacy": 0.23209169054441262,
+        "wer_human_whisper": 0.16385767790262173,
+        "wer_final_original": 0.22147001934235977,
+        "wer_stable_human_whisper": 0.1956928838951311
+      },
+      {
+        "audio_id": "ICWfTnUMio",
+        "wer_teacher_legacy": 0.19759825327510916,
+        "wer_teacher_whisper": 0.12299465240641712,
+        "wer_human_legacy": 0.19799777530589543,
+        "wer_human_whisper": 0.13472070098576122,
+        "wer_final_original": 0.19759825327510916,
+        "wer_stable_human_whisper": 0.1456736035049288
+      },
+      {
+        "audio_id": "JRrbTnEZbF",
+        "wer_teacher_legacy": 0.18157543391188252,
+        "wer_teacher_whisper": 0.11300919842312747,
+        "wer_human_legacy": 0.1983695652173913,
+        "wer_human_whisper": 0.10602094240837696,
+        "wer_final_original": 0.18157543391188252,
+        "wer_stable_human_whisper": 0.11387434554973822
+      },
+      {
+        "audio_id": "JhbtCwcsWY",
+        "wer_teacher_legacy": 0.27393617021276595,
+        "wer_teacher_whisper": 0.1801566579634465,
+        "wer_human_legacy": 0.273841961852861,
+        "wer_human_whisper": 0.18592297476759628,
+        "wer_final_original": 0.27393617021276595,
+        "wer_stable_human_whisper": 0.2098273572377158
+      },
+      {
+        "audio_id": "OiqEWDVtWk",
+        "wer_teacher_legacy": 0.2551834130781499,
+        "wer_teacher_whisper": 0.18025078369905956,
+        "wer_human_legacy": 0.2681744749596123,
+        "wer_human_whisper": 0.17452830188679244,
+        "wer_final_original": 0.2551834130781499,
+        "wer_stable_human_whisper": 0.18396226415094338
+      },
+      {
+        "audio_id": "MjDvRpkOFq",
+        "wer_teacher_legacy": 0.3318077803203661,
+        "wer_teacher_whisper": 0.21509009009009009,
+        "wer_human_legacy": 0.3547257876312719,
+        "wer_human_whisper": 0.25573394495412843,
+        "wer_final_original": 0.3318077803203661,
+        "wer_stable_human_whisper": 0.26605504587155965
+      },
+      {
+        "audio_id": "QTlIuodOsA",
+        "wer_teacher_legacy": 0.24423963133640553,
+        "wer_teacher_whisper": 0.140625,
+        "wer_human_legacy": 0.23595505617977527,
+        "wer_human_whisper": 0.14756671899529042,
+        "wer_final_original": 0.24423963133640553,
+        "wer_stable_human_whisper": 0.20565149136577707
+      },
+      {
+        "audio_id": "UOlPKyCVgg",
+        "wer_teacher_legacy": 0.4220055710306407,
+        "wer_teacher_whisper": 0.35294117647058826,
+        "wer_human_legacy": 0.4579831932773109,
+        "wer_human_whisper": 0.3975409836065574,
+        "wer_final_original": 0.4220055710306407,
+        "wer_stable_human_whisper": 0.41120218579234974
+      },
+      {
+        "audio_id": "ccpXHNfaoy",
+        "wer_teacher_legacy": 0.38645980253878703,
+        "wer_teacher_whisper": 0.33746556473829203,
+        "wer_human_legacy": 0.4062947067238913,
+        "wer_human_whisper": 0.3494475138121547,
+        "wer_final_original": 0.38645980253878703,
+        "wer_stable_human_whisper": 0.34806629834254144
+      },
+      {
+        "audio_id": "csJIsDTYMW",
+        "wer_teacher_legacy": 0.2092238470191226,
+        "wer_teacher_whisper": 0.13744588744588745,
+        "wer_human_legacy": 0.21372328458942633,
+        "wer_human_whisper": 0.13804347826086957,
+        "wer_final_original": 0.2092238470191226,
+        "wer_stable_human_whisper": 0.1673913043478261
+      },
+      {
+        "audio_id": "krJSAnVcGR",
+        "wer_teacher_legacy": 0.3319838056680162,
+        "wer_teacher_whisper": 0.25614489003880986,
+        "wer_human_legacy": 0.34959349593495936,
+        "wer_human_whisper": 0.2675324675324675,
+        "wer_final_original": 0.3319838056680162,
+        "wer_stable_human_whisper": 0.3025974025974026
+      },
+      {
+        "audio_id": "miPjvjWOvI",
+        "wer_teacher_legacy": 0.24327784891165172,
+        "wer_teacher_whisper": 0.15404040404040403,
+        "wer_human_legacy": 0.24774193548387097,
+        "wer_human_whisper": 0.15170670037926676,
+        "wer_final_original": 0.24327784891165172,
+        "wer_stable_human_whisper": 0.14917825537294563
+      },
+      {
+        "audio_id": "myfXyntFYL",
+        "wer_teacher_legacy": 0.3365539452495974,
+        "wer_teacher_whisper": 0.2589147286821705,
+        "wer_human_legacy": 0.3691275167785235,
+        "wer_human_whisper": 0.27936507936507937,
+        "wer_final_original": 0.3365539452495974,
+        "wer_stable_human_whisper": 0.2873015873015873
+      },
+      {
+        "audio_id": "rOwZgUjcwB",
+        "wer_teacher_legacy": 0.2546419098143236,
+        "wer_teacher_whisper": 0.19816272965879264,
+        "wer_human_legacy": 0.26104417670682734,
+        "wer_human_whisper": 0.19316688567674112,
+        "wer_final_original": 0.2546419098143236,
+        "wer_stable_human_whisper": 0.2102496714848883
+      },
+      {
+        "audio_id": "vrydRuOXbT",
+        "wer_teacher_legacy": 0.21892816419612315,
+        "wer_teacher_whisper": 0.15670800450958286,
+        "wer_human_legacy": 0.21878579610538373,
+        "wer_human_whisper": 0.1543700340522134,
+        "wer_final_original": 0.21892816419612315,
+        "wer_stable_human_whisper": 0.19409761634506242
+      },
+      {
+        "audio_id": "rxrToXvRyM",
+        "wer_teacher_legacy": 0.16636528028933092,
+        "wer_teacher_whisper": 0.08148804251550044,
+        "wer_human_legacy": 0.1766848816029144,
+        "wer_human_whisper": 0.09219858156028368,
+        "wer_final_original": 0.16636528028933092,
+        "wer_stable_human_whisper": 0.09397163120567376
+      },
+      {
+        "audio_id": "wJAPXMIoIG",
+        "wer_teacher_legacy": 0.15384615384615385,
+        "wer_teacher_whisper": 0.08163265306122448,
+        "wer_human_legacy": 0.1514726507713885,
+        "wer_human_whisper": 0.08879781420765027,
+        "wer_final_original": 0.15384615384615385,
+        "wer_stable_human_whisper": 0.09699453551912568
+      },
+      {
+        "audio_id": "xhjBHGVOyQ",
+        "wer_teacher_legacy": 0.3033854166666667,
+        "wer_teacher_whisper": 0.22942643391521197,
+        "wer_human_legacy": 0.31585845347313235,
+        "wer_human_whisper": 0.26433915211970077,
+        "wer_final_original": 0.3033854166666667,
+        "wer_stable_human_whisper": 0.26807980049875313
+      },
+      {
+        "audio_id": "xiSxNRoOzm",
+        "wer_teacher_legacy": 0.2219626168224299,
+        "wer_teacher_whisper": 0.15081206496519722,
+        "wer_human_legacy": 0.21908127208480566,
+        "wer_human_whisper": 0.14434180138568128,
+        "wer_final_original": 0.2219626168224299,
+        "wer_stable_human_whisper": 0.151270207852194
+      }
+    ]
+  },
+  {
+    "jsonl": "runs/jl_sessionB/full21_seg200_1920_reset.jsonl",
+    "items": 21,
+    "items_with_human_ref": 21,
+    "wer_final_original_mean": 0.2485296623700253,
+    "wer_teacher_legacy_mean": 0.2485296623700253,
+    "wer_teacher_whisper_mean": 0.17634547291076533,
+    "wer_human_legacy_mean": 0.25747625681020214,
+    "wer_human_whisper_mean": 0.18703135919475286,
+    "wer_stable_human_whisper_mean": 0.20721415283524167,
+    "per_item": [
+      {
+        "audio_id": "EqmWoxNDIr",
+        "wer_teacher_legacy": 0.22044728434504793,
+        "wer_teacher_whisper": 0.1833855799373041,
+        "wer_human_legacy": 0.23244929797191888,
+        "wer_human_whisper": 0.19076923076923077,
+        "wer_final_original": 0.22044728434504793,
+        "wer_stable_human_whisper": 0.20153846153846153
+      },
+      {
+        "audio_id": "ERmKpJPPDc",
+        "wer_teacher_legacy": 0.2908093278463649,
+        "wer_teacher_whisper": 0.195822454308094,
+        "wer_human_legacy": 0.3224043715846995,
+        "wer_human_whisper": 0.2245430809399478,
+        "wer_final_original": 0.2908093278463649,
+        "wer_stable_human_whisper": 0.24804177545691905
+      },
+      {
+        "audio_id": "DyXpuURBMP",
+        "wer_teacher_legacy": 0.22920696324951645,
+        "wer_teacher_whisper": 0.15319548872180452,
+        "wer_human_legacy": 0.2349570200573066,
+        "wer_human_whisper": 0.16385767790262173,
+        "wer_final_original": 0.22920696324951645,
+        "wer_stable_human_whisper": 0.17415730337078653
+      },
+      {
+        "audio_id": "ICWfTnUMio",
+        "wer_teacher_legacy": 0.18231441048034935,
+        "wer_teacher_whisper": 0.11550802139037433,
+        "wer_human_legacy": 0.1846496106785317,
+        "wer_human_whisper": 0.12595837897042717,
+        "wer_final_original": 0.18231441048034935,
+        "wer_stable_human_whisper": 0.12814895947426067
+      },
+      {
+        "audio_id": "JRrbTnEZbF",
+        "wer_teacher_legacy": 0.14819759679572764,
+        "wer_teacher_whisper": 0.09592641261498029,
+        "wer_human_legacy": 0.15760869565217392,
+        "wer_human_whisper": 0.09293193717277487,
+        "wer_final_original": 0.14819759679572764,
+        "wer_stable_human_whisper": 0.1099476439790576
+      },
+      {
+        "audio_id": "JhbtCwcsWY",
+        "wer_teacher_legacy": 0.2247340425531915,
+        "wer_teacher_whisper": 0.1370757180156658,
+        "wer_human_legacy": 0.2098092643051771,
+        "wer_human_whisper": 0.1407702523240372,
+        "wer_final_original": 0.2247340425531915,
+        "wer_stable_human_whisper": 0.17928286852589642
+      },
+      {
+        "audio_id": "OiqEWDVtWk",
+        "wer_teacher_legacy": 0.2583732057416268,
+        "wer_teacher_whisper": 0.1786833855799373,
+        "wer_human_legacy": 0.25848142164781907,
+        "wer_human_whisper": 0.18081761006289307,
+        "wer_final_original": 0.2583732057416268,
+        "wer_stable_human_whisper": 0.18867924528301888
+      },
+      {
+        "audio_id": "MjDvRpkOFq",
+        "wer_teacher_legacy": 0.3684210526315789,
+        "wer_teacher_whisper": 0.22747747747747749,
+        "wer_human_legacy": 0.3710618436406068,
+        "wer_human_whisper": 0.25344036697247707,
+        "wer_final_original": 0.3684210526315789,
+        "wer_stable_human_whisper": 0.2603211009174312
+      },
+      {
+        "audio_id": "QTlIuodOsA",
+        "wer_teacher_legacy": 0.20890937019969277,
+        "wer_teacher_whisper": 0.128125,
+        "wer_human_legacy": 0.21990369181380418,
+        "wer_human_whisper": 0.13657770800627944,
+        "wer_final_original": 0.20890937019969277,
+        "wer_stable_human_whisper": 0.20565149136577707
+      },
+      {
+        "audio_id": "UOlPKyCVgg",
+        "wer_teacher_legacy": 0.3969359331476323,
+        "wer_teacher_whisper": 0.3337893296853625,
+        "wer_human_legacy": 0.42997198879551823,
+        "wer_human_whisper": 0.3756830601092896,
+        "wer_final_original": 0.3969359331476323,
+        "wer_stable_human_whisper": 0.38934426229508196
+      },
+      {
+        "audio_id": "ccpXHNfaoy",
+        "wer_teacher_legacy": 0.37376586741889983,
+        "wer_teacher_whisper": 0.2988980716253444,
+        "wer_human_legacy": 0.4034334763948498,
+        "wer_human_whisper": 0.319060773480663,
+        "wer_final_original": 0.37376586741889983,
+        "wer_stable_human_whisper": 0.3494475138121547
+      },
+      {
+        "audio_id": "csJIsDTYMW",
+        "wer_teacher_legacy": 0.20697412823397077,
+        "wer_teacher_whisper": 0.1525974025974026,
+        "wer_human_legacy": 0.21372328458942633,
+        "wer_human_whisper": 0.15217391304347827,
+        "wer_final_original": 0.20697412823397077,
+        "wer_stable_human_whisper": 0.17391304347826086
+      },
+      {
+        "audio_id": "krJSAnVcGR",
+        "wer_teacher_legacy": 0.2968960863697706,
+        "wer_teacher_whisper": 0.23285899094437257,
+        "wer_human_legacy": 0.3021680216802168,
+        "wer_human_whisper": 0.23896103896103896,
+        "wer_final_original": 0.2968960863697706,
+        "wer_stable_human_whisper": 0.2701298701298701
+      },
+      {
+        "audio_id": "miPjvjWOvI",
+        "wer_teacher_legacy": 0.23815620998719592,
+        "wer_teacher_whisper": 0.1553030303030303,
+        "wer_human_legacy": 0.2541935483870968,
+        "wer_human_whisper": 0.1554993678887484,
+        "wer_final_original": 0.23815620998719592,
+        "wer_stable_human_whisper": 0.1997471554993679
+      },
+      {
+        "audio_id": "myfXyntFYL",
+        "wer_teacher_legacy": 0.3140096618357488,
+        "wer_teacher_whisper": 0.24651162790697675,
+        "wer_human_legacy": 0.34060402684563756,
+        "wer_human_whisper": 0.25873015873015875,
+        "wer_final_original": 0.3140096618357488,
+        "wer_stable_human_whisper": 0.2571428571428571
+      },
+      {
+        "audio_id": "rOwZgUjcwB",
+        "wer_teacher_legacy": 0.2427055702917772,
+        "wer_teacher_whisper": 0.1837270341207349,
+        "wer_human_legacy": 0.24230254350736277,
+        "wer_human_whisper": 0.18528252299605782,
+        "wer_final_original": 0.2427055702917772,
+        "wer_stable_human_whisper": 0.19316688567674112
+      },
+      {
+        "audio_id": "vrydRuOXbT",
+        "wer_teacher_legacy": 0.20524515393386544,
+        "wer_teacher_whisper": 0.14430665163472378,
+        "wer_human_legacy": 0.2027491408934708,
+        "wer_human_whisper": 0.14755959137343927,
+        "wer_final_original": 0.20524515393386544,
+        "wer_stable_human_whisper": 0.1793416572077185
+      },
+      {
+        "audio_id": "rxrToXvRyM",
+        "wer_teacher_legacy": 0.16726943942133815,
+        "wer_teacher_whisper": 0.07528786536758193,
+        "wer_human_legacy": 0.18214936247723132,
+        "wer_human_whisper": 0.09219858156028368,
+        "wer_final_original": 0.16726943942133815,
+        "wer_stable_human_whisper": 0.11790780141843972
+      },
+      {
+        "audio_id": "wJAPXMIoIG",
+        "wer_teacher_legacy": 0.13706293706293707,
+        "wer_teacher_whisper": 0.09523809523809523,
+        "wer_human_legacy": 0.13183730715287517,
+        "wer_human_whisper": 0.09972677595628415,
+        "wer_final_original": 0.13706293706293707,
+        "wer_stable_human_whisper": 0.11612021857923498
+      },
+      {
+        "audio_id": "xhjBHGVOyQ",
+        "wer_teacher_legacy": 0.2890625,
+        "wer_teacher_whisper": 0.2256857855361596,
+        "wer_human_legacy": 0.3040629095674967,
+        "wer_human_whisper": 0.256857855361596,
+        "wer_final_original": 0.2890625,
+        "wer_stable_human_whisper": 0.2593516209476309
+      },
+      {
+        "audio_id": "xiSxNRoOzm",
+        "wer_teacher_legacy": 0.21962616822429906,
+        "wer_teacher_whisper": 0.14385150812064965,
+        "wer_human_legacy": 0.20848056537102475,
+        "wer_human_whisper": 0.13625866050808313,
+        "wer_final_original": 0.21962616822429906,
+        "wer_stable_human_whisper": 0.15011547344110854
+      }
+    ]
+  }
+]
