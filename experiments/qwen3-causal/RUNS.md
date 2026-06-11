@@ -5407,3 +5407,38 @@ the windowed production point (0.0843), at equal RTF (0.29).
 Artifacts: `runs/jl_sessionB/`, `runs/jl_ws2_mix_pos_p2b/{history,final_metrics}.json`,
 rescore in `runs/rescore_mcif_v0/sessionB_reset.json`. Checkpoints on the
 paused machine + `~/Downloads/qwen3_checkpoints/`.
+
+## 2026-06-11 - WS2c: Long-Sequence Distillation — Negative Result
+
+Run `r_c9bf18da` on instance 425323 (paused after). Attempt to retire the
+rollover reset by training the chain directly: streamed utterances
+concatenated to 16-96s samples (12-19 chained blocks, log-uniform), frame-
+budget batching, mixed blocks 96/192, offsets, 30k steps lr 5e-6 from the
+WS2 tower. New long-form gate: 3 full WLK files, segmented, NO reset.
+
+| step | gate@960 | gate@1920 | gate@long (no reset) |
+| ---: | ---: | ---: | ---: |
+| 0 (WS2 tower) | 0.2117 | 0.2031 | ~0.8710 |
+| 10000 | — | — | 0.8710 |
+| 20000 | 0.3148 | 0.2978 | 0.8455 |
+| 30000 | 0.3063 | 0.3082 | 0.8338 |
+
+Findings:
+
+- The long gate barely moves (0.871 -> 0.834, -4 percent relative in 30k
+  steps) while short-chunk quality DEGRADES (0.21 -> 0.31) and never
+  recovers. The distillation loss on long sequences stays 2-3x above the
+  short-sequence level throughout: matching a fully-bidirectional teacher
+  through a KV chain over 96s appears structurally hard, not
+  budget-limited.
+- No checkpoint improves on the WS2 tower; nothing promoted.
+
+Decision: the **rollover-reset design stands as the production answer** for
+long-form causal serving (0.2485 teacher-legacy / 0.1870 human-whisper on
+the 21 files, RTF 0.29 — better than offline one-pass 0.6B). Voxtral-style
+windowed-session behavior, achieved. Retiring the reset would need a
+different attack (length curriculum at higher LR accepting a quality dip,
+or sequence-level/text-level objectives) with uncertain payoff — parked.
+
+Next: WS4 (causal mode in the qwen3-streaming backend with
+reset-on-rollover default), then French (MLS) on the same recipe.
