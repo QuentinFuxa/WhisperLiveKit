@@ -117,6 +117,7 @@ class CachedFullHypothesisConfig:
     prompt_token_ids: Sequence[int] | None = None
     prompt_prefix_template: Sequence[int] | None = None
     audio_placeholder_token_id: int | None = None
+    use_decoder_kv_cache: bool = True
 
     def __post_init__(self) -> None:
         if self.max_new_tokens < 0:
@@ -199,6 +200,7 @@ class CachedFullHypothesisStreamer:
                 repetition_penalty=self.config.repetition_penalty,
                 no_repeat_ngram_size=self.config.no_repeat_ngram_size,
                 max_consecutive_text_tokens=self.config.max_consecutive_text_tokens,
+                use_decoder_kv_cache=self.config.use_decoder_kv_cache,
             )
             hypothesis_tokens = trim_at_stop(
                 _tensor_to_int_list(generated),

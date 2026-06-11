@@ -143,6 +143,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Wrap the text decoder with LoRA and load a D2 lora_best.pt checkpoint.",
     )
+    parser.add_argument(
+        "--decoder-cache",
+        choices=("on", "off"),
+        default="on",
+        help="Decoder KV-cached incremental decode (on, default) vs legacy full re-forward (off).",
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--events-dir", type=Path, default=None)
     return parser.parse_args()
@@ -361,6 +367,7 @@ def _run_one(
         suppress_token_ids=tuple(suppress_token_ids),
         prompt_prefix_template=prompt_prefix_template,
         audio_placeholder_token_id=audio_placeholder_token_id,
+        use_decoder_kv_cache=args.decoder_cache == "on",
     )
     if args.segment_max_cached_steps > 0:
         streamer = SegmentedCachedFullHypothesisStreamer(
