@@ -52,35 +52,53 @@ ax.spines[["top", "right"]].set_visible(False)
 ax.grid(axis="y", color="#e6e6e6", lw=0.8)
 ax.set_axisbelow(True)
 
+# phase bands
+ax.axvspan(-1500, 3000, color="#f3f3f3", zorder=0)
+ax.axvspan(3000, 63000, color="#eaf1f7", zorder=0)
+ax.axvspan(63000, 124500, color="#eef5e8", zorder=0)
 for x0 in (3000, 63000):
-    ax.axvline(x0, color="#d0d0d0", lw=0.9, ls=(0, (4, 3)))
-ax.text(1500, 0.97, "phase 1\n100 h", ha="center", va="top", fontsize=8, color=GRAY)
-ax.text(
-    33000, 0.97, "phase 2 — LibriSpeech 960 h, 0.96 s blocks",
-    ha="center", va="top", fontsize=8, color=GRAY,
-)
-ax.text(
-    93000, 0.97,
-    "phase 3 — mixed 0.96/1.92 s blocks\n+ position-offset augmentation",
-    ha="center", va="top", fontsize=8, color=GRAY,
-)
+    ax.axvline(x0, color="#bdbdbd", lw=0.8)
+
+def phase_title(x, lines):
+    ax.text(x, 0.985, lines[0], ha="center", va="top", fontsize=8.5,
+            color="#444444", fontweight="bold")
+    ax.text(x, 0.925, "\n".join(lines[1:]), ha="center", va="top",
+            fontsize=7.5, color=GRAY)
+
+phase_title(1200, ["Phase 1", "warm-up", "100 h"])
+phase_title(33000, ["Phase 2: scale", "LibriSpeech 960 h, no labels", "fixed 0.96 s blocks"])
+phase_title(93500, ["Phase 3: serving regime", "mixed 0.96 / 1.92 s blocks", "+ random position offsets (up to 2 h)"])
 
 ax.plot(sx + dx, sy + dy, "-o", ms=3, lw=1.6, color=ACCENT,
-        label="streaming gate WER @0.96 s blocks")
+        label="WER, 0.96 s blocks")
 ax.plot(wx, w960, "-o", ms=3, lw=1.6, color=ACCENT)
-ax.plot(wx, w1920, "-s", ms=3, lw=1.6, color=ACCENT2, label="@1.92 s blocks")
+ax.plot(wx, w1920, "-s", ms=3, lw=1.6, color=ACCENT2,
+        label="WER, 1.92 s blocks (serving config)")
 ax.plot(wx, woff, "-^", ms=3, lw=1.4, color=ACCENT3,
-        label="@0.96 s, position offset 4000 (≈85 min)")
-ax.axhline(0.755, color=GRAY, lw=1.0, ls=":", xmax=0.08)
-ax.text(200, 0.768, "untrained block-causal: 0.755", fontsize=7.5, color=GRAY,
-        va="bottom")
+        label="WER as if 85 min into a stream (offset 4000)")
+
+# direct annotations
+ax.annotate("before training: 0.755", (0, 0.755), (8500, 0.83),
+            fontsize=7.5, color=GRAY,
+            arrowprops=dict(arrowstyle="-", color=GRAY, lw=0.7))
+ax.annotate("long streams broken before phase 3\n(positions beyond the 120 s table)",
+            (63000, 0.883), (52000, 0.70), fontsize=7.5, color=ACCENT3,
+            ha="center",
+            arrowprops=dict(arrowstyle="->", color=ACCENT3, lw=0.8))
+ax.annotate("fixed by offset\naugmentation: 0.27",
+            (123000, 0.274), (109000, 0.45), fontsize=7.5, color=ACCENT3,
+            ha="center",
+            arrowprops=dict(arrowstyle="->", color=ACCENT3, lw=0.8))
+ax.annotate("0.20", (123000, 0.203), (124800, 0.203), fontsize=8,
+            color=ACCENT2, va="center")
+
 ax.set_xlabel("cumulative training step")
-ax.set_ylabel("held-out streaming WER (frozen decoder)")
+ax.set_ylabel("WER, held-out streaming eval (decoder frozen)")
 ax.set_ylim(0.15, 1.0)
-ax.set_xlim(-1500, 124500)
-ax.legend(frameon=False, fontsize=8, loc="center right")
+ax.set_xlim(-1500, 131000)
+ax.legend(frameon=False, fontsize=8, loc="center left", bbox_to_anchor=(0.30, 0.42))
 ax.set_title(
-    "Held-out streaming WER during distillation (123k steps, ~6 H100-hours, audio only)",
+    "Distilling the offline tower into causal execution: 123k steps, about 6 H100 hours, audio only",
     fontsize=10, loc="left",
 )
 
