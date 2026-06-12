@@ -5556,7 +5556,7 @@ Readings:
   (2.7x)** — better WER than the baseline AND 2.7x its speed. E adds the
   clean invariant that no generation ever runs on an over-cap cache
   (434 punct / 0 cap rollovers); D vs E WER/RTF deltas are run noise.
-  Per 33-min talk: ~32-35 s of H100 compute.
+  Per 33-min talk: ~3.5 min of H100 compute.
 
 Shipping config (WS4 defaults): rolling KV + speculative draft ON
 (already default), `--segment-punct-rollover --segment-punct-min-steps 150
@@ -5591,3 +5591,22 @@ quality; this is expected and documented in the test).
 
 169 WLK tests + 124 experiments tests pass. Benchmarks (21 MCIF via prod
 stack + LibriSpeech test-clean/other) follow below.
+
+### WS4 benchmarks (production stack, H100 bf16, runs/ws4_bench/, machine 425907)
+
+| eval | metric | value |
+| --- | --- | ---: |
+| 21 MCIF long-form (prod causal, 1920ms) | WER teacher-legacy / human-whisper | 0.2465 / **0.1810** |
+| 21 MCIF long-form (prod causal) | RTF | 0.160 |
+| LibriSpeech test-clean (2620 utt, streaming) | corpus WER whisper-norm | **0.0364** |
+| LibriSpeech test-other (2939 utt, streaming) | corpus WER whisper-norm | **0.0716** |
+
+The production backend reproduces the experiments run-E numbers exactly
+(0.2465/0.1810 — same checkpoint, same blocks, ported code). LS numbers are
+short-form streaming through the full prod stack (per-utterance streamer,
+1.92 s blocks, punct rollover mostly idle on short clips). Context: Voxtral
+Mini Realtime 3B @480ms publishes 2.1/5.5; for a 0.6B append-only streaming
+model, 3.6/7.2 is the headline short-form result. Offline LS numbers for the
+base model are published by Qwen (not re-run here). Artifacts:
+runs/ws4_bench/ + ~/Downloads/qwen3_checkpoints/ws4_bench_artifacts.tgz
+(local). Total phase-2 GPU spend ~ $10.
