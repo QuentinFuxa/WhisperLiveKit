@@ -1,7 +1,7 @@
 <p align="center">
   <img width="330" alt="wlk" src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/wlk.png" />
 </p>
-<p align="center"><b>WLK: Ultra-low-latency, self-hosted speech-to-text model(s) with speaker identification</b></p>
+<p align="center"><b>WLK: Ultra-low-latency, self-hosted speech-to-text pipeline</b></p>
 
 
 <p align="center">
