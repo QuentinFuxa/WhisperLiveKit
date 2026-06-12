@@ -7,14 +7,15 @@ bounds decode cost for long sessions by periodically finalizing a segment and
 trimming the cached embeddings.
 
 Promoted from ``experiments/qwen3-causal/qwen3_streaming/cached_full_hypothesis.py``
-(validated at WER 0.110 / RTF 0.10 on 21 long-form MCIF talks; see RUNS.md
-2026-06-10 re-audit there).
+@ 9d4b99a (windowed point: WER 0.110 / RTF 0.10; causal point: WER 0.181 /
+RTF 0.107 on 21 long-form MCIF talks — see RUNS.md there). Decoder rolling KV
+and the speculative draft default OFF here: the validated windowed operating
+point stays byte-stable; the causal backend turns them on explicitly.
 """
 
 from __future__ import annotations
 
-
-
+import time
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
@@ -26,11 +27,11 @@ from .stable_commit import (
 )
 
 
+
 def post_process_realtime_text(text: str) -> str:
     """Strip Qwen ASR prompt scaffolding (language line, <asr_text> tag)."""
     if not text:
         return ""
-
     pieces: list[str] = []
     for line in text.replace("\r", "\n").splitlines():
         line = line.strip()
@@ -43,7 +44,6 @@ def post_process_realtime_text(text: str) -> str:
         line = line.strip()
         if line:
             pieces.append(line)
-
     return " ".join(pieces).strip()
 
 
@@ -116,6 +116,18 @@ def join_text_segments(*segments: str) -> str:
     return " ".join(kept).strip()
 
 
+_SENTENCE_END_CHARS = ".!?"
+_CLOSING_TRAIL_CHARS = "\"'»”’)]"
+
+
+def ends_with_sentence_punctuation(text: str) -> bool:
+    """True when the (stripped) text ends a sentence, ignoring closing quotes."""
+    stripped = (text or "").rstrip()
+    while stripped and stripped[-1] in _CLOSING_TRAIL_CHARS:
+        stripped = stripped[:-1].rstrip()
+    return bool(stripped) and stripped[-1] in _SENTENCE_END_CHARS
+
+
 def trailing_text_words(text: str, max_words: int) -> str:
     if max_words <= 0:
         return ""
@@ -152,6 +164,17 @@ class CachedFullHypothesisConfig:
     prompt_token_ids: Sequence[int] | None = None
     prompt_prefix_template: Sequence[int] | None = None
     audio_placeholder_token_id: int | None = None
+    use_decoder_kv_cache: bool = True
+    # Persist the decoder KV over [prompt head + audio] across chunks and
+    # re-forward only the new audio + template tail per generation.
+    # OFF by default in production: the validated windowed operating point
+    # stays byte-stable. The causal backend enables it (21-file gate
+    # 2026-06-12: WER delta +0.0002, RTF 0.289 -> 0.115).
+    decoder_rolling_kv: bool = False
+    # Verify the previous chunk's hypothesis as a draft in the same parallel
+    # pass; sequential decode resumes from the first divergence. Exactly
+    # faithful to the rolling path (measured: spec == roll on every chunk).
+    speculative_draft: bool = False
 
     def __post_init__(self) -> None:
         if self.max_new_tokens < 0:
@@ -170,6 +193,10 @@ class CachedFullHypothesisConfig:
             raise ValueError("no_repeat_ngram_size must be >= 0")
         if self.max_consecutive_text_tokens < 0:
             raise ValueError("max_consecutive_text_tokens must be >= 0")
+        if self.speculative_draft and not self.decoder_rolling_kv:
+            raise ValueError("speculative_draft requires decoder_rolling_kv")
+        if self.decoder_rolling_kv and not self.use_decoder_kv_cache:
+            raise ValueError("decoder_rolling_kv requires use_decoder_kv_cache")
 
 
 @dataclass(frozen=True)
@@ -204,37 +231,78 @@ class CachedFullHypothesisStreamer:
         if self.state is None:
             self.state = self.model.init_cached_audio_decode_state()
 
-    def prompt_prefix_token_ids(self, *, audio_steps: int) -> list[int] | None:
+    def prompt_template_token_ids(self) -> list[int] | None:
+        """Unexpanded prompt template (exactly one audio placeholder)."""
         if self.config.prompt_prefix_template is None:
+            return None
+        return list(self.config.prompt_prefix_template)
+
+    def prompt_prefix_token_ids(self, *, audio_steps: int) -> list[int] | None:
+        template = self.prompt_template_token_ids()
+        if template is None:
             return None
         if self.config.audio_placeholder_token_id is None:
             raise ValueError("missing audio placeholder token id")
         return expand_audio_prompt_placeholders(
-            self.config.prompt_prefix_template,
+            template,
             audio_placeholder_token_id=self.config.audio_placeholder_token_id,
             audio_steps=int(audio_steps),
         )
 
     def append_mel_chunk(self, chunk: Any, *, is_flush: bool = False) -> dict[str, Any]:
         cached, delta, self.state = self.model.append_audio_to_cache(chunk, self.state)
+        gen_stats: dict[str, Any] = {}
         if int(cached.shape[1]) == 0:
             hypothesis_tokens: list[int] = []
         else:
-            prefix_token_ids = self.prompt_prefix_token_ids(
-                audio_steps=int(cached.shape[1])
+            start_time = time.perf_counter()
+            template = (
+                self.prompt_template_token_ids()
+                if self.config.decoder_rolling_kv
+                else None
             )
-            generated = self.model.generate_full_hypothesis_from_cached_audio(
-                cached,
-                prefix_token_ids=prefix_token_ids,
-                audio_placeholder_token_id=self.config.audio_placeholder_token_id,
-                prompt_token_ids=self.config.prompt_token_ids,
-                max_new_tokens=self.config.max_new_tokens,
-                eos_token_id=self.config.eos_token_id,
-                suppress_token_ids=list(self.config.suppress_token_ids),
-                repetition_penalty=self.config.repetition_penalty,
-                no_repeat_ngram_size=self.config.no_repeat_ngram_size,
-                max_consecutive_text_tokens=self.config.max_consecutive_text_tokens,
-            )
+            if (
+                template is not None
+                and self.config.audio_placeholder_token_id is not None
+                and self.config.prompt_token_ids is None
+                and int(cached.shape[0]) == 1
+                and hasattr(self.model, "generate_full_hypothesis_rolling")
+            ):
+                generated, gen_stats = self.model.generate_full_hypothesis_rolling(
+                    cached,
+                    state=self.state,
+                    template_token_ids=template,
+                    audio_placeholder_token_id=self.config.audio_placeholder_token_id,
+                    draft_token_ids=(
+                        self.last_hypothesis_tokens
+                        if self.config.speculative_draft
+                        else None
+                    ),
+                    max_new_tokens=self.config.max_new_tokens,
+                    eos_token_id=self.config.eos_token_id,
+                    suppress_token_ids=list(self.config.suppress_token_ids),
+                    repetition_penalty=self.config.repetition_penalty,
+                    no_repeat_ngram_size=self.config.no_repeat_ngram_size,
+                    max_consecutive_text_tokens=self.config.max_consecutive_text_tokens,
+                )
+            else:
+                prefix_token_ids = self.prompt_prefix_token_ids(
+                    audio_steps=int(cached.shape[1])
+                )
+                generated = self.model.generate_full_hypothesis_from_cached_audio(
+                    cached,
+                    prefix_token_ids=prefix_token_ids,
+                    audio_placeholder_token_id=self.config.audio_placeholder_token_id,
+                    prompt_token_ids=self.config.prompt_token_ids,
+                    max_new_tokens=self.config.max_new_tokens,
+                    eos_token_id=self.config.eos_token_id,
+                    suppress_token_ids=list(self.config.suppress_token_ids),
+                    repetition_penalty=self.config.repetition_penalty,
+                    no_repeat_ngram_size=self.config.no_repeat_ngram_size,
+                    max_consecutive_text_tokens=self.config.max_consecutive_text_tokens,
+                    use_decoder_kv_cache=self.config.use_decoder_kv_cache,
+                )
+            gen_stats["generate_ms"] = (time.perf_counter() - start_time) * 1000.0
             hypothesis_tokens = trim_at_stop(
                 _tensor_to_int_list(generated),
                 self.config.eos_token_id,
@@ -260,7 +328,30 @@ class CachedFullHypothesisStreamer:
                 getattr(audio, "last_recomputed_context_frames", 0)
             ),
         )
+        if gen_stats:
+            event.update(gen_stats)
         return event
+
+    def flush_pending_audio(self) -> dict[str, Any] | None:
+        """Encode the partial encoder block buffered by the causal backend.
+
+        The causal encoder consumes fixed attention blocks and may hold up to
+        block_frames-1 mel frames pending; at end of utterance they must be
+        encoded once or trailing speech is silently dropped. Folds the flushed
+        steps into the cache and decodes once via the normal path. Returns
+        None when the model has no flush support (windowed backend) or when
+        nothing was pending.
+        """
+        flush = getattr(self.model, "flush_audio_to_cache", None)
+        if flush is None:
+            return None
+        cached, delta, self.state = flush(self.state)
+        if int(delta.shape[1]) == 0:
+            return None
+        empty_chunk = delta.new_zeros(
+            int(delta.shape[0]), 0, int(self.model.config.n_mels)
+        )
+        return self.append_mel_chunk(empty_chunk, is_flush=True)
 
     def update_from_hypothesis(
         self,
@@ -424,10 +515,26 @@ class SegmentedCachedFullHypothesisStreamer(CachedFullHypothesisStreamer):
     segment_max_cached_steps: int = 0
     segment_keep_tail_steps: int = 0
     segment_finalize_mode: str = "latest"
+    # Roll at sentence boundaries (IWSLT-style): when the active hypothesis
+    # ends with sentence-final punctuation and the segment is at least
+    # ``segment_punct_min_steps`` long. The hard cap above stays the fallback
+    # for speech without punctuation. Shorter segments = shorter regenerated
+    # hypotheses per chunk and shorter causal encoder chains.
+    segment_punct_rollover: bool = False
+    segment_punct_min_steps: int = 100
+    # Roll BEFORE generating when the incoming chunk would exceed the cap, so
+    # the segment's largest generation is not run on a cache that is dropped
+    # immediately after. The boundary chunk's audio starts the next segment.
+    segment_roll_before_generate: bool = False
     segment_prompt_context_words: int = 0
     segment_prompt_base_context: str = ""
     segment_prompt_language: str | None = None
     segment_prompt_context_prefix: str = "Previous transcript context:"
+    # Reset the audio encoder state (positions + per-layer KV) when a segment
+    # rolls. Bounds the encoder's chain length to one segment: long sessions
+    # become sequences of segment-length encodes, trading cross-segment
+    # acoustic context for trained-regime fidelity.
+    reset_encoder_on_rollover: bool = False
     completed_text: str = ""
     completed_tokens: list[int] = field(default_factory=list)
     segments_finalized: int = 0
@@ -435,6 +542,10 @@ class SegmentedCachedFullHypothesisStreamer(CachedFullHypothesisStreamer):
     last_global_hypothesis_text: str = ""
     last_global_display_text: str = ""
     last_global_committed_text: str = ""
+    # Tokenized prompt template for the active segment; the context words only
+    # change at rollover, so re-encoding per chunk is pure waste.
+    _segment_prompt_template: list[int] | None = field(default=None, repr=False)
+    _rolled_before_generate: bool = field(default=False, repr=False)
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -453,35 +564,66 @@ class SegmentedCachedFullHypothesisStreamer(CachedFullHypothesisStreamer):
             raise ValueError("segment_finalize_mode must be 'latest' or 'stable'")
         if self.segment_prompt_context_words < 0:
             raise ValueError("segment_prompt_context_words must be >= 0")
+        if self.segment_punct_min_steps < 1:
+            raise ValueError("segment_punct_min_steps must be >= 1")
+
+    def prompt_template_token_ids(self) -> list[int] | None:
+        if self.segment_prompt_context_words <= 0:
+            return super().prompt_template_token_ids()
+        if self._segment_prompt_template is None:
+            previous = trailing_text_words(
+                self.completed_text,
+                self.segment_prompt_context_words,
+            )
+            context_parts = []
+            if self.segment_prompt_base_context.strip():
+                context_parts.append(self.segment_prompt_base_context.strip())
+            if previous:
+                context_parts.append(
+                    f"{self.segment_prompt_context_prefix.strip()}\n{previous}"
+                )
+            self._segment_prompt_template = self.tokenizer.encode(
+                qwen_asr_prompt_text(
+                    context="\n\n".join(context_parts),
+                    language=self.segment_prompt_language,
+                ),
+                add_special_tokens=False,
+            )
+        return list(self._segment_prompt_template)
 
     def prompt_prefix_token_ids(self, *, audio_steps: int) -> list[int] | None:
         if self.segment_prompt_context_words <= 0:
             return super().prompt_prefix_token_ids(audio_steps=audio_steps)
         if self.config.audio_placeholder_token_id is None:
             raise ValueError("missing audio placeholder token id")
-        previous = trailing_text_words(
-            self.completed_text,
-            self.segment_prompt_context_words,
-        )
-        context_parts = []
-        if self.segment_prompt_base_context.strip():
-            context_parts.append(self.segment_prompt_base_context.strip())
-        if previous:
-            context_parts.append(
-                f"{self.segment_prompt_context_prefix.strip()}\n{previous}"
-            )
-        prompt_template = self.tokenizer.encode(
-            qwen_asr_prompt_text(
-                context="\n\n".join(context_parts),
-                language=self.segment_prompt_language,
-            ),
-            add_special_tokens=False,
-        )
         return expand_audio_prompt_placeholders(
-            prompt_template,
+            self.prompt_template_token_ids(),
             audio_placeholder_token_id=self.config.audio_placeholder_token_id,
             audio_steps=int(audio_steps),
         )
+
+    def append_mel_chunk(self, chunk: Any, *, is_flush: bool = False) -> dict[str, Any]:
+        if (
+            self.segment_roll_before_generate
+            and not is_flush
+            and self.segment_max_cached_steps > 0
+            and self._active_cached_steps() > 0
+        ):
+            frames_per_step = int(
+                getattr(
+                    getattr(self.model, "config", None),
+                    "frames_per_decoder_step",
+                    8,
+                )
+            )
+            incoming_steps = int(chunk.shape[1]) // max(1, frames_per_step)
+            if (
+                self._active_cached_steps() + incoming_steps
+                > self.segment_max_cached_steps
+            ):
+                self.roll_segment()
+                self._rolled_before_generate = True
+        return super().append_mel_chunk(chunk, is_flush=is_flush)
 
     def update_from_hypothesis(
         self,
@@ -561,15 +703,28 @@ class SegmentedCachedFullHypothesisStreamer(CachedFullHypothesisStreamer):
                 "segment_rollover": False,
             }
         )
+        if self._rolled_before_generate:
+            event["segment_rolled_before_generate"] = True
+            self._rolled_before_generate = False
 
+        roll_reason: str | None = None
         if (
             self.segment_max_cached_steps > 0
             and int(cached_steps) > self.segment_max_cached_steps
         ):
+            roll_reason = "cap"
+        elif (
+            self.segment_punct_rollover
+            and int(cached_steps) >= self.segment_punct_min_steps
+            and ends_with_sentence_punctuation(segment_hypothesis)
+        ):
+            roll_reason = "punctuation"
+        if roll_reason is not None:
             segment_final = self.roll_segment()
             event.update(
                 {
                     "segment_rollover": True,
+                    "segment_rollover_reason": roll_reason,
                     "segment_final_text": segment_final.final_text,
                     "segments_finalized": int(self.segments_finalized),
                     "dropped_cached_steps_total": int(
@@ -590,7 +745,19 @@ class SegmentedCachedFullHypothesisStreamer(CachedFullHypothesisStreamer):
         )
         self.completed_tokens.extend(segment_final.final_tokens)
         self.segments_finalized += 1
+        self._segment_prompt_template = None
+        # The prompt head and the audio embedding positions both change at
+        # rollover; the rolling decoder KV is unusable either way.
+        if getattr(self.state, "decoder", None) is not None:
+            self.state.decoder = None
         self._trim_cached_audio_window()
+        if self.reset_encoder_on_rollover:
+            frames_seen = int(getattr(self.state.audio, "frames_seen", 0))
+            pending = getattr(self.state.audio, "mel_buffer", None)
+            self.state.audio = self.model.audio_encoder.init_state()
+            self.state.audio.frames_seen = frames_seen
+            if pending is not None:
+                self.state.audio.mel_buffer = pending
         self._reset_active_segment_state()
         return segment_final
 

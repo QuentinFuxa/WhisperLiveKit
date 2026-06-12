@@ -337,6 +337,40 @@ def parse_args():
         dest="qwen3_streaming_prompt_context_words",
         help="Trailing transcript words injected into the next segment prompt (0 = disabled; enabling measured worse).",
     )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-audio-backend",
+        choices=["windowed", "causal"],
+        default="windowed",
+        dest="qwen3_streaming_audio_backend",
+        help=(
+            "Audio encoder execution. 'windowed' (default) re-encodes a bounded "
+            "window per update (best WER). 'causal' runs the append-only "
+            "causal-KV encoder with a fine-tuned tower checkpoint: each audio "
+            "block is encoded exactly once (lowest compute per chunk; requires "
+            "--qwen3-streaming-tower-checkpoint)."
+        ),
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-tower-checkpoint",
+        type=str,
+        default="",
+        dest="qwen3_streaming_tower_checkpoint",
+        help=(
+            "Fine-tuned audio-tower weights for the causal backend: local "
+            ".pt/.safetensors file, directory, or Hugging Face repo id "
+            "(e.g. qfuxa/qwen3-asr-0.6b-streaming)."
+        ),
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-block-frames",
+        type=int,
+        default=192,
+        dest="qwen3_streaming_block_frames",
+        help=(
+            "Fixed attention-block size in mel frames for the causal backend "
+            "(96 or 192; must match the tower checkpoint training regime)."
+        ),
+    )
 
     # SimulStreaming-specific arguments
     simulstreaming_group = parser.add_argument_group('SimulStreaming arguments (only used with --backend simulstreaming)')

@@ -19,6 +19,7 @@ class FakeTokenizer:
             1: "hello",
             2: "world",
             3: "today",
+            4: "done.",
         }
         self.last_encoded_text = ""
 
@@ -208,3 +209,99 @@ def test_segmented_streamer_builds_dynamic_prompt_from_completed_tail():
     assert "Previous transcript context:" in tokenizer.last_encoded_text
     assert "world today" in tokenizer.last_encoded_text
     assert "language English<asr_text>" in tokenizer.last_encoded_text
+
+
+def test_ends_with_sentence_punctuation():
+    from whisperlivekit.qwen3_streaming.streamer import ends_with_sentence_punctuation
+
+    assert ends_with_sentence_punctuation("Hello world.")
+    assert ends_with_sentence_punctuation("Really?!")
+    assert ends_with_sentence_punctuation('He said "stop."')
+    assert not ends_with_sentence_punctuation("Hello world")
+    assert not ends_with_sentence_punctuation("3,5")
+    assert not ends_with_sentence_punctuation("")
+
+
+def make_punct_streamer(**kwargs):
+    return SegmentedCachedFullHypothesisStreamer(
+        FakeModel(),
+        FakeTokenizer(),
+        CachedFullHypothesisConfig(
+            wait_token_id=99,
+            word_start_token_id=98,
+            hold_back_words=0,
+            stable_iterations=1,
+        ),
+        **kwargs,
+    )
+
+
+def test_segmented_streamer_rolls_at_sentence_punctuation():
+    streamer = make_punct_streamer(
+        segment_punct_rollover=True,
+        segment_punct_min_steps=3,
+    )
+
+    early = streamer.update_from_hypothesis([1, 4], audio_sec=1.0, cached_steps=2)
+    assert early["segment_rollover"] is False
+
+    plain = streamer.update_from_hypothesis([1, 2], audio_sec=2.0, cached_steps=5)
+    assert plain["segment_rollover"] is False
+
+    rolled = streamer.update_from_hypothesis([1, 2, 4], audio_sec=3.0, cached_steps=5)
+    assert rolled["segment_rollover"] is True
+    assert rolled["segment_rollover_reason"] == "punctuation"
+    assert rolled["segment_final_text"] == "hello world done."
+    assert streamer.segments_finalized == 1
+
+
+def test_cap_rollover_reason_takes_precedence_over_punctuation():
+    streamer = make_punct_streamer(
+        segment_max_cached_steps=4,
+        segment_punct_rollover=True,
+        segment_punct_min_steps=1,
+    )
+    event = streamer.update_from_hypothesis([1, 2, 4], audio_sec=1.0, cached_steps=6)
+    assert event["segment_rollover"] is True
+    assert event["segment_rollover_reason"] == "cap"
+
+
+def test_segment_rollover_can_reset_encoder_state():
+    class AudioState:
+        def __init__(self, emitted_steps=0, frames_seen=0):
+            self.emitted_steps = emitted_steps
+            self.frames_seen = frames_seen
+            self.mel_buffer = None
+
+    class DecodeState:
+        def __init__(self):
+            self.audio = AudioState(emitted_steps=4321, frames_seen=999)
+            self.frame_hidden = None
+
+    class Encoder:
+        def init_state(self):
+            return AudioState()
+
+    class Model:
+        audio_encoder = Encoder()
+
+        def init_cached_audio_decode_state(self):
+            return DecodeState()
+
+    config = CachedFullHypothesisConfig(wait_token_id=99, word_start_token_id=98)
+    streamer = SegmentedCachedFullHypothesisStreamer(
+        Model(),
+        FakeTokenizer(),
+        config,
+        segment_max_cached_steps=2,
+        reset_encoder_on_rollover=True,
+    )
+    streamer.roll_segment()
+
+    assert streamer.state.audio.emitted_steps == 0
+    assert streamer.state.audio.frames_seen == 999
+
+
+def test_flush_pending_audio_is_noop_without_model_support():
+    streamer = make_punct_streamer()
+    assert streamer.flush_pending_audio() is None

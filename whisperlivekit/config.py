@@ -96,6 +96,9 @@ class WhisperLiveKitConfig:
     qwen3_streaming_dtype: str = "auto"
     qwen3_streaming_context: str = ""
     qwen3_streaming_prompt_context_words: int = 0
+    qwen3_streaming_audio_backend: str = "windowed"
+    qwen3_streaming_tower_checkpoint: str = ""
+    qwen3_streaming_block_frames: int = 192
 
     def __post_init__(self):
         # .en model suffix forces English

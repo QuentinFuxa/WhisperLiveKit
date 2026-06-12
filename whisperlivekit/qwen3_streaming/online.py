@@ -144,6 +144,12 @@ class Qwen3StreamingOnlineProcessor:
             tail = self.mel.flush()
             if tail is not None and tail.shape[1] > 0:
                 self.streamer.append_mel_chunk(tail.to(self.asr.device))
+            # Causal backend: encode the partial attention block still
+            # buffered in the encoder (no-op for the windowed backend, which
+            # is flushed by the right-context zeros below instead).
+            flush_pending = getattr(self.streamer, "flush_pending_audio", None)
+            if flush_pending is not None:
+                flush_pending()
             right_context_frames = self.asr.right_context_frames
             if right_context_frames > 0 and self.streamer.events:
                 import torch

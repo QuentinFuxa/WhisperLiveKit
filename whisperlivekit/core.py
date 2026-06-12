@@ -126,6 +126,9 @@ class TranscriptionEngine:
                     "qwen3_streaming_dtype": config.qwen3_streaming_dtype,
                     "qwen3_streaming_context": config.qwen3_streaming_context,
                     "qwen3_streaming_prompt_context_words": config.qwen3_streaming_prompt_context_words,
+                    "qwen3_streaming_audio_backend": config.qwen3_streaming_audio_backend,
+                    "qwen3_streaming_tower_checkpoint": config.qwen3_streaming_tower_checkpoint,
+                    "qwen3_streaming_block_frames": config.qwen3_streaming_block_frames,
                 }
                 self.tokenizer = None
                 self.asr = Qwen3StreamingASR(

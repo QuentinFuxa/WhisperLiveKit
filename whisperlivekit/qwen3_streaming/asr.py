@@ -117,6 +117,60 @@ class Qwen3StreamingASR:
             kwargs.get("qwen3_streaming_prompt_context_words", 0)
         )
 
+        # Audio backend: "windowed" (bounded-recompute window, default) or
+        # "causal" (append-only causal-KV encoder with the fine-tuned tower).
+        self.audio_backend = str(
+            kwargs.get("qwen3_streaming_audio_backend", "windowed") or "windowed"
+        )
+        if self.audio_backend not in ("windowed", "causal"):
+            raise ValueError(
+                "qwen3_streaming_audio_backend must be 'windowed' or 'causal', "
+                f"got {self.audio_backend!r}"
+            )
+        self.tower_checkpoint = str(
+            kwargs.get("qwen3_streaming_tower_checkpoint", "") or ""
+        )
+        self.block_frames = int(kwargs.get("qwen3_streaming_block_frames", 192))
+
+        # Decode/rollover policy. The windowed defaults stay at the validated
+        # operating point; causal mode derives the run-D operating point
+        # (RUNS.md 2026-06-12: WER 0.1807 human-whisper, RTF 0.107).
+        self.decoder_rolling_kv = False
+        self.speculative_draft = False
+        self.repetition_penalty = 1.0
+        self.no_repeat_ngram_size = 0
+        self.segment_punct_rollover = False
+        self.segment_punct_min_steps = 150
+        self.segment_roll_before_generate = False
+        self.reset_encoder_on_rollover = False
+        if self.audio_backend == "causal":
+            if not self.tower_checkpoint:
+                raise ValueError(
+                    "the causal audio backend requires "
+                    "--qwen3-streaming-tower-checkpoint (local .pt/.safetensors "
+                    "file, directory, or Hugging Face repo id)"
+                )
+            if self.left_context_sec == 12.0:
+                # Windowed CLI default; the causal tower was trained at 15 s.
+                logger.info(
+                    "qwen3-streaming causal: using the trained 15 s left context"
+                )
+                self.left_context_sec = 15.0
+            if self.right_context_ms not in (0, 640):
+                logger.warning(
+                    "qwen3-streaming causal: ignoring right context %d ms "
+                    "(the causal encoder has none)",
+                    self.right_context_ms,
+                )
+            self.right_context_ms = 0
+            self.decoder_rolling_kv = True
+            self.speculative_draft = True
+            self.repetition_penalty = 1.15
+            self.no_repeat_ngram_size = 3
+            self.segment_punct_rollover = True
+            self.segment_roll_before_generate = True
+            self.reset_encoder_on_rollover = True
+
         device_setting = str(kwargs.get("qwen3_streaming_device", "auto"))
         dtype_setting = str(kwargs.get("qwen3_streaming_dtype", "auto"))
         self.device, self.dtype = self._resolve_device_dtype(
@@ -141,13 +195,22 @@ class Qwen3StreamingASR:
         hf_config = AutoConfig.from_pretrained(model_id)
         text_config = hf_config.thinker_config.text_config
 
+        causal = self.audio_backend == "causal"
         self.audio_config = RealtimeAudioConfig(
             d_model=int(text_config.hidden_size),
             qwen_audio_left_context_sec=self.left_context_sec,
             qwen_audio_right_context_ms=self.right_context_ms,
+            qwen_audio_block_bidirectional=causal,
+            qwen_audio_block_frames=(self.block_frames if causal else 0),
         )
+        if causal:
+            from .causal import Qwen3ASRRealtimeQwenAudioCausalModel
+
+            model_cls = Qwen3ASRRealtimeQwenAudioCausalModel
+        else:
+            model_cls = Qwen3ASRRealtimeQwenAudioSurgeryModel
         self.model = (
-            Qwen3ASRRealtimeQwenAudioSurgeryModel.from_qwen_pretrained(
+            model_cls.from_qwen_pretrained(
                 model_id,
                 config=self.audio_config,
                 bos_token_id=(
@@ -162,6 +225,16 @@ class Qwen3StreamingASR:
             .to(self.device)
             .eval()
         )
+        if causal:
+            from .causal import load_tower_checkpoint, resolve_tower_checkpoint
+
+            checkpoint_path = resolve_tower_checkpoint(self.tower_checkpoint)
+            metadata = load_tower_checkpoint(self.model, checkpoint_path)
+            logger.info(
+                "qwen3-streaming causal: loaded tower checkpoint %s%s",
+                checkpoint_path,
+                f" (step {metadata['step']})" if metadata.get("step") else "",
+            )
         logger.info("Qwen3-ASR streaming model loaded in %.2fs", time.time() - t)
 
         # Token ids shared by all sessions
@@ -239,8 +312,12 @@ class Qwen3StreamingASR:
             stable_iterations=self.stable_iterations,
             commit_mode="word",
             suppress_token_ids=self.suppress_token_ids,
+            repetition_penalty=self.repetition_penalty,
+            no_repeat_ngram_size=self.no_repeat_ngram_size,
             prompt_prefix_template=prompt_prefix_template,
             audio_placeholder_token_id=self.audio_placeholder_token_id,
+            decoder_rolling_kv=self.decoder_rolling_kv,
+            speculative_draft=self.speculative_draft,
         )
         return SegmentedCachedFullHypothesisStreamer(
             self.model,
@@ -252,6 +329,10 @@ class Qwen3StreamingASR:
             segment_prompt_context_words=self.prompt_context_words,
             segment_prompt_base_context=self.base_context,
             segment_prompt_language=qwen_lang,
+            segment_punct_rollover=self.segment_punct_rollover,
+            segment_punct_min_steps=self.segment_punct_min_steps,
+            segment_roll_before_generate=self.segment_roll_before_generate,
+            reset_encoder_on_rollover=self.reset_encoder_on_rollover,
         )
 
     def new_mel_extractor(self) -> StreamingMelExtractor:

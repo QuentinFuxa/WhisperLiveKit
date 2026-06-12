@@ -21,6 +21,17 @@ class RealtimeAudioConfig:
     qwen_audio_right_context_ms: int = 640
     qwen_audio_left_context_sec: float = 12.0
     qwen_audio_strict_causal: bool = False
+    # Causal-KV backend (audio_backend="causal"): bidirectional attention
+    # within each fixed block, causal KV across blocks, append-only.
+    qwen_audio_block_bidirectional: bool = False
+    # Encoder steps younger than this stay re-computable each chunk; older
+    # steps freeze into the per-layer KV cache. 0 = strict append-only.
+    qwen_audio_mutable_tail_sec: float = 0.0
+    # Fixed attention-block size in mel frames for the causal encoder. The
+    # trained regime is 96/192-frame blocks; the encoder buffers incoming
+    # mel and consumes it in exact multiples so production pacing (variable
+    # chunk sizes) cannot leave the trained regime. 0 = no fixed blocking.
+    qwen_audio_block_frames: int = 0
     qwen_audio_adapter_hidden_dim: int = 0
     qwen_audio_adapter_layers: int = 0
     qwen_audio_adapter_dropout: float = 0.0
@@ -60,6 +71,22 @@ class RealtimeAudioConfig:
             raise ValueError("qwen_audio_adapter_dropout must be in [0, 1)")
         if self.qwen_audio_adapter_residual_scale < 0.0:
             raise ValueError("qwen_audio_adapter_residual_scale must be >= 0")
+        if self.qwen_audio_mutable_tail_sec < 0.0:
+            raise ValueError("qwen_audio_mutable_tail_sec must be >= 0")
+        if self.qwen_audio_block_frames < 0:
+            raise ValueError("qwen_audio_block_frames must be >= 0")
+        if (
+            self.qwen_audio_block_frames > 0
+            and self.qwen_audio_block_frames % self.frames_per_decoder_step != 0
+        ):
+            raise ValueError(
+                "qwen_audio_block_frames must be a multiple of "
+                "frames_per_decoder_step"
+            )
+        if self.qwen_audio_block_frames > 0 and self.qwen_audio_mutable_tail_sec > 0:
+            raise ValueError(
+                "fixed attention blocks and a mutable tail are exclusive"
+            )
 
     @property
     def frames_per_decoder_step(self) -> int:
