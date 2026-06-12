@@ -199,6 +199,28 @@ Notes:
 - Defaults encode the validated operating point (12 s left context, ~15 s
   segments); see `--help` for the `--qwen3-streaming-*` knobs.
 
+**Causal mode (minimum compute per chunk).** The windowed default re-encodes
+up to 12 s of audio on every update. The causal mode runs an append-only
+causal-KV encoder instead — each ~2 s audio block is encoded exactly once,
+memory is bounded (15 s window + sentence-boundary segment resets), and
+per-chunk compute is constant in stream length:
+
+```bash
+wlk --backend qwen3-streaming --language en \
+    --qwen3-streaming-audio-backend causal \
+    --qwen3-streaming-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+The fine-tuned tower ([qfuxa/qwen3-asr-0.6b-streaming](https://huggingface.co/qfuxa/qwen3-asr-0.6b-streaming))
+downloads automatically. Measured on 21 long-form MCIF talks (human refs,
+Whisper normalization): WER 18.1 vs 8.4 for the windowed default — and 20.8
+for the same 0.6B model run offline over the full file, i.e. the streaming
+causal model beats its own offline baseline. LibriSpeech streaming:
+test-clean 3.6 / test-other 7.2. Use it for many concurrent streams,
+energy-constrained serving or unbounded session lengths; keep the windowed
+default for best accuracy. English only for now. Details:
+`experiments/qwen3-causal/RUNS.md`.
+
 ### Usage Examples
 
 **Command-line Interface**: Start the transcription server with various options:
