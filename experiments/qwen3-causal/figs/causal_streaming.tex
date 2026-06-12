@@ -1,0 +1,81 @@
+% Principle of the Qwen3-ASR causal/streaming audio tower.
+% Compile: lualatex causal_streaming.tex ; export: pdftocairo -svg causal_streaming.pdf
+\documentclass[tikz,border=8pt]{standalone}
+\usetikzlibrary{arrows.meta,calc,decorations.pathreplacing,positioning}
+\renewcommand{\familydefault}{\sfdefault}
+
+\definecolor{accent}{HTML}{0A66A3}
+\definecolor{accentlight}{HTML}{D7E7F3}
+\definecolor{frozen}{HTML}{F2F2F2}
+\definecolor{frozenedge}{HTML}{B8B8B8}
+\definecolor{inkgray}{HTML}{6E6E6E}
+\definecolor{drop}{HTML}{D9D9D9}
+\definecolor{emb}{HTML}{EAF2E3}
+\definecolor{embedge}{HTML}{7FA85C}
+
+\begin{document}
+\begin{tikzpicture}[
+  font=\footnotesize,
+  blk/.style={rounded corners=1.5pt, minimum width=1.55cm, minimum height=0.78cm, inner sep=0},
+  lbl/.style={inner sep=1pt, text=inkgray},
+  attn/.style={-{Stealth[length=2.2mm]}, accent, line width=0.75pt},
+]
+
+% ---------- row 1: mel blocks over time ----------
+\foreach \i/\name in {0/B$_{k-4}$,1/B$_{k-3}$,2/B$_{k-2}$,3/B$_{k-1}$}{
+  \node[blk, draw=frozenedge, fill=frozen] (b\i) at (\i*1.95, 0) {\name};
+}
+% evicted block (outside the sliding window)
+\node[blk, draw=drop, dashed, fill=white, text=drop] (bdrop) at (-1.95, 0) {B$_{k-5}$};
+% current block
+\node[blk, draw=accent, very thick, fill=accentlight] (bcur) at (4*1.95, 0) {\textbf{B$_k$}};
+% future audio
+\node[blk, draw=drop, dashed, fill=white, text=inkgray] (bnext) at (5*1.95, 0) {$\cdots$};
+\draw[-{Stealth[length=2mm]}, inkgray] ($(bnext.east)+(0.12,0)$) -- ++(0.85,0)
+  node[lbl, right=1pt] {audio (1.92\,s blocks)};
+
+% intra-block bidirectional attention
+\draw[{Stealth[length=2.1mm]}-{Stealth[length=2.1mm]}, accent, line width=1.0pt]
+  ($(bcur.south west)+(0.16,0.17)$) -- ($(bcur.south east)+(-0.16,0.17)$);
+\node[lbl, accent, align=center] at ($(bcur.north)+(0,0.95)$)
+  {bidirectional\\\emph{within} the block};
+\draw[accent, line width=0.5pt] ($(bcur.north)+(0,0.42)$) -- ($(bcur.north)+(0,0.12)$);
+
+% causal attention to frozen per-layer KV
+\foreach \i in {1,2,3}{
+  \draw[attn] (bcur.north) .. controls ($(bcur.north)+(-1.2,0.62)$)
+    and ($(b\i.north)+(1.0,0.62)$) .. ($(b\i.north)+(0.1,0.05)$);
+}
+\node[lbl, accent] at (2.0, 1.30) {causal $\rightarrow$ frozen KV cache};
+
+% sliding window bracket
+\draw[decorate, decoration={brace, mirror, amplitude=4pt}, inkgray]
+  ($(b0.south west)+(0,-0.16)$) -- ($(bcur.south east)+(0,-0.16)$)
+  node[midway, below=5pt, lbl] {sliding attention window (15\,s) — older KV evicted};
+\draw[-{Stealth[length=1.8mm]}, drop] (b0.west) -- ($(bdrop.east)+(0.05,0)$);
+\node[lbl, text=frozenedge, align=center] at (bdrop.north) [above=1pt] {evicted};
+
+% ---------- row 2: append-only cached embeddings ----------
+\foreach \i in {0,...,3}{
+  \node[blk, minimum height=0.42cm, draw=embedge, fill=emb] (e\i) at (\i*1.95, -2.05) {};
+}
+\node[blk, minimum height=0.42cm, draw=accent, thick, fill=accentlight] (ecur) at (4*1.95, -2.05) {};
+\draw[-{Stealth[length=2.2mm]}, embedge, line width=0.9pt] (bcur.south) -- (ecur.north)
+  node[midway, right=2pt, lbl, align=left] {encoded \textbf{once} —\\never recomputed};
+\node[lbl, anchor=east] at ($(e0.west)+(-0.25,0)$) {cached audio embeddings\enspace(append-only)};
+
+% ---------- row 3: incremental decoder ----------
+\node[blk, draw=inkgray, fill=white, minimum width=3.4cm, minimum height=0.62cm]
+  (dec) at (2.925, -3.55) {Qwen3 decoder (rolling KV)};
+\foreach \i in {0,...,3}{ \draw[inkgray!55, line width=0.5pt] (e\i.south) -- ($(dec.north)+(\i*0.5-1.2,0)$); }
+\draw[accent, line width=0.8pt] (ecur.south) .. controls ($(ecur.south)+(0,-0.5)$)
+  and ($(dec.east)+(0.7,0.3)$) .. (dec.east);
+\node[anchor=west, font=\footnotesize\ttfamily] (txt) at (5.6, -3.55)
+  {\textcolor{inkgray}{\dots so the talk continues.}\ \textcolor{accent}{\textbf{And as I}}\textcolor{accent!45}{\ was say\_}};
+\draw[-{Stealth[length=2mm]}, inkgray] (dec.east) -- ($(txt.west)+(-0.05,0)$);
+\node[lbl, align=left, anchor=north west] at ($(dec.south west)+(0,-0.18)$)
+  {previous hypothesis re-verified in one pass (lossless speculative decode);\\
+   segments commit \& encoder resets at sentence boundaries ($\sim$12--16\,s)};
+
+\end{tikzpicture}
+\end{document}
