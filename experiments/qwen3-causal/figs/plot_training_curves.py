@@ -47,24 +47,21 @@ loss_y = [e["loss"] for e in d1 if "loss" in e] + [
 
 GRAY = "#9a9a9a"
 ACCENT, ACCENT2, ACCENT3 = "#0a66a3", "#c2542e", "#6b9e3f"
-fig, (ax, ax2) = plt.subplots(
-    1, 2, figsize=(10.5, 3.8), width_ratios=[2.05, 1], constrained_layout=True
-)
-for a in (ax, ax2):
-    a.spines[["top", "right"]].set_visible(False)
-    a.grid(axis="y", color="#e6e6e6", lw=0.8)
-    a.set_axisbelow(True)
+fig, ax = plt.subplots(figsize=(8.6, 3.8), constrained_layout=True)
+ax.spines[["top", "right"]].set_visible(False)
+ax.grid(axis="y", color="#e6e6e6", lw=0.8)
+ax.set_axisbelow(True)
 
 for x0 in (3000, 63000):
     ax.axvline(x0, color="#d0d0d0", lw=0.9, ls=(0, (4, 3)))
-ax.text(1500, 0.97, "smoke\nLS-100", ha="center", va="top", fontsize=8, color=GRAY)
+ax.text(1500, 0.97, "phase 1\n100 h", ha="center", va="top", fontsize=8, color=GRAY)
 ax.text(
-    33000, 0.97, "D1 — LibriSpeech 960 h, 0.96 s blocks",
+    33000, 0.97, "phase 2 — LibriSpeech 960 h, 0.96 s blocks",
     ha="center", va="top", fontsize=8, color=GRAY,
 )
 ax.text(
     93000, 0.97,
-    "WS2 — mixed 0.96/1.92 s blocks\n+ position-offset augmentation",
+    "phase 3 — mixed 0.96/1.92 s blocks\n+ position-offset augmentation",
     ha="center", va="top", fontsize=8, color=GRAY,
 )
 
@@ -82,13 +79,10 @@ ax.set_ylabel("held-out streaming WER (frozen decoder)")
 ax.set_ylim(0.15, 1.0)
 ax.set_xlim(-1500, 124500)
 ax.legend(frameon=False, fontsize=8, loc="center right")
-ax.set_title("Gate WER during distillation", fontsize=10, loc="left")
-
-ax2.plot(loss_x, loss_y, "-o", ms=3, lw=1.6, color=ACCENT)
-ax2.set_xlabel("cumulative training step")
-ax2.set_ylabel("distillation loss (MSE + 0.5·cos)")
-ax2.set_yscale("log")
-ax2.set_title("Embedding-distillation loss", fontsize=10, loc="left")
+ax.set_title(
+    "Held-out streaming WER during distillation (123k steps, ~6 H100-hours, audio only)",
+    fontsize=10, loc="left",
+)
 
 fig.savefig(OUT, format="svg")
 print("saved", OUT)
