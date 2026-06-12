@@ -3,6 +3,7 @@ from qwen3_streaming.cached_full_hypothesis import (
     CachedFullHypothesisStreamer,
     SegmentedCachedFullHypothesisStreamer,
     decode_clean_token_ids,
+    ends_with_sentence_punctuation,
     expand_audio_prompt_placeholders,
     qwen_asr_prompt_text,
     trailing_text_words,
@@ -19,6 +20,7 @@ class FakeTokenizer:
             1: "hello",
             2: "world",
             3: "today",
+            4: "done.",
         }
         self.last_encoded_text = ""
 
@@ -245,3 +247,61 @@ def test_segment_rollover_can_reset_encoder_state():
     # Encoder positions restarted; stream-time bookkeeping preserved.
     assert streamer.state.audio.emitted_steps == 0
     assert streamer.state.audio.frames_seen == 999
+
+
+def test_ends_with_sentence_punctuation():
+    assert ends_with_sentence_punctuation("Hello world.")
+    assert ends_with_sentence_punctuation("Really?!")
+    assert ends_with_sentence_punctuation('He said "stop."')
+    assert ends_with_sentence_punctuation("Done.”  ")
+    assert not ends_with_sentence_punctuation("Hello world")
+    assert not ends_with_sentence_punctuation("3,5")
+    assert not ends_with_sentence_punctuation("")
+    assert not ends_with_sentence_punctuation('   ""  ')
+
+
+def make_punct_streamer(**kwargs):
+    return SegmentedCachedFullHypothesisStreamer(
+        FakeModel(),
+        FakeTokenizer(),
+        CachedFullHypothesisConfig(
+            wait_token_id=99,
+            word_start_token_id=98,
+            hold_back_words=0,
+            stable_iterations=1,
+        ),
+        **kwargs,
+    )
+
+
+def test_segmented_streamer_rolls_at_sentence_punctuation():
+    streamer = make_punct_streamer(
+        segment_punct_rollover=True,
+        segment_punct_min_steps=3,
+    )
+
+    # Punctuated but below the minimum segment length: no roll.
+    early = streamer.update_from_hypothesis([1, 4], audio_sec=1.0, cached_steps=2)
+    assert early["segment_rollover"] is False
+
+    # Long enough but no terminal punctuation: no roll.
+    plain = streamer.update_from_hypothesis([1, 2], audio_sec=2.0, cached_steps=5)
+    assert plain["segment_rollover"] is False
+
+    # Long enough and sentence-final: roll with the punctuation reason.
+    rolled = streamer.update_from_hypothesis([1, 2, 4], audio_sec=3.0, cached_steps=5)
+    assert rolled["segment_rollover"] is True
+    assert rolled["segment_rollover_reason"] == "punctuation"
+    assert rolled["segment_final_text"] == "hello world done."
+    assert streamer.segments_finalized == 1
+
+
+def test_cap_rollover_reason_takes_precedence_over_punctuation():
+    streamer = make_punct_streamer(
+        segment_max_cached_steps=4,
+        segment_punct_rollover=True,
+        segment_punct_min_steps=1,
+    )
+    event = streamer.update_from_hypothesis([1, 2, 4], audio_sec=1.0, cached_steps=6)
+    assert event["segment_rollover"] is True
+    assert event["segment_rollover_reason"] == "cap"

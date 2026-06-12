@@ -22,7 +22,13 @@ from .cached_full_hypothesis import (
 from .metrics import word_error_rate
 
 
-def build_streamer_config(tokenizer, *, language: str) -> CachedFullHypothesisConfig:
+def build_streamer_config(
+    tokenizer,
+    *,
+    language: str,
+    decoder_rolling_kv: bool = True,
+    speculative_draft: bool = True,
+) -> CachedFullHypothesisConfig:
     wait_id = added_token_id(tokenizer, "[P]")
     word_id = added_token_id(tokenizer, "[W]")
     suppress = [wait_id, word_id]
@@ -44,6 +50,8 @@ def build_streamer_config(tokenizer, *, language: str) -> CachedFullHypothesisCo
         suppress_token_ids=tuple(suppress),
         prompt_prefix_template=prompt_template,
         audio_placeholder_token_id=int(tokenizer.convert_tokens_to_ids("<|audio_pad|>")),
+        decoder_rolling_kv=decoder_rolling_kv,
+        speculative_draft=speculative_draft,
     )
 
 
@@ -60,13 +68,20 @@ def gate_eval(
     device,
     position_offset: int = 0,
     segment_max_cached_steps: int = 0,
+    decoder_rolling_kv: bool = True,
+    speculative_draft: bool = True,
 ) -> float:
     """Streaming WER over the first ``limit`` manifest rows."""
     import soundfile as sf
 
     was_training = model.training
     model.eval()
-    config = build_streamer_config(tokenizer, language=language)
+    config = build_streamer_config(
+        tokenizer,
+        language=language,
+        decoder_rolling_kv=decoder_rolling_kv,
+        speculative_draft=speculative_draft,
+    )
     rows = [
         json.loads(line)
         for line in Path(manifest).read_text().splitlines()

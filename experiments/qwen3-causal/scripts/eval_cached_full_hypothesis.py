@@ -155,6 +155,54 @@ def parse_args() -> argparse.Namespace:
         default="on",
         help="Decoder KV-cached incremental decode (on, default) vs legacy full re-forward (off).",
     )
+    parser.add_argument(
+        "--decoder-rolling-kv",
+        choices=("on", "off"),
+        default=None,
+        help=(
+            "Persist the decoder KV over [prompt head + audio] across chunks; "
+            "only the new audio and the template tail are re-forwarded per "
+            "generation. Default: on (auto-off when --decoder-cache off)."
+        ),
+    )
+    parser.add_argument(
+        "--speculative-draft",
+        choices=("on", "off"),
+        default=None,
+        help=(
+            "Verify the previous chunk's hypothesis as a draft in the rolling "
+            "pass and resume sequential decode from the first divergence. "
+            "Default: follows --decoder-rolling-kv; requires it on."
+        ),
+    )
+    parser.add_argument(
+        "--decoder-parity-check",
+        action="store_true",
+        help=(
+            "Run every file through BOTH decoder paths (full re-prefill vs "
+            "rolling KV + speculative draft) and record byte-parity of every "
+            "per-chunk hypothesis and the final text. Doubles compute."
+        ),
+    )
+    parser.add_argument(
+        "--segment-punct-rollover",
+        action="store_true",
+        help=(
+            "Roll segments at sentence-final punctuation (IWSLT-style) once "
+            "the segment has at least --segment-punct-min-steps cached steps; "
+            "--segment-max-cached-steps stays the hard fallback."
+        ),
+    )
+    parser.add_argument("--segment-punct-min-steps", type=int, default=100)
+    parser.add_argument(
+        "--segment-roll-before-generate",
+        action="store_true",
+        help=(
+            "Roll BEFORE decoding when the incoming chunk would exceed the "
+            "segment cap, instead of running the segment's largest generation "
+            "on a cache that is dropped right after."
+        ),
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--events-dir", type=Path, default=None)
     return parser.parse_args()
@@ -203,6 +251,45 @@ def _mean(values: list[float | None]) -> float | None:
     return statistics.mean(kept) if kept else None
 
 
+def _decoder_event_stats(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate per-chunk decoder cost stats emitted by the streamer."""
+    generate_ms = sorted(
+        float(event["generate_ms"])
+        for event in events
+        if event.get("generate_ms") is not None
+    )
+    draft_tokens = sum(int(event.get("draft_tokens") or 0) for event in events)
+    draft_accepted = sum(int(event.get("draft_accepted") or 0) for event in events)
+    path_counts: dict[str, int] = {}
+    for event in events:
+        path = event.get("decoder_path")
+        if path:
+            path_counts[path] = path_counts.get(path, 0) + 1
+    return {
+        "generate_ms_mean": statistics.mean(generate_ms) if generate_ms else None,
+        "generate_ms_p50": (
+            generate_ms[len(generate_ms) // 2] if generate_ms else None
+        ),
+        "generate_ms_p95": (
+            generate_ms[min(len(generate_ms) - 1, int(len(generate_ms) * 0.95))]
+            if generate_ms
+            else None
+        ),
+        "draft_tokens_total": draft_tokens,
+        "draft_accepted_total": draft_accepted,
+        "draft_acceptance_rate": (
+            draft_accepted / draft_tokens if draft_tokens > 0 else None
+        ),
+        "decode_steps_total": sum(
+            int(event.get("decode_steps") or 0) for event in events
+        ),
+        "prefill_positions_total": sum(
+            int(event.get("prefill_positions") or 0) for event in events
+        ),
+        "decoder_path_counts": path_counts,
+    }
+
+
 def _override_audio_context(model, args: argparse.Namespace) -> None:
     encoder = getattr(model, "audio_encoder", None)
     if encoder is None:
@@ -211,6 +298,13 @@ def _override_audio_context(model, args: argparse.Namespace) -> None:
         encoder.left_context_frames = int(
             round(args.qwen_audio_left_context_sec * 1000.0 / model.config.mel_hop_ms)
         )
+        if hasattr(encoder, "left_context_steps"):
+            # The causal-KV encoder derives its step window once at init; keep
+            # it in sync so this override is never a silent no-op.
+            encoder.left_context_steps = max(
+                1,
+                encoder.output_steps_for_mel_frames(encoder.left_context_frames),
+            )
     if args.qwen_audio_right_context_ms is not None:
         desired = int(round(args.qwen_audio_right_context_ms / model.config.mel_hop_ms))
         try:
@@ -356,58 +450,113 @@ def _run_one(
         mel = log_mel_spectrogram(audio, sr, model.config).to(device)
     chunk_frames = max(1, int(round(args.chunk_ms / model.config.mel_hop_ms)))
 
-    config = CachedFullHypothesisConfig(
-        wait_token_id=wait_token_id,
-        word_start_token_id=word_start_token_id,
-        eos_token_id=eos_token_id,
-        max_new_tokens=args.max_new_tokens,
-        repetition_penalty=args.repetition_penalty,
-        no_repeat_ngram_size=args.no_repeat_ngram_size,
-        max_consecutive_text_tokens=args.max_consecutive_text_tokens,
-        hold_back_tokens=args.hold_back_tokens,
-        hold_back_words=args.hold_back_words,
-        stable_iterations=args.stable_iterations,
-        min_commit_audio_sec=args.min_commit_audio_sec,
-        commit_mode=args.commit_mode,
-        normalize_commit_match=args.normalize_commit_match,
-        suppress_token_ids=tuple(suppress_token_ids),
-        prompt_prefix_template=prompt_prefix_template,
-        audio_placeholder_token_id=audio_placeholder_token_id,
-        use_decoder_kv_cache=args.decoder_cache == "on",
-    )
-    if args.segment_max_cached_steps > 0:
-        streamer = SegmentedCachedFullHypothesisStreamer(
-            model,
-            tokenizer,
-            config,
-            segment_max_cached_steps=args.segment_max_cached_steps,
-            segment_keep_tail_steps=args.segment_keep_tail_steps,
-            segment_finalize_mode=args.segment_finalize_mode,
-            segment_prompt_context_words=args.segment_prompt_context_words,
-            segment_prompt_base_context=args.context,
-            segment_prompt_language=args.language,
-            reset_encoder_on_rollover=args.encoder_reset_on_rollover,
-            segment_prompt_context_prefix=args.segment_prompt_context_prefix,
+    def build_streamer(*, rolling: bool, speculative: bool):
+        config = CachedFullHypothesisConfig(
+            wait_token_id=wait_token_id,
+            word_start_token_id=word_start_token_id,
+            eos_token_id=eos_token_id,
+            max_new_tokens=args.max_new_tokens,
+            repetition_penalty=args.repetition_penalty,
+            no_repeat_ngram_size=args.no_repeat_ngram_size,
+            max_consecutive_text_tokens=args.max_consecutive_text_tokens,
+            hold_back_tokens=args.hold_back_tokens,
+            hold_back_words=args.hold_back_words,
+            stable_iterations=args.stable_iterations,
+            min_commit_audio_sec=args.min_commit_audio_sec,
+            commit_mode=args.commit_mode,
+            normalize_commit_match=args.normalize_commit_match,
+            suppress_token_ids=tuple(suppress_token_ids),
+            prompt_prefix_template=prompt_prefix_template,
+            audio_placeholder_token_id=audio_placeholder_token_id,
+            use_decoder_kv_cache=args.decoder_cache == "on",
+            decoder_rolling_kv=rolling,
+            speculative_draft=speculative,
         )
+        if args.segment_max_cached_steps > 0 or args.segment_punct_rollover:
+            return SegmentedCachedFullHypothesisStreamer(
+                model,
+                tokenizer,
+                config,
+                segment_max_cached_steps=args.segment_max_cached_steps,
+                segment_keep_tail_steps=args.segment_keep_tail_steps,
+                segment_finalize_mode=args.segment_finalize_mode,
+                segment_prompt_context_words=args.segment_prompt_context_words,
+                segment_prompt_base_context=args.context,
+                segment_prompt_language=args.language,
+                reset_encoder_on_rollover=args.encoder_reset_on_rollover,
+                segment_prompt_context_prefix=args.segment_prompt_context_prefix,
+                segment_punct_rollover=args.segment_punct_rollover,
+                segment_punct_min_steps=args.segment_punct_min_steps,
+                segment_roll_before_generate=args.segment_roll_before_generate,
+            )
+        return CachedFullHypothesisStreamer(model, tokenizer, config)
+
+    def run_stream(streamer):
+        if args.audio_position_offset:
+            streamer.state.audio.emitted_steps = int(args.audio_position_offset)
+        with torch.no_grad():
+            for start in range(0, mel.shape[0], chunk_frames):
+                streamer.append_mel_chunk(
+                    mel[start : start + chunk_frames, :].unsqueeze(0),
+                    is_flush=False,
+                )
+            right_context = int(
+                getattr(model.audio_encoder, "right_context_frames", 0)
+            )
+            if right_context > 0:
+                streamer.append_mel_chunk(
+                    mel.new_zeros(1, right_context, model.config.n_mels),
+                    is_flush=True,
+                )
+        return streamer.finalize(finalize_mode=args.finalize_mode)
+
+    parity_fields: dict[str, Any] = {}
+    if args.decoder_parity_check:
+        baseline = build_streamer(rolling=False, speculative=False)
+        baseline_final = run_stream(baseline)
+        streamer = build_streamer(rolling=True, speculative=True)
+        final = run_stream(streamer)
+        mismatch_chunks: list[int] = []
+        if len(baseline.events) != len(streamer.events):
+            mismatch_chunks.append(min(len(baseline.events), len(streamer.events)))
+        else:
+            mismatch_chunks = [
+                index
+                for index, (base_event, cand_event) in enumerate(
+                    zip(baseline.events, streamer.events)
+                )
+                if base_event["hypothesis"] != cand_event["hypothesis"]
+            ]
+        reference = item.get("reference")
+        parity_fields = {
+            # Strict byte parity is not attainable in bf16: the incremental
+            # prefill computes K/V in different matmul shapes than the
+            # monolithic re-prefill, so near-tie argmaxes can flip on rare
+            # chunks (self-correcting, since text is regenerated per chunk).
+            # Gate on flip rate + WER delta instead.
+            "parity_ok": not mismatch_chunks
+            and baseline_final.final_text == final.final_text,
+            "parity_first_mismatch_chunk": (
+                mismatch_chunks[0] if mismatch_chunks else None
+            ),
+            "parity_mismatch_chunks": len(mismatch_chunks),
+            "parity_chunks_total": len(streamer.events),
+            "parity_final_text_equal": baseline_final.final_text == final.final_text,
+            "baseline_final_text": baseline_final.final_text,
+            "baseline_wer_final": (
+                word_error_rate(reference, baseline_final.final_text)
+                if reference
+                else None
+            ),
+            "baseline_decoder_stats": _decoder_event_stats(baseline.events),
+        }
     else:
-        streamer = CachedFullHypothesisStreamer(model, tokenizer, config)
-    if args.audio_position_offset:
-        streamer.state.audio.emitted_steps = int(args.audio_position_offset)
+        streamer = build_streamer(
+            rolling=args.decoder_rolling_kv == "on",
+            speculative=args.speculative_draft == "on",
+        )
+        final = run_stream(streamer)
 
-    with torch.no_grad():
-        for start in range(0, mel.shape[0], chunk_frames):
-            streamer.append_mel_chunk(
-                mel[start : start + chunk_frames, :].unsqueeze(0),
-                is_flush=False,
-            )
-        right_context_frames = int(getattr(model.audio_encoder, "right_context_frames", 0))
-        if right_context_frames > 0:
-            streamer.append_mel_chunk(
-                mel.new_zeros(1, right_context_frames, model.config.n_mels),
-                is_flush=True,
-            )
-
-    final = streamer.finalize(finalize_mode=args.finalize_mode)
     final_tokens = final.final_tokens
     events = streamer.events
 
@@ -477,6 +626,16 @@ def _run_one(
         "cache_bound_ok": bool(cache_bound <= 0 or max_recomputed <= cache_bound),
         "repetition": repetition,
         "streaming": streaming_stats,
+        "decoder_stats": _decoder_event_stats(events),
+        "segment_rollover_reasons": {
+            reason: sum(
+                1
+                for event in events
+                if event.get("segment_rollover_reason") == reason
+            )
+            for reason in ("cap", "punctuation")
+        },
+        **parity_fields,
     }
 
 
@@ -521,6 +680,22 @@ def main() -> None:
         )
     if args.segment_prompt_context_words < 0:
         raise ValueError("--segment-prompt-context-words must be >= 0")
+    if args.decoder_rolling_kv == "on" and args.decoder_cache != "on":
+        raise ValueError("--decoder-rolling-kv on requires --decoder-cache on")
+    if args.decoder_rolling_kv is None:
+        args.decoder_rolling_kv = "on" if args.decoder_cache == "on" else "off"
+    if args.speculative_draft == "on" and args.decoder_rolling_kv != "on":
+        raise ValueError("--speculative-draft on requires --decoder-rolling-kv on")
+    if args.speculative_draft is None:
+        args.speculative_draft = args.decoder_rolling_kv
+    if args.decoder_parity_check and args.decoder_cache != "on":
+        raise ValueError("--decoder-parity-check requires --decoder-cache on")
+    if args.segment_punct_min_steps < 1:
+        raise ValueError("--segment-punct-min-steps must be >= 1")
+    if args.segment_roll_before_generate and args.segment_max_cached_steps <= 0:
+        raise ValueError(
+            "--segment-roll-before-generate requires --segment-max-cached-steps > 0"
+        )
 
     device = torch.device(args.device)
     items = _load_items(args)
@@ -566,6 +741,14 @@ def main() -> None:
             handle.flush()
 
     ok_rows = [row for row in rows if row.get("error") is None]
+    draft_accepted_total = sum(
+        int((row.get("decoder_stats") or {}).get("draft_accepted_total") or 0)
+        for row in ok_rows
+    )
+    draft_tokens_total = sum(
+        int((row.get("decoder_stats") or {}).get("draft_tokens_total") or 0)
+        for row in ok_rows
+    )
     summary = {
         "count": len(rows),
         "ok": len(ok_rows),
@@ -610,6 +793,47 @@ def main() -> None:
         ),
         "dropped_cached_steps_total": sum(
             int(row.get("dropped_cached_steps_total", 0)) for row in ok_rows
+        ),
+        "generate_ms_mean": _mean(
+            [
+                (row.get("decoder_stats") or {}).get("generate_ms_mean")
+                for row in ok_rows
+            ]
+        ),
+        "draft_acceptance_rate": (
+            draft_accepted_total / draft_tokens_total
+            if draft_tokens_total > 0
+            else None
+        ),
+        "decode_steps_total": sum(
+            int((row.get("decoder_stats") or {}).get("decode_steps_total") or 0)
+            for row in ok_rows
+        ),
+        "prefill_positions_total": sum(
+            int((row.get("decoder_stats") or {}).get("prefill_positions_total") or 0)
+            for row in ok_rows
+        ),
+        "parity_ok_all": (
+            all(bool(row.get("parity_ok")) for row in ok_rows)
+            if any("parity_ok" in row for row in ok_rows)
+            else None
+        ),
+        "parity_mismatch_chunks_total": sum(
+            int(row.get("parity_mismatch_chunks") or 0) for row in ok_rows
+        ),
+        "parity_chunks_total": sum(
+            int(row.get("parity_chunks_total") or 0) for row in ok_rows
+        ),
+        "baseline_wer_final_mean": _mean(
+            [row.get("baseline_wer_final") for row in ok_rows]
+        ),
+        "segment_rollovers_punctuation": sum(
+            int((row.get("segment_rollover_reasons") or {}).get("punctuation", 0))
+            for row in ok_rows
+        ),
+        "segment_rollovers_cap": sum(
+            int((row.get("segment_rollover_reasons") or {}).get("cap", 0))
+            for row in ok_rows
         ),
         "first_display_sec_mean": _mean(
             [

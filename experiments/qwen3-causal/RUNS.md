@@ -5442,3 +5442,124 @@ or sequence-level/text-level objectives) with uncertain payoff — parked.
 
 Next: WS4 (causal mode in the qwen3-streaming backend with
 reset-on-rollover default), then French (MLS) on the same recipe.
+
+## 2026-06-12 - Min-Compute-Per-Chunk: Rolling Decoder KV + Speculative Draft + Punctuation Rollover
+
+Objective pivot: WER 0.18-0.20 long-form is accepted; the target is now the
+least computation per new audio chunk. Per-chunk audit (5-agent workflow,
+file:line): the causal encoder is already at its floor (~12-15 GFLOPs,
+append-only, 1-3 ms); the decoder is 85-90 percent of wall-clock through
+three redundancies: (1) the [prompt + audio] prefix re-prefilled from
+scratch every chunk (44 -> 212 positions across a segment, 4.8x redundant,
+zero KV reuse across chunks); (2) the full hypothesis re-decoded from token
+0 every chunk (7 -> 49 sequential steps, 4.6x); (3) per-step overhead in
+`_control_logits_and_pick` — O(T) `generated.cpu().tolist()` per step, a
+Python repetition-penalty loop doing per-token GPU scalar indexing, 3-5
+device syncs (3-10 ms/step instead of the ~1.5-2 ms bandwidth floor).
+Bonus finds: `tokenizer.encode` of the prompt template ran EVERY chunk when
+`segment_prompt_context_words > 0`; rollover was checked AFTER generation
+(the segment's largest generation ran on a cache dropped right after); the
+eval CLI's post-construction left-context override silently failed to update
+`left_context_steps` on the causal encoder (config path was live; override
+now re-derives the step window so it can never be a silent no-op).
+
+Implementation (all training-free, flags default OFF):
+
+- `_GreedyControlSession` (native_realtime_model.py): incremental host-side
+  token history (no per-step O(T) transfer), vectorized repetition penalty
+  over a cached unique-token GPU index, ngram ban from the host list, one
+  device sync per step. Kept `_apply_repetition_controls_to_logits` as the
+  reference spec; bit-equivalence tests (fp32 + bf16) over 8 ordering/dtype
+  risk points. Both legacy decode loops now run through the session.
+- Rolling decoder KV (`generate_full_hypothesis_rolling` + new
+  `DecoderRollingState` on `CachedAudioDecodeState`): the decoder KV over
+  [prompt head + cached audio] persists across chunks; per chunk ONE
+  parallel forward of [new audio delta + template tail + previous
+  hypothesis as a speculative draft], greedy verification position-by-
+  position with exact control replay (same `controlled_logits` code as the
+  sequential stepper), `DynamicCache.crop` drops rejected-draft KV and
+  restores the [head + audio] prefix after every generation. Capability
+  probe with one-shot `disabled` fallback to the legacy path (non-croppable
+  cache / batch != 1 / prompt_token_ids).
+- Streamer: `decoder_rolling_kv` / `speculative_draft` config flags, segment
+  prompt template tokenized once per segment, rolling state invalidated at
+  rollover, per-event stats (decoder_path, draft_tokens/accepted,
+  decode_steps, prefill_positions, generate_ms).
+- Punctuation rollover (IWSLT agent_simulstream-style, audio cut at chunk
+  boundary instead of forced-aligner timestamps): roll when the segment
+  hypothesis ends with sentence-final punctuation and the segment has
+  >= `--segment-punct-min-steps` (default 100) cached steps; the step cap
+  stays the no-punctuation fallback. `--segment-roll-before-generate`
+  rolls before decoding when the incoming chunk would exceed the cap.
+- Eval CLI: `--decoder-rolling-kv`, `--speculative-draft`,
+  `--decoder-parity-check` (dual-streamer harness), punctuation flags;
+  summary gains generate_ms_mean, draft_acceptance_rate, decode/prefill
+  totals, parity fields. gate.py passes the new flags through (defaults
+  unchanged for trainers).
+
+Tests: 124 local / 52 on the H100 (new tests/test_decoder_rolling_kv.py:
+control bit-equivalence vs legacy spec, rolling-vs-full parity across
+chunks on croppable cumulative-mean fakes, 10 draft cases incl.
+corrected-pick-is-eos and budget edges, fallback/disabled paths, end-to-end
+streamer parity across rollovers, template encoded once per segment,
+punctuation/pre-roll triggers).
+
+Parity semantics, measured (5 MCIF files, 1920 ms, seg200 + reset): the
+speculative draft is exactly faithful to the rolling path (spec == roll on
+every chunk, including divergent ones). Rolling vs monolithic re-prefill is
+NOT byte-stable in bf16 — K/V computed in different matmul shapes flip a
+near-tie argmax on rare chunks ("high-sounding" vs "high-speed"),
+self-correcting next chunk since text is regenerated. Quality impact: zero
+— per-file WER delta vs the session-B baseline run: +0.0032/-0.0082/
++0.0019/+0.0033/-0.0013, mean -0.0002. Gate redefined accordingly (flip
+rate + WER delta, not byte equality) and PASSED.
+
+Speed (same 5 files): generate_ms mean 161-234 vs 431-530 baseline —
+**2.1-2.6x on the dominant term**, draft acceptance 0.67-0.88 (mean 0.76),
+sequential decode steps now ~constant in segment age.
+
+### 21-file results (chunk 1920 ms, seg200 + reset, runs/jl_mincompute/)
+
+| run | WER teacher-legacy | WER human-whisper | RTF | segments/file | rollovers punct/cap |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline (session B, full re-prefill) | 0.2485 | 0.1870 | 0.289 | ~19 | 0/all |
+| A: rolling KV + speculative draft | 0.2488 | 0.1873 | **0.115** | 19.1 | 0/402 |
+| B: A + punct rollover (min 100 steps ~8s) | 0.2696 | 0.1902 | 0.0997 | 31.8 | 655/13 |
+| C: B + roll-before-generate | 0.2672 | 0.1885 | **0.0950** | 31.9 | 657/0 |
+| D: A + punct rollover (min 150 steps ~12s) | **0.2468** | **0.1807** | 0.1065 | 23.4 | 436/55 |
+| E: D + roll-before-generate | 0.2465 | 0.1810 | 0.1094 | 23.7 | 434/0 |
+
+Readings:
+
+- A is the drop-in production point: WER identical to the baseline in both
+  metrics (+0.0002 / +0.0003), **RTF 0.289 -> 0.115 (2.5x)**, draft
+  acceptance 0.74, generate_ms_mean 205 (chunk-level speedup grows with
+  segment depth: 2.1-2.6x measured). Defaults flipped ON
+  (CachedFullHypothesisConfig, gate.py, eval CLI auto-resolves on unless
+  --decoder-cache off).
+- The teacher-legacy "degradation" of B/C (+0.02) is mostly a normalization
+  artifact: under human refs + Whisper normalizer C is +0.0012 vs A —
+  within noise — while cutting RTF another 17 percent and rolling on
+  sentence boundaries exclusively (657 punct / 0 cap). Punct flags stay
+  opt-in because they change output text (policy choice, not a pure
+  optimization).
+- Punct min-steps matters: at min 100 (~8s segments) WER degrades (+0.003
+  human-whisper, +0.02 teacher-legacy); at min 150 (~12-16s segments,
+  run D) sentence-boundary cuts BEAT the fixed cap on BOTH axes —
+  **0.1807 human-whisper (best long-form causal number to date, vs 0.1870
+  baseline) at RTF 0.1065 (2.7x)**. Cutting at linguistic boundaries
+  avoids the mid-sentence word losses of the cap roll, as long as segments
+  stay long enough to keep encoder context.
+- Total speedup baseline -> C: **3.0x end-to-end** (RTF 0.289 -> 0.095) at
+  WER 0.1885 human-whisper; recommended quality point is D/E (punct min
+  150, preroll optional): **0.1807-0.1810 human-whisper at RTF ~0.11
+  (2.7x)** — better WER than the baseline AND 2.7x its speed. E adds the
+  clean invariant that no generation ever runs on an over-cap cache
+  (434 punct / 0 cap rollovers); D vs E WER/RTF deltas are run noise.
+  Per 33-min talk: ~32-35 s of H100 compute.
+
+Shipping config (WS4 defaults): rolling KV + speculative draft ON
+(already default), `--segment-punct-rollover --segment-punct-min-steps 150
+--segment-roll-before-generate` recommended for long-form serving.
+Artifacts: runs/jl_mincompute/ (+ ~/jl_mincompute_artifacts.tgz on the
+machine). Machine paused after this session.
