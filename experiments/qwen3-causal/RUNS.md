@@ -5563,3 +5563,31 @@ Shipping config (WS4 defaults): rolling KV + speculative draft ON
 --segment-roll-before-generate` recommended for long-form serving.
 Artifacts: runs/jl_mincompute/ (+ ~/jl_mincompute_artifacts.tgz on the
 machine). Machine paused after this session.
+
+## 2026-06-12 - WS4: Causal Backend Promoted to whisperlivekit (Production)
+
+The causal stack is now a first-class mode of the qwen3-streaming backend
+(commit a495c2e): `--qwen3-streaming-audio-backend causal
+--qwen3-streaming-tower-checkpoint <path-or-hf-repo>`. New
+`whisperlivekit/qwen3_streaming/causal.py` (encoder + causal model +
+checkpoint loaders), rolling decoder KV + speculative draft ported into
+prod model.py (defaults OFF in windowed mode, ON in causal), punct
+rollover + roll-before-generate + reset-on-rollover in the prod streamer,
+causal defaults derived automatically in asr.py (run-D operating point).
+
+Key production-only design: **fixed attention blocks inside the encoder**
+(block_frames=192). Production pacing delivers variable-size mel chunks;
+the encoder buffers and consumes exact multiples of the trained block size
+(pacing-invariance pinned by unit tests), and `flush_pending` encodes the
+partial tail block once at end of utterance (mandatory: no right-context
+zeros in causal mode).
+
+GPU parity gate (3 MCIF files, H100 bf16, machine 425907): PASSED —
+prod fed 192-frame chunks == experiments harness (gate 1, near-tie bf16
+flips only), and variable chunking does not degrade quality vs exact
+blocks (gate 2, one-sided; on one file paced was 0.026 BETTER — punct
+boundaries shift with decode points, transcripts differ in form at equal
+quality; this is expected and documented in the test).
+
+169 WLK tests + 124 experiments tests pass. Benchmarks (21 MCIF via prod
+stack + LibriSpeech test-clean/other) follow below.
