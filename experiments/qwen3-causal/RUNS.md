@@ -5610,3 +5610,26 @@ model, 3.6/7.2 is the headline short-form result. Offline LS numbers for the
 base model are published by Qwen (not re-run here). Artifacts:
 runs/ws4_bench/ + ~/Downloads/qwen3_checkpoints/ws4_bench_artifacts.tgz
 (local). Total phase-2 GPU spend ~ $10.
+
+### FLOPs correction: measured (FlopCounterMode) vs the analytic audit
+
+The 2026-06-12 per-chunk ledger's GFLOPs were analytic estimates; now
+measured with torch.utils.flop_counter on the real modules (real tower
+weights, steady-state caches) — scripts/measure_flops.py:
+
+| quantity | audit (analytic) | measured |
+| --- | ---: | ---: |
+| causal encoder, 1.92s block @steady | 12-15 | **17.1** |
+| windowed encoder, 2.0s update @steady | ~37 | **114.5** |
+| decoder prefill 128/212 pos | ~154/254 | **112.7/186.7** |
+| causal rolling pass (~62 pos) | ~46-96 | **54.6** |
+| 1 sequential step @past250 | ~1.2 | **0.88** |
+| windowed total per audio-sec | ~110 avg | **125.9 avg / 172.2 peak** |
+| causal total per audio-sec | ~50 | **41.5 (constant)** |
+
+Main audit error: the windowed encoder was 3x underestimated — the audit
+ignored the conv stem (3x conv2d at 480 channels over the full 1264-frame
+window; the conv alone is ~2/3 of the window cost) and assumed the audio
+tower at d=1024 when it is d=896 (the text decoder is 1024). The headline
+ratio survives: causal is 3.0x cheaper on average, 4.1x at segment end,
+and constant in stream age. HF card updated with the measured numbers.
