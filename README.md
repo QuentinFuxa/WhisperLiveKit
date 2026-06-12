@@ -1,7 +1,7 @@
 <p align="center">
   <img width="330" alt="wlk" src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/wlk.png" />
 </p>
-<p align="center"><b>WhisperLiveKit: Ultra-low-latency, self-hosted speech-to-text with speaker identification</b></p>
+<p align="center"><b>WLK: Ultra-low-latency, self-hosted speech-to-text model(s) with speaker identification</b></p>
 
 
 <p align="center">
@@ -13,8 +13,8 @@
 <a href="https://pypi.org/project/whisperlivekit/"><img alt="PyPI Version" src="https://img.shields.io/pypi/v/whisperlivekit?color=g"></a>
 <a href="https://pepy.tech/project/whisperlivekit"><img alt="PyPI Downloads" src="https://static.pepy.tech/personalized-badge/whisperlivekit?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=installations"></a>
 <a href="https://pypi.org/project/whisperlivekit/"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.11--3.13-dark_green"></a>
-<a href="https://huggingface.co/qfuxa/whisper-base-french-lora">
-  <img alt="Hugging Face Weights" src="https://img.shields.io/badge/🤗-Hugging%20Face%20Weights-yellow" />
+<a href="https://huggingface.co/qfuxa/qwen3-asr-0.6b-streaming">
+  <img alt="Hugging Face models" src="https://img.shields.io/badge/🤗-Hugging%20Face%20Weights-yellow" />
 </a>
 <a href="https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache 2.0-dark_green"></a>
 </p>
