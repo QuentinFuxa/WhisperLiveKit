@@ -5633,3 +5633,20 @@ window; the conv alone is ~2/3 of the window cost) and assumed the audio
 tower at d=1024 when it is d=896 (the text decoder is 1024). The headline
 ratio survives: causal is 3.0x cheaper on average, 4.1x at segment end,
 and constant in stream age. HF card updated with the measured numbers.
+
+### Two corrections to earlier notes
+
+1. MCIF/WLK file durations: the 21 talks are 277-426 s (mean 5.6 min, 2.0 h
+   total), NOT ~30 min as claimed in some later notes. Consequently the
+   per-talk compute at RTF 0.107-0.16 is ~36-54 s of H100 (the "3.5 min per
+   33-min talk" correction of 2026-06-12 was itself wrong; the original
+   "~32-35 s per talk" seconds were right, the premise about duration was
+   not).
+2. HF card: the offline 0.6B row (20.8) is now explicitly labeled as the
+   NAIVE one-pass usage (single transcribe() call on a 5-7 min file:
+   long-generation drift/skips, deletion-dominated; 1.7B scores 12.0 under
+   the same protocol). Properly segmented offline decoding is the strong
+   baseline, and the windowed backend (8.4) is that strategy made streaming.
+   This was already the RUNS.md conclusion ("segmentation is not a streaming
+   compromise, it is the better long-form decoding strategy"); the card
+   table now says it instead of implying offline < streaming.
