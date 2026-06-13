@@ -5650,3 +5650,26 @@ and constant in stream age. HF card updated with the measured numbers.
    This was already the RUNS.md conclusion ("segmentation is not a streaming
    compromise, it is the better long-form decoding strategy"); the card
    table now says it instead of implying offline < streaming.
+
+### Offline done right: VAD-segmented baseline (the missing fair comparison)
+
+The 20.8 "offline one-pass" number was the bare `transcribe()` call, which
+only splits above MAX_ASR_INPUT_SECONDS=1200s, so a 5-7min file decoded in
+one autoregressive generation (long-decode drift). Measured the recommended
+long-form recipe instead: Silero VAD segmentation (<=28s segments) + offline
+transcribe per segment + concat (scripts/offline_baseline_vad.py), 21 MCIF
+files, human refs whisper-norm:
+
+| offline method | WER (human, whisper) | WER (human, legacy) |
+| --- | ---: | ---: |
+| naive one-pass (full 5-7min file) | 0.2075 | 0.2660 |
+| **VAD-segmented (recommended)** | **0.0764** | 0.1430 |
+
+So the honest long-form ranking on these files:
+offline VAD-segmented **0.076** < windowed streaming 0.084 < causal
+streaming 0.181. Offline-done-right is the quality ceiling; the windowed
+backend tracks it (it IS segmentation made streaming); the causal model
+trades ~2.4x accuracy for ~3x lower, constant per-chunk compute. The HF
+card table now uses 7.6 as the offline reference (not the 20.8 misuse) and
+sells the causal model on compute, not on beating a strawman. Artifacts:
+~/Downloads/qwen3_checkpoints/offline_vad_artifacts.tgz.
