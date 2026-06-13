@@ -51,7 +51,7 @@
 % sliding window bracket
 \draw[decorate, decoration={brace, mirror, amplitude=4pt}, inkgray]
   ($(b0.south west)+(0,-0.16)$) -- ($(bcur.south east)+(0,-0.16)$)
-  node[midway, below=5pt, lbl] {sliding attention window (15\,s) — older KV evicted};
+  node[midway, below=5pt, lbl] {sliding attention window (15\,s), older KV evicted};
 \draw[-{Stealth[length=1.8mm]}, drop] (b0.west) -- ($(bdrop.east)+(0.05,0)$);
 \node[lbl, text=frozenedge, align=center] at (bdrop.north) [above=1pt] {evicted};
 
@@ -61,7 +61,7 @@
 }
 \node[blk, minimum height=0.42cm, draw=accent, thick, fill=accentlight] (ecur) at (4*1.95, -2.05) {};
 \draw[-{Stealth[length=2.2mm]}, embedge, line width=0.9pt] (bcur.south) -- (ecur.north)
-  node[midway, right=2pt, lbl, align=left] {encoded \textbf{once} —\\never recomputed};
+  node[midway, right=2pt, lbl, align=left] {encoded \textbf{once},\\never recomputed};
 \node[lbl, anchor=east] at ($(e0.west)+(-0.25,0)$) {cached audio embeddings\enspace(append-only)};
 
 % ---------- row 3: incremental decoder ----------

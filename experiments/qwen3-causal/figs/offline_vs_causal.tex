@@ -1,6 +1,6 @@
 % Offline Qwen3-ASR vs this release's causal streaming execution.
 % Visual language follows Fig. 2 of the Qwen3-ASR technical report
-% (arXiv:2601.21337) — redrawn, not copied.
+% (arXiv:2601.21337); redrawn, not copied.
 % Compile: lualatex offline_vs_causal.tex ; export: pdftocairo -svg
 \documentclass[tikz,border=10pt]{standalone}
 \usetikzlibrary{arrows.meta,calc,decorations.pathreplacing,positioning}
@@ -42,7 +42,7 @@
 
 % =========================== LEFT: offline ===========================
 \begin{scope}[local bounding box=leftpanel]
-  \node[plbl, anchor=west] at (-0.1, 5.05) {\textbf{(a) Qwen3-ASR — offline}};
+  \node[plbl, anchor=west] at (-0.1, 5.05) {\textbf{(a) Qwen3-ASR, offline}};
 
   % waveform: whole utterance present
   \waveform{0}{90}{1.0}
@@ -56,7 +56,7 @@
   % full bidirectional attention glyph
   \draw[{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]}, accent, line width=0.8pt]
     (0.25, 1.12) -- (5.85, 1.12);
-  \node[glbl, accent, fill=white, inner sep=2.5pt] at (3.0, 1.33) {full bidirectional attention — one pass, after the audio ends};
+  \node[glbl, accent, fill=white, inner sep=2.5pt] at (3.0, 1.33) {full bidirectional attention, one pass after the audio ends};
 
   % encoder box
   \node[bigbox, minimum width=5.9cm, anchor=west] (enc) at (0.05, 1.95) {AuT encoder \, (offline execution)};
@@ -76,7 +76,7 @@
 
 % =========================== RIGHT: causal ===========================
 \begin{scope}[xshift=8.9cm, local bounding box=rightpanel]
-  \node[plbl, anchor=west] at (-0.1, 5.05) {\textbf{(b) This release — causal streaming}};
+  \node[plbl, anchor=west] at (-0.1, 5.05) {\textbf{(b) This release, causal streaming}};
 
   % waveform: past solid, future faded
   \waveform{0}{62}{1.0}
@@ -106,13 +106,13 @@
   }
   \node[glbl, accent, anchor=west] at (0.0, 1.85) {bidirectional \emph{within} the block; causal $\rightarrow$ frozen KV};
   \draw[decorate, decoration={brace, mirror, amplitude=3.5pt}, inkgray]
-    (0.16,-0.95) -- (5.55,-0.95) node[midway, below=4pt, glbl] {15\,s sliding window — oldest KV evicted};
+    (0.16,-0.95) -- (5.55,-0.95) node[midway, below=4pt, glbl] {15\,s sliding window, oldest KV evicted};
 
   % encoder box
   \node[bigbox, minimum width=6.5cm, anchor=west, draw=accent, line width=0.9pt] (enc2) at (0.05, 2.45)
-    {AuT encoder — \textbf{causal-KV} \, (fine-tuned tower, this release)};
+    {AuT encoder, \textbf{causal-KV} \, (fine-tuned tower, this release)};
   \draw[flow, accent] (4.94, 0.92) -- (4.94, 2.08);
-  \node[glbl, accent, align=left, anchor=west] at (5.30, 1.45) {encoded \textbf{once} —\\never recomputed};
+  \node[glbl, accent, align=left, anchor=west] at (5.30, 1.45) {encoded \textbf{once},\\never recomputed};
 
   % hidden tokens: append-only
   \foreach \i in {0,...,15}{ \node[tok, fill=toktealmute, minimum height=0.26cm] at (0.22+\i*0.262, 3.18) {}; }
