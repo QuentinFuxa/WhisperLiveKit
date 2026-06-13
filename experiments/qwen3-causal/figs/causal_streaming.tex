@@ -1,81 +1,94 @@
-% Principle of the Qwen3-ASR causal/streaming audio tower.
-% Compile: lualatex causal_streaming.tex ; export: pdftocairo -svg causal_streaming.pdf
-\documentclass[tikz,border=8pt]{standalone}
+% Decoder-side serving loop for the causal streaming backend: what one
+% ~2 s update actually forwards. Same visual language as offline_vs_causal.tex.
+% Compile: lualatex causal_streaming.tex ; export: pdftocairo -svg
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage{amssymb}
 \usetikzlibrary{arrows.meta,calc,decorations.pathreplacing,positioning}
 \renewcommand{\familydefault}{\sfdefault}
 
+\definecolor{boxgray}{HTML}{D9D9D9}
+\definecolor{boxedge}{HTML}{8A8A8A}
+\definecolor{tokteal}{HTML}{7FD6C2}
+\definecolor{toktealmute}{HTML}{C8EDE4}
+\definecolor{toklilac}{HTML}{E7E1F7}
+\definecolor{labelpurple}{HTML}{6C4FD8}
+\definecolor{inkgray}{HTML}{5A5A5A}
 \definecolor{accent}{HTML}{0A66A3}
 \definecolor{accentlight}{HTML}{D7E7F3}
-\definecolor{frozen}{HTML}{F2F2F2}
-\definecolor{frozenedge}{HTML}{B8B8B8}
-\definecolor{inkgray}{HTML}{6E6E6E}
-\definecolor{drop}{HTML}{D9D9D9}
-\definecolor{emb}{HTML}{EAF2E3}
-\definecolor{embedge}{HTML}{7FA85C}
+\definecolor{okgreen}{HTML}{6B9E3F}
+\definecolor{warm}{HTML}{C2542E}
+\definecolor{mute}{HTML}{C9C9C9}
 
 \begin{document}
 \begin{tikzpicture}[
   font=\footnotesize,
-  blk/.style={rounded corners=1.5pt, minimum width=1.55cm, minimum height=0.78cm, inner sep=0},
-  lbl/.style={inner sep=1pt, text=inkgray},
-  attn/.style={-{Stealth[length=2.2mm]}, accent, line width=0.75pt},
+  bigbox/.style={rounded corners=3pt, draw=boxedge, fill=boxgray,
+                 minimum height=0.72cm, inner xsep=8pt},
+  tok/.style={rounded corners=1.1pt, minimum width=0.24cm, minimum height=0.32cm,
+              inner sep=0, draw=black!55, line width=0.4pt, anchor=west},
+  glbl/.style={inkgray, font=\scriptsize, inner sep=1pt},
+  plbl/.style={labelpurple, font=\footnotesize\itshape, inner sep=1pt},
+  flow/.style={-{Stealth[length=2.2mm]}, inkgray, line width=0.9pt},
 ]
 
-% ---------- row 1: mel blocks over time ----------
-\foreach \i/\name in {0/B$_{k-4}$,1/B$_{k-3}$,2/B$_{k-2}$,3/B$_{k-1}$}{
-  \node[blk, draw=frozenedge, fill=frozen] (b\i) at (\i*1.95, 0) {\name};
-}
-% evicted block (outside the sliding window)
-\node[blk, draw=drop, dashed, fill=white, text=drop] (bdrop) at (-1.95, 0) {B$_{k-5}$};
-% current block
-\node[blk, draw=accent, very thick, fill=accentlight] (bcur) at (4*1.95, 0) {\textbf{B$_k$}};
-% future audio
-\node[blk, draw=drop, dashed, fill=white, text=inkgray] (bnext) at (5*1.95, 0) {$\cdots$};
-\draw[-{Stealth[length=2mm]}, inkgray] ($(bnext.east)+(0.12,0)$) -- ++(0.85,0)
-  node[lbl, right=1pt] {audio (1.92\,s blocks)};
+\def\step{0.30}
+% group start x and counts
+% head 0.0 (3) | cachedA 0.9 (9) | newblk 3.6 (4) | tail 4.8 (3) | draft 5.7 (8)
 
-% intra-block bidirectional attention
-\draw[{Stealth[length=2.1mm]}-{Stealth[length=2.1mm]}, accent, line width=1.0pt]
-  ($(bcur.south west)+(0.16,0.17)$) -- ($(bcur.south east)+(-0.16,0.17)$);
-\node[lbl, accent, align=center] at ($(bcur.north)+(0,0.95)$)
-  {bidirectional\\\emph{within} the block};
-\draw[accent, line width=0.5pt] ($(bcur.north)+(0,0.42)$) -- ($(bcur.north)+(0,0.12)$);
+\node[plbl, anchor=west] at (-0.15, 3.95) {\textbf{One $\sim$2\,s update, decoder side}};
 
-% causal attention to frozen per-layer KV
-\foreach \i in {1,2,3}{
-  \draw[attn] (bcur.north) .. controls ($(bcur.north)+(-1.2,0.62)$)
-    and ($(b\i.north)+(1.0,0.62)$) .. ($(b\i.north)+(0.1,0.05)$);
-}
-\node[lbl, accent] at (2.0, 1.30) {causal $\rightarrow$ frozen KV cache};
+% ---- forwarded-region highlight behind new block + tail + draft ----
+\fill[accentlight, rounded corners=2pt] (3.54, -0.30) rectangle (8.16, 0.34);
 
-% sliding window bracket
-\draw[decorate, decoration={brace, mirror, amplitude=4pt}, inkgray]
-  ($(b0.south west)+(0,-0.16)$) -- ($(bcur.south east)+(0,-0.16)$)
-  node[midway, below=5pt, lbl] {sliding attention window (15\,s), older KV evicted};
-\draw[-{Stealth[length=1.8mm]}, drop] (b0.west) -- ($(bdrop.east)+(0.05,0)$);
-\node[lbl, text=frozenedge, align=center] at (bdrop.north) [above=1pt] {evicted};
+% ---- token strip ----
+\foreach \i in {0,...,2}{ \node[tok, fill=boxgray, draw=mute] at (0.0+\i*\step, 0) {}; }
+\foreach \i in {0,...,8}{ \node[tok, fill=toktealmute] at (0.9+\i*\step, 0) {}; }
+\foreach \i in {0,...,3}{ \node[tok, fill=tokteal, draw=accent, line width=0.7pt] at (3.6+\i*\step, 0) {}; }
+\foreach \i in {0,...,2}{ \node[tok, fill=toklilac, draw=labelpurple] at (4.8+\i*\step, 0) {}; }
+\foreach \i in {0,...,7}{ \node[tok, fill=white] at (5.7+\i*\step, 0) {}; }
 
-% ---------- row 2: append-only cached embeddings ----------
-\foreach \i in {0,...,3}{
-  \node[blk, minimum height=0.42cm, draw=embedge, fill=emb] (e\i) at (\i*1.95, -2.05) {};
-}
-\node[blk, minimum height=0.42cm, draw=accent, thick, fill=accentlight] (ecur) at (4*1.95, -2.05) {};
-\draw[-{Stealth[length=2.2mm]}, embedge, line width=0.9pt] (bcur.south) -- (ecur.north)
-  node[midway, right=2pt, lbl, align=left] {encoded \textbf{once},\\never recomputed};
-\node[lbl, anchor=east] at ($(e0.west)+(-0.25,0)$) {cached audio embeddings\enspace(append-only)};
+% ---- group labels above strip ----
+\node[glbl, align=center] at (1.95, 0.62) {prompt + all audio so far};
+\node[glbl, accent, align=center] at (4.2, -0.62) {new block};
+\node[glbl, labelpurple, align=center] at (5.25, 0.58) {tail};
+\node[glbl, align=center] at (6.9, -0.62) {previous hypothesis, as draft};
 
-% ---------- row 3: incremental decoder ----------
-\node[blk, draw=inkgray, fill=white, minimum width=3.4cm, minimum height=0.62cm]
-  (dec) at (2.925, -3.55) {Qwen3 decoder (rolling KV)};
-\foreach \i in {0,...,3}{ \draw[inkgray!55, line width=0.5pt] (e\i.south) -- ($(dec.north)+(\i*0.5-1.2,0)$); }
-\draw[accent, line width=0.8pt] (ecur.south) .. controls ($(ecur.south)+(0,-0.5)$)
-  and ($(dec.east)+(0.7,0.3)$) .. (dec.east);
-\node[anchor=west, font=\footnotesize\ttfamily] (txt) at (5.6, -3.55)
-  {\textcolor{inkgray}{\dots so the talk continues.}\ \textcolor{accent}{\textbf{And as I}}\textcolor{accent!45}{\ was say\_}};
-\draw[-{Stealth[length=2mm]}, inkgray] (dec.east) -- ($(txt.west)+(-0.05,0)$);
-\node[lbl, align=left, anchor=north west] at ($(dec.south west)+(0,-0.18)$)
-  {previous hypothesis re-verified in one pass (lossless speculative decode);\\
-   segments commit \& encoder resets at sentence boundaries ($\sim$12--16\,s)};
+% ---- kept-in-KV brace (head + cached audio) ----
+\draw[decorate, decoration={brace, amplitude=4pt}, inkgray]
+  (0.0, 0.40) -- (3.50, 0.40);
+\node[glbl, align=center] at (1.75, 0.95) {kept in the decoder KV cache across updates\\(never re-forwarded)};
+
+% ---- forwarded-region brace ----
+\draw[decorate, decoration={brace, mirror, amplitude=4pt}, accent]
+  (3.56, -0.92) -- (8.14, -0.92);
+\node[glbl, accent, align=center] at (5.85, -1.42)
+  {forwarded this update: $\approx$62 positions (new block + tail + draft)};
+
+% ---- verification marks under the draft ----
+\foreach \i in {0,...,4}{ \node[okgreen, font=\scriptsize] at (5.82+\i*\step, -0.30) {\checkmark}; }
+\node[warm, font=\footnotesize\bfseries] at (5.82+5*\step, -0.30) {$\times$};
+
+% ---- LM box over the forwarded region ----
+\node[bigbox, minimum width=4.55cm] (lm) at (5.85, 1.55) {Qwen3 LM: one parallel forward};
+\foreach \x in {3.78, 4.5, 5.85, 7.2, 7.95}{ \draw[flow] (\x, 0.36) -- (\x, 1.18); }
+
+% ---- KV-reuse arrow from kept region into the LM box ----
+\draw[-{Stealth[length=2mm]}, accent, line width=0.9pt]
+  (1.75, 0.30) .. controls (1.75, 1.55) and (2.7, 1.55) .. (lm.west);
+\node[glbl, accent, align=center] at (2.55, 1.92) {KV reused,\\no recompute};
+
+% ---- accepted vs resume annotation ----
+\node[glbl, align=left, anchor=west] at (8.45, -0.32)
+  {\textcolor{okgreen}{\checkmark} accepted prefix kept;\\\textcolor{warm}{$\times$} sequential decode\\resumes at the divergence\\($\approx$9 steps, not 7$\to$49)};
+
+% ---- output text (committed / fresh / faded), figure-1 convention ----
+\node[anchor=west, font=\footnotesize\itshape] at (3.7, 2.62)
+  {\textcolor{inkgray}{Hi, I'm Qwen, your helpful}\ \textcolor{accent}{\textbf{assis}}\textcolor{accent!45}{tant\_}};
+\draw[flow] (5.85, 1.92) -- (5.85, 2.44);
+
+% ---- caption ----
+\node[glbl, anchor=west, align=left] at (-0.15, -2.05)
+  {The windowed backend instead rebuilds the whole prompt + audio prefix (44$\to$212 positions) and re-decodes from token 0 every update.\\This rolling KV + speculative re-decode is what makes the decoder cost roughly constant in stream age (see the compute table).};
 
 \end{tikzpicture}
 \end{document}
