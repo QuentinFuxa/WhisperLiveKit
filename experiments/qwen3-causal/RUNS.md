@@ -5673,3 +5673,26 @@ trades ~2.4x accuracy for ~3x lower, constant per-chunk compute. The HF
 card table now uses 7.6 as the offline reference (not the 20.8 misuse) and
 sells the causal model on compute, not on beating a strawman. Artifacts:
 ~/Downloads/qwen3_checkpoints/offline_vad_artifacts.tgz.
+
+### Streaming WER is not an artifact of rewriting the past (dual-WER eval)
+
+Concern: the 0.1810 long-form number is scored on finalize('latest'), which
+lets a word be revised by later audio within its <=16s segment. Does that
+in-segment revision flatter the score vs a true no-retraction live stream?
+Measured both (scripts/bench_dual_wer.py, 21 MCIF, human refs whisper-norm):
+
+| scoring of the causal stream | WER (human, whisper) |
+| --- | ---: |
+| final transcript (in-segment revision allowed) | 0.1810 |
+| live, no retraction, frontier flushed at EOS | **0.1810** |
+| committed-only, no EOS flush (~2 s behind frontier) | 0.1938 |
+
+**0 of 21 files had a single committed-word retraction** (the
+LocalAgreement stable-prefix commit, hold_back_words=6 / stable_iterations=2,
+never walked a word back) — so the no-retraction live output is byte-identical
+in WER to the settled transcript. The only honest cost of "no rewriting the
+past" is the ~2 s holdback latency, which if you also refuse the end-of-stream
+flush shows as +0.013 WER (held-back frontier counted as deletions). The HF
+card reports all three. Note the offline 7.6 and windowed 8.4 are likewise
+settled-transcript numbers. Artifacts:
+~/Downloads/qwen3_checkpoints/dual_wer_artifacts.tgz.
