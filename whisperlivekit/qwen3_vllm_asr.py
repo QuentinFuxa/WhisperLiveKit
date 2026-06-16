@@ -286,7 +286,7 @@ class Qwen3VLLMASR:
         self.original_language = None if kwargs.get("lan", "auto") == "auto" else kwargs.get("lan")
         self.model_path = _resolve_model_path(kwargs)
         self.aligner_model_path = kwargs.get("vllm_aligner_model") or DEFAULT_QWEN3_VLLM_ALIGNER_MODEL
-        self.max_decode_tokens = int(kwargs.get("max_tokens") or 256)
+        self.max_decode_tokens = int(kwargs.get("max_tokens") or 64)
         self._SamplingParams = SamplingParams
         self._TokensPrompt = TokensPrompt
 
@@ -298,6 +298,7 @@ class Qwen3VLLMASR:
             "tensor_parallel_size": tensor_parallel_size,
             "gpu_memory_utilization": gpu_memory_utilization,
             "dtype": dtype,
+            "max_model_len": 8192
         }
 
         logger.info("Loading Qwen3-ASR vLLM model '%s' ...", self.model_path)
@@ -391,6 +392,7 @@ class Qwen3VLLMASR:
             if int(prompt_token_ids[idx]) == self.timestamp_token_id
         ]
         timestamp_values = _fix_timestamps(timestamp_values)
+        timestamp_values = [ts/1000 for ts in timestamp_values]
 
         aligned = []
         for idx, word in enumerate(words):
@@ -475,7 +477,7 @@ class Qwen3VLLMOnlineProcessor:
         aligned_words, detected_language = self.asr.transcribe_aligned(self.audio_buffer)
         tokens: list[ASRToken] = []
         for idx, word in enumerate(aligned_words):
-            text = word.text if idx == 0 else " " + word.text
+            text = word.text if idx == 0 or _is_cjk_char(word.text) else " " + word.text
             tokens.append(
                 ASRToken(
                     start=self._buffer_time_offset + word.start,
