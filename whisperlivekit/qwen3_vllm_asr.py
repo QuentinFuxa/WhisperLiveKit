@@ -477,7 +477,8 @@ class Qwen3VLLMOnlineProcessor:
         aligned_words, detected_language = self.asr.transcribe_aligned(self.audio_buffer)
         tokens: list[ASRToken] = []
         for idx, word in enumerate(aligned_words):
-            text = word.text if idx == 0 or _is_cjk_char(word.text) else " " + word.text
+            word_is_cjk = all(_is_cjk_char(c) for c in word.text)
+            text = word.text if idx == 0 or word_is_cjk else " " + word.text
             tokens.append(
                 ASRToken(
                     start=self._buffer_time_offset + word.start,
