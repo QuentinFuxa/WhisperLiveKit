@@ -1,7 +1,0 @@
-{
-  "model_id": "Qwen/Qwen3-ASR-0.6B",
-  "items": 21,
-  "wer_legacy_mean": 0.26596256512668065,
-  "wer_whisper_mean": 0.20747673882297235,
-  "latency_mean_sec": 56.67630062966674
-}

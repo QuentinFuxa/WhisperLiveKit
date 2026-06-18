@@ -212,14 +212,48 @@ wlk --backend qwen3-streaming --language en \
 ```
 
 The fine-tuned tower ([qfuxa/qwen3-asr-0.6b-streaming](https://huggingface.co/qfuxa/qwen3-asr-0.6b-streaming))
-downloads automatically. Measured on 21 long-form MCIF talks (human refs,
-Whisper normalization): WER 18.1 vs 8.4 for the windowed default — and 20.8
-for the same 0.6B model run offline over the full file, i.e. the streaming
-causal model beats its own offline baseline. LibriSpeech streaming:
-test-clean 3.6 / test-other 7.2. Use it for many concurrent streams,
-energy-constrained serving or unbounded session lengths; keep the windowed
-default for best accuracy. English only for now. Details:
-`experiments/qwen3-causal/RUNS.md`.
+downloads automatically. The Qwen runtime, tests, experiments, benchmarks and
+figures now live in [Qwen3-ASR-causal](https://github.com/QuentinFuxa/Qwen3-ASR-causal),
+which is consumed here through `third_party/qwen3-asr-causal`. WhisperLiveKit
+keeps only the backend wiring and CLI flags.
+
+Use causal mode for many concurrent streams, energy-constrained serving or
+unbounded session lengths; keep the windowed default for best accuracy. English
+only for now. Detailed WER/RTF results are in the Qwen3-ASR-causal repository.
+
+**Experimental vLLM Metal causal mode.** On Apple Silicon, `qwen3-vllm-metal`
+can also load the same causal tower and keep a rolling MLX decoder KV over the
+`[prompt + audio]` prefix. New audio blocks are encoded once, and the decoder
+replays only the new audio embeddings, prompt tail, and previous-hypothesis
+draft:
+
+```bash
+wlk --backend qwen3-vllm-metal --language en \
+    --qwen3-vllm-metal-audio-backend causal \
+    --qwen3-vllm-metal-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+This path has passed local short-form smoke tests and is useful for comparing
+the Metal decoder path against the HF/MPS causal backend. It is still
+experimental; use `qwen3-streaming` causal for the validated production stack.
+
+**Experimental vLLM CUDA causal mode.** On NVIDIA GPUs, `qwen3-vllm` can load
+the same causal tower, use vLLM for the text decoder, and keep vLLM
+ForcedAligner timestamps:
+
+```bash
+WLK_QWEN3_VLLM_LIVE_MULTIPROCESSING=1 \
+wlk --backend qwen3-vllm --language en \
+    --qwen3-vllm-audio-backend causal \
+    --qwen3-vllm-causal-decoder-backend vllm-live \
+    --qwen3-vllm-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+The `vllm-text` backend is the conservative fallback when you do not want the
+live request-local append path; it still uses vLLM prefix caching but starts one
+text-decoder request per chunk. The `append-kv` and `rolling` names remain as
+compatibility aliases for the HF decoder path. Keep standard `qwen3-vllm` for
+best current accuracy until the causal quality gate is fixed.
 
 ### Usage Examples
 

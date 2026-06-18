@@ -1,12 +1,9 @@
-"""Qwen3-ASR streaming backend (HF Transformers, bounded-recompute cache).
+"""Compatibility imports for the standalone Qwen3-ASR causal package."""
 
-Promoted from the ``experiments/qwen3-causal`` research workspace. The shared
-:class:`Qwen3StreamingASR` holds the model; each session gets a
-:class:`Qwen3StreamingOnlineProcessor` wrapping a segmented cached
-full-hypothesis streamer.
-"""
+from ._shim import ensure_qwen3_asr_causal
 
-from .asr import Qwen3StreamingASR
-from .online import Qwen3StreamingOnlineProcessor
+ensure_qwen3_asr_causal()
+
+from qwen3_asr_causal import Qwen3StreamingASR, Qwen3StreamingOnlineProcessor
 
 __all__ = ["Qwen3StreamingASR", "Qwen3StreamingOnlineProcessor"]

@@ -106,6 +106,19 @@ class TranscriptionEngine:
             "vllm_tensor_parallel_size": config.vllm_tensor_parallel_size,
             "vllm_gpu_memory_utilization": config.vllm_gpu_memory_utilization,
             "vllm_dtype": config.vllm_dtype,
+            "vllm_max_model_len": config.vllm_max_model_len,
+            "qwen3_vllm_audio_backend": config.qwen3_vllm_audio_backend,
+            "qwen3_vllm_causal_decoder_backend": config.qwen3_vllm_causal_decoder_backend,
+            "qwen3_vllm_causal_attn_implementation": config.qwen3_vllm_causal_attn_implementation,
+            "qwen3_vllm_text_decoder_model": config.qwen3_vllm_text_decoder_model,
+            "qwen3_vllm_live_idle_timeout_ms": config.qwen3_vllm_live_idle_timeout_ms,
+            "qwen3_vllm_tower_checkpoint": config.qwen3_vllm_tower_checkpoint,
+            "qwen3_vllm_left_context_sec": config.qwen3_vllm_left_context_sec,
+            "qwen3_vllm_block_frames": config.qwen3_vllm_block_frames,
+            "qwen3_vllm_cache_block_size": config.qwen3_vllm_cache_block_size,
+            "qwen3_vllm_segment_max_steps": config.qwen3_vllm_segment_max_steps,
+            "qwen3_vllm_segment_min_sec": config.qwen3_vllm_segment_min_sec,
+            "qwen3_vllm_prompt_context_words": config.qwen3_vllm_prompt_context_words,
             "holdback_words": config.holdback_words,
             "trim_sentence_buffer": config.trim_sentence_buffer,
         }
@@ -124,6 +137,7 @@ class TranscriptionEngine:
                     "qwen3_streaming_max_new_tokens": config.qwen3_streaming_max_new_tokens,
                     "qwen3_streaming_device": config.qwen3_streaming_device,
                     "qwen3_streaming_dtype": config.qwen3_streaming_dtype,
+                    "qwen3_streaming_attn_implementation": config.qwen3_streaming_attn_implementation,
                     "qwen3_streaming_context": config.qwen3_streaming_context,
                     "qwen3_streaming_prompt_context_words": config.qwen3_streaming_prompt_context_words,
                     "qwen3_streaming_audio_backend": config.qwen3_streaming_audio_backend,
@@ -142,8 +156,16 @@ class TranscriptionEngine:
                 logger.info("Using Qwen3-ASR vLLM in-process backend")
             elif config.backend == "qwen3-vllm-metal":
                 from whisperlivekit.qwen3_vllm_metal_asr import Qwen3VLLMMetalASR
+                qwen3_vllm_metal_params = {
+                    "qwen3_vllm_metal_audio_backend": config.qwen3_vllm_metal_audio_backend,
+                    "qwen3_vllm_metal_tower_checkpoint": config.qwen3_vllm_metal_tower_checkpoint,
+                    "qwen3_vllm_metal_left_context_sec": config.qwen3_vllm_metal_left_context_sec,
+                    "qwen3_vllm_metal_block_frames": config.qwen3_vllm_metal_block_frames,
+                }
                 self.tokenizer = None
-                self.asr = Qwen3VLLMMetalASR(**transcription_common_params)
+                self.asr = Qwen3VLLMMetalASR(
+                    **transcription_common_params, **qwen3_vllm_metal_params
+                )
                 logger.info("Using Qwen3-ASR vllm-metal in-process backend")
             elif config.backend == "voxtral-mlx":
                 from whisperlivekit.voxtral_mlx_asr import VoxtralMLXASR
@@ -248,10 +270,20 @@ def online_factory(args, asr, language=None):
         from whisperlivekit.qwen3_streaming import Qwen3StreamingOnlineProcessor
         return Qwen3StreamingOnlineProcessor(asr)
     if backend == "qwen3-vllm":
-        from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMOnlineProcessor
+        from whisperlivekit.qwen3_vllm_asr import (
+            Qwen3VLLMCausalOnlineProcessor,
+            Qwen3VLLMOnlineProcessor,
+        )
+        if getattr(asr, "audio_backend", "standard") == "causal":
+            return Qwen3VLLMCausalOnlineProcessor(asr)
         return Qwen3VLLMOnlineProcessor(asr)
     if backend == "qwen3-vllm-metal":
-        from whisperlivekit.qwen3_vllm_metal_asr import Qwen3VLLMMetalOnlineProcessor
+        from whisperlivekit.qwen3_vllm_metal_asr import (
+            Qwen3VLLMMetalCausalOnlineProcessor,
+            Qwen3VLLMMetalOnlineProcessor,
+        )
+        if getattr(asr, "audio_backend", "standard") == "causal":
+            return Qwen3VLLMMetalCausalOnlineProcessor(asr)
         return Qwen3VLLMMetalOnlineProcessor(asr)
     if backend == "voxtral-mlx":
         from whisperlivekit.voxtral_mlx_asr import VoxtralMLXOnlineProcessor

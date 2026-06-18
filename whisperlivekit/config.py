@@ -80,8 +80,25 @@ class WhisperLiveKitConfig:
     vllm_tensor_parallel_size: int = 1
     vllm_gpu_memory_utilization: float = 0.45
     vllm_dtype: str = "auto"
+    vllm_max_model_len: int = 0
+    qwen3_vllm_audio_backend: str = "standard"
+    qwen3_vllm_causal_decoder_backend: str = "vllm-text"
+    qwen3_vllm_causal_attn_implementation: str = "auto"
+    qwen3_vllm_text_decoder_model: str = ""
+    qwen3_vllm_live_idle_timeout_ms: float = 50.0
+    qwen3_vllm_tower_checkpoint: str = ""
+    qwen3_vllm_left_context_sec: float = 15.0
+    qwen3_vllm_block_frames: int = 192
+    qwen3_vllm_cache_block_size: int = 0
+    qwen3_vllm_segment_max_steps: int = 150
+    qwen3_vllm_segment_min_sec: float = 0.0
+    qwen3_vllm_prompt_context_words: int = 0
     holdback_words: Optional[int] = None
     trim_sentence_buffer: bool = True
+    qwen3_vllm_metal_audio_backend: str = "standard"
+    qwen3_vllm_metal_tower_checkpoint: str = ""
+    qwen3_vllm_metal_left_context_sec: float = 15.0
+    qwen3_vllm_metal_block_frames: int = 192
 
     # Qwen3 streaming backend (HF Transformers, bounded-recompute cache)
     qwen3_streaming_chunk_sec: float = 2.0
@@ -94,6 +111,7 @@ class WhisperLiveKitConfig:
     qwen3_streaming_max_new_tokens: int = 256
     qwen3_streaming_device: str = "auto"
     qwen3_streaming_dtype: str = "auto"
+    qwen3_streaming_attn_implementation: str = "auto"
     qwen3_streaming_context: str = ""
     qwen3_streaming_prompt_context_words: int = 0
     qwen3_streaming_audio_backend: str = "windowed"

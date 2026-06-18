@@ -1,8 +1,0 @@
-{
-  "count": 3600,
-  "ok": 3600,
-  "errors": 0,
-  "error_rate": 0.0,
-  "teacher_wer_mean": 0.16112652537373115,
-  "teacher_latency_mean": 0.5172211549419455
-}

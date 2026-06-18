@@ -127,3 +127,4 @@ launch.json
 !tests/
 nllb-200-distilled-600M-ctranslate2/*
 *.mp3
+macos/*
