@@ -208,7 +208,7 @@ class TranscriptionEngine:
                 )
             elif config.diarization_backend == "sortformer":
                 from whisperlivekit.diarization.sortformer_backend import SortformerDiarization
-                self.diarization_model = SortformerDiarization()
+                self.diarization_model = SortformerDiarization(model_path=config.sortformer_model_path)
 
         self.translation_model = None
         if config.target_language:

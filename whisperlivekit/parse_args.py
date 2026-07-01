@@ -39,6 +39,14 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--sortformer-model-path",
+        type=str,
+        default=None,
+        dest="sortformer_model_path",
+        help="Path to a local Sortformer .nemo file, a directory containing exactly one .nemo file, or a NeMo/Hugging Face model ID.",
+    )
+
+    parser.add_argument(
         "--punctuation-split",
         action="store_true",
         default=False,

@@ -41,6 +41,7 @@ class WhisperLiveKitConfig:
     pcm_input: bool = False
     disable_punctuation_split: bool = False
     diarization_backend: str = "sortformer"
+    sortformer_model_path: Optional[str] = None
     backend_policy: str = "simulstreaming"
     backend: str = "auto"
 

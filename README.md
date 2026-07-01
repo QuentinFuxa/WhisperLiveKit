@@ -263,6 +263,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | Diarization options | Description | Default |
 |-----------|-------------|---------|
 | `--diarization-backend` |  `diart` or `sortformer` | `sortformer` |
+| `--sortformer-model-path` | Path to a local Sortformer `.nemo` file, a directory containing exactly one `.nemo` file, or a NeMo/Hugging Face model ID. | `None` |
 | `--disable-punctuation-split` | [NOT FUNCTIONAL IN 0.2.15 / 0.2.16] Disable punctuation based splits. See #214 | `False` |
 | `--segmentation-model` | Hugging Face model ID for Diart segmentation model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/segmentation-3.0` |
 | `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/embedding` |
