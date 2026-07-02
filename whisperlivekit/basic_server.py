@@ -171,6 +171,25 @@ def _parse_time_str(time_str: str) -> float:
     return float(parts[0])
 
 
+def _speaker_label_from_index(index: int) -> str:
+    """Return A, B, ..., Z, AA, AB, ... for a zero-based speaker index."""
+    label = ""
+    index += 1
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        label = chr(ord("A") + remainder) + label
+    return label
+
+
+def _speaker_label(speaker, speaker_labels: dict) -> str:
+    """Map internal speaker IDs to OpenAI-style speaker labels."""
+    if isinstance(speaker, int) and speaker > 0:
+        return _speaker_label_from_index(speaker - 1)
+    if speaker not in speaker_labels:
+        speaker_labels[speaker] = _speaker_label_from_index(len(speaker_labels))
+    return speaker_labels[speaker]
+
+
 def _format_openai_response(front_data, response_format: str, language: Optional[str], duration: float) -> dict:
     """Convert FrontData to OpenAI-compatible response."""
     d = front_data.to_dict()
@@ -182,6 +201,35 @@ def _format_openai_response(front_data, response_format: str, language: Optional
 
     if response_format == "text":
         return full_text
+
+    speaker_labels = {}
+
+    if response_format == "diarized_json":
+        segments = []
+        text_parts = []
+        for line in lines:
+            if line.get("speaker") == -2 or not line.get("text"):
+                continue
+            speaker = _speaker_label(line.get("speaker", 1), speaker_labels)
+            start = _parse_time_str(line.get("start", "0:00:00"))
+            end = _parse_time_str(line.get("end", "0:00:00"))
+            text = line["text"]
+            segments.append({
+                "type": "transcript.text.segment",
+                "id": f"seg_{len(segments) + 1:03d}",
+                "start": round(start, 2),
+                "end": round(end, 2),
+                "text": text,
+                "speaker": speaker,
+            })
+            text_parts.append(f"{speaker}: {text}")
+
+        return {
+            "task": "transcribe",
+            "duration": round(duration, 2),
+            "text": "\n".join(text_parts).strip(),
+            "segments": segments,
+        }
 
     # Build segments and words for verbose_json
     segments = []

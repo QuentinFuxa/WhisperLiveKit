@@ -1,4 +1,6 @@
 import asyncio
+import importlib
+import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -707,6 +709,75 @@ def test_verbose_json_fallback_creates_segment_when_text_has_no_lines():
             "speaker": 1,
         }
     ]
+
+
+def _import_basic_server(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["whisperlivekit-server"])
+    return importlib.import_module("whisperlivekit.basic_server")
+
+
+def test_openai_rest_diarized_json_preserves_speaker_labels(monkeypatch):
+    basic_server = _import_basic_server(monkeypatch)
+
+    front_data = SimpleNamespace(
+        to_dict=lambda: {
+            "lines": [
+                {"text": "hello", "start": "0:00:00.00", "end": "0:00:02.10", "speaker": 1},
+                {"text": "", "start": "0:00:02.10", "end": "0:00:05.10", "speaker": -2},
+                {"text": "hi", "start": "0:00:05.10", "end": "0:00:06.00", "speaker": 2},
+            ]
+        }
+    )
+
+    payload = basic_server._format_openai_response(front_data, "diarized_json", "en", 6.0)
+
+    assert payload == {
+        "task": "transcribe",
+        "duration": 6.0,
+        "text": "A: hello\nB: hi",
+        "segments": [
+            {
+                "type": "transcript.text.segment",
+                "id": "seg_001",
+                "start": 0.0,
+                "end": 2.1,
+                "text": "hello",
+                "speaker": "A",
+            },
+            {
+                "type": "transcript.text.segment",
+                "id": "seg_002",
+                "start": 5.1,
+                "end": 6.0,
+                "text": "hi",
+                "speaker": "B",
+            },
+        ],
+    }
+
+
+def test_openai_rest_verbose_json_shape_remains_without_speaker(monkeypatch):
+    basic_server = _import_basic_server(monkeypatch)
+
+    front_data = SimpleNamespace(
+        to_dict=lambda: {
+            "lines": [
+                {"text": "hello world", "start": "0:00:00.00", "end": "0:00:02.00", "speaker": 1},
+            ]
+        }
+    )
+
+    payload = basic_server._format_openai_response(front_data, "verbose_json", "en", 2.0)
+
+    assert payload["segments"] == [
+        {
+            "id": 0,
+            "start": 0.0,
+            "end": 2.0,
+            "text": "hello world",
+        }
+    ]
+    assert "speaker" not in payload["segments"][0]
 
 
 def test_parse_cors_origins_defaults_to_disabled():
