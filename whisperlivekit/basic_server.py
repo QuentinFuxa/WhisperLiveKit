@@ -227,9 +227,13 @@ def _speaker_label_from_index(index: int) -> str:
 
 def _speaker_label(speaker, speaker_labels: dict) -> str:
     """Map internal speaker IDs to OpenAI-style speaker labels."""
+    # Diarized WLK lines use 1-based numeric speaker IDs, while OpenAI's
+    # diarized response examples use stable alphabetic labels.
     if isinstance(speaker, int) and speaker > 0:
         return _speaker_label_from_index(speaker - 1)
     if speaker not in speaker_labels:
+        # Non-numeric speaker IDs can come from other diarization backends, so
+        # keep a deterministic first-seen mapping for those labels.
         speaker_labels[speaker] = _speaker_label_from_index(len(speaker_labels))
     return speaker_labels[speaker]
 
@@ -252,6 +256,8 @@ def _format_openai_response(front_data, response_format: str, language: Optional
         segments = []
         text_parts = []
         for line in lines:
+            # WLK represents silence as speaker -2; diarized_json only emits
+            # spoken transcript segments with actual text.
             if line.get("speaker") == -2 or not line.get("text"):
                 continue
             speaker = _speaker_label(line.get("speaker", 1), speaker_labels)
@@ -266,6 +272,8 @@ def _format_openai_response(front_data, response_format: str, language: Optional
                 "text": text,
                 "speaker": speaker,
             })
+            # Match the diarized_json top-level transcript style by preserving
+            # speaker turns in the combined text instead of flattening them.
             text_parts.append(f"{speaker}: {text}")
 
         return {
