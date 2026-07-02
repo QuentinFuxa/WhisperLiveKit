@@ -841,6 +841,10 @@ def test_openai_rest_diarized_json_preserves_speaker_labels(monkeypatch):
                 "speaker": "B",
             },
         ],
+        "usage": {
+            "type": "duration",
+            "seconds": 6,
+        },
     }
 
 
@@ -866,6 +870,32 @@ def test_openai_rest_verbose_json_shape_remains_without_speaker(monkeypatch):
         }
     ]
     assert "speaker" not in payload["segments"][0]
+    assert payload["usage"] == {
+        "type": "duration",
+        "seconds": 2,
+    }
+
+
+def test_openai_rest_json_includes_duration_usage(monkeypatch):
+    basic_server = _import_basic_server(monkeypatch)
+
+    front_data = SimpleNamespace(
+        to_dict=lambda: {
+            "lines": [
+                {"text": "hello world", "start": "0:00:00.00", "end": "0:00:02.00", "speaker": 1},
+            ]
+        }
+    )
+
+    payload = basic_server._format_openai_response(front_data, "json", "en", 2.4)
+
+    assert payload == {
+        "text": "hello world",
+        "usage": {
+            "type": "duration",
+            "seconds": 2,
+        },
+    }
 
 
 def test_parse_cors_origins_defaults_to_disabled():
