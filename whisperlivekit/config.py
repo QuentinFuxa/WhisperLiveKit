@@ -39,6 +39,7 @@ class WhisperLiveKitConfig:
     transcription: bool = True
     vad: bool = True
     pcm_input: bool = False
+    max_concurrent_transcriptions: Optional[int] = None
     disable_punctuation_split: bool = False
     diarization_backend: str = "sortformer"
     sortformer_model_path: Optional[str] = None

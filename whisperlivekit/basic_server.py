@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
 from whisperlivekit.config import parse_cors_origins
+from whisperlivekit.server_metrics import ServerMetrics
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger().setLevel(logging.WARNING)
@@ -17,6 +18,7 @@ logger.setLevel(logging.DEBUG)
 
 config = parse_args()
 transcription_engine = None
+server_metrics = ServerMetrics(config.max_concurrent_transcriptions)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,6 +50,14 @@ async def health():
         "backend": backend,
         "ready": transcription_engine is not None,
     })
+
+
+@app.get("/metrics")
+async def metrics():
+    return PlainTextResponse(
+        await server_metrics.render_openmetrics(),
+        media_type="application/openmetrics-text; version=1.0.0; charset=utf-8",
+    )
 
 
 async def handle_websocket_results(websocket, results_generator, diff_tracker=None):
@@ -171,7 +181,7 @@ def _parse_time_str(time_str: str) -> float:
     return float(parts[0])
 
 
-def _format_openai_response(front_data, response_format: str, language: Optional[str], duration: float) -> dict:
+def _format_openai_response(front_data, response_format: str, language: Optional[str], duration: float) -> dict | str:
     """Convert FrontData to OpenAI-compatible response."""
     d = front_data.to_dict()
     lines = d.get("lines", [])
@@ -216,6 +226,7 @@ def _format_openai_response(front_data, response_format: str, language: Optional
             "text": full_text,
             "words": words,
             "segments": segments,
+            "usage": _build_transcription_usage(duration),
         }
 
     if response_format in ("srt", "vtt"):
@@ -233,7 +244,20 @@ def _format_openai_response(front_data, response_format: str, language: Optional
         return "\n".join(lines_out)
 
     # Default: json
-    return {"text": full_text}
+    return {"text": full_text, "usage": _build_transcription_usage(duration)}
+
+
+def _build_transcription_usage(duration: float) -> dict:
+    return {
+        "seconds": round(duration, 2),
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+    }
+
+
+def _format_empty_openai_response(duration: float) -> dict:
+    return {"text": "", "usage": _build_transcription_usage(duration)}
 
 
 def _srt_timestamp(seconds: float, fmt: str) -> str:
@@ -271,44 +295,45 @@ async def create_transcription(
     pcm_data = await _convert_to_pcm(audio_bytes)
     duration = len(pcm_data) / (16000 * 2)  # 16kHz, 16-bit
 
-    # Process through the full pipeline
-    processor = AudioProcessor(
-        transcription_engine=transcription_engine,
-        language=language,
-    )
-    # Force PCM input regardless of server config
-    processor.is_pcm_input = True
+    async with server_metrics.transcription_admission():
+        # Process through the full pipeline
+        processor = AudioProcessor(
+            transcription_engine=transcription_engine,
+            language=language,
+        )
+        # Force PCM input regardless of server config
+        processor.is_pcm_input = True
 
-    results_gen = await processor.create_tasks()
+        results_gen = await processor.create_tasks()
 
-    # Collect results in background while feeding audio
-    final_result = None
+        # Collect results in background while feeding audio
+        final_result = None
 
-    async def collect():
-        nonlocal final_result
-        async for result in results_gen:
-            final_result = result
+        async def collect():
+            nonlocal final_result
+            async for result in results_gen:
+                final_result = result
 
-    collect_task = asyncio.create_task(collect())
+        collect_task = asyncio.create_task(collect())
 
-    # Feed audio in chunks (1 second each)
-    chunk_size = 16000 * 2  # 1 second of PCM
-    for i in range(0, len(pcm_data), chunk_size):
-        await processor.process_audio(pcm_data[i:i + chunk_size])
+        # Feed audio in chunks (1 second each)
+        chunk_size = 16000 * 2  # 1 second of PCM
+        for i in range(0, len(pcm_data), chunk_size):
+            await processor.process_audio(pcm_data[i:i + chunk_size])
 
-    # Signal end of audio
-    await processor.process_audio(b"")
+        # Signal end of audio
+        await processor.process_audio(b"")
 
-    # Wait for pipeline to finish
-    try:
-        await asyncio.wait_for(collect_task, timeout=120.0)
-    except asyncio.TimeoutError:
-        logger.warning("Transcription timed out after 120s")
-    finally:
-        await processor.cleanup()
+        # Wait for pipeline to finish
+        try:
+            await asyncio.wait_for(collect_task, timeout=120.0)
+        except asyncio.TimeoutError:
+            logger.warning("Transcription timed out after 120s")
+        finally:
+            await processor.cleanup()
 
     if final_result is None:
-        return JSONResponse({"text": ""})
+        return JSONResponse(_format_empty_openai_response(duration))
 
     result = _format_openai_response(final_result, response_format, language, duration)
 

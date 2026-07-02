@@ -211,6 +211,13 @@ def parse_args():
         default=False,
         help="If set, raw PCM (s16le) data is expected as input and FFmpeg will be bypassed. Frontend will use AudioWorklet instead of MediaRecorder."
     )
+    parser.add_argument(
+        "--max-concurrent-transcriptions",
+        type=int,
+        default=None,
+        dest="max_concurrent_transcriptions",
+        help="Maximum concurrent REST transcription requests. Defaults to unlimited.",
+    )
     # vLLM Qwen3 backend arguments
     parser.add_argument(
         "--vllm-model",
