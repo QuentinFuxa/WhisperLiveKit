@@ -190,7 +190,9 @@ def parse_args():
         type=str,
         default="",
         dest="target_language",
-        help="Target language for translation. Not functional yet.",
+        help="Target language for translation (NLLB in-process by default; "
+        "see --translation-backend). Sessions can override it with the "
+        "?target_language= WebSocket query parameter.",
     )
 
     parser.add_argument(
@@ -778,6 +780,46 @@ def parse_args():
         type=str,
         default="600M",
         help="600M or 1.3B",
+    )
+
+    translation_group = parser.add_argument_group("Translation backend")
+    translation_group.add_argument(
+        "--translation-backend",
+        type=str,
+        default="nllb",
+        choices=["nllb", "alignatt"],
+        help="Translation engine for --target-language: 'nllb' (in-process, "
+        "CPU-friendly) or 'alignatt' (Alignatt4LLM sidecar over WebSocket, "
+        "streaming LLM translation with attention-gated commits; requires a "
+        "running alignatt-mt-server).",
+    )
+    translation_group.add_argument(
+        "--alignatt-url",
+        type=str,
+        default="ws://localhost:8765",
+        help="WebSocket URL of the alignatt-mt-server sidecar.",
+    )
+    translation_group.add_argument(
+        "--alignatt-preset",
+        type=str,
+        default=None,
+        help="Sidecar runtime preset to request (e.g. gemma_low_latency).",
+    )
+    translation_group.add_argument(
+        "--alignatt-latency",
+        type=str,
+        default="balanced",
+        choices=["quality", "balanced", "low"],
+        help="Latency/quality point: 'quality' translates committed words only, "
+        "'balanced' also drafts over the unstable ASR tail, 'low' additionally "
+        "drops target-side holdback (pair with a low ASR holdback preset).",
+    )
+    translation_group.add_argument(
+        "--alignatt-context",
+        type=str,
+        default="",
+        help="Free-text domain context (talk title, glossary) injected into "
+        "the MT prompt for every session.",
     )
 
     args = parser.parse_args()

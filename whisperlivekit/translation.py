@@ -22,6 +22,13 @@ def session_translation_factory(args, translation_model, target_language):
     target differs. Falls back to the server-wide target (with a warning)
     if the requested language is not recognized.
     """
+    from whisperlivekit.translation_alignatt import AlignAttRemoteEngine
+
+    if isinstance(translation_model, AlignAttRemoteEngine):
+        # Direction validation happens at sidecar init; an unsupported
+        # target degrades to empty translation output with one warning.
+        return translation_model.new_session(target_language)
+
     from nllw import OnlineTranslation
 
     from whisperlivekit.core import _nllw_language_code, online_translation_factory

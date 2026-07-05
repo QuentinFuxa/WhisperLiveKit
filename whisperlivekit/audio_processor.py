@@ -15,7 +15,7 @@ from whisperlivekit.core import (
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.silero_vad_iterator import FixedVADIterator, OnnxWrapper, load_jit_vad
-from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, FrontData, Silence, State, Transcript
+from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, FrontData, HypothesisTail, Silence, State, Transcript
 from whisperlivekit.tokens_alignment import TokensAlignment, resolve_retention_seconds
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -197,6 +197,25 @@ class AudioProcessor:
             for token in self._pending_translation_tokens:
                 await self.translation_queue.put(token)
             self._pending_translation_tokens = []
+
+    async def _queue_hypothesis_tail_for_translation(self, buffer_transcript) -> None:
+        """Forward the unstable ASR tail to translation backends that opt in.
+
+        A streaming translator (AlignAtt) drafts ahead over the tail while
+        committing only against committed words; NLLB never sees it.
+        """
+        if not self.translation_queue or self.translation is None:
+            return
+        if not getattr(self.translation, "wants_hypothesis_tail", False):
+            return
+        text = (buffer_transcript.text or "").strip() if buffer_transcript else ""
+        if not text:
+            return
+        await self.translation_queue.put(HypothesisTail(
+            start=buffer_transcript.start,
+            end=buffer_transcript.end,
+            text=text,
+        ))
 
     async def _push_silence_event(self) -> None:
         if self.transcription_queue:
@@ -546,6 +565,7 @@ class AudioProcessor:
                     self._prune_state_tokens()
 
                 await self._queue_tokens_for_translation(new_tokens)
+                await self._queue_hypothesis_tail_for_translation(_buffer_transcript)
             except Exception as e:
                 logger.warning(f"Exception in transcription_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")

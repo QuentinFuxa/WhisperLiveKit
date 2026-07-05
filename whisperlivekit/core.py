@@ -260,11 +260,23 @@ class TranscriptionEngine:
 
         self.translation_model = None
         if config.target_language:
-            if config.backend in {"qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"}:
-                raise ValueError(f"{config.backend} supports transcription only; translation is not supported.")
             if config.lan == 'auto' and config.backend_policy != "simulstreaming":
                 raise ValueError('Translation cannot be set with language auto when transcription backend is not simulstreaming')
+            if getattr(config, "translation_backend", "nllb") == "alignatt":
+                from whisperlivekit.translation_alignatt import AlignAttRemoteEngine
+                self.translation_model = AlignAttRemoteEngine(
+                    url=config.alignatt_url,
+                    source_language=config.lan,
+                    preset=config.alignatt_preset,
+                    latency=config.alignatt_latency,
+                    context_text=config.alignatt_context,
+                )
             else:
+                if config.backend in {"qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"}:
+                    raise ValueError(
+                        f"{config.backend} does not support in-process NLLB translation; "
+                        "use --translation-backend alignatt with an alignatt-mt-server sidecar."
+                    )
                 try:
                     from nllw import load_model
                 except ImportError:
@@ -337,6 +349,9 @@ def online_diarization_factory(args, diarization_backend):
 
 
 def online_translation_factory(args, translation_model):
+    from whisperlivekit.translation_alignatt import AlignAttRemoteEngine
+    if isinstance(translation_model, AlignAttRemoteEngine):
+        return translation_model.new_session(args.target_language)
     #should be at speaker level in the future:
     #one shared nllb model for all speaker
     #one tokenizer per speaker/language

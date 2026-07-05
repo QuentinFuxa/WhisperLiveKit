@@ -32,6 +32,14 @@ class WhisperLiveKitConfig:
     diarization: bool = False
     punctuation_split: bool = False
     target_language: str = ""
+    # "nllb" (in-process, CPU-friendly) or "alignatt" (Alignatt4LLM sidecar
+    # over WebSocket, streaming LLM translation with attention-gated commits).
+    translation_backend: str = "nllb"
+    alignatt_url: str = "ws://localhost:8765"
+    alignatt_preset: Optional[str] = None
+    # quality | balanced | low; see docs/translation-alignatt.md
+    alignatt_latency: str = "balanced"
+    alignatt_context: str = ""
     vac: bool = True
     vac_chunk_size: float = 0.04
     log_level: str = "DEBUG"

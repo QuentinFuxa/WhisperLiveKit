@@ -97,6 +97,16 @@ class Translation(TimedText):
     pass
 
 @dataclass
+class HypothesisTail(TimedText):
+    """Snapshot of the ASR's unstable hypothesis tail.
+
+    Queued to translation backends that opt in (``wants_hypothesis_tail``)
+    so a streaming translator can draft ahead over text the ASR has not
+    committed yet. Display backends never see it.
+    """
+    pass
+
+@dataclass
 class Silence():
     start: Optional[float] = None
     end: Optional[float] = None
