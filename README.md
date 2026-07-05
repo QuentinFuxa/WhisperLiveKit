@@ -26,9 +26,8 @@
 - [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting) (2025), based on [distilled](https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2) [NLLB](https://arxiv.org/abs/2207.04672) (2022, 2024) - Simulatenous translation from & to 200 languages.
 - [WhisperStreaming](https://github.com/ufal/whisper_streaming) (SOTA 2023) - Low latency transcription using [LocalAgreement policy](https://www.isca-archive.org/interspeech_2020/liu20s_interspeech.pdf)
 - [Streaming Sortformer](https://arxiv.org/abs/2507.18446) (SOTA 2025) - Advanced real-time speaker diarization
-- [Diart](https://github.com/juanmc2005/diart) (SOTA 2021) - Real-time speaker diarization
-- [Voxtral Mini](https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602) (2025) - 4B-parameter multilingual speech model by Mistral AI
-- [Silero VAD](https://github.com/snakers4/silero-vad) (2024) - Enterprise-grade Voice Activity Detection
+- [Qwen3-ASR-causal](https://github.com/QuentinFuxa/Qwen3-ASR-causal) (2026) - Causal streaming audio encoder for Qwen3-ASR: each audio block is encoded exactly once, constant compute per audio second, append-only transcripts.
+- [AlignAtt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM) ([IWSLT 2026](https://arxiv.org/abs/2606.03967)) - Simultaneous translation with decoder-only LLMs: attention-gated commits, append-only output.
 
 
 > **Why not just run a simple Whisper model on every audio batch?** Whisper is designed for complete utterances, not real-time chunks. Processing small segments loses context, cuts off words mid-syllable, and produces poor transcription. WhisperLiveKit uses state-of-the-art simultaneous speech research for intelligent buffering and incremental processing.
