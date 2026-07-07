@@ -537,6 +537,14 @@ label {
   margin-bottom: 0px;
 }
 
+.hidden-lines-notice {
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 13px;
+  margin: 8px 0;
+}
+
 /* for smaller screens */
 @media (max-width: 200px) {
   .header-container {

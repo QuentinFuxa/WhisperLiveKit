@@ -33,6 +33,22 @@ let outputAudioContext = null;
 let audioSource = null;
 const LAG_DISPLAY_THRESHOLD = 0.1;
 
+// Cap on transcript lines kept in the DOM. Older lines are removed from the
+// DOM (the data itself stays in lastReceivedData / on the server) and replaced
+// by a single collapsed indicator at the top, so multi-hour sessions do not
+// grow the page without bound.
+const MAX_RENDERED_LINES = 200;
+
+// Auto-reconnect on unexpected WebSocket loss: exponential backoff starting at
+// RECONNECT_BASE_DELAY_MS, doubling up to RECONNECT_MAX_DELAY_MS, with jitter.
+// A deliberate user stop never triggers reconnection (see stopRecording).
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 30000;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+let shouldReconnect = false; // true while a session is active and not user-stopped
+let mediaStream = null; // capture stream, kept so MediaRecorder can restart on reconnect
+
 waveCanvas.width = 60 * (window.devicePixelRatio || 1);
 waveCanvas.height = 30 * (window.devicePixelRatio || 1);
 waveCtx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
@@ -244,6 +260,12 @@ function setupWebSocket() {
             );
           }
         }
+      } else if (shouldReconnect && isRecording) {
+        // Unexpected close during an active session: keep the capture
+        // pipeline and the displayed lines, and retry with backoff.
+        websocket = null;
+        scheduleReconnect();
+        return;
       } else {
         statusText.textContent = "Disconnected from the WebSocket server. (Check logs if model is loading.)";
         if (isRecording) {
@@ -335,6 +357,58 @@ function setupWebSocket() {
   });
 }
 
+function startMediaRecorder(stream) {
+  try {
+    recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+  } catch (e) {
+    recorder = new MediaRecorder(stream);
+  }
+  recorder.ondataavailable = (e) => {
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+      if (e.data && e.data.size > 0) {
+        websocket.send(e.data);
+      }
+    }
+  };
+  recorder.start(chunkDuration);
+}
+
+function scheduleReconnect() {
+  if (!shouldReconnect || reconnectTimer) return;
+  const backoff = Math.min(
+    RECONNECT_BASE_DELAY_MS * Math.pow(2, reconnectAttempts),
+    RECONNECT_MAX_DELAY_MS
+  );
+  const delay = backoff + Math.random() * 250;
+  reconnectAttempts++;
+  console.log(`WebSocket lost, reconnect attempt ${reconnectAttempts} in ${Math.round(delay)} ms`);
+  statusText.textContent = "Reconnexion…";
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+    if (!shouldReconnect) return;
+    try {
+      await setupWebSocket();
+      reconnectAttempts = 0;
+      lastSignature = null; // force a re-render on the next server message
+      // The capture pipeline is kept alive across reconnects. PCM (worklet)
+      // chunks resume flowing on their own once the socket is OPEN again, but
+      // a MediaRecorder WebM stream must be restarted so the new server
+      // session receives fresh container headers.
+      if (!serverUseAudioWorklet && mediaStream) {
+        if (recorder) {
+          try {
+            recorder.stop();
+          } catch (e) {}
+        }
+        startMediaRecorder(mediaStream);
+      }
+    } catch (err) {
+      console.error("Reconnect attempt failed:", err);
+      scheduleReconnect();
+    }
+  }, delay);
+}
+
 function renderLinesWithBuffer(
   lines,
   buffer_diarization,
@@ -390,7 +464,12 @@ function renderLinesWithBuffer(
     ? [{ speaker: 1, text: "" }]
     : (lines || []);
 
-  const linesHtml = effectiveLines
+  // DOM growth cap: only the most recent MAX_RENDERED_LINES lines are put in
+  // the DOM; older ones collapse into a single indicator rendered at the top.
+  const hiddenCount = Math.max(0, effectiveLines.length - MAX_RENDERED_LINES);
+  const visibleLines = hiddenCount > 0 ? effectiveLines.slice(hiddenCount) : effectiveLines;
+
+  const linesHtml = visibleLines
     .map((item, idx) => {
       let timeInfo = "";
       if (item.start !== undefined && item.end !== undefined) {
@@ -415,7 +494,7 @@ function renderLinesWithBuffer(
 
       let currentLineText = item.text || "";
 
-      if (idx === effectiveLines.length - 1) {
+      if (idx === visibleLines.length - 1) {
         if (!isFinalizing && item.speaker !== -2) {
           if (showComputeLag) {
             speakerLabel += `<span class="label_compute" title="Audio received but not processed yet"><span class="spinner"></span>Compute <span id='timeInfo'><span class="lag-compute-value">${fmt1(
@@ -458,7 +537,7 @@ function renderLinesWithBuffer(
       if (item.translation) {
         translationContent += item.translation.trim();
       }
-      if (idx === effectiveLines.length - 1 && buffer_translation) {
+      if (idx === visibleLines.length - 1 && buffer_translation) {
         const bufferPiece = isFinalizing
           ? buffer_translation
           : `<span class="buffer_translation">${buffer_translation}</span>`;
@@ -480,7 +559,10 @@ function renderLinesWithBuffer(
     })
     .join("");
 
-  linesTranscriptDiv.innerHTML = linesHtml;
+  const hiddenNotice = hiddenCount > 0
+    ? `<p class="hidden-lines-notice" title="${effectiveLines.length} lignes au total">— ${hiddenCount} lignes précédentes (masquées) —</p>`
+    : "";
+  linesTranscriptDiv.innerHTML = hiddenNotice + linesHtml;
   const transcriptContainer = document.querySelector('.transcript-container');
   if (transcriptContainer) {
     transcriptContainer.scrollTo({ top: transcriptContainer.scrollHeight, behavior: "smooth" });
@@ -585,6 +667,7 @@ async function startRecording() {
       stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
     }
 
+    mediaStream = stream;
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
@@ -625,19 +708,7 @@ async function startRecording() {
         );
       };
     } else {
-      try {
-        recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      } catch (e) {
-        recorder = new MediaRecorder(stream);
-      }
-      recorder.ondataavailable = (e) => {
-        if (websocket && websocket.readyState === WebSocket.OPEN) {
-          if (e.data && e.data.size > 0) {
-            websocket.send(e.data);
-          }
-        }
-      };
-      recorder.start(chunkDuration);
+      startMediaRecorder(stream);
     }
 
     startTime = Date.now();
@@ -645,6 +716,7 @@ async function startRecording() {
     drawWaveform();
 
     isRecording = true;
+    shouldReconnect = true;
     updateUI();
   } catch (err) {
     if (window.location.hostname === "0.0.0.0") {
@@ -667,6 +739,14 @@ async function stopRecording() {
     wakeLock = null;
   }
 
+  // A deliberate stop must never trigger auto-reconnect.
+  shouldReconnect = false;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  reconnectAttempts = 0;
+
   userClosing = true;
   waitingForStop = true;
 
@@ -674,6 +754,17 @@ async function stopRecording() {
     const emptyBlob = new Blob([], { type: "audio/webm" });
     websocket.send(emptyBlob);
     statusText.textContent = "Recording stopped. Processing final audio...";
+  } else {
+    // Stopped while disconnected (e.g. during a reconnect backoff): there is
+    // no live server session to finalize, so skip the finalization wait.
+    waitingForStop = false;
+    userClosing = false;
+    if (websocket) {
+      try {
+        websocket.close();
+      } catch (e) {}
+      websocket = null;
+    }
   }
 
   if (recorder) {
@@ -703,6 +794,7 @@ async function stopRecording() {
     microphone.disconnect();
     microphone = null;
   }
+  mediaStream = null;
 
   if (analyser) {
     analyser = null;
