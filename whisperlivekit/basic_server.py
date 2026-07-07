@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
+from whisperlivekit.config import parse_cors_origins
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger().setLevel(logging.WARNING)
@@ -26,7 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=parse_cors_origins(config.cors_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -77,6 +78,7 @@ async def websocket_endpoint(websocket: WebSocket):
     audio_processor = AudioProcessor(
         transcription_engine=transcription_engine,
         language=session_language,
+        mode=mode,
     )
     await websocket.accept()
     logger.info(
@@ -298,13 +300,34 @@ async def create_transcription(
     # Signal end of audio
     await processor.process_audio(b"")
 
-    # Wait for pipeline to finish
+    # Wait for pipeline to finish. The budget scales with the audio length
+    # (issue #374: a fixed 120 s silently truncated long files) and can be
+    # overridden with --rest-timeout.
+    configured = float(getattr(config, "rest_timeout", 0) or 0)
+    timeout_sec = configured if configured > 0 else max(120.0, duration * 2.5)
+    timed_out = False
     try:
-        await asyncio.wait_for(collect_task, timeout=120.0)
+        await asyncio.wait_for(collect_task, timeout=timeout_sec)
     except asyncio.TimeoutError:
-        logger.warning("Transcription timed out after 120s")
+        timed_out = True
+        logger.warning(
+            "Transcription timed out after %.0fs (audio duration %.0fs)",
+            timeout_sec,
+            duration,
+        )
     finally:
         await processor.cleanup()
+
+    if timed_out:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=408,
+            detail=(
+                f"Transcription did not finish within {timeout_sec:.0f}s "
+                f"for {duration:.0f}s of audio. Retry with a longer "
+                "--rest-timeout or faster hardware/backend."
+            ),
+        )
 
     if final_result is None:
         return JSONResponse({"text": ""})

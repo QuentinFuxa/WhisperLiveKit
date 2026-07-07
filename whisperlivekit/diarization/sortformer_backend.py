@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 import threading
 import wave
 from typing import List, Optional
@@ -47,16 +48,59 @@ class StreamingSortformerState:
 
 
 class SortformerDiarization:
-    def __init__(self, model_name: str = "nvidia/diar_streaming_sortformer_4spk-v2"):
+    def __init__(
+        self,
+        model_name: str = "nvidia/diar_streaming_sortformer_4spk-v2",
+        model_path: Optional[str] = None,
+    ):
         """
         Stores the shared streaming Sortformer diarization model. Used when a new online_diarization is initialized.
+        If model_path is provided (local .nemo file or a directory containing one), it overrides model_name.
         """
-        self._load_model(model_name)
+        if model_path:
+            logger.info("Loading Sortformer from local path %s (overrides model %s)", model_path, model_name)
+        self._load_model(model_path or model_name)
 
     def _load_model(self, model_name: str):
         """Load and configure the Sortformer model for streaming."""
         try:
-            self.diar_model = SortformerEncLabelModel.from_pretrained(model_name)
+            full_path = Path(model_name).expanduser()
+            # If we were given a full path to the model
+            if full_path.is_file():
+                if full_path.suffix.lower() == ".nemo":
+                    self.diar_model = SortformerEncLabelModel.restore_from(restore_path=str(full_path))
+                else:
+                    raise ValueError(f"Given file is not a nemo file: {full_path}")
+
+            # If we were given a path to a folder with the model
+            elif full_path.is_dir():
+                nemo_files = sorted(full_path.glob("*.nemo"))
+
+                if len(nemo_files) == 0:
+                    raise FileNotFoundError(f"No .nemo file found in Sortformer model directory: {full_path}")
+                if len(nemo_files) > 1:
+                    raise ValueError(
+                        f"Multiple .nemo files found in Sortformer model directory: {full_path}. "
+                        "Please set --sortformer-model-path to the exact .nemo file."
+                    )
+                self.diar_model = SortformerEncLabelModel.restore_from(restore_path=str(nemo_files[0]))
+            # if we were given a Hugging face model ID
+            else:
+                # HF ids look like "org/name"; anything else path-like
+                # (extension, separators beyond one slash, ~, .) is a
+                # missing local path — fail with a clear message instead of
+                # a confusing download error.
+                looks_like_path = (
+                    model_name.lower().endswith(".nemo")
+                    or model_name.startswith(("/", "./", "../", "~"))
+                    or "\\" in model_name
+                    or model_name.count("/") > 1
+                )
+                if looks_like_path:
+                    raise FileNotFoundError(f"Sortformer model path does not exist: {full_path}")
+
+                self.diar_model = SortformerEncLabelModel.from_pretrained(model_name)
+
             self.diar_model.eval()
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -222,6 +266,13 @@ class SortformerDiarizationOnline:
                 left_offset=left_offset,
                 right_offset=right_offset,
             )
+            # total_preds only accumulates outputs (the model's memory lives
+            # in streaming_state spkcache/fifo) and _process_predictions
+            # reads just the last chunk, but it grew unboundedly on GPU and
+            # was copied to CPU whole every chunk. Keep a generous tail.
+            max_kept_frames = max(1024, 4 * (self._len_prediction or 256))
+            if self.total_preds.shape[1] > max_kept_frames:
+                self.total_preds = self.total_preds[:, -max_kept_frames:, :].contiguous()
         new_segments = self._process_predictions()
 
         self._chunk_index += 1

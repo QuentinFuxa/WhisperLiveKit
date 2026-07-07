@@ -10,6 +10,30 @@ from whisperlivekit.simul_whisper import SimulStreamingASR
 
 logger = logging.getLogger(__name__)
 
+
+_NLLW_LANGUAGE_ALIASES = {
+    "zh": "zh-CN",
+    "zh-cn": "zh-CN",
+    "zh-hans": "zh-CN",
+    "zh-sg": "zh-CN",
+    "cmn": "zh-CN",
+    "cmn-hans": "zh-CN",
+    "zh-tw": "zh-TW",
+    "zh-hant": "zh-TW",
+    "zh-hk": "zh-TW",
+    "cmn-hant": "zh-TW",
+}
+
+
+def _nllw_language_code(language):
+    """Return a language identifier accepted by NLLW without changing ASR config."""
+    if not language:
+        return language
+    normalized = str(language).strip()
+    lookup_key = normalized.replace("_", "-").lower()
+    return _NLLW_LANGUAGE_ALIASES.get(lookup_key, normalized)
+
+
 class TranscriptionEngine:
     _instance = None
     _initialized = False
@@ -232,7 +256,7 @@ class TranscriptionEngine:
                 )
             elif config.diarization_backend == "sortformer":
                 from whisperlivekit.diarization.sortformer_backend import SortformerDiarization
-                self.diarization_model = SortformerDiarization()
+                self.diarization_model = SortformerDiarization(model_path=config.sortformer_model_path)
 
         self.translation_model = None
         if config.target_language:
@@ -245,8 +269,9 @@ class TranscriptionEngine:
                     from nllw import load_model
                 except ImportError:
                     raise ImportError('To use translation, you must install nllw: `pip install nllw`')
+                source_language = _nllw_language_code(config.lan)
                 self.translation_model = load_model(
-                    [config.lan],
+                    [source_language],
                     nllb_backend=config.nllb_backend,
                     nllb_size=config.nllb_size,
                 )
@@ -316,4 +341,6 @@ def online_translation_factory(args, translation_model):
     #one shared nllb model for all speaker
     #one tokenizer per speaker/language
     from nllw import OnlineTranslation
-    return OnlineTranslation(translation_model, [args.lan], [args.target_language])
+    source_language = _nllw_language_code(args.lan)
+    target_language = _nllw_language_code(args.target_language)
+    return OnlineTranslation(translation_model, [source_language], [target_language])

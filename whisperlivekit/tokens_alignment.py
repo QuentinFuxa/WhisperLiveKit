@@ -1,3 +1,4 @@
+import math
 from time import time
 from typing import Any, List, Optional, Tuple, Union
 
@@ -14,9 +15,31 @@ from whisperlivekit.timed_objects import (
 _DEFAULT_RETENTION_SECONDS: float = 300.0
 
 
+def resolve_retention_seconds(requested: Optional[float], mode: str) -> float:
+    """History retention policy for a session.
+
+    An explicit --retention-seconds always wins (0 or negative = unlimited).
+    Otherwise clients in "full" mode get unlimited history: they receive the
+    whole transcript on every update, so server-side pruning permanently
+    deletes their earliest lines (issue #372). Diff-mode clients keep their
+    own copy, so the bounded default applies.
+    """
+    if requested is not None:
+        return math.inf if float(requested) <= 0 else float(requested)
+    if mode == "diff":
+        return _DEFAULT_RETENTION_SECONDS
+    return math.inf
+
+
 class TokensAlignment:
 
-    def __init__(self, state: Any, args: Any, sep: Optional[str]) -> None:
+    def __init__(
+        self,
+        state: Any,
+        args: Any,
+        sep: Optional[str],
+        retention_seconds: Optional[float] = None,
+    ) -> None:
         self.state = state
         self.diarization = args.diarization
 
@@ -40,7 +63,11 @@ class TokensAlignment:
         self.last_uncompleted_punc_segment: PuncSegment = None
         self.unvalidated_tokens: PuncSegment = []
 
-        self._retention_seconds: float = _DEFAULT_RETENTION_SECONDS
+        self._retention_seconds: float = (
+            retention_seconds
+            if retention_seconds is not None
+            else _DEFAULT_RETENTION_SECONDS
+        )
 
     def update(self) -> None:
         """Drain state buffers into the running alignment context."""
@@ -56,7 +83,7 @@ class TokensAlignment:
 
     def _prune(self) -> None:
         """Drop tokens/segments older than ``_retention_seconds`` from the latest token."""
-        if not self.all_tokens:
+        if not self.all_tokens or math.isinf(self._retention_seconds):
             return
 
         latest = self.all_tokens[-1].end

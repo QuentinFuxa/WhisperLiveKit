@@ -39,6 +39,14 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--sortformer-model-path",
+        type=str,
+        default=None,
+        dest="sortformer_model_path",
+        help="Path to a local Sortformer .nemo file, a directory containing exactly one .nemo file, or a NeMo/Hugging Face model ID.",
+    )
+
+    parser.add_argument(
         "--punctuation-split",
         action="store_true",
         default=False,
@@ -84,6 +92,31 @@ def parse_args():
         type=float,
         default=0.1,
         help="Minimum audio chunk size in seconds. It waits up to this time to do processing. If the processing takes shorter time, it waits, otherwise it processes the whole segment that was received by this time.",
+    )
+
+    parser.add_argument(
+        "--retention-seconds",
+        type=float,
+        default=None,
+        dest="retention_seconds",
+        help=(
+            "Transcript history kept in server memory per session. Default: "
+            "unlimited for mode=full sessions (the client is sent the whole "
+            "transcript each update), 300 for diff-mode sessions. "
+            "0 = unlimited."
+        ),
+    )
+
+    parser.add_argument(
+        "--rest-timeout",
+        type=float,
+        default=0.0,
+        dest="rest_timeout",
+        help=(
+            "Processing budget in seconds for /v1/audio/transcriptions. "
+            "0 = auto: max(120, 2.5x the audio duration). On expiry the "
+            "endpoint returns HTTP 408 instead of a silent empty result."
+        ),
     )
 
     parser.add_argument(
@@ -190,6 +223,13 @@ def parse_args():
     parser.add_argument("--ssl-certfile", type=str, help="Path to the SSL certificate file.", default=None)
     parser.add_argument("--ssl-keyfile", type=str, help="Path to the SSL private key file.", default=None)
     parser.add_argument("--forwarded-allow-ips", type=str, help="Allowed ips for reverse proxying.", default=None)
+    parser.add_argument(
+        "--cors-origins",
+        type=str,
+        default="",
+        dest="cors_origins",
+        help="Comma-separated list of allowed CORS origins. Empty disables CORS; use '*' to allow all origins.",
+    )
     parser.add_argument(
         "--pcm-input",
         action="store_true",
