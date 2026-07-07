@@ -50,6 +50,8 @@ class WhisperLiveKitConfig:
     min_chunk_size: float = 0.1
     # None = auto: unlimited history in mode=full, 300 s in diff mode.
     retention_seconds: Optional[float] = None
+    # REST /v1/audio/transcriptions budget; 0 = auto (max(120, 2.5x audio)).
+    rest_timeout: float = 0.0
     model_size: str = "base"
     model_cache_dir: Optional[str] = None
     model_dir: Optional[str] = None

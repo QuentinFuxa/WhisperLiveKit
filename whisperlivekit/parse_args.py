@@ -108,6 +108,18 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--rest-timeout",
+        type=float,
+        default=0.0,
+        dest="rest_timeout",
+        help=(
+            "Processing budget in seconds for /v1/audio/transcriptions. "
+            "0 = auto: max(120, 2.5x the audio duration). On expiry the "
+            "endpoint returns HTTP 408 instead of a silent empty result."
+        ),
+    )
+
+    parser.add_argument(
         "--model",
         type=str,
         default="base",
