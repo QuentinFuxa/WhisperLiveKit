@@ -1,8 +1,8 @@
 ### Alignment between STT Tokens and Diarization Segments 
 
-- Example 1: The punctuation from STT and the speaker change from Diariation come in the prediction `t`
-- Example 2: The punctuation from STT comes from prediction `t`, but the speaker change from Diariation come in the prediction `t-1`
-- Example 3: The punctuation from STT comes from prediction `t-1`, but the speaker change from Diariation come in the prediction `t`
+- Example 1: The punctuation from STT and the speaker change from Diarization come in the prediction `t`
+- Example 2: The punctuation from STT comes from prediction `t`, but the speaker change from Diarization come in the prediction `t-1`
+- Example 3: The punctuation from STT comes from prediction `t-1`, but the speaker change from Diarization come in the prediction `t`
 
 > `#` Is the split between the `t-1` prediction and `t` prediction.  
 
