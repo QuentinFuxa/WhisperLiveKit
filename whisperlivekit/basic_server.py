@@ -245,7 +245,7 @@ def _duration_usage(duration: float) -> dict:
     }
 
 
-def _format_openai_response(front_data, response_format: str, language: Optional[str], duration: float) -> dict:
+def _format_openai_response(front_data, response_format: str, language: Optional[str], duration: float, diarization_enabled: bool = True) -> dict:
     """Convert FrontData to OpenAI-compatible response."""
     d = front_data.to_dict()
     lines = d.get("lines", [])
@@ -260,6 +260,12 @@ def _format_openai_response(front_data, response_format: str, language: Optional
     speaker_labels = {}
 
     if response_format == "diarized_json":
+        if not diarization_enabled:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail="response_format=diarized_json requires diarization to be enabled on the server. Start the server with --diarization.",
+            )
         segments = []
         text_parts = []
         for line in lines:
@@ -294,27 +300,54 @@ def _format_openai_response(front_data, response_format: str, language: Optional
     # Build segments and words for verbose_json
     segments = []
     words = []
-    for i, line in enumerate(lines):
-        if line.get("speaker") == -2 or not line.get("text"):
-            continue
-        start = _parse_time_str(line.get("start", "0:00:00"))
-        end = _parse_time_str(line.get("end", "0:00:00"))
+
+    # Prefer real Segment objects (carrying ASRToken timestamps) when available;
+    # fall back to the serialized dict form (e.g. test mocks without .lines).
+    real_segments = getattr(front_data, "lines", None)
+    if real_segments is not None:
+        seg_iter = [
+            (s.start, s.end, s.text, getattr(s, "tokens", None))
+            for s in real_segments
+            if s.speaker != -2 and s.text
+        ]
+    else:
+        seg_iter = [
+            (
+                _parse_time_str(line.get("start", "0:00:00")),
+                _parse_time_str(line.get("end", "0:00:00")),
+                line["text"],
+                None,
+            )
+            for line in lines
+            if line.get("speaker") != -2 and line.get("text")
+        ]
+
+    for start, end, text, real_tokens in seg_iter:
         segments.append({
             "id": len(segments),
             "start": round(start, 2),
             "end": round(end, 2),
-            "text": line["text"],
+            "text": text,
         })
-        # Split segment text into approximate words with estimated timestamps
-        seg_words = line["text"].split()
-        if seg_words:
-            word_duration = (end - start) / max(len(seg_words), 1)
-            for j, word in enumerate(seg_words):
-                words.append({
-                    "word": word,
-                    "start": round(start + j * word_duration, 2),
-                    "end": round(start + (j + 1) * word_duration, 2),
-                })
+        if real_tokens:
+            for tok in real_tokens:
+                if tok.text and tok.text.strip():
+                    words.append({
+                        "word": tok.text.strip(),
+                        "start": round(tok.start, 2),
+                        "end": round(tok.end, 2),
+                    })
+        else:
+            # Fallback: interpolate word timestamps from segment boundaries
+            seg_words = text.split()
+            if seg_words:
+                word_duration = (end - start) / max(len(seg_words), 1)
+                for j, word in enumerate(seg_words):
+                    words.append({
+                        "word": word,
+                        "start": round(start + j * word_duration, 2),
+                        "end": round(start + (j + 1) * word_duration, 2),
+                    })
 
     if response_format == "verbose_json":
         return {
@@ -457,7 +490,7 @@ async def create_transcription(
     if final_result is None:
         return JSONResponse({"text": ""})
 
-    result = _format_openai_response(final_result, response_format, language, duration)
+    result = _format_openai_response(final_result, response_format, language, duration, diarization_enabled=processor.args.diarization)
 
     if isinstance(result, str):
         return PlainTextResponse(result)

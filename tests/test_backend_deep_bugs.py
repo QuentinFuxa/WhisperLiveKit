@@ -876,6 +876,69 @@ def test_openai_rest_verbose_json_shape_remains_without_speaker(monkeypatch):
     }
 
 
+def test_openai_rest_verbose_json_uses_real_asr_token_timestamps(monkeypatch):
+    """verbose_json should emit real per-word timestamps from ASRToken, not fabricated."""
+    from whisperlivekit.timed_objects import ASRToken, FrontData, Segment
+
+    basic_server = _import_basic_server(monkeypatch)
+
+    tokens = [
+        ASRToken(start=0.0, end=0.5, text="hello"),
+        ASRToken(start=0.5, end=1.2, text="world"),
+        ASRToken(start=1.2, end=2.0, text="there"),
+    ]
+    seg = Segment(start=0.0, end=2.0, text="hello world there", speaker=1, tokens=tokens)
+    front_data = FrontData(lines=[seg])
+
+    payload = basic_server._format_openai_response(front_data, "verbose_json", "en", 2.0)
+
+    assert payload["words"] == [
+        {"word": "hello", "start": 0.0, "end": 0.5},
+        {"word": "world", "start": 0.5, "end": 1.2},
+        {"word": "there", "start": 1.2, "end": 2.0},
+    ]
+
+
+def test_openai_rest_verbose_json_falls_back_to_interpolation_without_tokens(monkeypatch):
+    """When Segment.tokens is None, verbose_json falls back to interpolated timestamps."""
+    from whisperlivekit.timed_objects import FrontData, Segment
+
+    basic_server = _import_basic_server(monkeypatch)
+
+    seg = Segment(start=0.0, end=2.0, text="hello world", speaker=1, tokens=None)
+    front_data = FrontData(lines=[seg])
+
+    payload = basic_server._format_openai_response(front_data, "verbose_json", "en", 2.0)
+
+    # Two words, evenly distributed across 2 seconds
+    assert payload["words"] == [
+        {"word": "hello", "start": 0.0, "end": 1.0},
+        {"word": "world", "start": 1.0, "end": 2.0},
+    ]
+
+
+def test_openai_rest_diarized_json_rejects_when_diarization_disabled(monkeypatch):
+    """diarized_json without diarization enabled should raise 400, not fake speaker labels."""
+    basic_server = _import_basic_server(monkeypatch)
+
+    front_data = SimpleNamespace(
+        to_dict=lambda: {
+            "lines": [
+                {"text": "hello", "start": "0:00:00.00", "end": "0:00:02.00", "speaker": 1},
+            ]
+        }
+    )
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        basic_server._format_openai_response(
+            front_data, "diarized_json", "en", 2.0, diarization_enabled=False
+        )
+    assert exc_info.value.status_code == 400
+    assert "diarization" in exc_info.value.detail.lower()
+
+
 def test_openai_rest_json_includes_duration_usage(monkeypatch):
     basic_server = _import_basic_server(monkeypatch)
 
