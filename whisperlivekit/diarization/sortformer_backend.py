@@ -55,7 +55,10 @@ class SortformerDiarization:
     ):
         """
         Stores the shared streaming Sortformer diarization model. Used when a new online_diarization is initialized.
+        If model_path is provided (local .nemo file or a directory containing one), it overrides model_name.
         """
+        if model_path:
+            logger.info("Loading Sortformer from local path %s (overrides model %s)", model_path, model_name)
         self._load_model(model_path or model_name)
 
     def _load_model(self, model_name: str):
@@ -83,9 +86,15 @@ class SortformerDiarization:
                 self.diar_model = SortformerEncLabelModel.restore_from(restore_path=str(nemo_files[0]))
             # if we were given a Hugging face model ID
             else:
+                # HF ids look like "org/name"; anything else path-like
+                # (extension, separators beyond one slash, ~, .) is a
+                # missing local path — fail with a clear message instead of
+                # a confusing download error.
                 looks_like_path = (
                     model_name.lower().endswith(".nemo")
                     or model_name.startswith(("/", "./", "../", "~"))
+                    or "\\" in model_name
+                    or model_name.count("/") > 1
                 )
                 if looks_like_path:
                     raise FileNotFoundError(f"Sortformer model path does not exist: {full_path}")
