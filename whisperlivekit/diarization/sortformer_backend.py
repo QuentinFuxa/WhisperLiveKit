@@ -266,6 +266,13 @@ class SortformerDiarizationOnline:
                 left_offset=left_offset,
                 right_offset=right_offset,
             )
+            # total_preds only accumulates outputs (the model's memory lives
+            # in streaming_state spkcache/fifo) and _process_predictions
+            # reads just the last chunk, but it grew unboundedly on GPU and
+            # was copied to CPU whole every chunk. Keep a generous tail.
+            max_kept_frames = max(1024, 4 * (self._len_prediction or 256))
+            if self.total_preds.shape[1] > max_kept_frames:
+                self.total_preds = self.total_preds[:, -max_kept_frames:, :].contiguous()
         new_segments = self._process_predictions()
 
         self._chunk_index += 1
