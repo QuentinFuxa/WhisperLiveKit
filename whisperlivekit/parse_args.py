@@ -14,6 +14,30 @@ def parse_args():
         "--port", type=int, default=8000, help="The port number to bind the server to."
     )
     parser.add_argument(
+        "--translate-on-complete",
+        action="store_true",
+        default=False,
+        dest="translate_on_complete",
+        help=(
+            "Only translate segments once they are finalized by punctuation, "
+            "silence, or end of stream (issue #264). Reduces translation "
+            "flicker at the cost of latency; partial tails are not translated."
+        ),
+    )
+    parser.add_argument(
+        "--api-token",
+        type=str,
+        default=None,
+        dest="api_token",
+        help=(
+            "Require this token on every connection: WebSocket /asr accepts "
+            "?token=... or an Authorization: Bearer header, the REST API "
+            "requires Authorization: Bearer. Default: no authentication "
+            "(only expose the server on trusted networks). The WLK_API_TOKEN "
+            "environment variable is used when the flag is unset."
+        ),
+    )
+    parser.add_argument(
         "--warmup-file",
         type=str,
         default=None,

@@ -26,6 +26,9 @@ class WhisperLiveKitConfig:
     # Server / global
     host: str = "localhost"
     port: int = 8000
+    # None = no auth; WLK_API_TOKEN env var applies when unset.
+    api_token: Optional[str] = None
+    translate_on_complete: bool = False
     diarization: bool = False
     punctuation_split: bool = False
     target_language: str = ""
