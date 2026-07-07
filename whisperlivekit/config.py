@@ -91,6 +91,7 @@ class WhisperLiveKitConfig:
     vllm_tensor_parallel_size: int = 1
     vllm_gpu_memory_utilization: float = 0.45
     vllm_dtype: str = "auto"
+    vllm_max_model_len: int = 0
     holdback_words: Optional[int] = None
     trim_sentence_buffer: bool = True
 

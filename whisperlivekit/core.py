@@ -130,6 +130,7 @@ class TranscriptionEngine:
             "vllm_tensor_parallel_size": config.vllm_tensor_parallel_size,
             "vllm_gpu_memory_utilization": config.vllm_gpu_memory_utilization,
             "vllm_dtype": config.vllm_dtype,
+            "vllm_max_model_len": config.vllm_max_model_len,
             "holdback_words": config.holdback_words,
             "trim_sentence_buffer": config.trim_sentence_buffer,
         }

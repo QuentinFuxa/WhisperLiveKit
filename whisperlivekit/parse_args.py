@@ -248,6 +248,16 @@ def parse_args():
         help="dtype passed to vLLM for qwen3-vllm engines, e.g. auto, bfloat16, float16.",
     )
     parser.add_argument(
+        "--vllm-max-model-len",
+        type=int,
+        default=0,
+        dest="vllm_max_model_len",
+        help=(
+            "max_model_len passed to the qwen3-vllm engines to cap the KV "
+            "cache (e.g. 8192 on small GPUs). 0 keeps vLLM's model default."
+        ),
+    )
+    parser.add_argument(
         "--holdback-words",
         type=int,
         default=None,

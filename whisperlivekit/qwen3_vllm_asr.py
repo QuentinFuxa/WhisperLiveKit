@@ -200,6 +200,16 @@ def _split_align_words(text: str) -> list[str]:
     return words
 
 
+def _normalize_timestamp_segment_time(value) -> float:
+    """ForcedAligner configs declare the bin size in seconds (0.02) or in
+    milliseconds (20) depending on the release; normalize to seconds so
+    aligned word times stay in seconds (issue found via PR #375)."""
+    segment_time = float(value)
+    if segment_time > 1.0:
+        segment_time /= 1000.0
+    return segment_time
+
+
 def _fix_timestamps(values) -> list[float]:
     data = [float(v) for v in values]
     n = len(data)
@@ -299,6 +309,9 @@ class Qwen3VLLMASR:
             "gpu_memory_utilization": gpu_memory_utilization,
             "dtype": dtype,
         }
+        max_model_len = int(kwargs.get("vllm_max_model_len") or 0)
+        if max_model_len > 0:
+            common_kwargs["max_model_len"] = max_model_len
 
         logger.info("Loading Qwen3-ASR vLLM model '%s' ...", self.model_path)
         self.asr_llm = LLM(model=self.model_path, runner="generate", **common_kwargs)
@@ -319,7 +332,9 @@ class Qwen3VLLMASR:
         if timestamp_token_id is None:
             timestamp_token_id = _token_id(self.aligner_tokenizer, "<timestamp>")
         self.timestamp_token_id = int(timestamp_token_id)
-        self.timestamp_segment_time = float(getattr(aligner_config, "timestamp_segment_time", 0.02))
+        self.timestamp_segment_time = _normalize_timestamp_segment_time(
+            getattr(aligner_config, "timestamp_segment_time", 0.02)
+        )
 
     def _build_asr_prompt(self, audio: np.ndarray):
         language = _qwen3_language(self.original_language)
@@ -475,7 +490,10 @@ class Qwen3VLLMOnlineProcessor:
         aligned_words, detected_language = self.asr.transcribe_aligned(self.audio_buffer)
         tokens: list[ASRToken] = []
         for idx, word in enumerate(aligned_words):
-            text = word.text if idx == 0 else " " + word.text
+            # CJK scripts carry no inter-word spaces (aligner words are
+            # per-character there, see _split_align_words).
+            word_is_cjk = bool(word.text) and all(_is_cjk_char(ch) for ch in word.text)
+            text = word.text if idx == 0 or word_is_cjk else " " + word.text
             tokens.append(
                 ASRToken(
                     start=self._buffer_time_offset + word.start,
