@@ -90,6 +90,15 @@ client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")
 ws://localhost:8000/asr
 ```
 
+Per-session WebSocket query parameters:
+
+| param | example | effect |
+|---|---|---|
+| `language` | `?language=fr` | transcription language for this session (one shared engine serves mixed-language sessions) |
+| `target_language` | `?target_language=de` | translation target for this session (server must run with `--target-language`) |
+| `mode` | `?mode=diff` | incremental snapshot/diff protocol instead of resending the full state — experimental, for integrators building their own client (see `diff_protocol.py`); the bundled web UI uses `full` |
+| `token` | `?token=...` | API token when the server runs with `--api-token` (also accepted as an `Authorization: Bearer` header) |
+
 See [docs/API.md](docs/API.md) for the complete API reference.
 For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLiveKitMac).
 
