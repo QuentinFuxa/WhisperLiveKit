@@ -78,6 +78,7 @@ async def websocket_endpoint(websocket: WebSocket):
     audio_processor = AudioProcessor(
         transcription_engine=transcription_engine,
         language=session_language,
+        mode=mode,
     )
     await websocket.accept()
     logger.info(

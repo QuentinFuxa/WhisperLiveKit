@@ -48,6 +48,8 @@ class WhisperLiveKitConfig:
     # Transcription common
     warmup_file: Optional[str] = None
     min_chunk_size: float = 0.1
+    # None = auto: unlimited history in mode=full, 300 s in diff mode.
+    retention_seconds: Optional[float] = None
     model_size: str = "base"
     model_cache_dir: Optional[str] = None
     model_dir: Optional[str] = None

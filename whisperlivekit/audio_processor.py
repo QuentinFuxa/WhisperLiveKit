@@ -16,7 +16,7 @@ from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.silero_vad_iterator import FixedVADIterator, OnnxWrapper, load_jit_vad
 from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, FrontData, Silence, State, Transcript
-from whisperlivekit.tokens_alignment import TokensAlignment
+from whisperlivekit.tokens_alignment import TokensAlignment, resolve_retention_seconds
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -59,8 +59,12 @@ class AudioProcessor:
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the audio processor with configuration, models, and state."""
-        # Extract per-session language override before passing to TranscriptionEngine
+        # Extract per-session options before passing to TranscriptionEngine
         session_language = kwargs.pop('language', None)
+        # Output mode of the session: "full" resends the whole transcript on
+        # every update, so history must never be pruned away (issue #372);
+        # "diff" clients keep their own copy and allow bounded server memory.
+        session_mode = kwargs.pop('mode', 'full')
 
         if 'transcription_engine' in kwargs and isinstance(kwargs['transcription_engine'], TranscriptionEngine):
             models = kwargs['transcription_engine']
@@ -86,7 +90,14 @@ class AudioProcessor:
         self.sep: str = " "  # Default separator
         self.last_response_content: FrontData = FrontData()
 
-        self.tokens_alignment: TokensAlignment = TokensAlignment(self.state, self.args, self.sep)
+        self.tokens_alignment: TokensAlignment = TokensAlignment(
+            self.state,
+            self.args,
+            self.sep,
+            retention_seconds=resolve_retention_seconds(
+                getattr(self.args, "retention_seconds", None), session_mode
+            ),
+        )
         self.beg_loop: Optional[float] = None
 
         # Models and processing

@@ -95,6 +95,19 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--retention-seconds",
+        type=float,
+        default=None,
+        dest="retention_seconds",
+        help=(
+            "Transcript history kept in server memory per session. Default: "
+            "unlimited for mode=full sessions (the client is sent the whole "
+            "transcript each update), 300 for diff-mode sessions. "
+            "0 = unlimited."
+        ),
+    )
+
+    parser.add_argument(
         "--model",
         type=str,
         default="base",
