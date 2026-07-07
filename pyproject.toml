@@ -54,13 +54,13 @@ voxtral-hf = [
     "accelerate>=0.12",
 ]
 qwen3-vllm-metal = [
-    "qwen3-asr-causal[metal]",
+    "qwen3-asr-causal[metal]>=0.1.0",
 ]
 qwen3-vllm = [
-    "qwen3-asr-causal[vllm]",
+    "qwen3-asr-causal[vllm]>=0.1.0",
 ]
 qwen3-streaming = [
-    "qwen3-asr-causal[streaming]",
+    "qwen3-asr-causal[streaming]>=0.1.0",
 ]
 listen = ["sounddevice>=0.4.6"]
 cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
