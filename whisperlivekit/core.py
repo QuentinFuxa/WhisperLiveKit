@@ -119,6 +119,8 @@ class TranscriptionEngine:
             "qwen3_vllm_segment_max_steps": config.qwen3_vllm_segment_max_steps,
             "qwen3_vllm_segment_min_sec": config.qwen3_vllm_segment_min_sec,
             "qwen3_vllm_prompt_context_words": config.qwen3_vllm_prompt_context_words,
+            "qwen3_vllm_live_multiprocessing": config.qwen3_vllm_live_multiprocessing,
+            "qwen3_vllm_aligner_multiprocessing": config.qwen3_vllm_aligner_multiprocessing,
             "holdback_words": config.holdback_words,
             "trim_sentence_buffer": config.trim_sentence_buffer,
         }

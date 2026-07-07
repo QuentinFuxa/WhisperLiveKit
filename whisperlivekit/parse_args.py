@@ -1,5 +1,5 @@
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 
 
 def parse_args():
@@ -357,6 +357,28 @@ def parse_args():
         help=(
             "Minimum active causal segment duration before qwen3-vllm may "
             "roll. Increase this to avoid rollover on short clips."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-live-multiprocessing",
+        action=BooleanOptionalAction,
+        default=None,
+        dest="qwen3_vllm_live_multiprocessing",
+        help=(
+            "Run the qwen3-vllm vllm-live decoder engine in a separate vLLM "
+            "worker process. Default keeps the deprecated "
+            "WLK_QWEN3_VLLM_LIVE_MULTIPROCESSING env fallback (off)."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-aligner-multiprocessing",
+        action=BooleanOptionalAction,
+        default=None,
+        dest="qwen3_vllm_aligner_multiprocessing",
+        help=(
+            "Run the ForcedAligner engine in a separate vLLM worker process "
+            "when vllm-live multiprocessing is on. Default keeps the "
+            "deprecated WLK_QWEN3_VLLM_ALIGNER_MULTIPROCESSING env fallback."
         ),
     )
     parser.add_argument(

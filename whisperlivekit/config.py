@@ -93,6 +93,9 @@ class WhisperLiveKitConfig:
     qwen3_vllm_segment_max_steps: int = 150
     qwen3_vllm_segment_min_sec: float = 0.0
     qwen3_vllm_prompt_context_words: int = 0
+    # None keeps the deprecated WLK_QWEN3_VLLM_*_MULTIPROCESSING env fallback.
+    qwen3_vllm_live_multiprocessing: Optional[bool] = None
+    qwen3_vllm_aligner_multiprocessing: Optional[bool] = None
     holdback_words: Optional[int] = None
     trim_sentence_buffer: bool = True
     qwen3_vllm_metal_audio_backend: str = "standard"
