@@ -491,9 +491,13 @@ def parse_args():
     qwen3_streaming_group.add_argument(
         "--qwen3-streaming-stable-iterations",
         type=int,
-        default=2,
+        default=None,
         dest="qwen3_streaming_stable_iterations",
-        help="Consecutive identical hypothesis prefixes required before committing.",
+        help=(
+            "Consecutive identical hypothesis prefixes required before "
+            "committing. Default: 2 for the windowed backend, 1 for causal "
+            "(measured p50 commit latency 4.0 s vs 5.9 s for +0.5 pt WER)."
+        ),
     )
     qwen3_streaming_group.add_argument(
         "--qwen3-streaming-max-new-tokens",
