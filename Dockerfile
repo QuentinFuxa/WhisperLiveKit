@@ -26,6 +26,10 @@ RUN uv python install 3.12
 # Install dependencies first to leverage caching
 ARG EXTRAS=cu129
 COPY pyproject.toml uv.lock /app/
+# The qwen3 extras resolve qwen3-asr-causal from the submodule path
+# (tool.uv.sources); the build context must have submodules initialized:
+#   git submodule update --init
+COPY third_party /app/third_party
 RUN set -eux; \
   set --; \
   for extra in $(echo "${EXTRAS:-}" | tr ',' ' '); do \

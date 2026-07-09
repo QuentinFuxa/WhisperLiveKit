@@ -90,7 +90,17 @@ client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")
 ws://localhost:8000/asr
 ```
 
+Per-session WebSocket query parameters:
+
+| param | example | effect |
+|---|---|---|
+| `language` | `?language=fr` | transcription language for this session (one shared engine serves mixed-language sessions) |
+| `target_language` | `?target_language=de` | translation target for this session (server must run with `--target-language`) |
+| `mode` | `?mode=diff` | incremental snapshot/diff protocol instead of resending the full state (experimental, for integrators building their own client, see `diff_protocol.py`); the bundled web UI uses `full` |
+| `token` | `?token=...` | API token when the server runs with `--api-token` (also accepted as an `Authorization: Bearer` header) |
+
 See [docs/API.md](docs/API.md) for the complete API reference.
+For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLiveKitMac).
 
 > - See [here](whisperlivekit/whisper/tokenizer.py) for the list of all available languages.
 > - Check the [troubleshooting guide](docs/troubleshooting.md) for step-by-step fixes collected from recent GPU setup/env issues.
@@ -111,6 +121,7 @@ See [docs/API.md](docs/API.md) for the complete API reference.
 | **Sentence tokenizer** | `uv sync --extra sentence_tokenizer` | `pip install -e ".[sentence_tokenizer]"` |
 | **Voxtral (HF backend)** | `uv sync --extra voxtral-hf` | `pip install -e ".[voxtral-hf]"` |
 | **Qwen3-ASR vLLM (CUDA)** | `uv sync --extra qwen3-vllm` | `pip install -e ".[qwen3-vllm]"` |
+| **Qwen3-ASR streaming (HF, CUDA/MPS/CPU)** | `uv sync --extra qwen3-streaming` | `pip install -e ".[qwen3-streaming]"` |
 | **Qwen3-ASR vLLM Metal (Apple Silicon)** | Install vLLM with the official vllm-metal script first, then `uv sync --extra qwen3-vllm-metal` | Install vLLM with the official vllm-metal script first, then `pip install -e ".[qwen3-vllm-metal]"` |
 | **Speaker diarization (Sortformer / NeMo)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
 | *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
@@ -171,6 +182,87 @@ wlk --backend voxtral
 
 Voxtral uses its own streaming policy and does not use LocalAgreement or SimulStreaming.
 See [BENCHMARK.md](BENCHMARK.md) for performance numbers.
+
+### Qwen3-ASR streaming (HF Transformers)
+
+`qwen3-streaming` runs Qwen3-ASR through plain HF Transformers with a
+bounded-recompute audio cache: the pretrained audio tower only re-encodes a
+local window (default 12 s) per update, cached audio embeddings are
+append-only, and text is committed with a stable-prefix rule. Works on CUDA,
+Apple Silicon (MPS) and CPU, no vLLM required.
+
+```bash
+pip install -e ".[qwen3-streaming]"
+wlk --backend qwen3-streaming --language en
+```
+
+Notes:
+- An explicit `--language` is required (automatic detection switches language
+  mid-stream on accented audio).
+- Word timestamps are interpolated estimates (~1 s precision): good enough
+  for lines and diarization alignment. Use `--backend qwen3-vllm`
+  (ForcedAligner) when exact word timing matters.
+- Decode pacing self-adjusts to the hardware; on GPUs slower than real time
+  the update cadence grows instead of lagging. Plan one realtime session per
+  GPU.
+- Defaults encode the validated operating point (12 s left context, ~15 s
+  segments); see `--help` for the `--qwen3-streaming-*` knobs.
+
+**Causal mode (minimum compute per chunk).** The windowed default re-encodes
+up to 12 s of audio on every update. The causal mode runs an append-only
+causal-KV encoder instead: each ~2 s audio block is encoded exactly once,
+memory is bounded (15 s window + sentence-boundary segment resets), and
+per-chunk compute is constant in stream length:
+
+```bash
+wlk --backend qwen3-streaming --language en \
+    --qwen3-streaming-audio-backend causal \
+    --qwen3-streaming-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+The fine-tuned tower ([qfuxa/qwen3-asr-0.6b-streaming](https://huggingface.co/qfuxa/qwen3-asr-0.6b-streaming))
+downloads automatically. The Qwen runtime, tests, experiments, benchmarks and
+figures now live in [Qwen3-ASR-causal](https://github.com/QuentinFuxa/Qwen3-ASR-causal),
+which is consumed here through `third_party/qwen3-asr-causal`. WhisperLiveKit
+keeps only the backend wiring and CLI flags.
+
+Use causal mode for many concurrent streams, energy-constrained serving or
+unbounded session lengths; keep the windowed default for best accuracy. English
+only for now. Detailed WER/RTF results are in the Qwen3-ASR-causal repository.
+
+**Experimental vLLM Metal causal mode.** On Apple Silicon, `qwen3-vllm-metal`
+can also load the same causal tower and keep a rolling MLX decoder KV over the
+`[prompt + audio]` prefix. New audio blocks are encoded once, and the decoder
+replays only the new audio embeddings, prompt tail, and previous-hypothesis
+draft:
+
+```bash
+wlk --backend qwen3-vllm-metal --language en \
+    --qwen3-vllm-metal-audio-backend causal \
+    --qwen3-vllm-metal-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+This path has passed local short-form smoke tests and is useful for comparing
+the Metal decoder path against the HF/MPS causal backend. It is still
+experimental; use `qwen3-streaming` causal for the validated production stack.
+
+**Experimental vLLM CUDA causal mode.** On NVIDIA GPUs, `qwen3-vllm` can load
+the same causal tower, use vLLM for the text decoder, and keep vLLM
+ForcedAligner timestamps:
+
+```bash
+WLK_QWEN3_VLLM_LIVE_MULTIPROCESSING=1 \
+wlk --backend qwen3-vllm --language en \
+    --qwen3-vllm-audio-backend causal \
+    --qwen3-vllm-causal-decoder-backend vllm-live \
+    --qwen3-vllm-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+The `vllm-text` backend is the conservative fallback when you do not want the
+live request-local append path; it still uses vLLM prefix caching but starts one
+text-decoder request per chunk. The `append-kv` and `rolling` names remain as
+compatibility aliases for the HF decoder path. Keep standard `qwen3-vllm` for
+best current accuracy until the causal quality gate is fixed.
 
 ### Usage Examples
 
@@ -242,7 +334,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--target-language` | If sets, translates using [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting). [200 languages available](docs/supported_languages.md). If you want to translate to english, you can also use `--direct-english-translation`. The STT model will try to directly output the translation. | `None` |
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
-| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon) | `auto` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU) | `auto` |
 | `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
 | `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |

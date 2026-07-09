@@ -1,5 +1,5 @@
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 
 
 def parse_args():
@@ -12,6 +12,30 @@ def parse_args():
     )
     parser.add_argument(
         "--port", type=int, default=8000, help="The port number to bind the server to."
+    )
+    parser.add_argument(
+        "--translate-on-complete",
+        action="store_true",
+        default=False,
+        dest="translate_on_complete",
+        help=(
+            "Only translate segments once they are finalized by punctuation, "
+            "silence, or end of stream (issue #264). Reduces translation "
+            "flicker at the cost of latency; partial tails are not translated."
+        ),
+    )
+    parser.add_argument(
+        "--api-token",
+        type=str,
+        default=None,
+        dest="api_token",
+        help=(
+            "Require this token on every connection: WebSocket /asr accepts "
+            "?token=... or an Authorization: Bearer header, the REST API "
+            "requires Authorization: Bearer. Default: no authentication "
+            "(only expose the server on trusted networks). The WLK_API_TOKEN "
+            "environment variable is used when the flag is unset."
+        ),
     )
     parser.add_argument(
         "--warmup-file",
@@ -180,8 +204,8 @@ def parse_args():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal"],
-        help="Select the ASR backend implementation. Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon.",
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"],
+        help="Select the ASR backend implementation. Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-streaming' for Qwen3-ASR through plain HF Transformers with a bounded-recompute audio cache (CUDA/MPS/CPU, no vLLM; requires an explicit --language).",
     )
     parser.add_argument(
         "--no-vac",
@@ -278,8 +302,157 @@ def parse_args():
         default=0,
         dest="vllm_max_model_len",
         help=(
-            "max_model_len passed to the qwen3-vllm engines to cap the KV "
-            "cache (e.g. 8192 on small GPUs). 0 keeps vLLM's model default."
+            "Optional max_model_len passed to qwen3-vllm engines. "
+            "0 keeps the model default."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-audio-backend",
+        choices=["standard", "causal"],
+        default="standard",
+        dest="qwen3_vllm_audio_backend",
+        help=(
+            "Qwen3 CUDA/vLLM audio backend. 'standard' re-encodes the current "
+            "buffer; 'causal' uses the append-only causal audio tower. The "
+            "causal decoder path is selected by "
+            "--qwen3-vllm-causal-decoder-backend."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-causal-decoder-backend",
+        choices=["append-kv", "rolling", "vllm", "vllm-live", "vllm-text"],
+        default="vllm-text",
+        dest="qwen3_vllm_causal_decoder_backend",
+        help=(
+            "Decoder used by qwen3-vllm when --qwen3-vllm-audio-backend=causal. "
+            "'append-kv' keeps a persistent decoder KV over the prompt head "
+            "and audio prefix and uses vLLM only for ForcedAligner timestamps; "
+            "'rolling' is the older name for the same experimental path; "
+            "'vllm' feeds causal audio embeddings to a fresh Qwen3-ASR vLLM "
+            "request per chunk; 'vllm-live' keeps one streaming vLLM text "
+            "decoder request open and appends prompt embeddings with a "
+            "request-local KV prefix; 'vllm-text' exports Qwen3-ASR's text "
+            "decoder as Qwen3ForCausalLM and feeds it causal audio prompt "
+            "embeddings through fresh vLLM requests with prefix caching."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-text-decoder-model",
+        type=str,
+        default="",
+        dest="qwen3_vllm_text_decoder_model",
+        help=(
+            "Optional local Qwen3ForCausalLM export for "
+            "--qwen3-vllm-causal-decoder-backend vllm-text or vllm-live. "
+            "If unset, the decoder is exported into the WhisperLiveKit cache."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-live-idle-timeout-ms",
+        type=float,
+        default=50.0,
+        dest="qwen3_vllm_live_idle_timeout_ms",
+        help=(
+            "Idle gap used to close one partial vLLM-live decode update after "
+            "the last streamed token. Lower values reduce latency; higher "
+            "values are more conservative on slow GPUs."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-causal-attn-implementation",
+        choices=["auto", "eager", "sdpa", "flash_attention_2"],
+        default="auto",
+        dest="qwen3_vllm_causal_attn_implementation",
+        help=(
+            "Transformers attention implementation for the qwen3-vllm causal "
+            "rolling ASR decoder. Ignored by the legacy vLLM decoder path."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-tower-checkpoint",
+        type=str,
+        default="",
+        dest="qwen3_vllm_tower_checkpoint",
+        help=(
+            "Local path or Hugging Face repo id for the qwen3-vllm causal "
+            "audio tower checkpoint. Defaults to qfuxa/qwen3-asr-0.6b-streaming "
+            "when causal mode is enabled."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-left-context-sec",
+        type=float,
+        default=15.0,
+        dest="qwen3_vllm_left_context_sec",
+        help="Left context retained in the qwen3-vllm causal audio KV cache.",
+    )
+    parser.add_argument(
+        "--qwen3-vllm-block-frames",
+        type=int,
+        default=192,
+        dest="qwen3_vllm_block_frames",
+        help="Fixed mel-frame block size for qwen3-vllm causal audio encoding.",
+    )
+    parser.add_argument(
+        "--qwen3-vllm-cache-block-size",
+        type=int,
+        default=0,
+        dest="qwen3_vllm_cache_block_size",
+        help=(
+            "Optional vLLM KV/prefix-cache block size for qwen3-vllm engines. "
+            "0 keeps vLLM's platform default."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-segment-max-steps",
+        type=int,
+        default=150,
+        dest="qwen3_vllm_segment_max_steps",
+        help=(
+            "Maximum cached causal audio decoder steps before qwen3-vllm "
+            "rolls to a fresh no-past-rewrite segment. 0 disables rollover."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-segment-min-sec",
+        type=float,
+        default=0.0,
+        dest="qwen3_vllm_segment_min_sec",
+        help=(
+            "Minimum active causal segment duration before qwen3-vllm may "
+            "roll. Increase this to avoid rollover on short clips."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-live-multiprocessing",
+        action=BooleanOptionalAction,
+        default=None,
+        dest="qwen3_vllm_live_multiprocessing",
+        help=(
+            "Run the qwen3-vllm vllm-live decoder engine in a separate vLLM "
+            "worker process. Default keeps the deprecated "
+            "WLK_QWEN3_VLLM_LIVE_MULTIPROCESSING env fallback (off)."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-aligner-multiprocessing",
+        action=BooleanOptionalAction,
+        default=None,
+        dest="qwen3_vllm_aligner_multiprocessing",
+        help=(
+            "Run the ForcedAligner engine in a separate vLLM worker process "
+            "when vllm-live multiprocessing is on. Default keeps the "
+            "deprecated WLK_QWEN3_VLLM_ALIGNER_MULTIPROCESSING env fallback."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-prompt-context-words",
+        type=int,
+        default=0,
+        dest="qwen3_vllm_prompt_context_words",
+        help=(
+            "Number of previously committed transcript words injected into "
+            "the next qwen3-vllm causal segment prompt after rollover."
         ),
     )
     parser.add_argument(
@@ -295,6 +468,179 @@ def parse_args():
         default=True,
         dest="trim_sentence_buffer",
         help="Disable Qwen3 vllm-metal buffer trimming at committed sentence boundaries.",
+    )
+    parser.add_argument(
+        "--qwen3-vllm-metal-audio-backend",
+        choices=["standard", "causal"],
+        default="standard",
+        dest="qwen3_vllm_metal_audio_backend",
+        help=(
+            "Qwen3 vllm-metal audio backend. 'standard' re-encodes the current "
+            "buffer; 'causal' uses the experimental append-only causal MLX audio "
+            "tower."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-metal-tower-checkpoint",
+        type=str,
+        default="",
+        dest="qwen3_vllm_metal_tower_checkpoint",
+        help=(
+            "Local path or Hugging Face repo id for the qwen3-vllm-metal causal "
+            "audio tower checkpoint. Defaults to qfuxa/qwen3-asr-0.6b-streaming "
+            "when causal mode is enabled."
+        ),
+    )
+    parser.add_argument(
+        "--qwen3-vllm-metal-left-context-sec",
+        type=float,
+        default=15.0,
+        dest="qwen3_vllm_metal_left_context_sec",
+        help="Left context retained in the qwen3-vllm-metal causal audio KV cache.",
+    )
+    parser.add_argument(
+        "--qwen3-vllm-metal-block-frames",
+        type=int,
+        default=192,
+        dest="qwen3_vllm_metal_block_frames",
+        help="Fixed mel-frame block size for qwen3-vllm-metal causal audio encoding.",
+    )
+
+    # Qwen3 streaming backend arguments
+    qwen3_streaming_group = parser.add_argument_group(
+        'Qwen3 streaming backend arguments (only used with --backend qwen3-streaming)'
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-chunk-sec",
+        type=float,
+        default=2.0,
+        dest="qwen3_streaming_chunk_sec",
+        help="Minimum seconds of new audio per decode update. Decodes self-pace upward on slow hardware.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-left-context-sec",
+        type=float,
+        default=12.0,
+        dest="qwen3_streaming_left_context_sec",
+        help="Audio tower left context window in seconds (bounded recompute). Quality saturates around 12s on long-form audio.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-right-context-ms",
+        type=int,
+        default=640,
+        dest="qwen3_streaming_right_context_ms",
+        help="Audio tower right context in milliseconds before an encoder step is finalized.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-segment-max-steps",
+        type=int,
+        default=200,
+        dest="qwen3_streaming_segment_max_steps",
+        help="Cached decoder steps before the active segment is finalized and rolled (200 steps = ~15s of audio).",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-segment-keep-tail-steps",
+        type=int,
+        default=0,
+        dest="qwen3_streaming_segment_keep_tail_steps",
+        help="Audio embedding steps carried over after a segment roll (0 = hard boundary, validated default).",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-hold-back-words",
+        type=int,
+        default=6,
+        dest="qwen3_streaming_hold_back_words",
+        help="Trailing words held back from commitment until stable.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-stable-iterations",
+        type=int,
+        default=None,
+        dest="qwen3_streaming_stable_iterations",
+        help=(
+            "Consecutive identical hypothesis prefixes required before "
+            "committing. Default: 2 for the windowed backend, 1 for causal "
+            "(measured p50 commit latency 4.0 s vs 5.9 s for +0.5 pt WER)."
+        ),
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-max-new-tokens",
+        type=int,
+        default=256,
+        dest="qwen3_streaming_max_new_tokens",
+        help="Max tokens per full-hypothesis decode (bounds one segment's text).",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-device",
+        type=str,
+        default="auto",
+        choices=["auto", "cuda", "mps", "cpu"],
+        dest="qwen3_streaming_device",
+        help="Device for the Qwen3 streaming model.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-dtype",
+        type=str,
+        default="auto",
+        choices=["auto", "bfloat16", "float16", "float32"],
+        dest="qwen3_streaming_dtype",
+        help="Model dtype. auto = bfloat16 on CUDA, float16 on MPS, float32 on CPU.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-attn-implementation",
+        type=str,
+        default="auto",
+        choices=["auto", "eager", "sdpa", "flash_attention_2"],
+        dest="qwen3_streaming_attn_implementation",
+        help="Attention implementation passed to Transformers for Qwen3 streaming.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-context",
+        type=str,
+        default="",
+        dest="qwen3_streaming_context",
+        help="Optional system-prompt context (terminology, names) for the Qwen ASR prompt.",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-prompt-context-words",
+        type=int,
+        default=0,
+        dest="qwen3_streaming_prompt_context_words",
+        help="Trailing transcript words injected into the next segment prompt (0 = disabled; enabling measured worse).",
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-audio-backend",
+        choices=["windowed", "causal"],
+        default="windowed",
+        dest="qwen3_streaming_audio_backend",
+        help=(
+            "Audio encoder execution. 'windowed' (default) re-encodes a bounded "
+            "window per update (best WER). 'causal' runs the append-only "
+            "causal-KV encoder with a fine-tuned tower checkpoint: each audio "
+            "block is encoded exactly once (lowest compute per chunk; requires "
+            "--qwen3-streaming-tower-checkpoint)."
+        ),
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-tower-checkpoint",
+        type=str,
+        default="",
+        dest="qwen3_streaming_tower_checkpoint",
+        help=(
+            "Fine-tuned audio-tower weights for the causal backend: local "
+            ".pt/.safetensors file, directory, or Hugging Face repo id "
+            "(e.g. qfuxa/qwen3-asr-0.6b-streaming)."
+        ),
+    )
+    qwen3_streaming_group.add_argument(
+        "--qwen3-streaming-block-frames",
+        type=int,
+        default=192,
+        dest="qwen3_streaming_block_frames",
+        help=(
+            "Fixed attention-block size in mel frames for the causal backend "
+            "(96 or 192; must match the tower checkpoint training regime)."
+        ),
     )
 
     # SimulStreaming-specific arguments

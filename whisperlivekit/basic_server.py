@@ -1,9 +1,11 @@
 import asyncio
+import hmac
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
@@ -17,6 +19,22 @@ logger.setLevel(logging.DEBUG)
 
 config = parse_args()
 transcription_engine = None
+
+_API_TOKEN = getattr(config, "api_token", None) or os.environ.get("WLK_API_TOKEN") or None
+
+
+def _token_ok(candidate: Optional[str]) -> bool:
+    """No token configured = open server; otherwise constant-time compare."""
+    if _API_TOKEN is None:
+        return True
+    return bool(candidate) and hmac.compare_digest(candidate, _API_TOKEN)
+
+
+def _bearer_token(request: Request) -> Optional[str]:
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,19 +89,33 @@ async def handle_websocket_results(websocket, results_generator, diff_tracker=No
 async def websocket_endpoint(websocket: WebSocket):
     global transcription_engine
 
+    # Authentication (when --api-token / WLK_API_TOKEN is set): accept the
+    # token either as a query parameter or an Authorization: Bearer header.
+    ws_auth = websocket.headers.get("authorization") or ""
+    ws_token = websocket.query_params.get("token") or (
+        ws_auth[7:].strip() if ws_auth.lower().startswith("bearer ") else None
+    )
+    if not _token_ok(ws_token):
+        await websocket.close(code=4401, reason="invalid or missing API token")
+        logger.warning("WebSocket rejected: invalid or missing API token")
+        return
+
     # Read per-session options from query parameters
     session_language = websocket.query_params.get("language", None)
     mode = websocket.query_params.get("mode", "full")
+    session_target_language = websocket.query_params.get("target_language", None)
 
     audio_processor = AudioProcessor(
         transcription_engine=transcription_engine,
         language=session_language,
         mode=mode,
+        target_language=session_target_language,
     )
     await websocket.accept()
     logger.info(
-        "WebSocket connection opened.%s",
+        "WebSocket connection opened.%s%s",
         f" language={session_language}" if session_language else "",
+        f" target_language={session_target_language}" if session_target_language else "",
     )
     diff_tracker = None
     if mode == "diff":
@@ -249,6 +281,7 @@ def _srt_timestamp(seconds: float, fmt: str) -> str:
 
 @app.post("/v1/audio/transcriptions")
 async def create_transcription(
+    request: Request,
     file: UploadFile = File(...),
     model: str = Form(default=""),
     language: Optional[str] = Form(default=None),
@@ -259,14 +292,24 @@ async def create_transcription(
     """OpenAI-compatible audio transcription endpoint.
 
     Accepts the same parameters as OpenAI's /v1/audio/transcriptions API.
-    The `model` parameter is accepted but ignored (uses the server's configured backend).
+    The `model` parameter is accepted but ignored (uses the server's configured
+    backend); `prompt` is likewise accepted but has no effect.
     """
     global transcription_engine
+    from fastapi import HTTPException
+
+    if not _token_ok(_bearer_token(request)):
+        raise HTTPException(status_code=401, detail="invalid or missing API token")
 
     audio_bytes = await file.read()
     if not audio_bytes:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Empty audio file")
+    max_upload_mb = 512
+    if len(audio_bytes) > max_upload_mb * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Audio file exceeds the {max_upload_mb} MB upload limit",
+        )
 
     # Convert to PCM for pipeline processing
     pcm_data = await _convert_to_pcm(audio_bytes)

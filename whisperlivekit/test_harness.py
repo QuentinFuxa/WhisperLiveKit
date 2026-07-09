@@ -106,6 +106,8 @@ class TestState:
     buffer_diarization: str = ""
     buffer_translation: str = ""
     remaining_time_transcription: float = 0.0
+    remaining_time_transcription_processing: float = 0.0
+    remaining_time_transcription_policy: float = 0.0
     remaining_time_diarization: float = 0.0
     audio_position: float = 0.0
     status: str = ""
@@ -120,6 +122,8 @@ class TestState:
             buffer_diarization=d.get("buffer_diarization", ""),
             buffer_translation=d.get("buffer_translation", ""),
             remaining_time_transcription=d.get("remaining_time_transcription", 0),
+            remaining_time_transcription_processing=d.get("remaining_time_transcription_processing", 0),
+            remaining_time_transcription_policy=d.get("remaining_time_transcription_policy", 0),
             remaining_time_diarization=d.get("remaining_time_diarization", 0),
             audio_position=audio_position,
             status=d.get("status", ""),

@@ -26,6 +26,9 @@ class WhisperLiveKitConfig:
     # Server / global
     host: str = "localhost"
     port: int = 8000
+    # None = no auth; WLK_API_TOKEN env var applies when unset.
+    api_token: Optional[str] = None
+    translate_on_complete: bool = False
     diarization: bool = False
     punctuation_split: bool = False
     target_language: str = ""
@@ -96,8 +99,46 @@ class WhisperLiveKitConfig:
     vllm_gpu_memory_utilization: float = 0.45
     vllm_dtype: str = "auto"
     vllm_max_model_len: int = 0
+    qwen3_vllm_audio_backend: str = "standard"
+    qwen3_vllm_causal_decoder_backend: str = "vllm-text"
+    qwen3_vllm_causal_attn_implementation: str = "auto"
+    qwen3_vllm_text_decoder_model: str = ""
+    qwen3_vllm_live_idle_timeout_ms: float = 50.0
+    qwen3_vllm_tower_checkpoint: str = ""
+    qwen3_vllm_left_context_sec: float = 15.0
+    qwen3_vllm_block_frames: int = 192
+    qwen3_vllm_cache_block_size: int = 0
+    qwen3_vllm_segment_max_steps: int = 150
+    qwen3_vllm_segment_min_sec: float = 0.0
+    qwen3_vllm_prompt_context_words: int = 0
+    # None keeps the deprecated WLK_QWEN3_VLLM_*_MULTIPROCESSING env fallback.
+    qwen3_vllm_live_multiprocessing: Optional[bool] = None
+    qwen3_vllm_aligner_multiprocessing: Optional[bool] = None
     holdback_words: Optional[int] = None
     trim_sentence_buffer: bool = True
+    qwen3_vllm_metal_audio_backend: str = "standard"
+    qwen3_vllm_metal_tower_checkpoint: str = ""
+    qwen3_vllm_metal_left_context_sec: float = 15.0
+    qwen3_vllm_metal_block_frames: int = 192
+
+    # Qwen3 streaming backend (HF Transformers, bounded-recompute cache)
+    qwen3_streaming_chunk_sec: float = 2.0
+    qwen3_streaming_left_context_sec: float = 12.0
+    qwen3_streaming_right_context_ms: int = 640
+    qwen3_streaming_segment_max_steps: int = 200
+    qwen3_streaming_segment_keep_tail_steps: int = 0
+    qwen3_streaming_hold_back_words: int = 6
+    # None = auto (2 windowed, 1 causal; see qwen3_asr_causal asr.py).
+    qwen3_streaming_stable_iterations: Optional[int] = None
+    qwen3_streaming_max_new_tokens: int = 256
+    qwen3_streaming_device: str = "auto"
+    qwen3_streaming_dtype: str = "auto"
+    qwen3_streaming_attn_implementation: str = "auto"
+    qwen3_streaming_context: str = ""
+    qwen3_streaming_prompt_context_words: int = 0
+    qwen3_streaming_audio_backend: str = "windowed"
+    qwen3_streaming_tower_checkpoint: str = ""
+    qwen3_streaming_block_frames: int = 192
 
     def __post_init__(self):
         # .en model suffix forces English

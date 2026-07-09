@@ -1,0 +1,375 @@
+<svg viewBox="0 0 2000 770" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#000"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#9e9e9e"/></marker>
+  </defs>
+  <style>
+    text{fill:#000}
+    .b{font-weight:bold}.i{font-style:italic}.g{fill:#808080}.bl{fill:#1a5fb4}.m{text-anchor:middle}
+    .ln{stroke:#000;stroke-width:1.4;fill:none}
+    .lng{stroke:#9e9e9e;stroke-width:1.4;fill:none}
+    .dsh{stroke-dasharray:7 5}
+    .bx{fill:#fff;stroke:#000;stroke-width:1.6}
+    .red{fill:#f8cecc;stroke:#b85450;stroke-width:1.6}
+    .grn{fill:#d5e8d4;stroke:#82b366;stroke-width:1.6}
+    .blu{fill:#dae8fc;stroke:#6c8ebf;stroke-width:1.6}
+    .pur{fill:#e1d5e7;stroke:#9673a6;stroke-width:1.4}
+    .org{fill:#ffe6cc;stroke:#d79b00;stroke-width:1.4}
+    .pch{fill:#fdf4ef}
+</style>
+
+  <rect width="2000" height="770" fill="#ffffff"/>
+
+  <!-- background panels -->
+  <rect x="290" y="52" width="704" height="708" rx="18" fill="#f8e0e8"/>
+  <rect x="438" y="40" width="558" height="720" rx="18" fill="#f1f0f5"/>
+
+  <!-- CLI commands banner -->
+  <rect x="289" y="3" width="711" height="38" rx="19" fill="#d5e8d4"/>
+  <text x="305" y="28" class="b" font-size="16">CLI commands</text>
+  <text x="438" y="27" class="i g" font-size="13">serve | listen | run | transcribe | bench | diagnose | models | pull | rm | check</text>
+  <polygon points="672,44 688,44 680,58" fill="#000"/>
+
+  <!-- column headers -->
+  <text x="310" y="82" class="b" font-size="18">FastAPI server</text>
+  <text x="322" y="102" class="i g" font-size="13">replaceable</text>
+  <text x="690" y="84" class="b m" font-size="21">WLK</text>
+  <text x="690" y="106" class="i g m" font-size="13">local or remote hosting</text>
+  <text x="880" y="148" class="b i m" font-size="16">shared vad model</text>
+  <text x="880" y="168" class="m" font-size="13.5">silero-vad</text>
+
+  <!-- get / frontend -->
+  <rect x="328" y="132" width="62" height="54" rx="12" class="bx"/>
+  <text x="359" y="154" class="m" font-size="15">get</text>
+  <text x="359" y="176" class="m" font-size="15">/</text>
+  <rect x="455" y="128" width="270" height="58" rx="14" class="bx"/>
+  <text x="590" y="152" class="b i m" font-size="16">frontend (optional)</text>
+  <text x="590" y="174" class="i m" font-size="14">html + JS</text>
+  <path class="ln" d="M392,158 H451" marker-end="url(#ab)"/>
+
+  <!-- arrows from get/ to clients -->
+  <path class="ln" d="M328,146 H40 V506" marker-end="url(#ab)"/>
+  <path class="ln" d="M219,146 V166" marker-end="url(#ab)"/>
+  <path class="ln" d="M130,146 V338" marker-end="url(#ab)"/>
+
+  <!-- phone mockup -->
+  <rect x="182" y="172" width="74" height="148" rx="16" fill="#f2f2f2" stroke="#b0b0b0" stroke-width="2"/>
+  <rect x="205" y="180" width="28" height="5" rx="2.5" fill="#c8c8c8"/>
+  <text x="192" y="210" font-size="11">Nunc</text>
+  <text x="192" y="224" font-size="11">viverra</text>
+  <text x="192" y="238" font-size="11">imperdiet</text>
+  <text x="192" y="252" font-size="11" class="g">enim.</text>
+  <text x="192" y="266" font-size="11" class="g">Fusce...</text>
+  <text x="219" y="310" font-size="8" class="g m">0.0.0.0</text>
+
+  <!-- browser mockup 1 -->
+  <rect x="58" y="345" width="228" height="160" rx="10" fill="#fff" stroke="#b0b0b0" stroke-width="2"/>
+  <text x="272" y="363" font-size="11" class="g" text-anchor="end">&#8212;  &#9633;  &#10005;</text>
+  <rect x="76" y="372" width="134" height="22" rx="11" fill="#fff" stroke="#b0b0b0" stroke-width="1.4"/>
+  <text x="143" y="387" class="m" font-size="11.5">0.0.0.0:8000</text>
+  <text x="76" y="432" font-size="17">Lorem ipsum</text>
+  <text x="76" y="458" font-size="17" class="g">dolor sit ...</text>
+
+  <!-- browser mockup 2 -->
+  <rect x="8" y="515" width="278" height="180" rx="10" fill="#fff" stroke="#b0b0b0" stroke-width="2"/>
+  <circle cx="26" cy="533" r="5.5" fill="#ff5f57"/>
+  <circle cx="44" cy="533" r="5.5" fill="#ffbd2e"/>
+  <circle cx="62" cy="533" r="5.5" fill="#28c941"/>
+  <rect x="84" y="522" width="134" height="22" rx="11" fill="#fff" stroke="#b0b0b0" stroke-width="1.4"/>
+  <text x="151" y="537" class="m" font-size="11.5">0.0.0.0:8000</text>
+  <text x="28" y="584" font-size="17">Maecenas porttitor</text>
+  <text x="28" y="610" font-size="17">congue <tspan class="g">massa.</tspan></text>
+  <text x="28" y="640" font-size="17" class="g">Fusce posuere...</text>
+
+  <!-- websocket boxes -->
+  <rect x="298" y="204" width="124" height="58" rx="14" class="bx"/>
+  <text x="360" y="228" class="m" font-size="15">websocket</text>
+  <text x="360" y="250" class="m" font-size="15">/asr</text>
+  <rect x="298" y="391" width="124" height="58" rx="14" class="bx"/>
+  <text x="360" y="415" class="m" font-size="15">websocket</text>
+  <text x="360" y="437" class="m" font-size="15">/asr</text>
+  <rect x="298" y="576" width="124" height="58" rx="14" class="bx"/>
+  <text x="360" y="600" class="m" font-size="15">websocket</text>
+  <text x="360" y="622" class="b m" font-size="15">/asrx</text>
+
+  <!-- ASRProxy -->
+  <rect x="298" y="642" width="124" height="60" rx="10" class="bx"/>
+  <text x="360" y="662" class="b m" font-size="14">ASRProxy</text>
+  <text x="360" y="680" class="i m" font-size="12.5">per-session</text>
+  <text x="360" y="696" class="i m" font-size="12.5">language</text>
+
+  <!-- clients <-> websockets -->
+  <path class="ln" d="M258,231 H296" marker-start="url(#ab)" marker-end="url(#ab)"/>
+  <path class="ln" d="M286,420 H296" marker-start="url(#ab)" marker-end="url(#ab)"/>
+  <path class="ln" d="M286,605 H296" marker-start="url(#ab)" marker-end="url(#ab)"/>
+  <!-- websockets <-> audio processors -->
+  <path class="ln" d="M424,233 H441" marker-start="url(#ab)" marker-end="url(#ab)"/>
+  <path class="ln" d="M424,420 H441" marker-start="url(#ab)" marker-end="url(#ab)"/>
+  <path class="ln" d="M424,605 H441" marker-start="url(#ab)" marker-end="url(#ab)"/>
+
+  <!-- TestHarness / wlk-test -->
+  <rect x="162" y="702" width="120" height="26" rx="8" class="bx"/>
+  <text x="222" y="720" class="m" font-size="13">TestHarness</text>
+  <path class="ln" d="M282,715 H440" marker-end="url(#ab)"/>
+  <rect x="162" y="734" width="92" height="24" rx="8" class="bx"/>
+  <text x="208" y="751" class="m" font-size="13">wlk-test</text>
+  <path class="ln" d="M254,746 H298" marker-end="url(#ab)"/>
+
+  <!-- audio processors (box top T = 214 / 398 / 582, height 162) -->
+  <g>
+    <rect x="445" y="214" width="460" height="162" rx="18" class="org" stroke-width="2"/>
+    <text x="463" y="233" class="b i" font-size="17">audio processor</text>
+    <text x="470" y="263" font-size="16">FFmpeg decoding</text>
+    <rect x="464" y="273" width="142" height="26" class="pch"/>
+    <text x="535" y="291" class="m" font-size="15">OPUS &#10132; PCM</text>
+    <rect x="652" y="247" width="202" height="55" rx="18" class="pch"/>
+    <text x="753" y="280" class="m" font-size="17">Stream state</text>
+    <text x="466" y="327" class="i" font-size="15">Buffers</text>
+    <rect x="534" y="314" width="352" height="25" class="pch"/>
+    <text x="710" y="331" class="m" font-size="14.5">Audio  |  Transcription  |  Diarization</text>
+    <text x="466" y="358" class="i" font-size="15">Validated</text>
+    <rect x="534" y="345" width="352" height="25" class="pch"/>
+    <text x="710" y="362" class="m" font-size="14.5">Transcription  |  Speakers  |  Silences</text>
+  </g>
+  <g>
+    <rect x="445" y="398" width="460" height="162" rx="18" class="org" stroke-width="2"/>
+    <text x="463" y="417" class="b i" font-size="17">audio processor</text>
+    <text x="470" y="447" font-size="16">FFmpeg decoding</text>
+    <rect x="464" y="457" width="142" height="26" class="pch"/>
+    <text x="535" y="475" class="m" font-size="15">OPUS &#10132; PCM</text>
+    <rect x="652" y="431" width="202" height="55" rx="18" class="pch"/>
+    <text x="753" y="464" class="m" font-size="17">Stream state</text>
+    <text x="466" y="511" class="i" font-size="15">Buffers</text>
+    <rect x="534" y="498" width="352" height="25" class="pch"/>
+    <text x="710" y="515" class="m" font-size="14.5">Audio  |  Transcription  |  Diarization</text>
+    <text x="466" y="542" class="i" font-size="15">Validated</text>
+    <rect x="534" y="529" width="352" height="25" class="pch"/>
+    <text x="710" y="546" class="m" font-size="14.5">Transcription  |  Speakers  |  Silences</text>
+  </g>
+  <g>
+    <rect x="445" y="582" width="460" height="162" rx="18" class="org" stroke-width="2"/>
+    <text x="463" y="601" class="b i" font-size="17">audio processor</text>
+    <text x="470" y="631" font-size="16">FFmpeg decoding</text>
+    <rect x="464" y="641" width="142" height="26" class="pch"/>
+    <text x="535" y="659" class="m" font-size="15">OPUS &#10132; PCM</text>
+    <rect x="652" y="615" width="202" height="55" rx="18" class="pch"/>
+    <text x="753" y="648" class="m" font-size="17">Stream state</text>
+    <text x="466" y="695" class="i" font-size="15">Buffers</text>
+    <rect x="534" y="682" width="352" height="25" class="pch"/>
+    <text x="710" y="699" class="m" font-size="14.5">Audio  |  Transcription  |  Diarization</text>
+    <text x="466" y="726" class="i" font-size="15">Validated</text>
+    <rect x="534" y="713" width="352" height="25" class="pch"/>
+    <text x="710" y="730" class="m" font-size="14.5">Transcription  |  Speakers  |  Silences</text>
+  </g>
+
+  <!-- VAD column -->
+  <rect x="916" y="216" width="80" height="450" rx="40" fill="#fff"/>
+  <!-- row 1 -->
+  <path class="ln" d="M904,233 H999" marker-start="url(#ab)" marker-end="url(#ab)"/>
+  <rect x="922" y="226" width="10" height="14" fill="#c00000"/>
+  <rect x="932" y="226" width="22" height="14" fill="#00b050"/>
+  <rect x="954" y="226" width="12" height="14" fill="#c00000"/>
+  <rect x="966" y="226" width="28" height="14" fill="#00b050"/>
+  <path class="lng" d="M944,248 L937,259" marker-end="url(#ag)"/>
+  <path class="lng" d="M958,248 L951,259" marker-end="url(#ag)"/>
+  <path class="lng" d="M972,248 L965,259" marker-end="url(#ag)"/>
+  <rect x="936" y="272" width="52" height="15" fill="#00b050"/>
+  <line x1="996" y1="233" x2="1024" y2="233" stroke="#00b050" stroke-width="5"/>
+  <polygon points="1022,225 1040,233 1022,241" fill="#00b050"/>
+  <!-- row 2 -->
+  <path class="ln" d="M904,447 H999" marker-start="url(#ab)" marker-end="url(#ab)"/>
+  <rect x="922" y="440" width="18" height="14" fill="#00b050"/>
+  <rect x="940" y="440" width="14" height="14" fill="#c00000"/>
+  <rect x="954" y="440" width="16" height="14" fill="#00b050"/>
+  <rect x="970" y="440" width="10" height="14" fill="#c00000"/>
+  <rect x="980" y="440" width="14" height="14" fill="#00b050"/>
+  <path class="lng" d="M944,462 L937,473" marker-end="url(#ag)"/>
+  <path class="lng" d="M958,462 L951,473" marker-end="url(#ag)"/>
+  <path class="lng" d="M972,462 L965,473" marker-end="url(#ag)"/>
+  <rect x="936" y="482" width="20" height="15" fill="#00b050"/>
+  <rect x="962" y="482" width="28" height="15" fill="#00b050"/>
+  <line x1="996" y1="447" x2="1024" y2="447" stroke="#00b050" stroke-width="5"/>
+  <polygon points="1022,439 1040,447 1022,455" fill="#00b050"/>
+  <!-- row 3 -->
+  <path class="ln" d="M1001,600 H904" marker-end="url(#ab)"/>
+  <rect x="922" y="593" width="66" height="14" fill="#c00000"/>
+  <line x1="998" y1="592" x2="1014" y2="608" stroke="#cc0000" stroke-width="4"/>
+  <line x1="1014" y1="592" x2="998" y2="608" stroke="#cc0000" stroke-width="4"/>
+
+  <!-- trunk to engines -->
+  <path class="ln" d="M1040,233 H1052"/>
+  <path class="ln" d="M1040,447 H1052"/>
+  <path class="ln" d="M1052,210 V667"/>
+  <path class="ln" d="M1052,210 H1094" marker-end="url(#ab)"/>
+  <path class="ln" d="M1052,520 H1094" marker-end="url(#ab)"/>
+  <path class="ln" d="M1052,667 H1094" marker-end="url(#ab)"/>
+
+  <!-- Shared core vertical label -->
+  <text transform="translate(1062,160) rotate(-90)" class="b i" font-size="18">Shared core</text>
+
+  <!-- ===================== diarization engine ===================== -->
+  <rect x="1078" y="38" width="738" height="296" rx="24" fill="none" stroke="#333" stroke-width="1.5" class="dsh"/>
+  <text x="1092" y="62" class="b i" font-size="17">diarization engine</text>
+  <text x="1092" y="80" class="i" font-size="11.5">optional</text>
+
+  <text x="1138" y="100" class="b i bl" font-size="16">Streaming</text>
+  <text x="1138" y="120" class="b i bl" font-size="16">Sortformer</text>
+
+  <text x="1317" y="96" class="m" font-size="14">NEST</text>
+  <text x="1317" y="112" class="m" font-size="14">Conformer</text>
+  <rect x="1262" y="116" width="110" height="38" rx="8" class="red"/>
+  <text x="1317" y="140" class="m" font-size="15.5">Encoder</text>
+
+  <rect x="1398" y="102" width="115" height="42" rx="10" class="grn"/>
+  <text x="1455" y="121" class="m" font-size="13.5">Speaker</text>
+  <text x="1455" y="137" class="m" font-size="13.5">Cache</text>
+
+  <text x="1605" y="96" class="m" font-size="14">Transformer</text>
+  <rect x="1550" y="116" width="110" height="38" rx="8" class="red"/>
+  <text x="1605" y="140" class="m" font-size="15.5">Encoder</text>
+
+  <path class="lng" d="M1374,131 L1394,126" marker-end="url(#ag)"/>
+  <path class="lng" d="M1515,125 L1546,132" marker-end="url(#ag)"/>
+
+  <rect x="1098" y="175" width="138" height="62" rx="14" class="blu"/>
+  <text x="1167" y="201" class="m" font-size="16">Mel</text>
+  <text x="1167" y="223" class="m" font-size="16">Spectrogram</text>
+  <path class="ln" d="M1140,175 V132 H1258" marker-end="url(#ab)"/>
+
+  <text x="1182" y="252" font-size="15">Pyannote</text>
+  <text x="1182" y="271" class="b i bl" font-size="15">Diart</text>
+  <path class="ln" d="M1167,237 V276 H1248" marker-end="url(#ab)"/>
+  <rect x="1252" y="258" width="150" height="36" rx="8" class="red dsh"/>
+  <text x="1327" y="281" class="m" font-size="15.5">Segmentation</text>
+  <path class="ln" d="M1404,276 H1432" marker-end="url(#ab)"/>
+
+  <rect x="1428" y="196" width="172" height="124" rx="14" fill="none" stroke="#82b366" stroke-width="1.5" class="dsh"/>
+  <text x="1514" y="220" class="m" font-size="14">Pyannote /</text>
+  <text x="1514" y="238" class="m" font-size="14">WeSpeaker</text>
+  <rect x="1440" y="246" width="148" height="66" rx="10" class="grn"/>
+  <text x="1514" y="266" class="m" font-size="14">TDNN</text>
+  <text x="1514" y="283" class="m" font-size="14">Incremental</text>
+  <text x="1514" y="300" class="m" font-size="14">clustering</text>
+
+  <path class="ln" d="M1605,154 V180 H1648 V258" marker-end="url(#ab)"/>
+  <path class="ln" d="M1588,279 H1604" marker-end="url(#ab)"/>
+  <text x="1652" y="282" class="b i m" font-size="17">Speakers</text>
+
+  <!-- ===================== translation engine ===================== -->
+  <rect x="1828" y="35" width="160" height="300" rx="20" fill="none" stroke="#333" stroke-width="1.5" class="dsh"/>
+  <text x="1840" y="58" class="b i" font-size="15.5">translation engine</text>
+  <text x="1840" y="76" class="i" font-size="11.5">optional</text>
+  <rect x="1842" y="86" width="132" height="54" rx="12" class="grn"/>
+  <text x="1908" y="108" class="m" font-size="14">LocalAgreement</text>
+  <text x="1908" y="126" class="m" font-size="14">Policy</text>
+  <path class="ln" d="M1908,182 V146" marker-end="url(#ab)"/>
+  <text x="1908" y="198" class="m" font-size="13">HF / CTranslate2</text>
+  <rect x="1840" y="206" width="136" height="92" rx="12" fill="none" stroke="#b85450" stroke-width="1.4" class="dsh"/>
+  <rect x="1848" y="214" width="120" height="76" rx="10" class="red"/>
+  <text x="1908" y="240" class="b m" font-size="16">NLLB</text>
+  <text x="1908" y="260" class="i m" font-size="12.5">M2M100 based</text>
+  <text x="1908" y="276" class="i m" font-size="12.5">transformer</text>
+
+  <!-- speaker alignment -->
+  <line x1="1240" y1="354" x2="1348" y2="354" stroke="#777" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <text x="1428" y="358" class="i m" font-size="13.5">speaker alignment</text>
+  <line x1="1512" y1="354" x2="1660" y2="354" stroke="#777" stroke-width="1.2" stroke-dasharray="5 4"/>
+
+  <!-- ===================== transcription engine ===================== -->
+  <rect x="1078" y="368" width="880" height="388" rx="24" fill="none" stroke="#333" stroke-width="1.5" class="dsh"/>
+  <text x="1090" y="398" class="b i" font-size="17">transcription</text>
+  <text x="1090" y="420" class="b i" font-size="17">engine</text>
+
+  <!-- Voxtral row -->
+  <rect x="1240" y="382" width="646" height="46" rx="16" fill="none" stroke="#b85450" stroke-width="1.4" class="dsh"/>
+  <text x="1252" y="410" font-size="14">[MLX/HF] Voxtral</text>
+  <rect x="1404" y="388" width="225" height="34" rx="4" class="red"/>
+  <text x="1516" y="410" class="m" font-size="15">Incremental Encoder</text>
+  <path class="ln" d="M1629,405 H1654" marker-end="url(#ab)"/>
+  <rect x="1658" y="388" width="218" height="34" rx="4" class="red"/>
+  <text x="1767" y="410" class="m" font-size="15">Autoregressive Decoder</text>
+
+  <!-- Mel spectrogram -->
+  <rect x="1098" y="490" width="138" height="62" rx="14" class="blu"/>
+  <text x="1167" y="516" class="m" font-size="16">Mel</text>
+  <text x="1167" y="538" class="m" font-size="16">Spectrogram</text>
+
+  <path class="ln" d="M1236,500 H1262 V434" marker-end="url(#ab)"/>
+  <path class="ln" d="M1236,512 H1358" marker-end="url(#ab)"/>
+  <path class="ln" d="M1236,524 H1276 V586" marker-end="url(#ab)"/>
+
+  <!-- Qwen container -->
+  <rect x="1362" y="440" width="386" height="108" rx="16" fill="none" stroke="#b85450" stroke-width="1.4" class="dsh"/>
+  <rect x="1370" y="434" width="84" height="14" fill="#fff"/>
+  <text x="1376" y="446" font-size="13">[HF] Qwen</text>
+  <text x="1555" y="474" class="b m" font-size="15">Autoregressive decoder</text>
+  <rect x="1380" y="482" width="185" height="26" fill="#fff" stroke="#b85450" stroke-width="1.3"/>
+  <text x="1472" y="500" class="m" font-size="13">Audio encoded frames</text>
+  <text x="1578" y="501" class="b m" font-size="14">|</text>
+  <rect x="1592" y="482" width="125" height="26" fill="#fff" stroke="#b85450" stroke-width="1.3"/>
+  <text x="1654" y="500" class="m" font-size="13">Output tokens</text>
+  <rect x="1420" y="514" width="305" height="28" rx="10" class="org"/>
+  <rect x="1428" y="517" width="118" height="22" rx="10" class="red"/>
+  <text x="1487" y="532" class="m" font-size="12.5">Self-attention</text>
+  <text x="1556" y="532" class="i" font-size="11.5">Alignement heads tracking</text>
+
+  <!-- Whisper section -->
+  <text x="1292" y="580" font-size="14">[Faster/MLX/OG] Whisper</text>
+  <rect x="1244" y="590" width="64" height="62" rx="8" class="pur"/>
+  <text x="1276" y="606" class="m" font-size="10.5">LoRA</text>
+  <text x="1276" y="618" class="m" font-size="10.5">language</text>
+  <text x="1276" y="630" class="m" font-size="10.5">adapter</text>
+  <text x="1276" y="644" class="i m" font-size="9">If available</text>
+
+  <rect x="1318" y="586" width="118" height="130" rx="12" fill="none" stroke="#b85450" stroke-width="1.4" class="dsh"/>
+  <rect x="1326" y="592" width="100" height="34" rx="8" class="red"/>
+  <text x="1376" y="614" class="m" font-size="15">Encoder</text>
+  <text x="1444" y="600" class="b i bl" font-size="12.5">AlignAtt</text>
+  <path class="ln" d="M1376,626 V668" marker-end="url(#ab)"/>
+  <text x="1388" y="646" class="b i bl" font-size="12.5">Whisper</text>
+  <text x="1388" y="661" class="b i bl" font-size="12.5">Streaming</text>
+  <rect x="1326" y="674" width="100" height="34" rx="8" class="red"/>
+  <text x="1376" y="696" class="m" font-size="15">Decoder</text>
+
+  <path class="ln" d="M1308,621 H1324"/>
+  <path class="ln" d="M1426,609 H1448"/>
+  <rect x="1448" y="606" width="66" height="64" rx="8" class="pur"/>
+  <text x="1481" y="622" class="m" font-size="10.5">LoRA</text>
+  <text x="1481" y="634" class="m" font-size="10.5">language</text>
+  <text x="1481" y="646" class="m" font-size="10.5">adapter</text>
+  <text x="1481" y="660" class="i m" font-size="9">If available</text>
+  <path class="ln" d="M1514,621 H1524"/>
+
+  <rect x="1526" y="590" width="322" height="62" rx="14" class="red"/>
+  <text x="1687" y="612" class="m" font-size="17">Whisper  Decoder</text>
+  <rect x="1542" y="620" width="290" height="26" rx="8" class="org"/>
+  <rect x="1548" y="623" width="128" height="21" rx="10" class="red"/>
+  <text x="1612" y="638" class="m" font-size="12.5">Cross-attention</text>
+  <text x="1684" y="638" class="i" font-size="11.5">Alignement heads tracking</text>
+
+  <path class="ln" d="M1426,691 H1448" marker-end="url(#ab)"/>
+  <rect x="1452" y="666" width="288" height="52" rx="12" class="grn"/>
+  <text x="1596" y="690" class="m" font-size="15">LocalAgreement Policy</text>
+  <text x="1596" y="708" class="i m" font-size="11.5">Longest prefix with t-1</text>
+
+  <!-- Language detection -->
+  <path class="lng dsh" d="M1167,554 V618" marker-end="url(#ag)"/>
+  <rect x="1098" y="624" width="138" height="88" rx="14" class="blu"/>
+  <text x="1167" y="656" class="m" font-size="16">Language</text>
+  <text x="1167" y="678" class="m" font-size="16">Detection</text>
+  <text x="1167" y="700" class="i m" font-size="12">If auto</text>
+
+  <!-- Output tokens -->
+  <text x="1912" y="668" class="b i m" font-size="17">Output</text>
+  <text x="1912" y="688" class="b i m" font-size="17">tokens</text>
+  <path class="ln" d="M1876,405 H1938 V646" marker-end="url(#ab)"/>
+  <path class="ln" d="M1748,494 H1912 V646" marker-end="url(#ab)"/>
+  <path class="ln" d="M1848,610 H1886 V646" marker-end="url(#ab)"/>
+  <path class="ln" d="M1740,692 H1872" marker-end="url(#ab)"/>
+
+  <!-- output -> translation -->
+  <path class="ln" d="M1944,662 H1966 V340" marker-end="url(#ab)"/>
+  <path class="ln" d="M1944,682 H1976 V340" marker-end="url(#ab)"/>
+  <!-- output return path -->
+  <path class="ln" d="M1912,698 V740 H1092"/>
+</svg>

@@ -65,6 +65,7 @@ class AudioProcessor:
         # every update, so history must never be pruned away (issue #372);
         # "diff" clients keep their own copy and allow bounded server memory.
         session_mode = kwargs.pop('mode', 'full')
+        session_target_language = kwargs.pop('target_language', None)
 
         if 'transcription_engine' in kwargs and isinstance(kwargs['transcription_engine'], TranscriptionEngine):
             models = kwargs['transcription_engine']
@@ -146,7 +147,56 @@ class AudioProcessor:
         if self.args.diarization:
             self.diarization = online_diarization_factory(self.args, models.diarization_model)
         if models.translation_model:
-            self.translation = online_translation_factory(self.args, models.translation_model)
+            if session_target_language and session_target_language != self.args.target_language:
+                from whisperlivekit.translation import session_translation_factory
+                self.translation = session_translation_factory(
+                    self.args, models.translation_model, session_target_language
+                )
+            else:
+                self.translation = online_translation_factory(self.args, models.translation_model)
+        elif session_target_language:
+            logger.warning(
+                "Session requested target_language=%r but the server was started "
+                "without translation (--target-language); ignoring.",
+                session_target_language,
+            )
+
+        # Translate-on-segment-complete (issue #264): when enabled, committed
+        # tokens are held back until their segment is finalized by punctuation
+        # (or a silence/end-of-stream boundary), so the translation output does
+        # not flicker while the partial text evolves.
+        self.translate_on_complete: bool = bool(getattr(self.args, "translate_on_complete", False))
+        self._pending_translation_tokens: List[ASRToken] = []
+
+    async def _queue_tokens_for_translation(self, tokens: List[ASRToken]) -> None:
+        """Forward committed tokens to the translation queue.
+
+        With translate_on_complete, tokens are held back until a token
+        carrying punctuation closes the segment; the incomplete tail stays
+        pending and is not translated (issue #264).
+        """
+        if not self.translation_queue or not tokens:
+            return
+        if not self.translate_on_complete:
+            for token in tokens:
+                await self.translation_queue.put(token)
+            return
+        self._pending_translation_tokens.extend(tokens)
+        last_punctuation_idx = -1
+        for i, token in enumerate(self._pending_translation_tokens):
+            if token.has_punctuation():
+                last_punctuation_idx = i
+        if last_punctuation_idx >= 0:
+            for token in self._pending_translation_tokens[:last_punctuation_idx + 1]:
+                await self.translation_queue.put(token)
+            self._pending_translation_tokens = self._pending_translation_tokens[last_punctuation_idx + 1:]
+
+    async def _flush_pending_translation_tokens(self) -> None:
+        """Release held-back tokens at a segment boundary (silence or end of stream)."""
+        if self.translation_queue and self._pending_translation_tokens:
+            for token in self._pending_translation_tokens:
+                await self.translation_queue.put(token)
+            self._pending_translation_tokens = []
 
     async def _push_silence_event(self) -> None:
         if self.transcription_queue:
@@ -154,6 +204,7 @@ class AudioProcessor:
         if self.args.diarization and self.diarization_queue:
             await self.diarization_queue.put(self.current_silence)
         if self.translation_queue:
+            await self._flush_pending_translation_tokens()
             await self.translation_queue.put(self.current_silence)
 
     async def _begin_silence(self, at_sample: Optional[int] = None) -> None:
@@ -174,6 +225,7 @@ class AudioProcessor:
         if self.args.diarization and self.diarization_queue:
             await self.diarization_queue.put(start_event)
         if self.translation_queue:
+            await self._flush_pending_translation_tokens()
             await self.translation_queue.put(start_event)
 
     async def _end_silence(self, at_sample: Optional[int] = None) -> None:
@@ -208,6 +260,12 @@ class AudioProcessor:
         """Convert PCM buffer in s16le format to normalized NumPy array."""
         return np.frombuffer(pcm_buffer, dtype=np.int16).astype(np.float32) / 32768.0
 
+    def _latest_committed_transcription_end(self) -> float:
+        latest_end = self.state.end_transcription_committed
+        if self.state.tokens:
+            latest_end = max(latest_end, self.state.tokens[-1].end or 0.0)
+        return latest_end
+
     async def get_current_state(self) -> State:
         """Get current state."""
         async with self.lock:
@@ -224,6 +282,23 @@ class AudioProcessor:
 
             self.state.remaining_time_transcription = remaining_transcription
             self.state.remaining_time_diarization = remaining_diarization
+
+            if getattr(getattr(self, "args", None), "transcription", True):
+                audio_received_end = self.total_pcm_samples / self.sample_rate if self.sample_rate else 0.0
+                processed_end = max(0.0, self.state.end_transcription_processed)
+                committed_end = self._latest_committed_transcription_end()
+                self.state.end_transcription_committed = committed_end
+                self.state.remaining_time_transcription_processing = max(
+                    0.0,
+                    round(audio_received_end - processed_end, 1),
+                )
+                self.state.remaining_time_transcription_policy = max(
+                    0.0,
+                    round(processed_end - committed_end, 1),
+                )
+            else:
+                self.state.remaining_time_transcription_processing = 0.0
+                self.state.remaining_time_transcription_policy = 0.0
 
             return self.state
 
@@ -338,6 +413,18 @@ class AudioProcessor:
                         )
                     ]
                     _buffer_transcript = Transcript()
+
+            final_committed_end = final_tokens[-1].end if final_tokens else None
+            async with self.lock:
+                self.state.end_transcription_processed = max(
+                    self.state.end_transcription_processed,
+                    end_time,
+                )
+                if final_committed_end is not None:
+                    self.state.end_transcription_committed = max(
+                        self.state.end_transcription_committed,
+                        final_committed_end,
+                    )
             if final_tokens:
                 logger.info(f"Finish flushed {len(final_tokens)} tokens")
                 self.metrics.n_tokens_produced += len(final_tokens)
@@ -348,9 +435,9 @@ class AudioProcessor:
                     self.state.new_tokens.extend(final_tokens)
                     self.state.new_tokens_buffer = _buffer_transcript
                     self._prune_state_tokens()
-                if self.translation_queue:
-                    for token in final_tokens:
-                        await self.translation_queue.put(token)
+                await self._queue_tokens_for_translation(final_tokens)
+            # End of stream finalizes the last segment even without punctuation
+            await self._flush_pending_translation_tokens()
         except Exception as e:
             logger.warning(f"Error finishing transcription: {e}")
             logger.debug(f"Traceback: {traceback.format_exc()}")
@@ -445,13 +532,20 @@ class AudioProcessor:
                     self.state.tokens.extend(new_tokens)
                     self.state.buffer_transcription = _buffer_transcript
                     self.state.end_buffer = max(candidate_end_times)
+                    self.state.end_transcription_processed = max(
+                        self.state.end_transcription_processed,
+                        current_audio_processed_upto,
+                    )
+                    if new_tokens:
+                        self.state.end_transcription_committed = max(
+                            self.state.end_transcription_committed,
+                            new_tokens[-1].end or 0.0,
+                        )
                     self.state.new_tokens.extend(new_tokens)
                     self.state.new_tokens_buffer = _buffer_transcript
                     self._prune_state_tokens()
 
-                if self.translation_queue:
-                    for token in new_tokens:
-                        await self.translation_queue.put(token)
+                await self._queue_tokens_for_translation(new_tokens)
             except Exception as e:
                 logger.warning(f"Exception in transcription_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")
@@ -592,6 +686,8 @@ class AudioProcessor:
                     buffer_diarization=buffer_diarization_text,
                     buffer_translation=buffer_translation_text,
                     remaining_time_transcription=state.remaining_time_transcription,
+                    remaining_time_transcription_processing=state.remaining_time_transcription_processing,
+                    remaining_time_transcription_policy=state.remaining_time_transcription_policy,
                     remaining_time_diarization=state.remaining_time_diarization if self.args.diarization else 0
                 )
 
@@ -846,6 +942,6 @@ class AudioProcessor:
         if self.current_silence:
             await self._end_silence(at_sample=self.total_pcm_samples)
 
-        await self._enqueue_active_audio(pcm_array)
         self.total_pcm_samples += len(pcm_array)
+        await self._enqueue_active_audio(pcm_array)
         logger.info(f"Flushed remaining PCM buffer: {len(pcm_array)} samples ({len(pcm_array)/self.sample_rate:.2f}s)")

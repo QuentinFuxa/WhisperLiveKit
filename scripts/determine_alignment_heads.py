@@ -23,9 +23,9 @@ WHISPER_ROOT = REPO_ROOT / "whisper"
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(WHISPER_ROOT))
 
-from whisper import load_model
-from whisper.audio import log_mel_spectrogram, pad_or_trim
-from whisper.tokenizer import get_tokenizer
+from whisper import load_model  # noqa: E402
+from whisper.audio import log_mel_spectrogram, pad_or_trim  # noqa: E402
+from whisper.tokenizer import get_tokenizer  # noqa: E402
 
 AudioInput = Union[str, pathlib.Path, np.ndarray, torch.Tensor]
 
@@ -254,7 +254,7 @@ def _plot_heatmaps(
         if mat is None:
             ax.axis("off")
             continue
-        im = ax.imshow(mat.to(torch.float32).numpy(), aspect="auto", origin="lower")
+        ax.imshow(mat.to(torch.float32).numpy(), aspect="auto", origin="lower")
         ax.set_title(f"L{layer} H{head} · score {score:.2f}")
         ax.set_xlabel("time")
         ax.set_ylabel("tokens")
