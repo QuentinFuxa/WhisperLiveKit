@@ -41,7 +41,10 @@ jobs:
 
       - name: Resolve tag
         id: tag
-        run: echo "value=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+        # GHCR repository names must be lowercase; the owner login is not.
+        run: |
+          echo "value=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -51,7 +54,7 @@ jobs:
           build-args: |
             EXTRAS=${{ matrix.extras }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/whisperlivekit:${{ steps.tag.outputs.value }}${{ matrix.suffix }}
-            ghcr.io/${{ github.repository_owner }}/whisperlivekit:latest${{ matrix.suffix }}
+            ghcr.io/${{ steps.tag.outputs.owner }}/whisperlivekit:${{ steps.tag.outputs.value }}${{ matrix.suffix }}
+            ghcr.io/${{ steps.tag.outputs.owner }}/whisperlivekit:latest${{ matrix.suffix }}
           cache-from: type=gha,scope=wlk${{ matrix.suffix }}
           cache-to: type=gha,mode=max,scope=wlk${{ matrix.suffix }}
