@@ -96,7 +96,7 @@ Per-session WebSocket query parameters:
 |---|---|---|
 | `language` | `?language=fr` | transcription language for this session (one shared engine serves mixed-language sessions) |
 | `target_language` | `?target_language=de` | translation target for this session (server must run with `--target-language`) |
-| `mode` | `?mode=diff` | incremental snapshot/diff protocol instead of resending the full state — experimental, for integrators building their own client (see `diff_protocol.py`); the bundled web UI uses `full` |
+| `mode` | `?mode=diff` | incremental snapshot/diff protocol instead of resending the full state (experimental, for integrators building their own client, see `diff_protocol.py`); the bundled web UI uses `full` |
 | `token` | `?token=...` | API token when the server runs with `--api-token` (also accepted as an `Authorization: Bearer` header) |
 
 See [docs/API.md](docs/API.md) for the complete API reference.
@@ -189,7 +189,7 @@ See [BENCHMARK.md](BENCHMARK.md) for performance numbers.
 bounded-recompute audio cache: the pretrained audio tower only re-encodes a
 local window (default 12 s) per update, cached audio embeddings are
 append-only, and text is committed with a stable-prefix rule. Works on CUDA,
-Apple Silicon (MPS) and CPU — no vLLM required.
+Apple Silicon (MPS) and CPU, no vLLM required.
 
 ```bash
 pip install -e ".[qwen3-streaming]"
@@ -199,7 +199,7 @@ wlk --backend qwen3-streaming --language en
 Notes:
 - An explicit `--language` is required (automatic detection switches language
   mid-stream on accented audio).
-- Word timestamps are interpolated estimates (~1 s precision) — good enough
+- Word timestamps are interpolated estimates (~1 s precision): good enough
   for lines and diarization alignment. Use `--backend qwen3-vllm`
   (ForcedAligner) when exact word timing matters.
 - Decode pacing self-adjusts to the hardware; on GPUs slower than real time
@@ -210,7 +210,7 @@ Notes:
 
 **Causal mode (minimum compute per chunk).** The windowed default re-encodes
 up to 12 s of audio on every update. The causal mode runs an append-only
-causal-KV encoder instead — each ~2 s audio block is encoded exactly once,
+causal-KV encoder instead: each ~2 s audio block is encoded exactly once,
 memory is bounded (15 s window + sentence-boundary segment resets), and
 per-chunk compute is constant in stream length:
 

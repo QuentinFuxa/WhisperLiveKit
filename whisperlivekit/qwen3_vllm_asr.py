@@ -6,8 +6,8 @@ from whisperlivekit.qwen3_streaming._shim import ensure_qwen3_asr_causal, reexpo
 
 ensure_qwen3_asr_causal()
 
-from qwen3_asr_causal.vllm import *  # noqa: F401,F403
-from qwen3_asr_causal.vllm import Qwen3VLLMASR as _StandaloneQwen3VLLMASR
+from qwen3_asr_causal.vllm import *  # noqa: E402,F401,F403
+from qwen3_asr_causal.vllm import Qwen3VLLMASR as _StandaloneQwen3VLLMASR  # noqa: E402
 
 reexport("qwen3_asr_causal.vllm", globals())
 

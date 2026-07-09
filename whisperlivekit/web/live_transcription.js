@@ -560,7 +560,7 @@ function renderLinesWithBuffer(
     .join("");
 
   const hiddenNotice = hiddenCount > 0
-    ? `<p class="hidden-lines-notice" title="${effectiveLines.length} lignes au total">— ${hiddenCount} lignes précédentes (masquées) —</p>`
+    ? `<p class="hidden-lines-notice" title="${effectiveLines.length} lignes au total">${hiddenCount} lignes précédentes (masquées)</p>`
     : "";
   linesTranscriptDiv.innerHTML = hiddenNotice + linesHtml;
   const transcriptContainer = document.querySelector('.transcript-container');

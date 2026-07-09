@@ -1,8 +1,8 @@
 """Compatibility helpers for the old WhisperLiveKit Qwen import paths."""
 
+import sys
 from importlib import import_module
 from pathlib import Path
-import sys
 
 
 def ensure_qwen3_asr_causal() -> None:

@@ -2,7 +2,9 @@ from argparse import Namespace
 
 
 def test_qwen3_streaming_shim_exposes_standalone_private_helpers():
-    import whisperlivekit.qwen3_streaming.model as wlk_model
+    # The whisperlivekit import must run first: its shim makes the standalone
+    # qwen3_asr_causal package importable from third_party/ in dev checkouts.
+    import whisperlivekit.qwen3_streaming.model as wlk_model  # noqa: I001
     import qwen3_asr_causal.model as qwen_model
 
     assert wlk_model.Qwen3ASRRealtimeQwenAudioSurgeryModel is qwen_model.Qwen3ASRRealtimeQwenAudioSurgeryModel
@@ -17,8 +19,9 @@ def test_qwen3_vllm_shim_preserves_whisperlivekit_default_model():
 
 
 def test_qwen3_vllm_metal_shim_imports_standalone_backend():
-    import whisperlivekit.qwen3_vllm_metal_asr as wlk_metal
     import qwen3_asr_causal.metal as qwen_metal
+
+    import whisperlivekit.qwen3_vllm_metal_asr as wlk_metal
 
     assert wlk_metal.Qwen3VLLMMetalASR is qwen_metal.Qwen3VLLMMetalASR
     assert wlk_metal._resolve_audio_backend({"qwen3_vllm_metal_audio_backend": "causal"}) == "causal"
@@ -61,6 +64,7 @@ def test_parse_args_accepts_qwen3_causal_options(monkeypatch):
 
 def test_online_factory_routes_qwen3_streaming():
     from qwen3_asr_causal.online import Qwen3StreamingOnlineProcessor
+
     from whisperlivekit.core import online_factory
 
     class FakeASR:

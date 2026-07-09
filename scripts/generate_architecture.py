@@ -2,10 +2,10 @@
 """Generate the architecture.png diagram for WhisperLiveKit README."""
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
+from matplotlib.patches import FancyBboxPatch
 
 # ── Colours ──
 C_BG       = "#1a1a2e"

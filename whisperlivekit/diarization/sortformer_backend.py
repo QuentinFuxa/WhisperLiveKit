@@ -1,7 +1,7 @@
 import logging
-from pathlib import Path
 import threading
 import wave
+from pathlib import Path
 from typing import List, Optional
 
 import numpy as np

@@ -128,7 +128,7 @@ class WhisperLiveKitConfig:
     qwen3_streaming_segment_max_steps: int = 200
     qwen3_streaming_segment_keep_tail_steps: int = 0
     qwen3_streaming_hold_back_words: int = 6
-    # None = auto (2 windowed, 1 causal — see qwen3_asr_causal asr.py).
+    # None = auto (2 windowed, 1 causal; see qwen3_asr_causal asr.py).
     qwen3_streaming_stable_iterations: Optional[int] = None
     qwen3_streaming_max_new_tokens: int = 256
     qwen3_streaming_device: str = "auto"

@@ -17,7 +17,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install ruff
-        run: pip install ruff
+        run: pip install "ruff==0.15.*"
 
       - name: Run ruff check
         run: ruff check .
@@ -51,7 +51,9 @@ jobs:
           cache: pip
 
       - name: Install package with test deps
-        run: pip install -e . pytest pytest-asyncio
+        run: pip install -e ".[test]" qwen3-asr-causal
 
+      # test_pipeline.py downloads real models and audio; it stays a local
+      # suite (see CLAUDE.md). CI runs the dependency-light tests.
       - name: Run test suite
-        run: pytest -q tests/
+        run: pytest -q tests/ --ignore=tests/test_pipeline.py
