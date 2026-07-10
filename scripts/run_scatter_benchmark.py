@@ -35,8 +35,10 @@ for name in [
 LONG_SAMPLES_PATH = "~/.cache/whisperlivekit/benchmark_data/long_samples.json"
 
 # ── All configurations to benchmark ──
+# Combo keys: kwargs = extra TranscriptionEngine kwargs; languages = restrict
+# the combo to these language codes (None = follow the backend matrix).
 
-COMBOS = [
+COMBOS_DARWIN = [
     # faster-whisper x LocalAgreement
     {"backend": "faster-whisper", "model_size": "base", "policy": "localagreement",
      "label": "fw LA base", "color": "#4a9eff", "marker": "o", "size": 100},
@@ -62,6 +64,33 @@ COMBOS = [
      "label": "voxtral mlx", "color": "#f5a623", "marker": "D", "size": 250},
 ]
 
+COMBOS_CUDA = [
+    # faster-whisper x LocalAgreement
+    {"backend": "faster-whisper", "model_size": "base", "policy": "localagreement",
+     "label": "fw LA base", "color": "#4a9eff", "marker": "o", "size": 100},
+    {"backend": "faster-whisper", "model_size": "small", "policy": "localagreement",
+     "label": "fw LA small", "color": "#4a9eff", "marker": "o", "size": 220},
+    {"backend": "faster-whisper", "model_size": "large-v3-turbo", "policy": "localagreement",
+     "label": "fw LA turbo", "color": "#4a9eff", "marker": "o", "size": 340},
+    # faster-whisper x SimulStreaming
+    {"backend": "faster-whisper", "model_size": "base", "policy": "simulstreaming",
+     "label": "fw SS base", "color": "#4a9eff", "marker": "s", "size": 100},
+    {"backend": "faster-whisper", "model_size": "small", "policy": "simulstreaming",
+     "label": "fw SS small", "color": "#4a9eff", "marker": "s", "size": 220},
+    {"backend": "faster-whisper", "model_size": "large-v3-turbo", "policy": "simulstreaming",
+     "label": "fw SS turbo", "color": "#4a9eff", "marker": "s", "size": 340},
+    # qwen3-streaming (0.6B): causal tower (append-only, English-only) and
+    # windowed re-compute (multilingual)
+    {"backend": "qwen3-streaming", "model_size": "0.6b", "policy": "",
+     "label": "qwen3 causal", "color": "#b06ee8", "marker": "D", "size": 220,
+     "kwargs": {"qwen3_streaming_audio_backend": "causal"}, "languages": ["en"]},
+    {"backend": "qwen3-streaming", "model_size": "0.6b", "policy": "",
+     "label": "qwen3 windowed", "color": "#8e44ad", "marker": "D", "size": 220,
+     "kwargs": {"qwen3_streaming_audio_backend": "windowed"}},
+]
+
+COMBOS = COMBOS_DARWIN if sys.platform == "darwin" else COMBOS_CUDA
+
 
 def is_backend_available(backend):
     try:
@@ -76,6 +105,8 @@ def is_backend_available(backend):
             from whisperlivekit.voxtral_mlx.loader import load_voxtral_model; return True  # noqa
         elif backend == "voxtral":
             from transformers import VoxtralRealtimeForConditionalGeneration; return True  # noqa
+        elif backend == "qwen3-streaming":
+            import qwen3_asr_causal; return True  # noqa
     except (ImportError, Exception):
         pass
     return False
@@ -83,16 +114,35 @@ def is_backend_available(backend):
 
 def get_system_info():
     info = {"platform": platform.platform(), "machine": platform.machine()}
-    try:
-        info["cpu"] = subprocess.check_output(
-            ["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip()
-    except Exception:
-        info["cpu"] = platform.processor()
-    try:
-        mem = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True).strip())
-        info["ram_gb"] = round(mem / (1024**3))
-    except Exception:
-        info["ram_gb"] = None
+    if sys.platform == "darwin":
+        try:
+            info["cpu"] = subprocess.check_output(
+                ["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip()
+        except Exception:
+            info["cpu"] = platform.processor()
+        try:
+            mem = int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True).strip())
+            info["ram_gb"] = round(mem / (1024**3))
+        except Exception:
+            info["ram_gb"] = None
+    else:
+        try:
+            with open("/proc/cpuinfo") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        info["cpu"] = line.split(":", 1)[1].strip()
+                        break
+        except Exception:
+            info["cpu"] = platform.processor()
+        try:
+            gpu = subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                text=True).strip().splitlines()[0]
+            # The scatter title shows this field; the GPU is what matters here.
+            info["gpu"] = gpu
+            info["cpu"] = gpu.replace("NVIDIA ", "")
+        except Exception:
+            pass
     return info
 
 
@@ -113,6 +163,7 @@ async def run_combo_on_samples(combo, samples, lang="en", speed=0):
         kwargs["model_size"] = combo["model_size"]
     if combo.get("policy"):
         kwargs["backend_policy"] = combo["policy"]
+    kwargs.update(combo.get("kwargs") or {})
 
     TranscriptionEngine.reset()
     _engine_cache.clear()
@@ -386,7 +437,11 @@ def main():
 
     # Filter combos to backends that support this language
     from whisperlivekit.benchmark.compat import backend_supports_language
-    combos = [c for c in COMBOS if backend_supports_language(c["backend"], lang)]
+    combos = [
+        c for c in COMBOS
+        if backend_supports_language(c["backend"], lang)
+        and (c.get("languages") is None or lang in c["languages"])
+    ]
 
     system_info = get_system_info()
 

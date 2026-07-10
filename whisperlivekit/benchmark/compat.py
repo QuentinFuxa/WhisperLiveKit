@@ -14,6 +14,9 @@ BACKEND_LANGUAGES: Dict[str, Optional[Set[str]]] = {
     "mlx-whisper": None,
     "voxtral-mlx": None,
     "voxtral": None,
+    # The qwen3 combos declare their own language restriction (the causal
+    # tower is English-only, the windowed tower is multilingual).
+    "qwen3-streaming": None,
 }
 
 
