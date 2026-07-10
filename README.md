@@ -149,8 +149,8 @@ See **Parameters & Configuration** below on how to use them.
 <img src="benchmark_scatter_fr_aware.png" alt="Speed vs Accuracy — French" width="700">
 </p>
 
-Benchmarks use 6 minutes of public [LibriVox](https://librivox.org/) audiobook recordings per language (30s + 60s + 120s + 180s), with ground truth from [Project Gutenberg](https://www.gutenberg.org/). Fully reproducible with `python scripts/run_scatter_benchmark.py`.
-We are actively looking for benchmark results on other hardware (NVIDIA GPUs, different Apple Silicon chips, cloud instances). If you run the benchmarks on your machine, please share your results via an issue or PR!
+Benchmarks use 6 minutes of public [LibriVox](https://librivox.org/) audiobook recordings per language (30s + 60s + 120s + 180s), with ground truth from [Project Gutenberg](https://www.gutenberg.org/). The figures above were measured on an NVIDIA H100 (CUDA); the qwen3 causal tower is English-only, so it only appears on the English chart. Fully reproducible with `python scripts/run_scatter_benchmark.py` (the script picks a matching combo set on Apple Silicon: mlx-whisper and voxtral-mlx instead of the CUDA-only backends). Raw results: [benchmarks/h100_scatter/](benchmarks/h100_scatter/).
+We are actively looking for benchmark results on other hardware (different NVIDIA GPUs, Apple Silicon chips, cloud instances). If you run the benchmarks on your machine, please share your results via an issue or PR!
 
 
 #### Use it to capture audio from web pages.

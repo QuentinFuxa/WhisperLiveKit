@@ -314,6 +314,10 @@ def generate_scatter(results, system_info, output_path, n_samples, lang="en",
         "voxtral mlx":    (10, -14),
         "fw LA large-v3": (8, -5),
         "fw SS large-v3": (8, 5),
+        "fw LA turbo":    (10, -4),
+        "fw SS turbo":    (10, -4),
+        "qwen3 causal":   (10, 8),
+        "qwen3 windowed": (10, -14),
     }
 
     # Plot main points
