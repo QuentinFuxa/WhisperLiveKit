@@ -51,6 +51,12 @@ def warmup_asr(asr, warmup_file=None, timeout=5):
     try:
         asr.transcribe(audio)
     except Exception as e:
-        logger.warning("Warmup transcription failed: %s", e)
-        return
+        logger.exception("Warmup transcription failed: %s", e)
+        # Warmup runs the exact inference path every session uses: if it
+        # fails, sessions would silently produce empty transcripts. Fail
+        # loudly at startup instead.
+        raise RuntimeError(
+            "ASR warmup transcription failed; refusing to serve since "
+            f"sessions would produce empty output. Cause: {e}"
+        ) from e
     logger.info("ASR model is warmed up.")

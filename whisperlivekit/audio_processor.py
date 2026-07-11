@@ -168,6 +168,10 @@ class AudioProcessor:
         self.translate_on_complete: bool = bool(getattr(self.args, "translate_on_complete", False))
         self._pending_translation_tokens: List[ASRToken] = []
 
+        # Silent-backend watchdog: flips once the ASR has produced anything.
+        self._any_asr_output: bool = False
+        self._silent_backend_warned: bool = False
+
     async def _queue_tokens_for_translation(self, tokens: List[ASRToken]) -> None:
         """Forward committed tokens to the translation queue.
 
@@ -190,6 +194,30 @@ class AudioProcessor:
             for token in self._pending_translation_tokens[:last_punctuation_idx + 1]:
                 await self.translation_queue.put(token)
             self._pending_translation_tokens = self._pending_translation_tokens[last_punctuation_idx + 1:]
+
+    _SILENT_BACKEND_WARN_SECONDS = 20.0
+
+    def _warn_if_backend_silent(self, audio_seconds: float) -> None:
+        """One-time loud error when the ASR consumed audio but never produced
+        a single token or buffer character.
+
+        Every real occurrence of this so far was a backend failing on every
+        chunk while its exceptions were only logged as warnings (torch 2.13
+        MLX device mismatch #383, CTranslate2 wheels with PTX newer than the
+        driver): the server looked healthy and sessions showed empty captions.
+        """
+        if self._silent_backend_warned or self._any_asr_output:
+            return
+        if audio_seconds < self._SILENT_BACKEND_WARN_SECONDS:
+            return
+        self._silent_backend_warned = True
+        logger.error(
+            "ASR backend produced no output after %.0f s of audio. The backend "
+            "is likely failing on every chunk; check earlier warnings for the "
+            "root cause (device mismatches, incompatible wheels, model load "
+            "errors).",
+            audio_seconds,
+        )
 
     async def _flush_pending_translation_tokens(self) -> None:
         """Release held-back tokens at a segment boundary (silence or end of stream)."""
@@ -563,6 +591,11 @@ class AudioProcessor:
                     self.state.new_tokens.extend(new_tokens)
                     self.state.new_tokens_buffer = _buffer_transcript
                     self._prune_state_tokens()
+
+                if new_tokens or buffer_text.strip():
+                    self._any_asr_output = True
+                else:
+                    self._warn_if_backend_silent(cumulative_pcm_duration_stream_time)
 
                 await self._queue_tokens_for_translation(new_tokens)
                 await self._queue_hypothesis_tail_for_translation(_buffer_transcript)

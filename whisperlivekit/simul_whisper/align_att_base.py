@@ -80,6 +80,13 @@ class AlignAttBase(ABC):
             logger.info("Model warmed up successfully")
         except Exception as e:
             logger.exception(f"Model warmup failed: {e}")
+            # Warmup exercises the exact inference path every session uses:
+            # if it fails, every session would silently produce empty
+            # captions (seen with the torch 2.13 MLX device mismatch, #383).
+            raise RuntimeError(
+                "Model warmup inference failed; refusing to serve since "
+                f"sessions would produce empty output. Cause: {e}"
+            ) from e
 
     def create_tokenizer(self, language=None):
         self.tokenizer = tokenizer.get_tokenizer(
