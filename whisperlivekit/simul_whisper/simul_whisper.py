@@ -323,7 +323,7 @@ class AlignAtt(AlignAttBase):
             mlx_mel = mlx_pad_or_trim(mlx_mel_padded, N_FRAMES, axis=-2)
             mlx_encoder_feature = self.mlx_encoder.encoder(mlx_mel[None])
             # torch>=2.13 converts MLX arrays via DLPack onto MPS, but the
-            # decoder weights live on self.device — pin the device explicitly,
+            # decoder weights live on self.device: pin the device explicitly,
             # like the CoreML branch above.
             encoder_feature = torch.as_tensor(
                 np.asarray(mlx_encoder_feature), device=self.device,
