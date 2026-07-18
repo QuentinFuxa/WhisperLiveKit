@@ -5,6 +5,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+FUNASR_LANGUAGES = frozenset({"auto", "zh", "yue", "en", "ja", "ko"})
+
 
 def parse_cors_origins(origins: Optional[str]) -> list[str]:
     """Parse comma-separated CORS origins for FastAPI."""
@@ -149,14 +151,41 @@ class WhisperLiveKitConfig:
     qwen3_streaming_block_frames: int = 192
 
     def __post_init__(self):
-        # .en model suffix forces English
-        if self.model_size and self.model_size.endswith(".en"):
+        # .en model suffix forces English for Whisper-family backends.
+        if (
+            self.backend != "funasr"
+            and self.model_size
+            and self.model_size.endswith(".en")
+        ):
             self.lan = "en"
-        # Normalize backend_policy aliases
+
         if self.backend_policy == "1":
             self.backend_policy = "simulstreaming"
         elif self.backend_policy == "2":
             self.backend_policy = "localagreement"
+
+        if self.backend != "funasr":
+            return
+
+        if self.backend_policy == "simulstreaming":
+            logger.warning(
+                "FunASR requires LocalAgreement; using backend_policy=localagreement."
+            )
+            self.backend_policy = "localagreement"
+        elif self.backend_policy != "localagreement":
+            raise ValueError("FunASR requires the LocalAgreement backend policy.")
+
+        if self.lan not in FUNASR_LANGUAGES:
+            supported = ", ".join(sorted(FUNASR_LANGUAGES))
+            raise ValueError(f"FunASR SenseVoiceSmall supports only: {supported}.")
+        if self.direct_english_translation:
+            raise ValueError(
+                "FunASR SenseVoiceSmall does not support direct English translation."
+            )
+        if self.buffer_trimming == "sentence" and self.lan == "auto":
+            raise ValueError(
+                "FunASR sentence trimming requires an explicit language."
+            )
 
     # ------------------------------------------------------------------
     # Factory helpers

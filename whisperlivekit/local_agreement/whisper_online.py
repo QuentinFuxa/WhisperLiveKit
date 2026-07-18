@@ -12,7 +12,7 @@ from .backends import FasterWhisperASR, MLXWhisper, OpenaiApiASR, WhisperASR
 logger = logging.getLogger(__name__)
 
 
-WHISPER_LANG_CODES = "af,am,ar,as,az,ba,be,bg,bn,bo,br,bs,ca,cs,cy,da,de,el,en,es,et,eu,fa,fi,fo,fr,gl,gu,ha,haw,he,hi,hr,ht,hu,hy,id,is,it,ja,jw,ka,kk,km,kn,ko,la,lb,ln,lo,lt,lv,mg,mi,mk,ml,mn,mr,ms,mt,my,ne,nl,nn,no,oc,pa,pl,ps,pt,ro,ru,sa,sd,si,sk,sl,sn,so,sq,sr,su,sv,sw,ta,te,tg,th,tk,tl,tr,tt,uk,ur,uz,vi,yi,yo,zh".split(
+WHISPER_LANG_CODES = "af,am,ar,as,az,ba,be,bg,bn,bo,br,bs,ca,cs,cy,da,de,el,en,es,et,eu,fa,fi,fo,fr,gl,gu,ha,haw,he,hi,hr,ht,hu,hy,id,is,it,ja,jw,ka,kk,km,kn,ko,la,lb,ln,lo,lt,lv,mg,mi,mk,ml,mn,mr,ms,mt,my,ne,nl,nn,no,oc,pa,pl,ps,pt,ro,ru,sa,sd,si,sk,sl,sn,so,sq,sr,su,sv,sw,ta,te,tg,th,tk,tl,tr,tt,uk,ur,uz,vi,yi,yo,yue,zh".split(
     ","
 )
 
@@ -80,6 +80,27 @@ def backend_factory(
             min_chunk_size=None,
             **_unused_kwargs,
         ):
+    if backend == "funasr":
+        from whisperlivekit.funasr_backend import FunASRASR
+
+        t = time.time()
+        logger.info("Loading SenseVoiceSmall for language %s using FunASR...", lan)
+        asr = FunASRASR(
+            lan=lan,
+            model_size=model_size,
+            cache_dir=model_cache_dir,
+            model_dir=model_dir,
+        )
+        tokenizer = create_tokenizer(lan) if buffer_trimming == "sentence" else None
+        warmup_asr(asr, warmup_file)
+        asr.confidence_validation = confidence_validation
+        asr.tokenizer = tokenizer
+        asr.buffer_trimming = buffer_trimming
+        asr.buffer_trimming_sec = buffer_trimming_sec
+        asr.backend_choice = "funasr"
+        logger.info("done. It took %.2f seconds.", time.time() - t)
+        return asr
+
     backend_choice = backend
     custom_reference = model_path or model_dir
     resolved_root = None

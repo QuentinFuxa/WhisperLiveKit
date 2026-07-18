@@ -14,6 +14,18 @@ When translation is enabled, the 600M distilled NLLB model is used by default. T
 **Default Translation Backend**: `transformers`  
 The translation backend defaults to Transformers. On Apple Silicon, this automatically uses MPS acceleration for better performance.
 
+## FunASR SenseVoiceSmall
+
+`--backend funasr` maps WLK's unchanged default model name to
+`iic/SenseVoiceSmall`. `--model_dir` takes precedence and may point to a local
+SenseVoiceSmall snapshot. WLK passes 16 kHz mono audio to FunASR with word
+timestamps enabled and `trust_remote_code=False`; the initial compatibility
+contract does not cover arbitrary FunASR models.
+
+SenseVoiceSmall runs through WLK's LocalAgreement policy. It supports `auto`,
+`zh`, `yue`, `en`, `ja`, and `ko`, while WLK's VAC/VAD pipeline remains
+responsible for speech boundaries.
+
 ---
 
 
