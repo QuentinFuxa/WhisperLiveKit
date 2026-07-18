@@ -62,3 +62,19 @@ def test_canary_segment_end_ts():
     ]
     assert canary_segment_end_ts(seg_stamps) == [0.9, 1.5]
     assert canary_segment_end_ts(None) == []
+
+
+def test_map_voxlingua_to_canary_supported():
+    from whisperlivekit.canary_backend import map_voxlingua_to_canary
+
+    assert map_voxlingua_to_canary("en") == "en"
+    assert map_voxlingua_to_canary("de") == "de"
+    assert map_voxlingua_to_canary("uk") == "uk"
+
+
+def test_map_voxlingua_to_canary_unsupported_returns_none():
+    from whisperlivekit.canary_backend import map_voxlingua_to_canary
+
+    assert map_voxlingua_to_canary("zh") is None   # Chinese not in Canary's 25
+    assert map_voxlingua_to_canary("") is None
+    assert map_voxlingua_to_canary(None) is None
