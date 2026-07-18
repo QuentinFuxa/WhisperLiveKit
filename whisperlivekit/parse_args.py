@@ -206,7 +206,7 @@ def parse_args():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"],
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming", "canary"],
         help="Select the ASR backend implementation. Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-streaming' for Qwen3-ASR through plain HF Transformers with a bounded-recompute audio cache (CUDA/MPS/CPU, no vLLM; requires an explicit --language).",
     )
     parser.add_argument(
@@ -780,6 +780,46 @@ def parse_args():
         type=str,
         default="600M",
         help="600M or 1.3B",
+    )
+
+    # Canary backend arguments
+    canary_group = parser.add_argument_group(
+        "Canary backend arguments (only used with --backend canary)"
+    )
+    canary_group.add_argument(
+        "--canary-model",
+        type=str,
+        default="nvidia/canary-1b-v2",
+        dest="canary_model",
+        help="Canary model: HuggingFace/NGC id or local .nemo path. Default nvidia/canary-1b-v2.",
+    )
+    canary_group.add_argument(
+        "--canary-default-lang",
+        type=str,
+        default="en",
+        dest="canary_default_lang",
+        help="Fallback source language used while auto-detecting (and if detection stays low-confidence).",
+    )
+    canary_group.add_argument(
+        "--canary-lid-model",
+        type=str,
+        default="langid_ambernet",
+        dest="canary_lid_model",
+        help="NeMo spoken-language-ID model used for auto detection (EncDecSpeakerLabelModel).",
+    )
+    canary_group.add_argument(
+        "--canary-lid-min-sec",
+        type=float,
+        default=2.0,
+        dest="canary_lid_min_sec",
+        help="Minimum seconds of buffered audio before language detection runs.",
+    )
+    canary_group.add_argument(
+        "--canary-lid-min-conf",
+        type=float,
+        default=0.5,
+        dest="canary_lid_min_conf",
+        help="Minimum LID confidence (0-1) required to lock the detected language.",
     )
 
     translation_group = parser.add_argument_group("Translation backend")

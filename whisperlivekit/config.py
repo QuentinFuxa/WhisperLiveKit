@@ -148,6 +148,13 @@ class WhisperLiveKitConfig:
     qwen3_streaming_tower_checkpoint: str = ""
     qwen3_streaming_block_frames: int = 192
 
+    # Canary backend (NeMo EncDecMultiTaskModel on LocalAgreement)
+    canary_model: str = "nvidia/canary-1b-v2"
+    canary_default_lang: str = "en"
+    canary_lid_model: str = "langid_ambernet"
+    canary_lid_min_sec: float = 2.0
+    canary_lid_min_conf: float = 0.5
+
     def __post_init__(self):
         # .en model suffix forces English
         if self.model_size and self.model_size.endswith(".en"):
