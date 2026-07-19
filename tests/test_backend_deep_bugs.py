@@ -901,3 +901,31 @@ async def test_ffmpeg_reader_drains_stdout_after_stop_before_sentinel():
     assert processor.ffmpeg_manager.stopped is True
     assert await processor.transcription_queue.get() is SENTINEL
     assert processor.transcription_queue.empty()
+
+
+def test_concatenate_diar_segments_does_not_mutate_stored_segments():
+    """Merging same-speaker slices must work on copies: the merge runs on
+    every get_lines refresh, and extending merged[-1].end in place used to
+    corrupt the stored diarization spans a little more each call.
+    Reported via the vonernue fork."""
+    from whisperlivekit.timed_objects import SpeakerSegment, State
+    from whisperlivekit.tokens_alignment import TokensAlignment
+
+    state = State()
+    alignment = TokensAlignment(state, SimpleNamespace(diarization=True), " ")
+    alignment.all_diarization_segments = [
+        SpeakerSegment(start=0.0, end=1.0, speaker=0),
+        SpeakerSegment(start=1.0, end=2.0, speaker=0),
+        SpeakerSegment(start=2.0, end=3.0, speaker=1),
+        SpeakerSegment(start=3.0, end=4.0, speaker=1),
+    ]
+
+    first = alignment.concatenate_diar_segments()
+    assert [(s.start, s.end, s.speaker) for s in first] == [(0.0, 2.0, 0), (2.0, 4.0, 1)]
+
+    # stored segments must be untouched, and a second merge must be identical
+    assert [(s.start, s.end) for s in alignment.all_diarization_segments] == [
+        (0.0, 1.0), (1.0, 2.0), (2.0, 3.0), (3.0, 4.0),
+    ]
+    second = alignment.concatenate_diar_segments()
+    assert [(s.start, s.end, s.speaker) for s in second] == [(0.0, 2.0, 0), (2.0, 4.0, 1)]
