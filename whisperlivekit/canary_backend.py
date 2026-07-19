@@ -95,13 +95,15 @@ class CanarySessionASR(SessionASRProxy):
             return self._session_language
         if self._detected_lang is not None:
             return self._detected_lang
+        # audio is the LocalAgreement growing window, so len(audio) is the
+        # accumulated buffer length; detection waits for it to reach lid_min_sec.
         if self._lid is not None and len(audio) >= self._lid_min_sec * self.SAMPLING_RATE:
             try:
                 code, conf = self._lid.detect(audio)
             except Exception as e:  # noqa: BLE001
                 logger.warning("Canary LID failed: %s", e)
                 code, conf = None, 0.0
-            if code is not None and conf >= self._lid_min_conf:
+            if code and conf >= self._lid_min_conf and code in CANARY_LANGS:
                 object.__setattr__(self, "_detected_lang", code)
                 logger.info("Canary auto-detected language: %s (conf=%.2f)", code, conf)
                 return code

@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def test_parse_args_accepts_canary_options(monkeypatch):
     from whisperlivekit.parse_args import parse_args
 
@@ -80,9 +83,6 @@ def test_map_voxlingua_to_canary_unsupported_returns_none():
     assert map_voxlingua_to_canary(None) is None
 
 
-import numpy as np
-
-
 class _RecordingCanaryASR:
     """Minimal stand-in for CanaryASR that records the source language used."""
     sep = " "
@@ -156,3 +156,33 @@ def test_auto_low_confidence_stays_on_default():
                                lid_min_sec=2.0, lid_min_conf=0.5)
     session.transcribe(_audio(3.0))
     assert asr.calls == ["en"]                # not locked, retried later
+
+
+def test_auto_lid_exception_stays_on_default_and_retries():
+    from whisperlivekit.canary_backend import CanarySessionASR
+
+    class _RaisingLID:
+        def __init__(self):
+            self.n_calls = 0
+        def detect(self, audio):
+            self.n_calls += 1
+            raise RuntimeError("boom")
+
+    asr = _RecordingCanaryASR()
+    lid = _RaisingLID()
+    session = CanarySessionASR(asr, "auto", lid=lid, default_lang="en",
+                               lid_min_sec=2.0, lid_min_conf=0.5)
+    session.transcribe(_audio(3.0))          # detect raises -> default, not locked
+    session.transcribe(_audio(3.0))          # retries (still not locked)
+    assert asr.calls == ["en", "en"]
+    assert lid.n_calls == 2                   # retried, never locked
+
+
+def test_auto_with_no_lid_uses_default():
+    from whisperlivekit.canary_backend import CanarySessionASR
+
+    asr = _RecordingCanaryASR()
+    session = CanarySessionASR(asr, "auto", lid=None, default_lang="en",
+                               lid_min_sec=2.0, lid_min_conf=0.5)
+    session.transcribe(_audio(5.0))
+    assert asr.calls == ["en"]
