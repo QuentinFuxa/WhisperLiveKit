@@ -258,3 +258,31 @@ def test_online_factory_routes_canary_to_localagreement():
     processor_none = online_factory(args, _FakeCanaryASR(), language=None)
     assert isinstance(processor_none.asr, CanarySessionASR)
     assert processor_none.asr._is_auto is True
+
+
+@requires_nemo
+def test_canary_end_to_end_via_testharness():
+    """Full pipeline smoke test: FFmpeg decode -> VAD -> Canary ASR -> LocalAgreement.
+
+    Uses the real TestHarness (whisperlivekit/test_harness.py), which forwards
+    **kwargs straight to TranscriptionEngine/WhisperLiveKitConfig, so `backend`
+    and `lan` are the same fields exercised by test_canary_config_defaults()
+    above. Audio comes from whisperlivekit/test_data.py's cached LibriSpeech
+    sample (same fixture used by test_canary_asr_transcribes_with_word_timestamps
+    and tests/test_pipeline.py).
+    """
+    import asyncio
+
+    from whisperlivekit import TestHarness
+    from whisperlivekit.test_data import get_sample
+
+    sample = get_sample("librispeech_short")
+
+    async def _run():
+        async with TestHarness(backend="canary", lan="en") as h:
+            await h.feed(sample.path, speed=1.0)
+            await h.drain(3.0)
+            result = await h.finish()
+            assert result.text.strip(), "expected non-empty transcription"
+
+    asyncio.run(_run())
