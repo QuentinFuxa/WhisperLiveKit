@@ -118,3 +118,108 @@ class CanarySessionASR(SessionASRProxy):
                 return self._asr.transcribe(audio, init_prompt=init_prompt)
             finally:
                 self._asr.original_language = saved
+
+
+class CanaryASR:
+    """Shared Canary model holder implementing the LocalAgreement contract."""
+
+    sep = " "
+    SAMPLING_RATE = 16000
+
+    def __init__(self, lan="auto", canary_model="nvidia/canary-1b-v2",
+                 buffer_trimming="segment", buffer_trimming_sec=15.0,
+                 confidence_validation=False, canary_default_lang="en",
+                 logfile=None, **_unused):
+        import time
+
+        self.original_language = None if lan == "auto" else lan
+        self.canary_default_lang = canary_default_lang
+        self.backend_choice = "canary"
+        self.confidence_validation = confidence_validation
+        self.tokenizer = None  # segment trimming needs no sentence tokenizer
+        self.buffer_trimming = buffer_trimming
+        self.buffer_trimming_sec = buffer_trimming_sec
+        self.transcribe_kargs = {}
+        self.lid_model = None  # attached by core.py when auto detection is enabled
+
+        from nemo.collections.asr.models import ASRModel
+
+        t = time.time()
+        logger.info("Loading Canary model '%s' via NeMo...", canary_model)
+        if canary_model.endswith(".nemo"):
+            self.model = ASRModel.restore_from(canary_model)
+        else:
+            self.model = ASRModel.from_pretrained(model_name=canary_model)
+        self.model.eval()
+        logger.info("Canary model loaded in %.2fs", time.time() - t)
+
+    def transcribe(self, audio, init_prompt="", source_lang=None):
+        """Run Canary on a 16kHz mono float32 numpy window. Returns hyp[0]."""
+        import numpy as np
+
+        lang = source_lang or self.original_language or self.canary_default_lang
+        audio = np.asarray(audio, dtype=np.float32)
+        outputs = self.model.transcribe(
+            [audio],
+            source_lang=lang,
+            target_lang=lang,
+            timestamps=True,
+            batch_size=1,
+            verbose=False,
+        )
+        return outputs[0]
+
+    def _word_stamps(self, res):
+        ts = getattr(res, "timestamp", None) or {}
+        return ts.get("word")
+
+    def _segment_stamps(self, res):
+        ts = getattr(res, "timestamp", None) or {}
+        return ts.get("segment")
+
+    def ts_words(self, res) -> List[ASRToken]:
+        return canary_words_to_tokens(self._word_stamps(res))
+
+    def segments_end_ts(self, res) -> List[float]:
+        return canary_segment_end_ts(self._segment_stamps(res))
+
+    def use_vad(self):
+        logger.warning("VAD is handled upstream (Silero); CanaryASR.use_vad() is a no-op.")
+
+
+class CanaryLID:
+    """Shared spoken-language-ID model (NeMo langid_ambernet / AmberNet)."""
+
+    SAMPLING_RATE = 16000
+
+    def __init__(self, lid_model="langid_ambernet", logfile=None, **_unused):
+        import time
+
+        import nemo.collections.asr as nemo_asr
+
+        t = time.time()
+        logger.info("Loading Canary LID model '%s' via NeMo...", lid_model)
+        self.model = nemo_asr.models.EncDecSpeakerLabelModel.from_pretrained(
+            model_name=lid_model
+        )
+        self.model.eval()
+        try:
+            self.device = next(self.model.parameters()).device
+        except StopIteration:  # pragma: no cover
+            self.device = "cpu"
+        logger.info("Canary LID model loaded in %.2fs", time.time() - t)
+
+    def detect(self, audio) -> Tuple[Optional[str], float]:
+        """Return (canary_lang_code_or_None, confidence) for a 16kHz clip."""
+        import numpy as np
+        import torch
+
+        arr = np.asarray(audio, dtype=np.float32)
+        sig = torch.tensor(arr).unsqueeze(0).to(self.device)
+        sig_len = torch.tensor([sig.shape[1]]).to(self.device)
+        with torch.no_grad():
+            logits, _ = self.model.forward(input_signal=sig, input_signal_length=sig_len)
+            probs = logits.softmax(dim=-1)
+            conf, idx = probs.max(dim=-1)
+        raw_code = self.model.cfg.labels[int(idx.item())]
+        return map_voxlingua_to_canary(raw_code), float(conf.item())

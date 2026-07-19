@@ -186,3 +186,35 @@ def test_auto_with_no_lid_uses_default():
                                lid_min_sec=2.0, lid_min_conf=0.5)
     session.transcribe(_audio(5.0))
     assert asr.calls == ["en"]
+
+
+import importlib.util
+
+import pytest
+
+_NEMO_AVAILABLE = importlib.util.find_spec("nemo") is not None
+requires_nemo = pytest.mark.skipif(not _NEMO_AVAILABLE, reason="NeMo not installed")
+
+
+@requires_nemo
+def test_canary_asr_transcribes_with_word_timestamps():
+    import soundfile as sf
+
+    from whisperlivekit.canary_backend import CanaryASR
+    from whisperlivekit.test_data import get_sample  # real 16kHz mono clip + reference text
+
+    asr = CanaryASR(
+        lan="en",
+        canary_model="nvidia/canary-1b-v2",
+        buffer_trimming="segment",
+        buffer_trimming_sec=15.0,
+        confidence_validation=False,
+    )
+    sample = get_sample("librispeech_short")
+    audio, _sr = sf.read(sample.path, dtype="float32")
+    res = asr.transcribe(audio, source_lang="en")
+    tokens = asr.ts_words(res)
+    assert tokens, "expected at least one word token"
+    assert all(t.end >= t.start for t in tokens)
+    ends = asr.segments_end_ts(res)
+    assert ends and ends[-1] > 0
