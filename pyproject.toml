@@ -72,6 +72,9 @@ cu129 = [
 diarization-sortformer = [
     "nemo-toolkit[asr]>2.4; python_version >= '3.10' and python_version < '3.13'",
 ]
+canary = [
+    "nemo-toolkit[asr]>=2.5.0; python_version >= '3.10' and python_version < '3.13'",
+]
 diarization-diart = [
     "diart",
     "torch<2.9.0",
@@ -127,6 +130,14 @@ conflicts = [
     [
         { extra = "qwen3-streaming" },
         { extra = "voxtral-hf" },
+    ],
+    [
+        { extra = "canary" },
+        { extra = "voxtral-hf" },
+    ],
+    [
+        { extra = "canary" },
+        { extra = "qwen3-vllm-metal" },
     ],
 ]
 

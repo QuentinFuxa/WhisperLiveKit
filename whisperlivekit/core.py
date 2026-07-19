@@ -203,6 +203,33 @@ class TranscriptionEngine:
                 self.tokenizer = None
                 self.asr = VoxtralHFStreamingASR(**transcription_common_params)
                 logger.info("Using Voxtral HF Transformers streaming backend")
+            elif config.backend == "canary":
+                from whisperlivekit.canary_backend import CanaryASR, CanaryLID
+                self.tokenizer = None
+                self.asr = CanaryASR(
+                    lan=config.lan,
+                    canary_model=config.canary_model,
+                    canary_default_lang=config.canary_default_lang,
+                    buffer_trimming=config.buffer_trimming,
+                    buffer_trimming_sec=config.buffer_trimming_sec,
+                    confidence_validation=config.confidence_validation,
+                )
+                # Load the LID model so any session may request auto-detection.
+                # A failure here (e.g. the LID model cannot be downloaded) must
+                # not stop the server from serving transcription — degrade to no
+                # auto-detect (sessions fall back to --canary-default-lang).
+                try:
+                    self.asr.lid_model = CanaryLID(lid_model=config.canary_lid_model)
+                except Exception as e:
+                    logger.warning(
+                        "Canary LID model %r failed to load (%s); auto language "
+                        "detection disabled, sessions use the default language.",
+                        config.canary_lid_model, e,
+                    )
+                    self.asr.lid_model = None
+                from whisperlivekit.warmup import warmup_asr
+                warmup_asr(self.asr, config.warmup_file)
+                logger.info("Using LocalAgreement policy with Canary backend")
             elif config.backend_policy == "simulstreaming":
                 simulstreaming_params = {
                     "disable_fast_encoder": config.disable_fast_encoder,
@@ -299,12 +326,27 @@ def online_factory(args, asr, language=None):
             If provided and the backend supports it, transcription will use
             this language instead of the server-wide default.
     """
+    backend = getattr(args, 'backend', None)
+    # Canary carries its own per-session wrapper (CanarySessionASR with auto-detect),
+    # so it returns here before the generic SessionASRProxy wrap to avoid double-wrapping.
+    if backend == "canary":
+        from whisperlivekit.canary_backend import CanarySessionASR
+        effective = language if language is not None else getattr(args, 'lan', 'auto')
+        wrapped = CanarySessionASR(
+            asr,
+            effective,
+            lid=getattr(asr, 'lid_model', None),
+            default_lang=getattr(args, 'canary_default_lang', 'en'),
+            lid_min_sec=getattr(args, 'canary_lid_min_sec', 2.0),
+            lid_min_conf=getattr(args, 'canary_lid_min_conf', 0.5),
+        )
+        return OnlineASRProcessor(wrapped)
+
     # Wrap the shared ASR with a per-session language if requested
     if language is not None:
         from whisperlivekit.session_asr_proxy import SessionASRProxy
         asr = SessionASRProxy(asr, language)
 
-    backend = getattr(args, 'backend', None)
     if backend == "qwen3-streaming":
         from whisperlivekit.qwen3_streaming import Qwen3StreamingOnlineProcessor
         return Qwen3StreamingOnlineProcessor(asr)

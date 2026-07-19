@@ -124,6 +124,7 @@ For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLi
 | **Qwen3-ASR vLLM Metal (Apple Silicon)** | Install vLLM with the official vllm-metal script first, then `uv sync --extra qwen3-vllm-metal` | Install vLLM with the official vllm-metal script first, then `pip install -e ".[qwen3-vllm-metal]"` |
 | **Speaker diarization (Sortformer / NeMo)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
 | *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
+| **Canary-1b-v2 (NeMo, CUDA)** | `uv sync --extra canary` | `pip install -e ".[canary]"` |
 
 Supported GPU profiles:
 
@@ -138,7 +139,7 @@ uv sync --extra cu129 --extra voxtral-hf --extra translation
 uv sync --extra qwen3-vllm
 ```
 
-`qwen3-vllm` uses vLLM's CUDA wheel stack and must be installed in a separate environment from `cu129`. `voxtral-hf` / `qwen3-vllm-metal` and `diarization-sortformer` are also intentionally incompatible extras and must be installed in separate environments.
+`qwen3-vllm` uses vLLM's CUDA wheel stack and must be installed in a separate environment from `cu129`. `voxtral-hf` / `qwen3-vllm-metal` / `canary` and `diarization-sortformer` are also intentionally incompatible extras and must be installed in separate environments.
 
 See **Parameters & Configuration** below on how to use them.
 
@@ -263,6 +264,28 @@ text-decoder request per chunk. The `append-kv` and `rolling` names remain as
 compatibility aliases for the HF decoder path. Keep standard `qwen3-vllm` for
 best current accuracy until the causal quality gate is fixed.
 
+### Canary Backend
+
+WhisperLiveKit supports [NVIDIA Canary-1b-v2](https://huggingface.co/nvidia/canary-1b-v2)
+via [NeMo](https://github.com/NVIDIA/NeMo), a 1B-parameter model covering 25 European
+languages with native word-level timestamps. Automatic language detection uses NeMo's
+AmberNet language-ID model when `--language auto` is set; the detected language is locked
+in once enough audio has accumulated. Canary streams through the LocalAgreement policy.
+
+```bash
+pip install -e ".[canary]"
+wlk --backend canary --language auto
+```
+
+Notes:
+- CUDA only; NeMo is a heavy dependency (torch, pytorch-lightning, and friends).
+- Word/segment timestamps require NeMo's timestamp API, available in NeMo 2.5+.
+  The `canary` extra pins `nemo-toolkit[asr]>=2.5.0`; if you land on a build where
+  the timestamp API is missing, install NeMo from `main`.
+- Explicit `--language <code>` skips language detection entirely. Tune detection
+  with `--canary-lid-min-sec` (minimum audio before detecting) and
+  `--canary-lid-min-conf` (confidence threshold to lock in the detected language).
+
 ### Usage Examples
 
 **Command-line Interface**: Start the transcription server with various options:
@@ -334,7 +357,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--translation-backend` | `nllb` (in-process, CPU-friendly) or `alignatt`: streaming LLM translation through an [Alignatt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM) sidecar, with attention-gated append-only commits. See [docs/translation-alignatt.md](docs/translation-alignatt.md). | `nllb` |
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
-| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU) | `auto` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU), `canary` (NeMo, CUDA) | `auto` |
 | `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
 | `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
@@ -359,6 +382,14 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--disable-punctuation-split` | [NOT FUNCTIONAL IN 0.2.15 / 0.2.16] Disable punctuation based splits. See #214 | `False` |
 | `--segmentation-model` | Hugging Face model ID for Diart segmentation model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/segmentation-3.0` |
 | `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/embedding` |
+
+| Canary backend options (only used with `--backend canary`) | Description | Default |
+|-----------|-------------|---------|
+| `--canary-model` | HuggingFace/NGC model id or local `.nemo` path | `nvidia/canary-1b-v2` |
+| `--canary-default-lang` | Language used until auto-detection locks in (or always, with explicit `--language`) | `en` |
+| `--canary-lid-model` | NeMo language-ID model used for `--language auto` | `langid_ambernet` |
+| `--canary-lid-min-sec` | Minimum seconds of audio before attempting language detection | `2.0` |
+| `--canary-lid-min-conf` | Confidence threshold to lock in the detected language | `0.5` |
 
 | SimulStreaming backend options | Description | Default |
 |-----------|-------------|---------|
