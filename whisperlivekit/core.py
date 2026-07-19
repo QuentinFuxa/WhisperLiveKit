@@ -314,6 +314,8 @@ def online_factory(args, asr, language=None):
             this language instead of the server-wide default.
     """
     backend = getattr(args, 'backend', None)
+    # Canary carries its own per-session wrapper (CanarySessionASR with auto-detect),
+    # so it returns here before the generic SessionASRProxy wrap to avoid double-wrapping.
     if backend == "canary":
         from whisperlivekit.canary_backend import CanarySessionASR
         effective = language if language is not None else getattr(args, 'lan', 'auto')
@@ -332,7 +334,6 @@ def online_factory(args, asr, language=None):
         from whisperlivekit.session_asr_proxy import SessionASRProxy
         asr = SessionASRProxy(asr, language)
 
-    backend = getattr(args, 'backend', None)
     if backend == "qwen3-streaming":
         from whisperlivekit.qwen3_streaming import Qwen3StreamingOnlineProcessor
         return Qwen3StreamingOnlineProcessor(asr)

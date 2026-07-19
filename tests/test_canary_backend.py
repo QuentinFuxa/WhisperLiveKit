@@ -252,3 +252,9 @@ def test_online_factory_routes_canary_to_localagreement():
     processor = online_factory(args, asr, language="auto")
     assert isinstance(processor, OnlineASRProcessor)
     assert isinstance(processor.asr, CanarySessionASR)
+    assert processor.asr._lid is asr.lid_model
+
+    # language=None falls back to args.lan ("auto") -> auto-detect mode.
+    processor_none = online_factory(args, _FakeCanaryASR(), language=None)
+    assert isinstance(processor_none.asr, CanarySessionASR)
+    assert processor_none.asr._is_auto is True
