@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 from time import time
 from typing import Any, List, Optional, Tuple, Union
 
@@ -183,15 +184,21 @@ class TokensAlignment:
 
 
     def concatenate_diar_segments(self) -> List[SpeakerSegment]:
-        """Merge consecutive diarization slices that share the same speaker."""
+        """Merge consecutive diarization slices that share the same speaker.
+
+        Works on copies: extending ``merged[-1].end`` in place would mutate
+        the stored ``all_diarization_segments`` entries, and since this runs
+        on every ``get_lines`` refresh, the stored spans would grow a little
+        more corrupt each time.
+        """
         if not self.all_diarization_segments:
             return []
-        merged = [self.all_diarization_segments[0]]
+        merged = [replace(self.all_diarization_segments[0])]
         for segment in self.all_diarization_segments[1:]:
             if segment.speaker == merged[-1].speaker:
                 merged[-1].end = segment.end
             else:
-                merged.append(segment)
+                merged.append(replace(segment))
         return merged
 
 
