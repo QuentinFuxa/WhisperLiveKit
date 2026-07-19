@@ -55,7 +55,11 @@ def canary_words_to_tokens(word_stamps) -> List[ASRToken]:
         text = w.get("word")
         if not text:
             continue
-        tokens.append(ASRToken(w["start"], w["end"], text))
+        # Prefix each word with a space (faster-whisper convention, paired with
+        # sep=""). The committed-line assembly (Segment.from_tokens) joins token
+        # text with "".join, so the space must live on the token, not the sep;
+        # otherwise committed words concatenate ("thequickbrown").
+        tokens.append(ASRToken(w["start"], w["end"], " " + text))
     return tokens
 
 
@@ -123,7 +127,9 @@ class CanarySessionASR(SessionASRProxy):
 class CanaryASR:
     """Shared Canary model holder implementing the LocalAgreement contract."""
 
-    sep = " "
+    # Empty sep paired with space-prefixed word tokens (see canary_words_to_tokens),
+    # matching the faster-whisper convention the display/assembly paths assume.
+    sep = ""
     SAMPLING_RATE = 16000
 
     def __init__(self, lan="auto", canary_model="nvidia/canary-1b-v2",

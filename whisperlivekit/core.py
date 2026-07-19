@@ -215,7 +215,18 @@ class TranscriptionEngine:
                     confidence_validation=config.confidence_validation,
                 )
                 # Load the LID model so any session may request auto-detection.
-                self.asr.lid_model = CanaryLID(lid_model=config.canary_lid_model)
+                # A failure here (e.g. the LID model cannot be downloaded) must
+                # not stop the server from serving transcription — degrade to no
+                # auto-detect (sessions fall back to --canary-default-lang).
+                try:
+                    self.asr.lid_model = CanaryLID(lid_model=config.canary_lid_model)
+                except Exception as e:
+                    logger.warning(
+                        "Canary LID model %r failed to load (%s); auto language "
+                        "detection disabled, sessions use the default language.",
+                        config.canary_lid_model, e,
+                    )
+                    self.asr.lid_model = None
                 from whisperlivekit.warmup import warmup_asr
                 warmup_asr(self.asr, config.warmup_file)
                 logger.info("Using LocalAgreement policy with Canary backend")

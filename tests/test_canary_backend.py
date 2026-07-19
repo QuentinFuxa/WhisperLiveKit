@@ -46,7 +46,8 @@ def test_canary_words_to_tokens_maps_word_timestamps():
         {"word": "world", "start": 0.4, "end": 0.9},
     ]
     tokens = canary_words_to_tokens(word_stamps)
-    assert [t.text for t in tokens] == ["hello", "world"]
+    # Words are space-prefixed (faster-whisper convention, paired with sep="").
+    assert [t.text for t in tokens] == [" hello", " world"]
     assert tokens[0].start == 0.0 and tokens[0].end == 0.4
     assert tokens[1].start == 0.4 and tokens[1].end == 0.9
 
