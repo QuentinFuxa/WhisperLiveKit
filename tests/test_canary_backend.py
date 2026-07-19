@@ -78,3 +78,81 @@ def test_map_voxlingua_to_canary_unsupported_returns_none():
     assert map_voxlingua_to_canary("zh") is None   # Chinese not in Canary's 25
     assert map_voxlingua_to_canary("") is None
     assert map_voxlingua_to_canary(None) is None
+
+
+import numpy as np
+
+
+class _RecordingCanaryASR:
+    """Minimal stand-in for CanaryASR that records the source language used."""
+    sep = " "
+
+    def __init__(self):
+        self.original_language = None
+        self.calls = []
+
+    def transcribe(self, audio, init_prompt=""):
+        self.calls.append(self.original_language)
+        return f"decoded:{self.original_language}"
+
+
+class _StubLID:
+    def __init__(self, code="de", conf=0.9):
+        self._code, self._conf = code, conf
+        self.n_calls = 0
+
+    def detect(self, audio):
+        self.n_calls += 1
+        return self._code, self._conf
+
+
+def _audio(seconds):
+    return np.zeros(int(seconds * 16000), dtype=np.float32)
+
+
+def test_explicit_language_bypasses_lid():
+    from whisperlivekit.canary_backend import CanarySessionASR
+
+    asr = _RecordingCanaryASR()
+    lid = _StubLID()
+    session = CanarySessionASR(asr, "fr", lid=lid, default_lang="en",
+                               lid_min_sec=2.0, lid_min_conf=0.5)
+    session.transcribe(_audio(5))
+    assert asr.calls == ["fr"]
+    assert lid.n_calls == 0
+
+
+def test_auto_uses_default_until_enough_audio():
+    from whisperlivekit.canary_backend import CanarySessionASR
+
+    asr = _RecordingCanaryASR()
+    lid = _StubLID(code="de", conf=0.9)
+    session = CanarySessionASR(asr, "auto", lid=lid, default_lang="en",
+                               lid_min_sec=2.0, lid_min_conf=0.5)
+    session.transcribe(_audio(1.0))          # below lid_min_sec -> default, no LID
+    assert asr.calls == ["en"]
+    assert lid.n_calls == 0
+
+
+def test_auto_detects_once_then_locks():
+    from whisperlivekit.canary_backend import CanarySessionASR
+
+    asr = _RecordingCanaryASR()
+    lid = _StubLID(code="de", conf=0.9)
+    session = CanarySessionASR(asr, "auto", lid=lid, default_lang="en",
+                               lid_min_sec=2.0, lid_min_conf=0.5)
+    session.transcribe(_audio(3.0))          # detects -> "de"
+    session.transcribe(_audio(4.0))          # locked -> "de", no second detect
+    assert asr.calls == ["de", "de"]
+    assert lid.n_calls == 1
+
+
+def test_auto_low_confidence_stays_on_default():
+    from whisperlivekit.canary_backend import CanarySessionASR
+
+    asr = _RecordingCanaryASR()
+    lid = _StubLID(code="de", conf=0.2)       # below lid_min_conf
+    session = CanarySessionASR(asr, "auto", lid=lid, default_lang="en",
+                               lid_min_sec=2.0, lid_min_conf=0.5)
+    session.transcribe(_audio(3.0))
+    assert asr.calls == ["en"]                # not locked, retried later
