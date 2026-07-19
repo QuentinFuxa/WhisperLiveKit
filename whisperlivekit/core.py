@@ -216,6 +216,8 @@ class TranscriptionEngine:
                 )
                 # Load the LID model so any session may request auto-detection.
                 self.asr.lid_model = CanaryLID(lid_model=config.canary_lid_model)
+                from whisperlivekit.warmup import warmup_asr
+                warmup_asr(self.asr, config.warmup_file)
                 logger.info("Using LocalAgreement policy with Canary backend")
             elif config.backend_policy == "simulstreaming":
                 simulstreaming_params = {

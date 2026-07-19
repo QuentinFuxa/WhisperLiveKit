@@ -155,6 +155,9 @@ class CanaryASR:
 
     def transcribe(self, audio, init_prompt="", source_lang=None):
         """Run Canary on a 16kHz mono float32 numpy window. Returns hyp[0]."""
+        # init_prompt is accepted for LocalAgreement interface compatibility but
+        # intentionally unused: Canary (offline attention enc-dec) has no
+        # prompt-conditioning slot; LocalAgreement relies on the growing buffer.
         import numpy as np
 
         lang = source_lang or self.original_language or self.canary_default_lang
@@ -227,4 +230,13 @@ class CanaryLID:
             probs = logits.softmax(dim=-1)
             conf, idx = probs.max(dim=-1)
         raw_code = self.model.cfg.labels[int(idx.item())]
-        return map_voxlingua_to_canary(raw_code), float(conf.item())
+        confidence = float(conf.item())
+        mapped = map_voxlingua_to_canary(raw_code)
+        if mapped is None:
+            logger.warning(
+                "Canary LID predicted label %r (conf=%.2f) with no mapping into "
+                "Canary's supported languages; extend _VOXLINGUA_TO_CANARY. "
+                "Falling back to the default language.",
+                raw_code, confidence,
+            )
+        return mapped, confidence
