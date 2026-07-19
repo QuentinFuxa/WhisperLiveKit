@@ -203,6 +203,20 @@ class TranscriptionEngine:
                 self.tokenizer = None
                 self.asr = VoxtralHFStreamingASR(**transcription_common_params)
                 logger.info("Using Voxtral HF Transformers streaming backend")
+            elif config.backend == "canary":
+                from whisperlivekit.canary_backend import CanaryASR, CanaryLID
+                self.tokenizer = None
+                self.asr = CanaryASR(
+                    lan=config.lan,
+                    canary_model=config.canary_model,
+                    canary_default_lang=config.canary_default_lang,
+                    buffer_trimming=config.buffer_trimming,
+                    buffer_trimming_sec=config.buffer_trimming_sec,
+                    confidence_validation=config.confidence_validation,
+                )
+                # Load the LID model so any session may request auto-detection.
+                self.asr.lid_model = CanaryLID(lid_model=config.canary_lid_model)
+                logger.info("Using LocalAgreement policy with Canary backend")
             elif config.backend_policy == "simulstreaming":
                 simulstreaming_params = {
                     "disable_fast_encoder": config.disable_fast_encoder,
@@ -299,6 +313,20 @@ def online_factory(args, asr, language=None):
             If provided and the backend supports it, transcription will use
             this language instead of the server-wide default.
     """
+    backend = getattr(args, 'backend', None)
+    if backend == "canary":
+        from whisperlivekit.canary_backend import CanarySessionASR
+        effective = language if language is not None else getattr(args, 'lan', 'auto')
+        wrapped = CanarySessionASR(
+            asr,
+            effective,
+            lid=getattr(asr, 'lid_model', None),
+            default_lang=getattr(args, 'canary_default_lang', 'en'),
+            lid_min_sec=getattr(args, 'canary_lid_min_sec', 2.0),
+            lid_min_conf=getattr(args, 'canary_lid_min_conf', 0.5),
+        )
+        return OnlineASRProcessor(wrapped)
+
     # Wrap the shared ASR with a per-session language if requested
     if language is not None:
         from whisperlivekit.session_asr_proxy import SessionASRProxy

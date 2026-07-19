@@ -1,3 +1,5 @@
+from argparse import Namespace
+
 import numpy as np
 
 
@@ -218,3 +220,35 @@ def test_canary_asr_transcribes_with_word_timestamps():
     assert all(t.end >= t.start for t in tokens)
     ends = asr.segments_end_ts(res)
     assert ends and ends[-1] > 0
+
+
+class _FakeCanaryASR:
+    """Stands in for a loaded CanaryASR so online_factory needs no NeMo."""
+    sep = " "
+
+    def __init__(self):
+        self.original_language = None
+        self.lid_model = _StubLID()
+        self.canary_default_lang = "en"
+        self.confidence_validation = False
+        self.tokenizer = None
+        self.buffer_trimming = "segment"
+        self.buffer_trimming_sec = 15.0
+
+    def transcribe(self, audio, init_prompt=""):
+        return "x"
+
+
+def test_online_factory_routes_canary_to_localagreement():
+    from whisperlivekit.canary_backend import CanarySessionASR
+    from whisperlivekit.core import online_factory
+    from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
+
+    args = Namespace(
+        backend="canary", backend_policy="simulstreaming", lan="auto",
+        canary_default_lang="en", canary_lid_min_sec=2.0, canary_lid_min_conf=0.5,
+    )
+    asr = _FakeCanaryASR()
+    processor = online_factory(args, asr, language="auto")
+    assert isinstance(processor, OnlineASRProcessor)
+    assert isinstance(processor.asr, CanarySessionASR)
