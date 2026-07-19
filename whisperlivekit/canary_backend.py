@@ -167,6 +167,11 @@ class CanaryASR:
             batch_size=1,
             verbose=False,
         )
+        # An all-silence / empty window can yield no hypotheses. ts_words() and
+        # segments_end_ts() both tolerate None (their helpers null-guard), so
+        # returning None here degrades cleanly instead of raising IndexError.
+        if not outputs:
+            return None
         return outputs[0]
 
     def _word_stamps(self, res):
