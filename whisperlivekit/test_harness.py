@@ -71,7 +71,7 @@ def _parse_time(time_str: str) -> float:
 
 
 def load_audio_pcm(audio_path: str, sample_rate: int = SAMPLE_RATE) -> bytes:
-    """Load any audio file and convert to PCM s16le mono via ffmpeg."""
+    """Load any audio file and convert to PCM s16le mono."""
     cmd = [
         "ffmpeg", "-i", str(audio_path),
         "-f", "s16le", "-acodec", "pcm_s16le",
@@ -79,12 +79,79 @@ def load_audio_pcm(audio_path: str, sample_rate: int = SAMPLE_RATE) -> bytes:
         "-loglevel", "error",
         "pipe:1",
     ]
-    proc = subprocess.run(cmd, capture_output=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True)
+    except FileNotFoundError:
+        return _load_audio_pcm_without_ffmpeg(audio_path, sample_rate)
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg conversion failed: {proc.stderr.decode().strip()}")
     if not proc.stdout:
         raise RuntimeError(f"ffmpeg produced no output for {audio_path}")
     return proc.stdout
+
+
+def _load_audio_pcm_without_ffmpeg(audio_path: str, sample_rate: int) -> bytes:
+    """Fallback audio loader for environments where ffmpeg is unavailable."""
+    errors = []
+    try:
+        import numpy as np
+        import soundfile as sf
+
+        waveform, source_rate = sf.read(str(audio_path), dtype="float32", always_2d=False)
+        waveform = _mono_audio(waveform, np)
+        if source_rate != sample_rate:
+            waveform = _resample_audio(waveform, source_rate, sample_rate, np)
+        return _float_audio_to_pcm(waveform, np)
+    except Exception as exc:
+        errors.append(exc)
+
+    try:
+        import librosa
+        import numpy as np
+
+        waveform, _ = librosa.load(str(audio_path), sr=sample_rate, mono=True)
+        return _float_audio_to_pcm(waveform, np)
+    except Exception as exc:
+        errors.append(exc)
+
+    try:
+        import torch
+        import torchaudio
+
+        waveform, source_rate = torchaudio.load(str(audio_path))
+    except Exception as exc:
+        errors.append(exc)
+        detail = "; ".join(str(error) for error in errors)
+        raise RuntimeError(f"fallback audio loading failed: {detail}") from exc
+    if waveform.ndim != 2 or waveform.shape[0] == 0:
+        raise RuntimeError(f"torchaudio produced invalid audio for {audio_path}")
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    if source_rate != sample_rate:
+        waveform = torchaudio.functional.resample(waveform, source_rate, sample_rate)
+    pcm = (waveform.squeeze(0).clamp(-1.0, 1.0) * 32767.0).to(torch.int16)
+    return pcm.cpu().numpy().tobytes()
+
+
+def _mono_audio(waveform, np):
+    if waveform.ndim == 1:
+        return waveform
+    return waveform.mean(axis=1)
+
+
+def _resample_audio(waveform, source_rate: int, target_rate: int, np):
+    if len(waveform) == 0:
+        return waveform
+    duration = len(waveform) / source_rate
+    target_length = max(1, int(round(duration * target_rate)))
+    source_positions = np.linspace(0.0, duration, num=len(waveform), endpoint=False)
+    target_positions = np.linspace(0.0, duration, num=target_length, endpoint=False)
+    return np.interp(target_positions, source_positions, waveform).astype("float32")
+
+
+def _float_audio_to_pcm(waveform, np) -> bytes:
+    pcm = (np.clip(waveform, -1.0, 1.0) * 32767.0).astype("<i2")
+    return pcm.tobytes()
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,25 @@ EXPECTED = {
     "ja": "中学",
     "ko": "생각",
 }
+
+
+def test_test_harness_audio_loader_falls_back_without_ffmpeg(tmp_path, monkeypatch):
+    from whisperlivekit import test_harness
+
+    sample_rate = 16000
+    audio = np.sin(np.linspace(0, np.pi * 8, sample_rate, dtype=np.float32)) * 0.2
+    sample = tmp_path / "sample.wav"
+    sf.write(sample, audio, sample_rate)
+
+    def missing_ffmpeg(*args, **kwargs):
+        raise FileNotFoundError("ffmpeg")
+
+    monkeypatch.setattr(subprocess, "run", missing_ffmpeg)
+
+    pcm = test_harness.load_audio_pcm(str(sample), sample_rate=sample_rate)
+
+    assert pcm
+    assert len(pcm) == sample_rate * 2
 
 
 def _load_16khz(path):
