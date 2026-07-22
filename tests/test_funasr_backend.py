@@ -56,6 +56,18 @@ def _adapter_for_tokens(postprocessed_text, language=None):
     return asr
 
 
+def test_funasr_backend_declares_sampling_rate():
+    from whisperlivekit.funasr_backend import FunASRASR
+
+    assert FunASRASR.SAMPLING_RATE == 16000
+
+
+def test_funasr_does_not_extend_whisper_language_table():
+    from whisperlivekit.local_agreement.whisper_online import WHISPER_LANG_CODES
+
+    assert "yue" not in WHISPER_LANG_CODES
+
+
 @pytest.mark.parametrize(
     ("text", "words", "expected_parts"),
     [
@@ -227,6 +239,26 @@ def test_funasr_empty_result_stays_empty(result):
     asr = _adapter_for_tokens("")
     assert asr.ts_words(result) == []
     assert asr.segments_end_ts(result) == []
+
+
+def test_funasr_decoration_only_output_stays_empty():
+    asr = _adapter_for_tokens("")
+    result = [{"text": "<|en|><|NEUTRAL|><|Music|><|woitn|>", "words": [], "timestamp": []}]
+
+    assert asr.ts_words(result) == []
+    assert asr.segments_end_ts(result) == []
+
+
+def test_funasr_session_rejects_unsupported_language():
+    from types import SimpleNamespace
+
+    from whisperlivekit.core import online_factory
+
+    asr = SimpleNamespace(backend_choice="funasr")
+    args = SimpleNamespace(backend="funasr")
+
+    with pytest.raises(ValueError, match="supports only"):
+        online_factory(args, asr, language="fr")
 
 
 def test_funasr_segment_end_uses_last_word_timestamp():

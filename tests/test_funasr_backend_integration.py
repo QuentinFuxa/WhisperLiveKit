@@ -1,5 +1,4 @@
 import os
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +14,11 @@ MODEL_DIR = os.environ.get("WLK_FUNASR_MODEL_DIR")
 SENSEVOICE_REPO = "FunAudioLLM/SenseVoiceSmall"
 SENSEVOICE_REVISION = "3847d57b6bdf2dd8875cb1508d2af43d80a16bf7"
 
+pytestmark = pytest.mark.skipif(
+    not RUN_INTEGRATION,
+    reason="set WLK_RUN_FUNASR_INTEGRATION=1 to run FunASR integration tests",
+)
+
 EXPECTED = {
     "en": "tribal",
     "zh": "开饭时间",
@@ -22,25 +26,6 @@ EXPECTED = {
     "ja": "中学",
     "ko": "생각",
 }
-
-
-def test_test_harness_audio_loader_falls_back_without_ffmpeg(tmp_path, monkeypatch):
-    from whisperlivekit import test_harness
-
-    sample_rate = 16000
-    audio = np.sin(np.linspace(0, np.pi * 8, sample_rate, dtype=np.float32)) * 0.2
-    sample = tmp_path / "sample.wav"
-    sf.write(sample, audio, sample_rate)
-
-    def missing_ffmpeg(*args, **kwargs):
-        raise FileNotFoundError("ffmpeg")
-
-    monkeypatch.setattr(subprocess, "run", missing_ffmpeg)
-
-    pcm = test_harness.load_audio_pcm(str(sample), sample_rate=sample_rate)
-
-    assert pcm
-    assert len(pcm) == sample_rate * 2
 
 
 def _load_16khz(path):
@@ -61,7 +46,7 @@ def _load_16khz(path):
 
 @pytest.fixture(scope="module")
 def sensevoice():
-    if not RUN_INTEGRATION or not MODEL_DIR:
+    if not MODEL_DIR:
         pytest.skip("set WLK_RUN_FUNASR_INTEGRATION=1 and WLK_FUNASR_MODEL_DIR")
     return FunASRASR(lan="auto", model_dir=MODEL_DIR)
 

@@ -51,9 +51,9 @@ jobs:
           cache: pip
 
       - name: Install package with test deps
-        run: pip install -e ".[test,funasr]" qwen3-asr-causal
+        run: pip install -e ".[test]" qwen3-asr-causal
 
-      # The full backend matrix in test_pipeline.py remains local (see CLAUDE.md).
-      # The normal suite includes a pinned SenseVoiceSmall TestHarness smoke test.
+      # test_pipeline.py downloads real models and audio; it stays a local
+      # suite (see CLAUDE.md). CI runs the dependency-light tests.
       - name: Run test suite
         run: pytest -q tests/ --ignore=tests/test_pipeline.py

@@ -34,6 +34,7 @@ def _load_funasr_dependencies():
 class FunASRASR:
     """Adapt SenseVoice's offline output to WLK's LocalAgreement contract."""
 
+    SAMPLING_RATE = 16000
     sep = ""
 
     def __init__(
@@ -229,6 +230,8 @@ class FunASRASR:
         if not isinstance(timestamps, (list, tuple)):
             raise ValueError("FunASR result timestamp must be a list.")
         if not text and not words and not timestamps:
+            return []
+        if not words and not timestamps and self._is_decoration(text):
             return []
         if not words:
             raise ValueError("FunASR returned text without timestamped words.")
