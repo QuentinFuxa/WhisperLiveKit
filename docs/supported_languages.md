@@ -2,6 +2,10 @@
 
 WLK supports transcription in the following languages:
 
+The FunASR SenseVoiceSmall backend supports `auto`, `zh`, `yue`, `en`, `ja`,
+and `ko`. These backend-specific limits are narrower than Whisper's language
+list; unsupported values are rejected during configuration.
+
 | ISO Code | Language Name        |
 |----------|---------------------|
 | en       | English             |

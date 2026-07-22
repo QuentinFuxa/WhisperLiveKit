@@ -301,6 +301,14 @@ def online_factory(args, asr, language=None):
     """
     # Wrap the shared ASR with a per-session language if requested
     if language is not None:
+        if getattr(args, "backend", None) == "funasr":
+            from whisperlivekit.config import FUNASR_LANGUAGES
+
+            if language not in FUNASR_LANGUAGES:
+                supported = ", ".join(sorted(FUNASR_LANGUAGES))
+                raise ValueError(
+                    f"FunASR SenseVoiceSmall supports only: {supported}."
+                )
         from whisperlivekit.session_asr_proxy import SessionASRProxy
         asr = SessionASRProxy(asr, language)
 
@@ -330,6 +338,9 @@ def online_factory(args, asr, language=None):
     if backend == "voxtral":
         from whisperlivekit.voxtral_hf_streaming import VoxtralHFStreamingOnlineProcessor
         return VoxtralHFStreamingOnlineProcessor(asr)
+    if backend == "funasr":
+        from whisperlivekit.funasr_backend import FunASROnlineASRProcessor
+        return FunASROnlineASRProcessor(asr)
     if args.backend_policy == "simulstreaming":
         from whisperlivekit.simul_whisper import SimulStreamingOnlineProcessor
         return SimulStreamingOnlineProcessor(asr)
