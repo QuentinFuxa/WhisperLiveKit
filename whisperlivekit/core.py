@@ -7,6 +7,7 @@ from whisperlivekit.config import WhisperLiveKitConfig
 from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
 from whisperlivekit.local_agreement.whisper_online import backend_factory
 from whisperlivekit.simul_whisper import SimulStreamingASR
+from whisperlivekit.timed_objects import TimedText, ASRToken
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +289,59 @@ class TranscriptionEngine:
                     nllb_size=config.nllb_size,
                 )
 
+def _to_wlk_token(tok):
+    """Convert a qwen3_asr_causal token into WhisperLiveKit's ASRToken.
+
+    qwen3's ASRToken is a separate class that doesn't derive from TimedText, so
+    it lacks helpers (has_punctuation) the diarization alignment needs.
+    """
+    if isinstance(tok, TimedText):
+        return tok
+    is_silence = getattr(tok, "is_silence", None)
+    if callable(is_silence) and is_silence():
+        return tok
+    # start/end/text accessed directly on purpose: a token missing them is a real
+    # incompatibility that should raise here, not be masked with defaults.
+    return ASRToken(
+        start=tok.start,
+        end=tok.end,
+        text=tok.text or "",
+        speaker=getattr(tok, "speaker", -1),
+        detected_language=getattr(tok, "detected_language", None),
+        probability=getattr(tok, "probability", None),
+    )
+
+
+class _ASRTokenNormalizer:
+    """Wraps a qwen3 online processor, converting emitted tokens to WhisperLiveKit
+    ASRTokens. finish is wrapped via __getattr__ (not an explicit method) so that
+    hasattr(proc, "finish") stays honest for the loop's fallback probe.
+    """
+
+    _WRAP = {"finish"}
+
+    def __init__(self, inner):
+        object.__setattr__(self, "_inner", inner)
+
+    @staticmethod
+    def _convert(result):
+        tokens, *rest = result # (tokens, end_time)
+        converted = [_to_wlk_token(t) for t in (tokens or [])]
+        return (converted, *rest)
+
+    def process_iter(self, *args, **kwargs):
+        return self._convert(self._inner.process_iter(*args, **kwargs))
+
+    def start_silence(self, *args, **kwargs):
+        return self._convert(self._inner.start_silence(*args, **kwargs))
+
+    def __getattr__(self, name):
+        attr = getattr(self._inner, name)
+        if name in self._WRAP and callable(attr):
+            def wrapped(*args, **kwargs):
+                return self._convert(attr(*args, **kwargs))
+            return wrapped
+        return attr
 
 def online_factory(args, asr, language=None):
     """Create an online ASR processor for a session.
@@ -307,23 +361,23 @@ def online_factory(args, asr, language=None):
     backend = getattr(args, 'backend', None)
     if backend == "qwen3-streaming":
         from whisperlivekit.qwen3_streaming import Qwen3StreamingOnlineProcessor
-        return Qwen3StreamingOnlineProcessor(asr)
+        return _ASRTokenNormalizer(Qwen3StreamingOnlineProcessor(asr))
     if backend == "qwen3-vllm":
         from whisperlivekit.qwen3_vllm_asr import (
             Qwen3VLLMCausalOnlineProcessor,
             Qwen3VLLMOnlineProcessor,
         )
         if getattr(asr, "audio_backend", "standard") == "causal":
-            return Qwen3VLLMCausalOnlineProcessor(asr)
-        return Qwen3VLLMOnlineProcessor(asr)
+            return _ASRTokenNormalizer(Qwen3VLLMCausalOnlineProcessor(asr))
+        return _ASRTokenNormalizer(Qwen3VLLMOnlineProcessor(asr))
     if backend == "qwen3-vllm-metal":
         from whisperlivekit.qwen3_vllm_metal_asr import (
             Qwen3VLLMMetalCausalOnlineProcessor,
             Qwen3VLLMMetalOnlineProcessor,
         )
         if getattr(asr, "audio_backend", "standard") == "causal":
-            return Qwen3VLLMMetalCausalOnlineProcessor(asr)
-        return Qwen3VLLMMetalOnlineProcessor(asr)
+            return _ASRTokenNormalizer(Qwen3VLLMMetalCausalOnlineProcessor(asr))
+        return _ASRTokenNormalizer(Qwen3VLLMMetalOnlineProcessor(asr))
     if backend == "voxtral-mlx":
         from whisperlivekit.voxtral_mlx_asr import VoxtralMLXOnlineProcessor
         return VoxtralMLXOnlineProcessor(asr)
