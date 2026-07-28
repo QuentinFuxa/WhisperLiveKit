@@ -54,6 +54,8 @@ jobs:
           context: .
           file: ./${{ matrix.dockerfile }}
           push: true
+          provenance: mode=max
+          sbom: true
           build-args: |
             EXTRAS=${{ matrix.extras }}
           tags: |
