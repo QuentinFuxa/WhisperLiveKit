@@ -25,6 +25,26 @@ logger.setLevel(logging.DEBUG)
 SENTINEL = object() # unique sentinel object for end of stream marker
 MIN_DURATION_REAL_SILENCE = 5
 
+
+def resolve_coalesce_window(min_s: Any, max_s: Any) -> tuple:
+    """Effective (min, max) coalescing window, or (0.0, 0.0) when disabled.
+
+    A ceiling at or below the minimum would leave the deferral unbounded.
+    """
+    min_s = float(min_s or 0.0)
+    max_s = float(max_s or 0.0)
+    if min_s <= 0.0 or max_s <= min_s:
+        return 0.0, 0.0
+    return min_s, max_s
+
+
+def should_defer_inference(deferred_s: float, chunk_s: float, min_s: float, max_s: float) -> bool:
+    """Whether to buffer this chunk instead of running process_iter()."""
+    if min_s <= 0.0:
+        return False
+    prospective = deferred_s + chunk_s
+    return prospective < min_s and prospective < max_s
+
 async def get_all_from_queue(queue: asyncio.Queue) -> Union[object, Silence, np.ndarray, List[Any]]:
     items: List[Any] = []
 
@@ -493,6 +513,12 @@ class AudioProcessor:
         """Process audio chunks for transcription."""
         cumulative_pcm_duration_stream_time = 0.0
 
+        coalesce_min_s, coalesce_max_s = resolve_coalesce_window(
+            getattr(self.args, "asr_coalesce_min_s", 0.0),
+            getattr(self.args, "asr_coalesce_max_s", 0.0),
+        )
+        deferred_audio_s = 0.0
+
         while True:
             try:
                 # Use a timeout so we periodically wake up and refresh the
@@ -526,6 +552,7 @@ class AudioProcessor:
 
                 if isinstance(item, Silence):
                     if item.is_starting:
+                        deferred_audio_s = 0.0  # boundary flushes; nothing is stranded
                         new_tokens, current_audio_processed_upto = await asyncio.to_thread(
                             self.transcription.start_silence
                         )
@@ -541,6 +568,7 @@ class AudioProcessor:
                     new_tokens = new_tokens or []
                     current_audio_processed_upto = max(current_audio_processed_upto, stream_time_end_of_current_pcm)
                 elif isinstance(item, ChangeSpeaker):
+                    deferred_audio_s = 0.0
                     self.transcription.new_speaker(item)
                     continue
                 elif isinstance(item, np.ndarray):
@@ -549,6 +577,16 @@ class AudioProcessor:
                     cumulative_pcm_duration_stream_time += len(pcm_array) / self.sample_rate
                     stream_time_end_of_current_pcm = cumulative_pcm_duration_stream_time
                     self.transcription.insert_audio_chunk(pcm_array, stream_time_end_of_current_pcm)
+
+                    chunk_s = len(pcm_array) / self.sample_rate
+                    if should_defer_inference(deferred_audio_s, chunk_s, coalesce_min_s, coalesce_max_s):
+                        deferred_audio_s += chunk_s
+                        # Keep the interim display current without an inference.
+                        async with self.lock:
+                            self.state.buffer_transcription = self.transcription.get_buffer()
+                        continue
+                    deferred_audio_s = 0.0
+
                     _t0 = time()
                     new_tokens, current_audio_processed_upto = await asyncio.to_thread(self.transcription.process_iter)
                     _dur = time() - _t0

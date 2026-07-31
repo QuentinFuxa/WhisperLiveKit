@@ -119,6 +119,24 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--asr-coalesce-min-s",
+        type=float,
+        default=0.0,
+        dest="asr_coalesce_min_s",
+        help="Defer ASR until this much new audio has accrued, trading update "
+             "cadence for fewer encoder passes. 0 disables (default).",
+    )
+
+    parser.add_argument(
+        "--asr-coalesce-max-s",
+        type=float,
+        default=1.0,
+        dest="asr_coalesce_max_s",
+        help="Cap on deferred audio, bounding the added time-to-first-word. "
+             "Must exceed the min, otherwise coalescing is disabled.",
+    )
+
+    parser.add_argument(
         "--retention-seconds",
         type=float,
         default=None,
