@@ -134,6 +134,38 @@ export TORCH_CUDA_ARCH_LIST="8.0 9.0 10.0 12.0 12.1a"
 
 After applying the fix, restart `wlk`. Incoming streams will now compile kernels targeting `sm_121a` without crashing.
 
+## CPU throughput
+
+### Transcription falls further and further behind on CPU
+
+If the transcript lags more the longer a session runs, the machine is spending
+more time on ASR than the stream produces audio. Check the compute time shown
+in the web UI against elapsed time: once it approaches 100%, the backlog grows
+without bound and no amount of waiting clears it.
+
+Each inference pass costs roughly the same regardless of how much *new* audio it
+covers, so when chunks are short most of that work re-encodes audio the previous
+pass already saw. `--asr-coalesce-min-s` waits for more new audio before running
+a pass, which cuts the number of passes at the cost of updating the transcript
+less often:
+
+```bash
+wlk --model base --asr-coalesce-min-s 0.75
+```
+
+Off by default. Two caveats worth knowing before you tune it:
+
+- The useful value depends on how large the incoming chunks already are, and the
+  response is a step rather than a gradual curve: a threshold below the typical
+  chunk size does almost nothing, and just above it can halve the passes. Start
+  near your chunk size and measure.
+- Words reach the screen in larger, less frequent updates, and the first word of
+  an utterance arrives later. `--asr-coalesce-max-s` caps how much audio may be
+  held back, which bounds that delay.
+
+If compute time is comfortably below elapsed time and the transcript still lags,
+this is not the right fix.
+
 ---
 
 Need help with another recurring issue? Open a GitHub discussion or PR and reference this document so we can keep it current.
