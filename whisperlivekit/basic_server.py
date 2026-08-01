@@ -105,12 +105,23 @@ async def websocket_endpoint(websocket: WebSocket):
     mode = websocket.query_params.get("mode", "full")
     session_target_language = websocket.query_params.get("target_language", None)
 
-    audio_processor = AudioProcessor(
-        transcription_engine=transcription_engine,
-        language=session_language,
-        mode=mode,
-        target_language=session_target_language,
-    )
+    try:
+        audio_processor = AudioProcessor(
+            transcription_engine=transcription_engine,
+            language=session_language,
+            mode=mode,
+            target_language=session_target_language,
+        )
+    except ValueError as e:
+        # Bad per-session parameters (e.g. a language the backend does not
+        # support): tell the client instead of failing before the handshake.
+        await websocket.accept()
+        try:
+            await websocket.send_json({"type": "error", "error": str(e)})
+        finally:
+            await websocket.close(code=4400, reason="invalid session parameters")
+        logger.warning("WebSocket rejected: %s", e)
+        return
     await websocket.accept()
     logger.info(
         "WebSocket connection opened.%s%s",
@@ -316,10 +327,13 @@ async def create_transcription(
     duration = len(pcm_data) / (16000 * 2)  # 16kHz, 16-bit
 
     # Process through the full pipeline
-    processor = AudioProcessor(
-        transcription_engine=transcription_engine,
-        language=language,
-    )
+    try:
+        processor = AudioProcessor(
+            transcription_engine=transcription_engine,
+            language=language,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     # Force PCM input regardless of server config
     processor.is_pcm_input = True
 

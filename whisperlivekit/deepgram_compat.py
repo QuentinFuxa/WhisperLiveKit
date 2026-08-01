@@ -225,10 +225,20 @@ async def handle_deepgram_websocket(websocket: WebSocket, transcription_engine, 
     language = params.get("language", None)
     vad_events = params.get("vad_events", "false").lower() == "true"
 
-    audio_processor = AudioProcessor(
-        transcription_engine=transcription_engine,
-        language=language,
-    )
+    try:
+        audio_processor = AudioProcessor(
+            transcription_engine=transcription_engine,
+            language=language,
+        )
+    except ValueError as e:
+        # Bad per-session parameters: answer the handshake, then close.
+        await websocket.accept()
+        try:
+            await websocket.send_json({"type": "Error", "description": str(e)})
+        finally:
+            await websocket.close(code=4400, reason="invalid session parameters")
+        logger.warning("Deepgram-compat WebSocket rejected: %s", e)
+        return
 
     await websocket.accept()
     logger.info("Deepgram-compat WebSocket opened")
