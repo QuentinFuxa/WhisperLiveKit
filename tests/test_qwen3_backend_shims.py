@@ -65,7 +65,7 @@ def test_parse_args_accepts_qwen3_causal_options(monkeypatch):
 def test_online_factory_routes_qwen3_streaming():
     from qwen3_asr_causal.online import Qwen3StreamingOnlineProcessor
 
-    from whisperlivekit.core import online_factory
+    from whisperlivekit.core import _ASRTokenNormalizer, online_factory
 
     class FakeASR:
         sep = ""
@@ -81,7 +81,9 @@ def test_online_factory_routes_qwen3_streaming():
 
     processor = online_factory(Namespace(backend="qwen3-streaming"), FakeASR())
 
-    assert isinstance(processor, Qwen3StreamingOnlineProcessor)
+    # qwen3 processors come wrapped in the token normalizer since #389.
+    assert isinstance(processor, _ASRTokenNormalizer)
+    assert isinstance(processor._inner, Qwen3StreamingOnlineProcessor)
 
 
 def test_transcription_engine_routes_qwen3_vllm_metal(monkeypatch):

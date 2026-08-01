@@ -7,7 +7,7 @@ from whisperlivekit.config import WhisperLiveKitConfig
 from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
 from whisperlivekit.local_agreement.whisper_online import backend_factory
 from whisperlivekit.simul_whisper import SimulStreamingASR
-from whisperlivekit.timed_objects import TimedText, ASRToken
+from whisperlivekit.timed_objects import ASRToken, TimedText
 
 logger = logging.getLogger(__name__)
 
