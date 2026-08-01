@@ -563,6 +563,9 @@ def _resolve_pull_target(spec: str):
 
 def cmd_pull(spec: str):
     """Download a model for offline use."""
+    if spec == "funasr":
+        print("\n  funasr downloads its model itself on first use; nothing to pull.\n")
+        return 0
     targets = _resolve_pull_target(spec)
     if not targets:
         return 1
@@ -1140,6 +1143,13 @@ def cmd_run(args: list):
 
 def cmd_rm(spec: str):
     """Delete a downloaded model from the cache."""
+    if spec == "funasr":
+        print(
+            "\n  funasr manages its own model cache (typically ~/.cache/modelscope);"
+            " wlk has nothing to remove.\n",
+            file=sys.stderr,
+        )
+        return 0
     targets = _resolve_pull_target(spec)
     if not targets:
         return 1
