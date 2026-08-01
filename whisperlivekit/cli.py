@@ -82,6 +82,16 @@ BACKENDS = [
         "devices": ["mlx"],
     },
     {
+        "id": "funasr",
+        "name": "FunASR SenseVoice",
+        "module": "funasr",
+        "install": "pip install 'whisperlivekit[funasr]'",
+        "description": "SenseVoiceSmall multilingual ASR through LocalAgreement",
+        "policy": "localagreement",
+        "streaming": "chunk",
+        "devices": ["cpu", "cuda"],
+    },
+    {
         "id": "voxtral-mlx",
         "name": "Voxtral MLX",
         "module": "mlx",
@@ -433,6 +443,7 @@ def cmd_models():
     else:
         print("    wlk run large-v3-turbo            # Best quality/speed balance")
         print("    wlk run voxtral                   # Native streaming (CUDA/CPU)")
+    print("    wlk run funasr                    # Fast multilingual SenseVoiceSmall")
     print("    wlk pull base                     # Download smallest multilingual model")
     print("    wlk transcribe audio.mp3          # Offline transcription")
     print()
@@ -464,6 +475,10 @@ def _resolve_pull_target(spec: str):
     else:
         backend_part = None
         size_part = spec
+
+    if backend_part is None and size_part == "funasr":
+        # FunASR owns its ModelScope cache; an HF pull would not populate it.
+        return targets
 
     # Handle voxtral
     if size_part == "voxtral" or backend_part == "voxtral":

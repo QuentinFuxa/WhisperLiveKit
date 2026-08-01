@@ -113,6 +113,7 @@ For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLi
 | Feature | `uv sync` | `pip install -e` |
 |-----------|-------------|-------------|
 | **Apple Silicon MLX Whisper backend** | `uv sync --extra mlx-whisper` | `pip install -e ".[mlx-whisper]"` |
+| **FunASR SenseVoiceSmall** | `uv sync --extra funasr` | `pip install -e ".[funasr]"` |
 | **Voxtral (MLX backend, Apple Silicon)** | `uv sync --extra voxtral-mlx` | `pip install -e ".[voxtral-mlx]"` |
 | **CPU PyTorch stack** | `uv sync --extra cpu` | `pip install -e ".[cpu]"` |
 | **CUDA 12.9 PyTorch stack** | `uv sync --extra cu129` | `pip install -e ".[cu129]"` |
@@ -181,6 +182,32 @@ wlk --backend voxtral
 
 Voxtral uses its own streaming policy and does not use LocalAgreement or SimulStreaming.
 See [BENCHMARK.md](BENCHMARK.md) for performance numbers.
+
+### FunASR / SenseVoiceSmall
+
+Install the optional backend and run
+[SenseVoiceSmall](https://huggingface.co/FunAudioLLM/SenseVoiceSmall) through
+WLK's existing LocalAgreement and VAC/VAD pipeline:
+
+```bash
+pip install "whisperlivekit[funasr]"
+wlk --backend funasr --language auto
+```
+
+Use a verified local model snapshot without executing remote model code:
+
+```bash
+wlk --backend funasr --model_dir /path/to/SenseVoiceSmall --language yue
+```
+
+The initial integration supports SenseVoiceSmall transcription in Mandarin
+(`zh`), Cantonese (`yue`), English (`en`), Japanese (`ja`), Korean (`ko`), and
+automatic detection. FunASR uses LocalAgreement only; selecting it with the
+default policy switches that policy automatically. It does not support
+`--direct-english-translation`, and WLK remains responsible for voice activity
+control rather than enabling FunASR's internal VAD. This compatibility contract
+does not cover arbitrary FunASR models. SenseVoiceSmall is distributed under
+its [model license](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE).
 
 ### Qwen3-ASR streaming (HF Transformers)
 
@@ -334,7 +361,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--translation-backend` | `nllb` (in-process, CPU-friendly) or `alignatt`: streaming LLM translation through an [Alignatt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM) sidecar, with attention-gated append-only commits. See [docs/translation-alignatt.md](docs/translation-alignatt.md). | `nllb` |
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
-| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU) | `auto` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `funasr` (SenseVoiceSmall, LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU) | `auto` |
 | `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
 | `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
