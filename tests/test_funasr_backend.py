@@ -68,6 +68,23 @@ def test_funasr_does_not_extend_whisper_language_table():
     assert "yue" not in WHISPER_LANG_CODES
 
 
+def test_create_tokenizer_accepts_yue():
+    # yue is a FunASR language; mosestokenizer supports it directly (#392).
+    pytest.importorskip("mosestokenizer")
+    from whisperlivekit.local_agreement.whisper_online import create_tokenizer
+
+    tokenizer = create_tokenizer("yue")
+    # Same call shape as OnlineASRProcessor.words_to_sentences.
+    assert tokenizer(["你好。我係香港人。"]) == ["你好。我係香港人。"]
+
+
+def test_create_tokenizer_rejects_unknown_language_with_value_error():
+    from whisperlivekit.local_agreement.whisper_online import create_tokenizer
+
+    with pytest.raises(ValueError, match="lang code"):
+        create_tokenizer("xx")
+
+
 @pytest.mark.parametrize(
     ("text", "words", "expected_parts"),
     [

@@ -17,12 +17,19 @@ WHISPER_LANG_CODES = "af,am,ar,as,az,ba,be,bg,bn,bo,br,bs,ca,cs,cy,da,de,el,en,e
 )
 
 
+# Not Whisper codes, but the sentence tokenizers below handle them
+# (mosestokenizer supports yue directly; used by the FunASR backend).
+EXTRA_TOKENIZER_LANG_CODES = ["yue"]
+
+
 def create_tokenizer(lan):
     """returns an object that has split function that works like the one of MosesTokenizer"""
 
-    assert (
-        lan in WHISPER_LANG_CODES
-    ), "language must be Whisper's supported lang code: " + " ".join(WHISPER_LANG_CODES)
+    if lan not in WHISPER_LANG_CODES and lan not in EXTRA_TOKENIZER_LANG_CODES:
+        raise ValueError(
+            "language must be a supported sentence-tokenizer lang code: "
+            + " ".join(WHISPER_LANG_CODES + EXTRA_TOKENIZER_LANG_CODES)
+        )
 
     if lan == "uk":
         import tokenize_uk
