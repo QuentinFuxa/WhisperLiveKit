@@ -153,15 +153,19 @@ less often:
 wlk --model base --asr-coalesce-min-s 0.75
 ```
 
-Off by default. Two caveats worth knowing before you tune it:
+Off by default. Three things worth knowing before you tune it:
 
+- It applies to the whisper-family backends, whose processors infer once per
+  arriving chunk. Backends that already batch internally before calling the
+  model gain little or nothing from it.
 - The useful value depends on how large the incoming chunks already are, and the
   response is a step rather than a gradual curve: a threshold below the typical
   chunk size does almost nothing, and just above it can halve the passes. Start
   near your chunk size and measure.
 - Words reach the screen in larger, less frequent updates, and the first word of
-  an utterance arrives later. `--asr-coalesce-max-s` caps how much audio may be
-  held back, which bounds that delay.
+  an utterance arrives later. Held-back audio is bounded by the threshold plus
+  one chunk, and is always drained at silences, speaker changes and end of
+  stream, so nothing is delayed past a boundary.
 
 If compute time is comfortably below elapsed time and the transcript still lags,
 this is not the right fix.
