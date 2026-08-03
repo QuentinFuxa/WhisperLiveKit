@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke-test the NVIDIA Canary-1b-v2 ASR backend — no GPU required.
+"""Smoke-test the NVIDIA Canary-1b-v2 ASR backend, no GPU required.
 
 Loads the Canary backend (NeMo ``EncDecMultiTaskModel``), transcribes a short
 16 kHz mono clip, and prints the text plus per-word timestamps. Runs on CPU

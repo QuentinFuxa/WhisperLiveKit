@@ -20,6 +20,16 @@ from whisperlivekit.timed_objects import ASRToken
 
 logger = logging.getLogger(__name__)
 
+# Shown when NeMo is missing. Note the Python pin: NeMo's wheels cap at 3.12, so
+# on 3.13+ the `canary` extra resolves to nothing and the import still fails here
+# (see the extra's marker in pyproject.toml), hence the explicit version hint.
+_NEMO_INSTALL_HINT = (
+    "The Canary backend requires NeMo, which is not installed. Install it with:\n"
+    '    pip install -e ".[canary]"\n'
+    "NeMo currently supports Python 3.10-3.12 only; on 3.13+ the extra installs "
+    "nothing, so use a 3.10-3.12 environment."
+)
+
 
 # Canary-1b-v2's 25 supported source-language codes.
 CANARY_LANGS = {
@@ -70,6 +80,37 @@ def canary_segment_end_ts(segment_stamps) -> List[float]:
     return [s["end"] for s in segment_stamps]
 
 
+def resolve_lid_labels(model) -> List[str]:
+    """Locate the LID model's ordered class-label list across NeMo config layouts.
+
+    NeMo stores the classification labels in different places depending on the
+    model and version: some checkpoints expose them at ``cfg.labels``, others
+    keep them at ``cfg.train_ds.labels`` (where they were set during training).
+    We probe the known locations, in order, and return the first non-empty list.
+
+    Resolving this eagerly at load (rather than indexing a possibly-missing list
+    inside detect()) means a checkpoint whose labels we cannot find fails loudly
+    at model-load time, so auto-detection is disabled with a clear reason instead
+    of silently mispredicting every utterance.
+    """
+    cfg = getattr(model, "cfg", None)
+    for path in (("labels",), ("train_ds", "labels")):
+        node = cfg
+        for key in path:
+            try:
+                node = node[key]
+            except (KeyError, TypeError, AttributeError):
+                node = None
+                break
+        if node:
+            return list(node)
+    raise RuntimeError(
+        "Canary LID model exposes no class-label list at cfg.labels or "
+        "cfg.train_ds.labels; predictions cannot be mapped to language codes. "
+        "Auto language detection is unavailable for this checkpoint."
+    )
+
+
 class CanarySessionASR(SessionASRProxy):
     """Per-session Canary proxy with auto language detection.
 
@@ -86,6 +127,11 @@ class CanarySessionASR(SessionASRProxy):
                  lid_min_sec=2.0, lid_min_conf=0.5):
         super().__init__(asr, language)
         is_auto = (language is None) or (language == "auto")
+        if not is_auto and language not in CANARY_LANGS:
+            raise ValueError(
+                f"Canary does not support language {language!r}. Use 'auto' or one "
+                f"of the 25 supported codes: {', '.join(sorted(CANARY_LANGS))}."
+            )
         object.__setattr__(self, "_is_auto", is_auto)
         object.__setattr__(self, "_lid", lid)
         object.__setattr__(self, "_default_lang", default_lang)
@@ -148,7 +194,10 @@ class CanaryASR:
         self.transcribe_kargs = {}
         self.lid_model = None  # attached by core.py when auto detection is enabled
 
-        from nemo.collections.asr.models import ASRModel
+        try:
+            from nemo.collections.asr.models import ASRModel
+        except ImportError as e:
+            raise ImportError(_NEMO_INSTALL_HINT) from e
 
         t = time.time()
         logger.info("Loading Canary model '%s' via NeMo...", canary_model)
@@ -209,7 +258,10 @@ class CanaryLID:
     def __init__(self, lid_model="langid_ambernet", logfile=None, **_unused):
         import time
 
-        import nemo.collections.asr as nemo_asr
+        try:
+            import nemo.collections.asr as nemo_asr
+        except ImportError as e:
+            raise ImportError(_NEMO_INSTALL_HINT) from e
 
         t = time.time()
         logger.info("Loading Canary LID model '%s' via NeMo...", lid_model)
@@ -221,7 +273,14 @@ class CanaryLID:
             self.device = next(self.model.parameters()).device
         except StopIteration:  # pragma: no cover
             self.device = "cpu"
-        logger.info("Canary LID model loaded in %.2fs", time.time() - t)
+        # Resolve the class-label list now so an unmappable checkpoint fails at
+        # load (caught by core.py, which disables auto-detect) rather than
+        # mispredicting silently on the first detect() call.
+        self.labels = resolve_lid_labels(self.model)
+        logger.info(
+            "Canary LID model loaded in %.2fs (%d labels)",
+            time.time() - t, len(self.labels),
+        )
 
     def detect(self, audio) -> Tuple[Optional[str], float]:
         """Return (canary_lang_code_or_None, confidence) for a 16kHz clip."""
@@ -235,7 +294,7 @@ class CanaryLID:
             logits, _ = self.model.forward(input_signal=sig, input_signal_length=sig_len)
             probs = logits.softmax(dim=-1)
             conf, idx = probs.max(dim=-1)
-        raw_code = self.model.cfg.labels[int(idx.item())]
+        raw_code = self.labels[int(idx.item())]
         confidence = float(conf.item())
         mapped = map_voxlingua_to_canary(raw_code)
         if mapped is None:

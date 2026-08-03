@@ -105,12 +105,20 @@ async def websocket_endpoint(websocket: WebSocket):
     mode = websocket.query_params.get("mode", "full")
     session_target_language = websocket.query_params.get("target_language", None)
 
-    audio_processor = AudioProcessor(
-        transcription_engine=transcription_engine,
-        language=session_language,
-        mode=mode,
-        target_language=session_target_language,
-    )
+    try:
+        audio_processor = AudioProcessor(
+            transcription_engine=transcription_engine,
+            language=session_language,
+            mode=mode,
+            target_language=session_target_language,
+        )
+    except ValueError as e:
+        # e.g. a per-session ?language= the backend does not support. Surface the
+        # reason to the client instead of failing the handshake with no context.
+        logger.warning("Rejecting WebSocket session: %s", e)
+        await websocket.accept()
+        await websocket.close(code=4400, reason=str(e)[:123])
+        return
     await websocket.accept()
     logger.info(
         "WebSocket connection opened.%s%s",

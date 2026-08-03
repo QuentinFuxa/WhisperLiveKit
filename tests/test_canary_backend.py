@@ -1,6 +1,8 @@
+import importlib.util
 from argparse import Namespace
 
 import numpy as np
+import pytest
 
 
 def test_parse_args_accepts_canary_options(monkeypatch):
@@ -191,9 +193,41 @@ def test_auto_with_no_lid_uses_default():
     assert asr.calls == ["en"]
 
 
-import importlib.util
+def test_canary_session_rejects_unsupported_explicit_language():
+    from whisperlivekit.canary_backend import CanarySessionASR
 
-import pytest
+    # A per-session language Canary does not support must fail loudly at setup,
+    # not produce a silently dead session.
+    with pytest.raises(ValueError):
+        CanarySessionASR(_RecordingCanaryASR(), "zh", default_lang="en")
+
+
+class _FakeLIDModel:
+    def __init__(self, cfg):
+        self.cfg = cfg
+
+
+def test_resolve_lid_labels_reads_cfg_labels():
+    from whisperlivekit.canary_backend import resolve_lid_labels
+
+    model = _FakeLIDModel({"labels": ["en", "de", "fr"]})
+    assert resolve_lid_labels(model) == ["en", "de", "fr"]
+
+
+def test_resolve_lid_labels_falls_back_to_train_ds():
+    from whisperlivekit.canary_backend import resolve_lid_labels
+
+    # Some NeMo checkpoints keep the label list under train_ds, not cfg.labels.
+    model = _FakeLIDModel({"labels": None, "train_ds": {"labels": ["en", "de"]}})
+    assert resolve_lid_labels(model) == ["en", "de"]
+
+
+def test_resolve_lid_labels_raises_when_absent():
+    from whisperlivekit.canary_backend import resolve_lid_labels
+
+    with pytest.raises(RuntimeError):
+        resolve_lid_labels(_FakeLIDModel({"other": 1}))
+
 
 _NEMO_AVAILABLE = importlib.util.find_spec("nemo") is not None
 requires_nemo = pytest.mark.skipif(not _NEMO_AVAILABLE, reason="NeMo not installed")

@@ -204,7 +204,19 @@ class TranscriptionEngine:
                 self.asr = VoxtralHFStreamingASR(**transcription_common_params)
                 logger.info("Using Voxtral HF Transformers streaming backend")
             elif config.backend == "canary":
-                from whisperlivekit.canary_backend import CanaryASR, CanaryLID
+                from whisperlivekit.canary_backend import CANARY_LANGS, CanaryASR, CanaryLID
+                # Config-time language validation: reject unsupported codes at
+                # startup rather than letting a session silently fall back or die.
+                if config.canary_default_lang not in CANARY_LANGS:
+                    raise ValueError(
+                        f"--canary-default-lang {config.canary_default_lang!r} is not one "
+                        f"of Canary's 25 supported codes: {', '.join(sorted(CANARY_LANGS))}."
+                    )
+                if config.lan not in (None, "auto") and config.lan not in CANARY_LANGS:
+                    raise ValueError(
+                        f"--language {config.lan!r} is not supported by Canary. Use 'auto' "
+                        f"or one of: {', '.join(sorted(CANARY_LANGS))}."
+                    )
                 self.tokenizer = None
                 self.asr = CanaryASR(
                     lan=config.lan,
@@ -216,7 +228,7 @@ class TranscriptionEngine:
                 )
                 # Load the LID model so any session may request auto-detection.
                 # A failure here (e.g. the LID model cannot be downloaded) must
-                # not stop the server from serving transcription — degrade to no
+                # not stop the server from serving transcription; degrade to no
                 # auto-detect (sessions fall back to --canary-default-lang).
                 try:
                     self.asr.lid_model = CanaryLID(lid_model=config.canary_lid_model)

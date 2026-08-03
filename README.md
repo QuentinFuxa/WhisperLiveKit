@@ -124,7 +124,7 @@ For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLi
 | **Qwen3-ASR vLLM Metal (Apple Silicon)** | Install vLLM with the official vllm-metal script first, then `uv sync --extra qwen3-vllm-metal` | Install vLLM with the official vllm-metal script first, then `pip install -e ".[qwen3-vllm-metal]"` |
 | **Speaker diarization (Sortformer / NeMo)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
 | *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
-| **Canary-1b-v2 (NeMo, CUDA)** | `uv sync --extra canary` | `pip install -e ".[canary]"` |
+| **Canary-1b-v2 (NeMo, CUDA/MPS/CPU)** | `uv sync --extra canary` | `pip install -e ".[canary]"` |
 
 Supported GPU profiles:
 
@@ -139,7 +139,7 @@ uv sync --extra cu129 --extra voxtral-hf --extra translation
 uv sync --extra qwen3-vllm
 ```
 
-`qwen3-vllm` uses vLLM's CUDA wheel stack and must be installed in a separate environment from `cu129`. `voxtral-hf` / `qwen3-vllm-metal` / `canary` and `diarization-sortformer` are also intentionally incompatible extras and must be installed in separate environments.
+`qwen3-vllm` uses vLLM's CUDA wheel stack and must be installed in a separate environment from `cu129`. Several heavy extras (`voxtral-hf`, `qwen3-vllm-metal`, and the vLLM stacks) intentionally conflict with one another and must be installed in separate environments; the authoritative list is `[tool.uv].conflicts` in `pyproject.toml`. The `canary` extra conflicts with `voxtral-hf` and `qwen3-vllm-metal`, but is compatible with `diarization-sortformer` (both pull `nemo-toolkit[asr]`).
 
 See **Parameters & Configuration** below on how to use them.
 
@@ -278,7 +278,12 @@ wlk --backend canary --language auto
 ```
 
 Notes:
-- CUDA only; NeMo is a heavy dependency (torch, pytorch-lightning, and friends).
+- Runs on CUDA, Apple Silicon (MPS), and CPU. A GPU is strongly recommended:
+  CPU works (see `scripts/smoke_canary.py`) but is slow for a 1B-parameter model.
+  NeMo is a heavy dependency (torch, pytorch-lightning, and friends).
+- Requires Python 3.10-3.12. NeMo's wheels do not yet support 3.13+, so on 3.13
+  the `canary` extra resolves to nothing and `pip install -e ".[canary]"` installs
+  no NeMo; use a 3.10-3.12 environment.
 - Word/segment timestamps require NeMo's timestamp API, available in NeMo 2.5+.
   The `canary` extra pins `nemo-toolkit[asr]>=2.5.0`; if you land on a build where
   the timestamp API is missing, install NeMo from `main`.
@@ -357,7 +362,7 @@ async def websocket_endpoint(websocket: WebSocket):
 | `--translation-backend` | `nllb` (in-process, CPU-friendly) or `alignatt`: streaming LLM translation through an [Alignatt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM) sidecar, with attention-gated append-only commits. See [docs/translation-alignatt.md](docs/translation-alignatt.md). | `nllb` |
 | `--diarization` | Enable speaker identification | `False` |
 | `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
-| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU), `canary` (NeMo, CUDA) | `auto` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU), `canary` (NeMo, CUDA/MPS/CPU) | `auto` |
 | `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
 | `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
 | `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
