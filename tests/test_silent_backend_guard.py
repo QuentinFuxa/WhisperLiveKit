@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from whisperlivekit.audio_processor import AudioProcessor
+from whisperlivekit.audio_processor import AudioProcessor, TranscriptionWorker
 from whisperlivekit.warmup import warmup_asr
 
 
@@ -86,16 +86,16 @@ def _watchdog_self():
     return SimpleNamespace(
         _any_asr_output=False,
         _silent_backend_warned=False,
-        _SILENT_BACKEND_WARN_SECONDS=AudioProcessor._SILENT_BACKEND_WARN_SECONDS,
+        _SILENT_BACKEND_WARN_SECONDS=TranscriptionWorker._SILENT_BACKEND_WARN_SECONDS,
     )
 
 
 def test_silent_backend_watchdog_fires_once(caplog):
     fake = _watchdog_self()
     with caplog.at_level(logging.ERROR, logger="whisperlivekit.audio_processor"):
-        AudioProcessor._warn_if_backend_silent(fake, 5.0)      # too early
-        AudioProcessor._warn_if_backend_silent(fake, 25.0)     # fires
-        AudioProcessor._warn_if_backend_silent(fake, 60.0)     # already warned
+        TranscriptionWorker._warn_if_backend_silent(fake, 5.0)      # too early
+        TranscriptionWorker._warn_if_backend_silent(fake, 25.0)     # fires
+        TranscriptionWorker._warn_if_backend_silent(fake, 60.0)     # already warned
     errors = [r for r in caplog.records if "produced no output" in r.message]
     assert len(errors) == 1
     assert fake._silent_backend_warned is True
@@ -105,5 +105,5 @@ def test_silent_backend_watchdog_respects_real_output(caplog):
     fake = _watchdog_self()
     fake._any_asr_output = True
     with caplog.at_level(logging.ERROR, logger="whisperlivekit.audio_processor"):
-        AudioProcessor._warn_if_backend_silent(fake, 120.0)
+        TranscriptionWorker._warn_if_backend_silent(fake, 120.0)
     assert not [r for r in caplog.records if "produced no output" in r.message]

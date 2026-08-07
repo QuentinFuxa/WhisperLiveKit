@@ -634,10 +634,10 @@ def test_tokens_alignment_prunes_long_running_history():
 
 
 def test_audio_processor_prunes_persistent_state_tokens():
-    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.audio_processor import ResultAggregator
     from whisperlivekit.timed_objects import ASRToken, State
 
-    processor = object.__new__(AudioProcessor)
+    processor = object.__new__(ResultAggregator)
     processor.state = State()
     processor.tokens_alignment = SimpleNamespace(_retention_seconds=10.0)
     processor.state.end_buffer = 30.0
@@ -650,6 +650,7 @@ def test_audio_processor_prunes_persistent_state_tokens():
 
     assert processor.state.tokens[0].end >= 20.0
     assert processor.state.tokens[-1].text == " w29"
+
 
 def test_front_data_serializes_split_transcription_lags():
     from whisperlivekit.timed_objects import FrontData
@@ -700,20 +701,20 @@ def test_diff_protocol_preserves_split_transcription_lags():
 
 @pytest.mark.asyncio
 async def test_audio_processor_calculates_processing_and_policy_lag():
-    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.audio_processor import ResultAggregator
     from whisperlivekit.timed_objects import ASRToken, State
 
-    processor = object.__new__(AudioProcessor)
-    processor.lock = asyncio.Lock()
-    processor.state = State()
-    processor.sample_rate = 16000
-    processor.total_pcm_samples = 48000
-    processor.beg_loop = None
-    processor.args = SimpleNamespace(transcription=True)
-    processor.state.end_transcription_processed = 2.0
-    processor.state.tokens = [ASRToken(1.0, 1.4, "hello")]
+    sample_rate = 16000
+    total_pcm_samples = 48000
+    aggregator = object.__new__(ResultAggregator)
+    aggregator.state = State()
+    aggregator.chunker_ref = SimpleNamespace(get_audio_time=lambda: total_pcm_samples / sample_rate)
+    aggregator.beg_loop = None
+    aggregator.args = SimpleNamespace(transcription=True)
+    aggregator.state.end_transcription_processed = 2.0
+    aggregator.state.tokens = [ASRToken(1.0, 1.4, "hello")]
 
-    state = await processor.get_current_state()
+    state = aggregator.get_current_state()
 
     assert state.remaining_time_transcription_processing == 1.0
     assert state.remaining_time_transcription_policy == 0.6
@@ -721,20 +722,20 @@ async def test_audio_processor_calculates_processing_and_policy_lag():
 
 @pytest.mark.asyncio
 async def test_audio_processor_split_lags_are_zero_when_timestamps_are_aligned():
-    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.audio_processor import ResultAggregator
     from whisperlivekit.timed_objects import ASRToken, State
 
-    processor = object.__new__(AudioProcessor)
-    processor.lock = asyncio.Lock()
-    processor.state = State()
-    processor.sample_rate = 16000
-    processor.total_pcm_samples = 32000
-    processor.beg_loop = None
-    processor.args = SimpleNamespace(transcription=True)
-    processor.state.end_transcription_processed = 2.0
-    processor.state.tokens = [ASRToken(1.5, 2.0, "done")]
+    sample_rate = 16000
+    total_pcm_samples = 32000
+    aggregator = object.__new__(ResultAggregator)
+    aggregator.state = State()
+    aggregator.chunker_ref = SimpleNamespace(get_audio_time=lambda: total_pcm_samples / sample_rate)
+    aggregator.beg_loop = None
+    aggregator.args = SimpleNamespace(transcription=True)
+    aggregator.state.end_transcription_processed = 2.0
+    aggregator.state.tokens = [ASRToken(1.5, 2.0, "done")]
 
-    state = await processor.get_current_state()
+    state = aggregator.get_current_state()
 
     assert state.remaining_time_transcription_processing == 0.0
     assert state.remaining_time_transcription_policy == 0.0
@@ -742,7 +743,7 @@ async def test_audio_processor_split_lags_are_zero_when_timestamps_are_aligned()
 
 @pytest.mark.asyncio
 async def test_audio_processor_finish_commits_pending_buffer_when_backend_flush_is_empty():
-    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.audio_processor import ResultAggregator, TranscriptionWorker
     from whisperlivekit.metrics_collector import SessionMetrics
     from whisperlivekit.timed_objects import State, Transcript
 
@@ -753,26 +754,30 @@ async def test_audio_processor_finish_commits_pending_buffer_when_backend_flush_
         def get_buffer(self):
             return Transcript()
 
-    processor = object.__new__(AudioProcessor)
-    processor.transcription = EmptyFinishBackend()
-    processor.state = State()
-    processor.state.buffer_transcription = Transcript(
+    aggregator = object.__new__(ResultAggregator)
+    aggregator.state = State()
+    aggregator.state.buffer_transcription = Transcript(
         start=0.55,
         end=3.05,
         text="Concord returned to its place amidst the tents",
     )
-    processor.state.end_buffer = 3.5
-    processor.lock = asyncio.Lock()
-    processor.metrics = SessionMetrics()
-    processor.translation_queue = None
-    processor._prune_state_tokens = lambda: None
+    aggregator.state.end_buffer = 3.5
+    aggregator.tokens_alignment = None
 
-    await processor._finish_transcription()
+    worker = object.__new__(TranscriptionWorker)
+    worker.transcription = EmptyFinishBackend()
+    worker.aggregator = aggregator
+    worker.metrics = SessionMetrics()
+    worker.translation_queue = None
+    worker._pending_translation_tokens = []
+    worker.translate_on_complete = False
 
-    assert len(processor.state.new_tokens) == 1
-    assert processor.state.new_tokens[0].text == "Concord returned to its place amidst the tents"
-    assert processor.state.buffer_transcription.text == ""
-    assert processor.metrics.n_tokens_produced == 1
+    await worker._finish_transcription()
+
+    assert len(aggregator.state.new_tokens) == 1
+    assert aggregator.state.new_tokens[0].text == "Concord returned to its place amidst the tents"
+    assert aggregator.state.buffer_transcription.text == ""
+    assert worker.metrics.n_tokens_produced == 1
 
 
 def test_verbose_json_fallback_creates_segment_when_text_has_no_lines():
@@ -859,48 +864,50 @@ async def test_process_audio_non_pcm_closes_ffmpeg_stdin_without_sentinel():
     from whisperlivekit.audio_processor import AudioProcessor
 
     processor = object.__new__(AudioProcessor)
-    processor.beg_loop = 1.0
-    processor.is_stopping = False
     processor.is_pcm_input = False
-    processor.ffmpeg_manager = FakeFFmpegManager()
-    processor.transcription_queue = asyncio.Queue()
-    processor.pcm_buffer = bytearray()
+    processor.transcription_worker = None
+
+    processor.aggregator = SimpleNamespace(beg_loop=1.0, is_stopping=False)
+    processor.ingester = SimpleNamespace(ffmpeg_manager=FakeFFmpegManager())
+    processor.chunker = SimpleNamespace(transcription_queue=asyncio.Queue())
 
     await processor.process_audio(b"")
 
-    assert processor.is_stopping is True
-    assert processor.ffmpeg_manager.closed is True
-    assert processor.transcription_queue.empty()
+    assert processor.aggregator.is_stopping is True
+    assert processor.ingester.ffmpeg_manager.closed is True
+    assert processor.chunker.transcription_queue.empty()
 
 
 @pytest.mark.asyncio
 async def test_ffmpeg_reader_drains_stdout_after_stop_before_sentinel():
-    from whisperlivekit.audio_processor import SENTINEL, AudioProcessor
+    from whisperlivekit.audio_processor import AudioIngester, VADChunker, SENTINEL
 
-    processor = object.__new__(AudioProcessor)
-    processor.is_stopping = True
-    processor.ffmpeg_manager = FakeFFmpegManager([b"aaaa", None, b"bbbb", b""])
-    processor.pcm_buffer = bytearray()
-    processor.transcription_queue = asyncio.Queue()
-    processor.diarization_queue = None
-    processor.translation_queue = None
-    processor.diarization = None
-    processor.translation = None
-    processor.bytes_per_sample = 2
+    chunker = object.__new__(VADChunker)
+    chunker.pcm_buffer = bytearray()
+    chunker.transcription_queue = asyncio.Queue()
+    chunker.diarization_queue = None
+    chunker.translation_queue = None
+    chunker.bytes_per_sample = 2
+    chunker.sample_rate = 16000
+    chunker.current_silence = None
     seen = []
 
     async def fake_handle_pcm_data():
-        seen.append(bytes(processor.pcm_buffer))
-        processor.pcm_buffer.clear()
+        seen.append(bytes(chunker.pcm_buffer))
+        chunker.pcm_buffer.clear()
 
-    processor.handle_pcm_data = fake_handle_pcm_data
+    chunker.handle_pcm_data = fake_handle_pcm_data
 
-    await processor.ffmpeg_stdout_reader()
+    ingester = object.__new__(AudioIngester)
+    ingester.chunker = chunker
+    ingester.ffmpeg_manager = FakeFFmpegManager([b"aaaa", None, b"bbbb", b""])
+
+    await ingester.ffmpeg_stdout_reader()
 
     assert seen == [b"aaaa", b"bbbb"]
-    assert processor.ffmpeg_manager.stopped is True
-    assert await processor.transcription_queue.get() is SENTINEL
-    assert processor.transcription_queue.empty()
+    assert ingester.ffmpeg_manager.stopped is True
+    assert await chunker.transcription_queue.get() is SENTINEL
+    assert chunker.transcription_queue.empty()
 
 
 def test_concatenate_diar_segments_does_not_mutate_stored_segments():

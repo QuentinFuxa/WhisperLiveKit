@@ -525,7 +525,8 @@ class TranscriptionWorker:
         # Silent-backend watchdog: flips once ASR produces anything
         self._any_asr_output: bool = False
         self._silent_backend_warned: bool = False
-        self._SILENT_BACKEND_WARN_SECONDS = 20.0
+
+    _SILENT_BACKEND_WARN_SECONDS = 20.0
 
     async def _queue_tokens_for_translation(self, tokens: List[ASRToken]) -> None:
         """Forward committed tokens to the translation queue.
@@ -558,11 +559,10 @@ class TranscriptionWorker:
             return
         self._silent_backend_warned = True
         logger.error(
-            "ASR backend produced no output after {:.0f} s of audio. The backend "
+            f"ASR backend produced no output after {audio_seconds:.0f} s of audio. The backend "
             "is likely failing on every chunk; check earlier warnings for the "
             "root cause (device mismatches, incompatible wheels, model load "
             "errors).",
-            audio_seconds,
         )
 
     async def _flush_pending_translation_tokens(self) -> None:
