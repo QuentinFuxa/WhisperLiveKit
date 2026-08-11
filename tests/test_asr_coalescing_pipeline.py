@@ -28,6 +28,18 @@ def sample():
     return {s.name: s for s in get_samples()}["librispeech_1"]
 
 
+def test_sample_decodes_without_ffmpeg(sample, monkeypatch):
+    """CI runners have no ffmpeg; the standard samples must not require it."""
+    from whisperlivekit import test_harness
+
+    def no_ffmpeg(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory", "ffmpeg")
+
+    monkeypatch.setattr(test_harness.subprocess, "run", no_ffmpeg)
+    pcm = test_harness.load_audio_pcm(sample.path)
+    assert len(pcm) > 16000 * 2, "expected more than one second of s16le audio"
+
+
 async def _transcribe(sample, coalesce_s, silence_s=None):
     from whisperlivekit.test_harness import TestHarness
 
