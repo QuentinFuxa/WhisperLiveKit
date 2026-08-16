@@ -131,14 +131,38 @@ class SortformerDiarization:
             logger.error(f"Failed to load Sortformer model: {e}")
             raise
 
+
+def _resolve_max_speakers(max_speakers: Optional[int], model_speakers: int) -> int:
+    """Resolve a caller-declared speaker cap against the loaded checkpoint."""
+    if model_speakers < 1:
+        raise ValueError("The Sortformer checkpoint exposes no speaker channels.")
+    if max_speakers is None:
+        return model_speakers
+    if isinstance(max_speakers, bool) or not isinstance(max_speakers, int):
+        raise ValueError("max_speakers must be an integer.")
+    if not 1 <= max_speakers <= model_speakers:
+        raise ValueError(
+            f"max_speakers must be between 1 and {model_speakers} for the "
+            "loaded Sortformer checkpoint."
+        )
+    return max_speakers
+
+
 class SortformerDiarizationOnline:
-    def __init__(self, shared_model, sample_rate: int = 16000):
+    def __init__(
+        self,
+        shared_model,
+        sample_rate: int = 16000,
+        max_speakers: Optional[int] = None,
+    ):
         """
         Initialize the streaming Sortformer diarization system.
 
         Args:
             sample_rate: Audio sample rate (default: 16000)
-            model_name: Pre-trained model name (default: "nvidia/diar_streaming_sortformer_4spk-v2")
+            max_speakers: Maximum number of arrival-ordered speaker channels to
+                expose. This is a caller assertion about the session, not an
+                estimate of its true speaker count.
         """
         self.sample_rate = sample_rate
         self.diarization_segments = []
@@ -149,6 +173,10 @@ class SortformerDiarizationOnline:
         self.debug = False
 
         self.diar_model = shared_model.diar_model
+        self.max_speakers = _resolve_max_speakers(
+            max_speakers,
+            int(self.diar_model.sortformer_modules.n_spk),
+        )
 
         self.audio2mel = AudioToMelSpectrogramPreprocessor(
             window_size=0.025,
@@ -285,7 +313,18 @@ class SortformerDiarizationOnline:
     def _process_predictions(self):
         """Process model predictions and convert to speaker segments."""
         preds_np = self.total_preds[0].cpu().numpy()
-        active_speakers = np.argmax(preds_np, axis=1)
+        if preds_np.shape[1] < self.max_speakers:
+            raise RuntimeError(
+                "Sortformer returned fewer speaker channels than configured."
+            )
+
+        # Streaming Sortformer orders channels by speaker arrival and maintains
+        # those identities in its speaker cache. Keeping the first N channels
+        # therefore preserves their IDs across chunks. Selecting the per-frame
+        # top N channels would make membership unstable and is invalid for
+        # independent sigmoid outputs.
+        retained_preds = preds_np[:, :self.max_speakers]
+        active_speakers = np.argmax(retained_preds, axis=1)
 
         if not len(active_speakers):
             return []

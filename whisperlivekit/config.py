@@ -178,11 +178,26 @@ class WhisperLiveKitConfig:
     # Keep new fields at the end to preserve positional dataclass construction.
     # Pauses longer than this become stable transcript boundaries; 0 disables.
     pause_segmentation_seconds: float = 5.0
+    # None exposes every speaker channel provided by the Sortformer checkpoint.
+    sortformer_max_speakers: Optional[int] = None
 
     def __post_init__(self):
         self.pause_segmentation_seconds = validate_pause_segmentation_seconds(
             self.pause_segmentation_seconds
         )
+        if self.sortformer_max_speakers is not None:
+            if (
+                isinstance(self.sortformer_max_speakers, bool)
+                or not isinstance(self.sortformer_max_speakers, int)
+                or not 1 <= self.sortformer_max_speakers <= 4
+            ):
+                raise ValueError(
+                    "sortformer_max_speakers must be an integer between 1 and 4."
+                )
+            if self.diarization_backend != "sortformer":
+                raise ValueError(
+                    "sortformer_max_speakers requires diarization_backend=sortformer."
+                )
 
         # .en model suffix forces English for Whisper-family backends.
         if (

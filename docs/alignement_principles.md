@@ -60,3 +60,10 @@ folded into a speech line or held in the diarization buffer.
 The alignment selects one speaker per ASR token. It does not change the
 number of speakers supported by the configured diarization model, and it does
 not represent simultaneous speakers within one token.
+
+For Sortformer, `--sortformer-max-speakers N` retains the first N model
+channels in speaker-arrival order. It is a declared upper bound, not an
+estimate. If the recording actually contains more than N speakers, later
+speakers may be assigned to one of the retained labels. The setting does not
+change transcription text, word timestamps, or the one-speaker-per-token
+alignment described above.

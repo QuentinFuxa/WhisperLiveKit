@@ -55,6 +55,7 @@ def test_sortformer_final_frame_covers_the_complete_chunk(monkeypatch):
         online.total_preds = torch.tensor(
             [[[1.0, 0.0], [1.0, 0.0], [0.0, 1.0], [0.0, 1.0]]]
         )
+        online.max_speakers = 2
         online._len_prediction = None
         online.chunk_duration_seconds = 1.0
         online.segment_lock = threading.Lock()
