@@ -1,0 +1,204 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_version:
+        description: Exact version declared in pyproject.toml
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: publish-pypi
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build distributions
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.10.x"
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Validate requested version
+        env:
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          set -euo pipefail
+          uv run --isolated --no-project --no-config --python 3.12 python - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          expected = os.environ["EXPECTED_VERSION"]
+          if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", expected) is None:
+              raise SystemExit(
+                  "expected_version must be a stable X.Y.Z version"
+              )
+
+          with Path("pyproject.toml").open("rb") as source:
+              declared = tomllib.load(source)["project"]["version"]
+          if declared != expected:
+              raise SystemExit(
+                  f"expected_version {expected!r} does not match "
+                  f"pyproject.toml version {declared!r}"
+              )
+          PY
+
+      - name: Build distributions
+        id: build
+        run: |
+          set -euo pipefail
+          umask 077
+          dist_dir="$(mktemp -d "${RUNNER_TEMP}/whisperlivekit-dist.XXXXXXXXXX")"
+          uv build --no-sources --out-dir "$dist_dir"
+          if [[ -e "${dist_dir}/.gitignore" || -L "${dist_dir}/.gitignore" ]]; then
+            rm -- "${dist_dir}/.gitignore"
+          fi
+          printf 'dist_dir=%s\n' "$dist_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Check distribution metadata
+        env:
+          DIST_DIR: ${{ steps.build.outputs.dist_dir }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          set -euo pipefail
+          sdist="${DIST_DIR}/whisperlivekit-${EXPECTED_VERSION}.tar.gz"
+          wheel="${DIST_DIR}/whisperlivekit-${EXPECTED_VERSION}-py3-none-any.whl"
+          uvx --no-config --from "twine==7.0.0" twine check "$sdist" "$wheel"
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pypi-distributions
+          path: ${{ steps.build.outputs.dist_dir }}/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          include-hidden-files: false
+
+  publish:
+    name: Publish trusted release
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # Required for PyPI Trusted Publishing.
+    environment: pypi
+    steps:
+      - name: Prepare fresh distribution directory
+        id: artifacts
+        run: |
+          set -euo pipefail
+          umask 077
+          dist_dir="$(mktemp -d "${RUNNER_TEMP}/whisperlivekit-publish.XXXXXXXXXX")"
+          printf 'dist_dir=%s\n' "$dist_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Download distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pypi-distributions
+          path: ${{ steps.artifacts.outputs.dist_dir }}
+
+      - name: Verify exact distributions
+        env:
+          DIST_DIR: ${{ steps.artifacts.outputs.dist_dir }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          import tarfile
+          import zipfile
+          from email.parser import BytesParser
+          from email.policy import default
+          from pathlib import Path
+
+          package = "whisperlivekit"
+          version = os.environ["EXPECTED_VERSION"]
+          if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
+              raise SystemExit(
+                  "expected_version must be a stable X.Y.Z version"
+              )
+          dist_dir = Path(os.environ["DIST_DIR"])
+          sdist = dist_dir / f"{package}-{version}.tar.gz"
+          wheel = dist_dir / f"{package}-{version}-py3-none-any.whl"
+          expected_paths = {sdist, wheel}
+          actual_paths = set(dist_dir.iterdir())
+
+          if actual_paths != expected_paths:
+              expected = ", ".join(sorted(str(path) for path in expected_paths))
+              actual = ", ".join(sorted(str(path) for path in actual_paths))
+              raise SystemExit(
+                  f"unexpected distribution paths; expected [{expected}], got [{actual}]"
+              )
+          for path in expected_paths:
+              if not path.is_file() or path.is_symlink():
+                  raise SystemExit(f"distribution is not a regular file: {path}")
+
+          with tarfile.open(sdist, mode="r:gz") as archive:
+              pkg_info_path = f"{package}-{version}/PKG-INFO"
+              try:
+                  pkg_info = archive.extractfile(pkg_info_path)
+              except KeyError as error:
+                  raise SystemExit(
+                      f"sdist is missing {pkg_info_path}"
+                  ) from error
+              if pkg_info is None:
+                  raise SystemExit(f"sdist metadata is not a file: {pkg_info_path}")
+              sdist_metadata = pkg_info.read()
+
+          with zipfile.ZipFile(wheel) as archive:
+              metadata_path = f"{package}-{version}.dist-info/METADATA"
+              try:
+                  wheel_metadata = archive.read(metadata_path)
+              except KeyError as error:
+                  raise SystemExit(
+                      f"wheel is missing {metadata_path}"
+                  ) from error
+
+          for artifact, payload in (
+              ("sdist", sdist_metadata),
+              ("wheel", wheel_metadata),
+          ):
+              metadata = BytesParser(policy=default).parsebytes(payload)
+              if metadata["Name"] != package or metadata["Version"] != version:
+                  raise SystemExit(
+                      f"{artifact} metadata has Name={metadata['Name']!r} and "
+                      f"Version={metadata['Version']!r}"
+                  )
+          PY
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.10.x"
+          enable-cache: false
+
+      - name: Publish distributions
+        env:
+          DIST_DIR: ${{ steps.artifacts.outputs.dist_dir }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
+        run: |
+          set -euo pipefail
+          sdist="${DIST_DIR}/whisperlivekit-${EXPECTED_VERSION}.tar.gz"
+          wheel="${DIST_DIR}/whisperlivekit-${EXPECTED_VERSION}-py3-none-any.whl"
+          uv publish --no-config --trusted-publishing always "$sdist" "$wheel"
