@@ -71,6 +71,22 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--sortformer-max-speakers",
+        type=int,
+        choices=range(1, 5),
+        default=None,
+        dest="sortformer_max_speakers",
+        help=(
+            "Declare that a Sortformer session contains at most this many "
+            "speakers (1-4). The first N arrival-ordered speaker channels are "
+            "kept. This does not estimate the speaker count or reject extra "
+            "speakers; if more are present, attribution to retained labels is "
+            "undefined. Default: use every checkpoint channel (4 for the "
+            "default model)."
+        ),
+    )
+
+    parser.add_argument(
         "--punctuation-split",
         action="store_true",
         default=False,

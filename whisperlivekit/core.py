@@ -471,7 +471,10 @@ def online_diarization_factory(args, diarization_backend):
         # Not the best here, since several user/instances will share the same backend, but diart is not SOTA anymore and sortformer is recommended
     elif args.diarization_backend == "sortformer":
         from whisperlivekit.diarization.sortformer_backend import SortformerDiarizationOnline
-        online = SortformerDiarizationOnline(shared_model=diarization_backend)
+        online = SortformerDiarizationOnline(
+            shared_model=diarization_backend,
+            max_speakers=getattr(args, "sortformer_max_speakers", None),
+        )
     else:
         raise ValueError(f"Unknown diarization backend: {args.diarization_backend}")
     return online

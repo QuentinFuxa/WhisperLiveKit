@@ -584,6 +584,31 @@ def cmd_pull(spec: str):
     return 0
 
 
+def _add_diarization_cli_arguments(parser):
+    """Add the diarization options shared by in-process CLI commands."""
+    parser.add_argument("--diarization", action="store_true", help="Enable speaker diarization")
+    parser.add_argument(
+        "--sortformer-max-speakers",
+        type=int,
+        choices=range(1, 5),
+        default=None,
+        help=(
+            "Declare a known Sortformer speaker upper bound from 1 to 4. "
+            "The first N arrival-ordered channels are retained. This does not "
+            "estimate the speaker count; unexpected extra speakers can be "
+            "attributed to a retained label. Default: all checkpoint channels."
+        ),
+    )
+
+
+def _apply_diarization_cli_kwargs(parsed, kwargs):
+    """Pass shared diarization CLI options into the pipeline config."""
+    if parsed.diarization:
+        kwargs["diarization"] = True
+    if parsed.sortformer_max_speakers is not None:
+        kwargs["sortformer_max_speakers"] = parsed.sortformer_max_speakers
+
+
 # ---------------------------------------------------------------------------
 # `wlk transcribe` subcommand
 # ---------------------------------------------------------------------------
@@ -606,7 +631,7 @@ def cmd_transcribe(args: list):
     parser.add_argument("--format", default="text", choices=["text", "json", "srt", "vtt", "verbose_json"],
                         help="Output format (default: text)")
     parser.add_argument("--output", "-o", default=None, help="Output file (default: stdout)")
-    parser.add_argument("--diarization", action="store_true", help="Enable speaker diarization")
+    _add_diarization_cli_arguments(parser)
     parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed processing logs")
 
     parsed = parser.parse_args(args)
@@ -656,8 +681,7 @@ async def _transcribe_files(parsed):
         }
         if parsed.backend != "auto":
             kwargs["backend"] = parsed.backend
-        if parsed.diarization:
-            kwargs["diarization"] = True
+        _apply_diarization_cli_kwargs(parsed, kwargs)
 
         async with TestHarness(**kwargs) as h:
             await h.feed(audio_path, speed=0)
@@ -883,7 +907,7 @@ def cmd_listen(args: list):
     parser.add_argument("--backend", default="auto", help="ASR backend (default: auto)")
     parser.add_argument("--model", default="base", dest="model_size", help="Model size (default: base)")
     parser.add_argument("--language", "--lan", default="auto", dest="lan", help="Language code (default: auto)")
-    parser.add_argument("--diarization", action="store_true", help="Enable speaker diarization")
+    _add_diarization_cli_arguments(parser)
     parser.add_argument("--output", "-o", default=None, help="Save transcription to file on exit")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed logs")
 
@@ -933,8 +957,7 @@ async def _listen_main(parsed):
     }
     if parsed.backend != "auto":
         kwargs["backend"] = parsed.backend
-    if parsed.diarization:
-        kwargs["diarization"] = True
+    _apply_diarization_cli_kwargs(parsed, kwargs)
 
     out = sys.stderr
 
@@ -1267,7 +1290,7 @@ def cmd_diagnose(args: list):
                         help="Playback speed (1.0=realtime, 0=instant, default: 1.0)")
     parser.add_argument("--probe-interval", type=float, default=2.0,
                         help="Seconds between state probes (default: 2.0)")
-    parser.add_argument("--diarization", action="store_true", help="Enable speaker diarization")
+    _add_diarization_cli_arguments(parser)
 
     parsed = parser.parse_args(args)
 
@@ -1430,8 +1453,7 @@ async def _diagnose_main(parsed):
     }
     if parsed.backend != "auto":
         kwargs["backend"] = parsed.backend
-    if parsed.diarization:
-        kwargs["diarization"] = True
+    _apply_diarization_cli_kwargs(parsed, kwargs)
 
     t_load_start = time_module.perf_counter()
 

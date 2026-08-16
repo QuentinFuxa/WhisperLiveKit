@@ -417,9 +417,19 @@ async def websocket_endpoint(websocket: WebSocket):
 |-----------|-------------|---------|
 | `--diarization-backend` |  `diart` or `sortformer` | `sortformer` |
 | `--sortformer-model-path` | Path to a local Sortformer `.nemo` file, a directory containing exactly one `.nemo` file, or a NeMo/Hugging Face model ID. | `None` |
+| `--sortformer-max-speakers` | Declare a known upper bound from 1 to 4 for a Sortformer session. The first N speaker channels are retained in arrival order. | all checkpoint channels (4 for the default model) |
 | `--disable-punctuation-split` | [NOT FUNCTIONAL IN 0.2.15 / 0.2.16] Disable punctuation based splits. See #214 | `False` |
 | `--segmentation-model` | Hugging Face model ID for Diart segmentation model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/segmentation-3.0` |
 | `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/embedding` |
+
+`--sortformer-max-speakers` is an assertion about the audio, not speaker-count
+estimation. Use it only when the session is known to contain at most N speakers.
+If more speakers are present, later arrival-ordered channels are excluded and
+those speakers can be attributed to a retained label. The default preserves the
+full checkpoint output. Sortformer produces independent activity probabilities,
+including overlapping activity, but WhisperLiveKit currently resolves each
+diarization frame and ASR token to one speaker. This option does not add
+simultaneous-speaker output.
 
 | Canary backend options (only used with `--backend canary`) | Description | Default |
 |-----------|-------------|---------|

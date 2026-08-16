@@ -1,0 +1,1 @@
+recursive-include tests/fixtures/sortformer_2spk *.flac *.md *.txt
