@@ -403,6 +403,7 @@ class OnlineASRProcessor:
         Returns a tuple: (list of remaining ASRToken objects, float representing the final audio processed up to time).
         """
         remaining_tokens = self.transcript_buffer.buffer
+        self.transcript_buffer.buffer = []
         logger.debug(f"Final non-committed tokens: {remaining_tokens}")
         final_processed_upto = self.buffer_time_offset + (len(self.audio_buffer) / self.SAMPLING_RATE)
         self.buffer_time_offset = final_processed_upto

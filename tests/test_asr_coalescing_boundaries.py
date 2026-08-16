@@ -236,6 +236,32 @@ def test_local_agreement_new_speaker_returns_tokens_and_position():
     assert processor.get_buffer().text == ""
 
 
+@pytest.mark.asyncio
+async def test_local_agreement_eof_consumes_published_buffer():
+    from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
+
+    class FakeASR:
+        sep = " "
+        tokenizer = None
+        confidence_validation = False
+        buffer_trimming = "segment"
+        buffer_trimming_sec = 15.0
+
+    backend = OnlineASRProcessor(FakeASR())
+    pending = ASRToken(0.0, 0.2, "tail")
+    backend.transcript_buffer.buffer = [pending]
+    backend.audio_buffer = np.zeros(3_200, dtype=np.float32)
+    processor = _processor_for(backend)
+    processor.state.buffer_transcription = backend.get_buffer()
+
+    await processor._finish_transcription()
+
+    assert processor.state.tokens == [pending]
+    assert processor.state.end_transcription_processed == pytest.approx(0.2)
+    assert processor.state.buffer_transcription.text == ""
+    _assert_asr_metrics(processor, calls=1, tokens=1)
+
+
 def test_simulstreaming_new_speaker_returns_tokens_and_position():
     from whisperlivekit.simul_whisper.backend import SimulStreamingOnlineProcessor
 
