@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,12 +8,12 @@ version = "0.2.25"
 description = "Real-time speech-to-text models"
 readme = "README.md"
 authors = [{ name = "Quentin Fuxa" }]
-license = { file = "LICENSE" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.11, <3.14"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
 dependencies = [
-    "fastapi",
+    "fastapi>=0.141.1",
     "librosa",
     "soundfile",
     "uvicorn",
@@ -32,7 +32,8 @@ dependencies = [
     "torchaudio>=2.0.0",
     "tqdm",
     "tiktoken",
-    "python-multipart",
+    "python-multipart>=0.0.31",
+    "starlette>=1.3.1",
 ]
 
 [project.optional-dependencies]
@@ -81,7 +82,7 @@ diarization-diart = [
 ]
 
 [dependency-groups]
-dev = ["rich>=14.3.3"]
+dev = ["rich>=14.3.3", "ruff==0.15.*"]
 
 [tool.uv]
 conflicts = [
@@ -169,7 +170,7 @@ wlk-test = "whisperlivekit.test_client:main"
 [tool.ruff]
 target-version = "py311"
 line-length = 120
-exclude = [".git", "__pycache__", "build", "dist", ".eggs", ".claude", "scripts", "run_benchmark.py"]
+exclude = [".git", "__pycache__", "build", "dist", ".eggs", ".claude", "scripts", "third_party", "run_benchmark.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
