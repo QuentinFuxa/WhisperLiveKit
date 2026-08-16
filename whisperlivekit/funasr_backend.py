@@ -265,9 +265,4 @@ class FunASRASR:
 
 
 class FunASROnlineASRProcessor(OnlineASRProcessor):
-    """Prevent SenseVoice's committed EOF batch from remaining pending."""
-
-    def finish(self):
-        remaining_tokens, final_processed_upto = super().finish()
-        self.transcript_buffer.buffer = []
-        return remaining_tokens, final_processed_upto
+    """LocalAgreement processor specialization for SenseVoice."""
