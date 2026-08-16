@@ -2,6 +2,8 @@
 
 Thanks for helping improve WhisperLiveKit. Bug fixes, documentation, tests, and focused features are welcome.
 
+Participation in the project is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Before opening an issue
 
 Search the existing issues and discussions first. Use an issue for reproducible bugs and concrete feature requests. Use a discussion for setup questions, usage help, and broader ideas.
