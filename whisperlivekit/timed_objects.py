@@ -228,6 +228,14 @@ class ChangeSpeaker:
     speaker: int
     start: int
 
+
+@dataclass(frozen=True)
+class AudioStreamEvent:
+    """Sample-clock event exposed to protocol adapters."""
+
+    kind: str
+    timestamp: float
+
 @dataclass
 class State():
     """Unified state class for audio processing.

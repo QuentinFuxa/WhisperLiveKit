@@ -1955,6 +1955,22 @@ wheels = [
 ]
 
 [[package]]
+name = "deepgram-sdk"
+version = "7.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/aa/62/35862ebd6dc3873d7f67319afb775143b86fbf0fa1b1ab6697249325bfd4/deepgram_sdk-7.7.0.tar.gz", hash = "sha256:4cce45c853d6caebbed62081d9118b915a2f3a2e54eb420ff5148c30e16dcffd", size = 242704, upload-time = "2026-08-12T13:26:28.154Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/38/fa/7db3da57efe9b7919d57c4aac0eb9cbdf2ee40ed766316aada60cce89c03/deepgram_sdk-7.7.0-py3-none-any.whl", hash = "sha256:25355b2e119f969c8614136e494ef30be91a06c56152a9cba49535ef3f18f82c", size = 633789, upload-time = "2026-08-12T13:26:26.738Z" },
+]
+
+[[package]]
 name = "depyf"
 version = "0.20.0"
 source = { registry = "https://pypi.org/simple" }
@@ -11167,6 +11183,7 @@ sentence-tokenizer = [
 ]
 test = [
     { name = "datasets" },
+    { name = "deepgram-sdk" },
     { name = "librosa" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -11195,6 +11212,7 @@ dev = [
 requires-dist = [
     { name = "accelerate", marker = "extra == 'voxtral-hf'", specifier = ">=0.12" },
     { name = "datasets", marker = "extra == 'test'", specifier = ">=2.14" },
+    { name = "deepgram-sdk", marker = "extra == 'test'", specifier = "==7.7.0" },
     { name = "diart", marker = "python_full_version < '3.13' and extra == 'diarization-diart'", specifier = "==0.9.2" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "faster-whisper", specifier = ">=1.2.0" },

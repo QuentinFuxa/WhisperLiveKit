@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
+from whisperlivekit.api_auth import websocket_token
 from whisperlivekit.config import parse_cors_origins
 from whisperlivekit.timed_objects import FrontData
 
@@ -36,6 +37,7 @@ def _bearer_token(request: Request) -> Optional[str]:
     if auth.lower().startswith("bearer "):
         return auth[7:].strip()
     return None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -92,10 +94,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Authentication (when --api-token / WLK_API_TOKEN is set): accept the
     # token either as a query parameter or an Authorization: Bearer header.
-    ws_auth = websocket.headers.get("authorization") or ""
-    ws_token = websocket.query_params.get("token") or (
-        ws_auth[7:].strip() if ws_auth.lower().startswith("bearer ") else None
-    )
+    ws_token = websocket_token(websocket)
     if not _token_ok(ws_token):
         await websocket.close(code=4401, reason="invalid or missing API token")
         logger.warning("WebSocket rejected: invalid or missing API token")
@@ -179,6 +178,10 @@ async def websocket_endpoint(websocket: WebSocket):
 async def deepgram_websocket_endpoint(websocket: WebSocket):
     """Deepgram-compatible live transcription WebSocket."""
     global transcription_engine
+    if not _token_ok(websocket_token(websocket)):
+        await websocket.close(code=4401, reason="invalid or missing API token")
+        logger.warning("Deepgram WebSocket rejected: invalid or missing API token")
+        return
     from whisperlivekit.deepgram_compat import handle_deepgram_websocket
     await handle_deepgram_websocket(websocket, transcription_engine, config)
 

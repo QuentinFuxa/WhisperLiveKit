@@ -120,44 +120,91 @@ curl http://localhost:8000/health
 ### WS /v1/listen
 
 Compatibility-oriented subset of Deepgram's Live Transcription WebSocket.
-Current Deepgram client SDKs can connect when they use only the parameters and
-messages documented below.
+The adapter is verified with `deepgram-sdk==7.7.0`. Install that version and use
+only the parameters and messages documented below.
+
+```bash
+pip install deepgram-sdk==7.7.0
+```
 
 ```python
-from deepgram import DeepgramClient, LiveOptions
+from deepgram import AsyncDeepgramClient
+from deepgram.environment import DeepgramClientEnvironment
 
-deepgram = DeepgramClient(api_key="unused", config={"url": "localhost:8000"})
-connection = deepgram.listen.websocket.v("1")
-connection.start(LiveOptions(model="nova-2", language="en"))
+environment = DeepgramClientEnvironment(
+    base="http://localhost:8000",
+    production="ws://localhost:8000",
+    agent="ws://localhost:8000",
+    agent_rest="http://localhost:8000",
+)
+# Use the WLK API token here when the server was started with --api-token.
+deepgram = AsyncDeepgramClient(api_key="unused", environment=environment)
+
+async with deepgram.listen.v1.connect(
+    model="nova-3",
+    language="en",
+    encoding="linear16",
+    sample_rate=16000,
+    channels=1,
+    interim_results=True,
+    endpointing=300,
+    utterance_end_ms=1000,
+    vad_events=True,
+) as connection:
+    await connection.send_media(pcm_audio)
+    message = await connection.recv()
+    await connection.send_close_stream()
 ```
 
 **Supported Query Parameters:**
 
 - `language`: per-session source language
-- `vad_events=true`: emit `SpeechStarted` events
+- `model`: accepted for SDK compatibility; the server's configured WLK backend
+  remains authoritative
+- `encoding=linear16`: select raw signed 16-bit PCM input; requires
+  `sample_rate=16000`
+- `sample_rate=16000`: WLK's fixed input sample rate for raw PCM
+- `channels=1`: mono input; this is the only supported channel count
+- `interim_results=true|false`: emit revisable `is_final=false` hypotheses;
+  defaults to `false`
+- `endpointing=false|N`: disable pause endpoints or set a positive silence
+  threshold in milliseconds; defaults to 10 ms
+- `utterance_end_ms=N`: enable the independent finalized-word gap detector;
+  requires `interim_results=true` and accepts integers from 1000 to 5000
+- `vad_events=true|false`: emit `SpeechStarted` on VAD speech transitions;
+  defaults to `false`
 
-Deepgram's `endpointing` and `utterance_end_ms` parameters are not implemented and
-do not control `--pause-segmentation-seconds`. WhisperLiveKit currently marks every
-committed `Results` message as `speech_final` and emits its existing
-`UtteranceEnd` event from VAD-derived silence lines. These are compatibility
-approximations, not Deepgram's separate endpointing and word-gap timers.
+Numeric endpointing and `vad_events=true` require the server's VAC to be enabled.
+Endpointing uses submitted audio timestamps, not wall-clock time, and is
+independent from `--pause-segmentation-seconds`. A pause endpoint emits
+`speech_final=true` once. `UtteranceEnd` uses its own timer after the last word of
+a final result and is deduplicated for that word timestamp.
 
 **Client Messages:**
 - Binary audio frames
-- `{"type": "KeepAlive"}` — keep connection alive
-- `{"type": "CloseStream"}` — graceful close
-- `{"type": "Finalize"}` — flush pending audio
+- `{"type": "KeepAlive"}`: keep the connection alive without advancing audio time
+- `{"type": "CloseStream"}`: drain pending audio, receive final Results and
+  summary Metadata, then close
+
+Deepgram's non-terminal `Finalize` control is rejected explicitly. WLK backends
+currently expose only a terminal flush, so accepting more audio afterward would
+silently lose it. Send `CloseStream` when the audio is complete. An empty binary
+frame is also rejected and is not treated as EOF.
 
 **Server Messages:**
-- `Metadata` — sent once at connection start
-- `Results` — transcription results with `is_final`/`speech_final` flags
-- `UtteranceEnd` — silence detected after speech
-- `SpeechStarted` — speech begins (requires `vad_events=true`)
+- `Metadata`: request metadata and the final stream summary
+- `Results`: revisable or immutable transcript ranges with independent
+  `is_final` and `speech_final` flags
+- `UtteranceEnd`: finalized-word gap reached when configured
+- `SpeechStarted`: VAD speech begins when `vad_events=true`
 
 **Limitations vs Deepgram:**
-- No authentication (self-hosted)
-- Word timestamps are interpolated from segment boundaries
+- Self-hosted authentication uses the optional WLK API token rather than a
+  Deepgram project key
+- Native ASR token timestamps are preserved when available; multi-word source
+  tokens fall back to interpolation within their token span
 - Confidence scores are 0.0 (not available)
+- `Finalize` and channel-specific finalization are not supported
 
 ---
 
@@ -603,8 +650,8 @@ with and without diarization. Use `--pause-segmentation-seconds 0` to disable th
 boundaries. The boundary is committed after the pause ends, when speech resumes
 or end of input is received; an in-progress pause is not added to `lines`. The
 native `/asr` WebSocket uses the server-wide setting. The
-Deepgram-compatible `/v1/listen` endpoint uses the same server-wide setting;
-Deepgram's `endpointing` query parameter is not mapped to it.
+Deepgram-compatible `/v1/listen` endpoint instead keeps its per-session
+`endpointing` timer separate from these native output lines.
 
 ---
 

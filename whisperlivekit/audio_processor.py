@@ -18,7 +18,16 @@ from whisperlivekit.core import (
 from whisperlivekit.ffmpeg_manager import FFmpegManager, FFmpegState
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.silero_vad_iterator import FixedVADIterator, OnnxWrapper, load_jit_vad
-from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, FrontData, HypothesisTail, Silence, State, Transcript
+from whisperlivekit.timed_objects import (
+    ASRToken,
+    AudioStreamEvent,
+    ChangeSpeaker,
+    FrontData,
+    HypothesisTail,
+    Silence,
+    State,
+    Transcript,
+)
 from whisperlivekit.tokens_alignment import TokensAlignment, resolve_retention_seconds
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -92,6 +101,11 @@ class AudioProcessor:
         """Initialize the audio processor with configuration, models, and state."""
         # Extract per-session options before passing to TranscriptionEngine
         session_language = kwargs.pop('language', None)
+        self.stream_event_queue = kwargs.pop('stream_event_queue', None)
+        self._stream_events_after_snapshot = (
+            asyncio.Queue() if self.stream_event_queue is not None else None
+        )
+        session_pcm_input = kwargs.pop('pcm_input', None)
         # Output mode of the session: "full" resends the whole transcript on
         # every update, so history must never be pruned away (issue #372);
         # "diff" clients keep their own copy and allow bounded server memory.
@@ -120,7 +134,11 @@ class AudioProcessor:
         self.bytes_per_sample = 2
         self.bytes_per_sec = self.samples_per_sec * self.bytes_per_sample
         self.max_bytes_per_sec = 32000 * 5  # 5 seconds of audio at 32 kHz
-        self.is_pcm_input = self.args.pcm_input
+        self.is_pcm_input = (
+            self.args.pcm_input
+            if session_pcm_input is None
+            else bool(session_pcm_input)
+        )
 
         # State management
         self.is_stopping: bool = False
@@ -210,6 +228,32 @@ class AudioProcessor:
         # Silent-backend watchdog: flips once the ASR has produced anything.
         self._any_asr_output: bool = False
         self._silent_backend_warned: bool = False
+
+    async def _emit_stream_event(self, kind: str, timestamp: float) -> None:
+        """Publish a protocol-neutral event on the submitted audio clock."""
+        event_queue = getattr(self, "stream_event_queue", None)
+        if event_queue is not None:
+            await event_queue.put(
+                AudioStreamEvent(kind=kind, timestamp=float(timestamp))
+            )
+
+    async def _emit_stream_event_after_snapshot(
+        self,
+        kind: str,
+        timestamp: float,
+    ) -> None:
+        """Publish only after results_formatter yields the matching state."""
+        pending_queue = getattr(self, "_stream_events_after_snapshot", None)
+        if pending_queue is None:
+            return
+        acknowledged = asyncio.get_running_loop().create_future()
+        await pending_queue.put(
+            (
+                AudioStreamEvent(kind=kind, timestamp=float(timestamp)),
+                acknowledged,
+            )
+        )
+        await acknowledged
 
     async def _queue_tokens_for_translation(self, tokens: List[ASRToken]) -> None:
         """Forward committed tokens to the translation queue.
@@ -304,6 +348,7 @@ class AudioProcessor:
         self.current_silence = Silence(
             is_starting=True, start=audio_t
         )
+        await self._emit_stream_event("silence_started", audio_t)
         # Push a separate start-only event so _end_silence won't mutate it
         start_event = Silence(is_starting=True, start=audio_t)
         if self.transcription_queue:
@@ -313,6 +358,8 @@ class AudioProcessor:
         if self.translation_queue and not self.transcription_queue:
             await self._flush_pending_translation_tokens()
             await self.translation_queue.put(start_event)
+        if not self.transcription_queue:
+            await self._emit_stream_event("silence_transcription_ready", audio_t)
 
     def _is_pause_segmentation_boundary(self, silence: Silence) -> bool:
         """Whether a completed pause crosses the output threshold."""
@@ -326,7 +373,12 @@ class AudioProcessor:
         duration = silence.duration
         return duration is not None and duration > threshold
 
-    async def _end_silence(self, at_sample: Optional[int] = None) -> None:
+    async def _end_silence(
+        self,
+        at_sample: Optional[int] = None,
+        *,
+        speech_resumed: bool = False,
+    ) -> None:
         if not self.current_silence:
             return
         if at_sample is not None:
@@ -350,6 +402,8 @@ class AudioProcessor:
         # Push the completed silence as the end event (separate from the start event)
         await self._push_silence_event()
         self.current_silence = None
+        if speech_resumed:
+            await self._emit_stream_event("speech_started", audio_t)
 
     async def _enqueue_active_audio(self, pcm_chunk: np.ndarray) -> None:
         if pcm_chunk is None or pcm_chunk.size == 0:
@@ -745,6 +799,11 @@ class AudioProcessor:
 
                 await self._queue_tokens_for_translation(new_tokens)
                 await self._queue_hypothesis_tail_for_translation(_buffer_transcript)
+                if isinstance(item, Silence) and item.is_starting:
+                    await self._emit_stream_event_after_snapshot(
+                        "silence_transcription_ready",
+                        item.start or 0.0,
+                    )
                 if isinstance(item, Silence) and self.translation_queue:
                     # The silence-start ASR call can commit the final words of
                     # the utterance. Forward those words before resetting the
@@ -901,11 +960,25 @@ class AudioProcessor:
                     remaining_time_diarization=state.remaining_time_diarization if self.args.diarization else 0
                 )
 
-                should_push = (response != self.last_response_content)
+                deferred_events = []
+                pending_queue = getattr(self, "_stream_events_after_snapshot", None)
+                if pending_queue is not None:
+                    while not pending_queue.empty():
+                        deferred_events.append(pending_queue.get_nowait())
+
+                should_push = (
+                    response != self.last_response_content
+                    or bool(deferred_events)
+                )
                 if should_push:
                     self.metrics.n_responses_sent += 1
                     yield response
                     self.last_response_content = response
+                for event, acknowledged in deferred_events:
+                    await self.stream_event_queue.put(event)
+                    if not acknowledged.done():
+                        acknowledged.set_result(None)
+                    pending_queue.task_done()
 
                 if self.is_stopping and self._processing_tasks_done():
                     logger.info("Results formatter: All upstream processors are done and in stopping state. Terminating.")
@@ -1070,7 +1143,7 @@ class AudioProcessor:
         # Without VAC, there's no speech detector to end the initial silence.
         # Clear it on the first audio chunk so audio actually gets enqueued.
         if not self.args.vac and self.current_silence:
-            await self._end_silence()
+            await self._end_silence(speech_resumed=True)
 
         # Process when enough data
         if len(self.pcm_buffer) < self.bytes_per_sec:
@@ -1103,7 +1176,10 @@ class AudioProcessor:
         # EOF can send a sub-chunk directly here. Without VAC, clear the
         # initial placeholder before treating that tail as active speech.
         if not self.args.vac and self.current_silence:
-            await self._end_silence(at_sample=self.total_pcm_samples)
+            await self._end_silence(
+                at_sample=self.total_pcm_samples,
+                speech_resumed=True,
+            )
 
         num_samples = len(pcm_array)
         chunk_sample_start = self.total_pcm_samples
@@ -1128,7 +1204,10 @@ class AudioProcessor:
                 # ensuring all active audio in the current chunk is captured.
                 start_sample_eff = max(chunk_sample_start, min(chunk_sample_end, start_sample))
                 start_offset = start_sample_eff - chunk_sample_start
-                await self._end_silence(at_sample=start_sample_eff)
+                await self._end_silence(
+                    at_sample=start_sample_eff,
+                    speech_resumed=True,
+                )
                 last_offset = start_offset
 
             if "end" in event and not self.current_silence:
@@ -1148,6 +1227,10 @@ class AudioProcessor:
             await self._enqueue_active_audio(pcm_array[last_offset:])
 
         self.total_pcm_samples = chunk_sample_end
+        await self._emit_stream_event(
+            "audio_advanced",
+            self.total_pcm_samples / self.sample_rate,
+        )
 
     async def _finalize_current_silence_at_stream_end(self) -> None:
         """Commit a trailing pause at the final known stream position."""

@@ -73,7 +73,7 @@ wlk bench
 
 #### API Compatibility
 
-WhisperLiveKit exposes multiple APIs so you can use it as a drop-in replacement:
+WhisperLiveKit exposes compatibility-oriented subsets of popular APIs:
 
 ```bash
 # OpenAI-compatible REST API
@@ -82,8 +82,8 @@ curl http://localhost:8000/v1/audio/transcriptions -F file=@audio.wav
 # Works with the OpenAI Python SDK
 client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")
 
-# Deepgram-compatible WebSocket (use any Deepgram SDK)
-# Just point your Deepgram client at localhost:8000
+# Deepgram-compatible WebSocket
+# See docs/API.md for supported options and current SDK setup
 
 # Native WebSocket for real-time streaming
 ws://localhost:8000/asr
