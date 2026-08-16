@@ -37,6 +37,12 @@ updates:
     groups:
       docker-images:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Keep the container runtime aligned with the cu129 PyTorch extra.
+      # CUDA major upgrades need an explicit compatibility review.
+      - dependency-name: "nvidia/cuda"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "docker"
 
