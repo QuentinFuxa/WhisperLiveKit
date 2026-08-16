@@ -20,13 +20,15 @@ class SessionMetrics:
     total_audio_duration_s: float = 0.0
     total_processing_time_s: float = 0.0
 
-    # Chunk / call counters
+    # Chunk / call counters. A transcription call is one successful invocation
+    # of process_iter, start_silence, new_speaker, or finish, including explicit
+    # coalescing drains at boundaries and EOF.
     n_chunks_received: int = 0
     n_transcription_calls: int = 0
     n_tokens_produced: int = 0
     n_responses_sent: int = 0
 
-    # Per-call ASR latency (seconds)
+    # Per-successful-call ASR latency (seconds), one entry per counted call.
     transcription_durations: List[float] = field(default_factory=list)
 
     # Silence

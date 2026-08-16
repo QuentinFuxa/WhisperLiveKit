@@ -772,6 +772,8 @@ async def test_audio_processor_finish_commits_pending_buffer_when_backend_flush_
     assert len(processor.state.new_tokens) == 1
     assert processor.state.new_tokens[0].text == "Concord returned to its place amidst the tents"
     assert processor.state.buffer_transcription.text == ""
+    assert processor.metrics.n_transcription_calls == 1
+    assert len(processor.metrics.transcription_durations) == 1
     assert processor.metrics.n_tokens_produced == 1
 
 

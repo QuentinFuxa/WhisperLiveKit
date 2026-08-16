@@ -599,7 +599,8 @@ class VoxtralMLXOnlineProcessor:
         self.end += silence_duration
 
     def new_speaker(self, change_speaker):
-        self.start_silence()
+        """Flush and return the previous speaker's final tokens before reset."""
+        return self.start_silence()
 
     def warmup(self, audio, init_prompt=""):
         pass

@@ -125,7 +125,7 @@ def parse_args():
         dest="asr_coalesce_min_s",
         help="Defer ASR until this much new audio has accrued, trading update "
              "cadence for fewer encoder passes. Held-back audio is bounded by "
-             "this value plus one chunk. 0 disables (default).",
+             "this value plus one chunk. Non-finite or <= 0 disables (default).",
     )
 
     parser.add_argument(
