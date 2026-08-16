@@ -7,7 +7,7 @@ also reset the hypothesis buffer, so their second pass must be returned first.
 
 Audio must be fed at speed=1.0: at speed=0 the whole file arrives as a single
 chunk, nothing is ever deferred, and these tests would pass vacuously. The cut
-point matters too — it has to leave a sub-threshold remainder outstanding.
+point matters too; it has to leave a sub-threshold remainder outstanding.
 """
 
 import logging

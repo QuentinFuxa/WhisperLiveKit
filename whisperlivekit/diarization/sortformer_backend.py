@@ -15,7 +15,11 @@ try:
     from nemo.collections.asr.models import SortformerEncLabelModel
     from nemo.collections.asr.modules import AudioToMelSpectrogramPreprocessor
 except ImportError:
-    raise SystemExit("""Please use `pip install "git+https://github.com/NVIDIA/NeMo.git@main#egg=nemo_toolkit[asr]"` to use the Sortformer diarization""")
+    raise SystemExit(
+        "Sortformer diarization requires NeMo. Install it with "
+        '`pip install "whisperlivekit[diarization-sortformer]"` or '
+        "`uv sync --extra diarization-sortformer`."
+    )
 
 
 class StreamingSortformerState:

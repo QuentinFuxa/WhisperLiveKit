@@ -1,5 +1,6 @@
 """Typed configuration for the WhisperLiveKit pipeline."""
 import logging
+import math
 from dataclasses import dataclass, fields
 from typing import Optional
 
@@ -152,6 +153,13 @@ class WhisperLiveKitConfig:
     qwen3_streaming_tower_checkpoint: str = ""
     qwen3_streaming_block_frames: int = 192
 
+    # Canary backend (NeMo EncDecMultiTaskModel on LocalAgreement)
+    canary_model: str = "nvidia/canary-1b-v2"
+    canary_default_lang: str = "en"
+    canary_lid_model: str = "langid_ambernet"
+    canary_lid_min_sec: float = 2.0
+    canary_lid_min_conf: float = 0.5
+
     def __post_init__(self):
         # .en model suffix forces English for Whisper-family backends.
         if (
@@ -165,6 +173,19 @@ class WhisperLiveKitConfig:
             self.backend_policy = "simulstreaming"
         elif self.backend_policy == "2":
             self.backend_policy = "localagreement"
+
+        if self.backend == "canary":
+            if not math.isfinite(self.canary_lid_min_sec) or self.canary_lid_min_sec < 0:
+                raise ValueError(
+                    "canary_lid_min_sec must be finite and non-negative."
+                )
+            if (
+                not math.isfinite(self.canary_lid_min_conf)
+                or not 0.0 <= self.canary_lid_min_conf <= 1.0
+            ):
+                raise ValueError(
+                    "canary_lid_min_conf must be between 0 and 1."
+                )
 
         if self.backend != "funasr":
             return
