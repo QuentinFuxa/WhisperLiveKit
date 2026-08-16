@@ -70,8 +70,35 @@ def _parse_time(time_str: str) -> float:
     return float(parts[0])
 
 
+def _load_audio_pcm_soundfile(audio_path: str, sample_rate: int) -> Optional[bytes]:
+    """Decode via soundfile when the file already matches the target format.
+
+    Returns None when the file cannot be decoded or needs resampling or
+    downmixing; those stay ffmpeg's job.
+    """
+    try:
+        import soundfile as sf
+    except ImportError:
+        return None
+    try:
+        data, sr = sf.read(str(audio_path), dtype="int16", always_2d=True)
+    except Exception:
+        return None
+    if sr != sample_rate or data.shape[1] != 1:
+        return None
+    return data[:, 0].tobytes()
+
+
 def load_audio_pcm(audio_path: str, sample_rate: int = SAMPLE_RATE) -> bytes:
-    """Load any audio file and convert to PCM s16le mono via ffmpeg."""
+    """Load any audio file and convert to PCM s16le mono.
+
+    Files soundfile can decode at the target rate and channel count need no
+    external executable, which keeps the standard test samples usable on
+    runners without ffmpeg; everything else is converted via ffmpeg.
+    """
+    pcm = _load_audio_pcm_soundfile(audio_path, sample_rate)
+    if pcm is not None:
+        return pcm
     cmd = [
         "ffmpeg", "-i", str(audio_path),
         "-f", "s16le", "-acodec", "pcm_s16le",
