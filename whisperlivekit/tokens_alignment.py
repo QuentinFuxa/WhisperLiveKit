@@ -372,6 +372,11 @@ class TokensAlignment:
 
         for token in self.all_tokens:
             if token.is_silence():
+                # A boundary cannot overtake earlier speech that is still
+                # waiting for diarization. Keep the entire remaining suffix
+                # volatile until speaker coverage catches up.
+                if buffering_suffix:
+                    continue
                 flush_pending()
                 silence_segment = PuncSegment.from_tokens([token], is_silence=True)
                 if silence_segment is not None:

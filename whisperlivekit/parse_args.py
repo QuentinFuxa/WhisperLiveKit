@@ -119,6 +119,17 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--pause-segmentation-seconds",
+        type=float,
+        default=5.0,
+        dest="pause_segmentation_seconds",
+        help=(
+            "Create a stable transcript boundary after a VAD pause longer than "
+            "this many seconds. Use 0 to disable pause-based segmentation."
+        ),
+    )
+
+    parser.add_argument(
         "--asr-coalesce-min-s",
         type=float,
         default=0.0,

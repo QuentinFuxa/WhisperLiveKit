@@ -119,7 +119,9 @@ curl http://localhost:8000/health
 
 ### WS /v1/listen
 
-Drop-in compatible with Deepgram's Live Transcription WebSocket. Connect using any Deepgram client SDK pointed at your local server.
+Compatibility-oriented subset of Deepgram's Live Transcription WebSocket.
+Current Deepgram client SDKs can connect when they use only the parameters and
+messages documented below.
 
 ```python
 from deepgram import DeepgramClient, LiveOptions
@@ -129,7 +131,16 @@ connection = deepgram.listen.websocket.v("1")
 connection.start(LiveOptions(model="nova-2", language="en"))
 ```
 
-**Query Parameters:** Same as Deepgram (`language`, `punctuate`, `interim_results`, `vad_events`, etc.).
+**Supported Query Parameters:**
+
+- `language`: per-session source language
+- `vad_events=true`: emit `SpeechStarted` events
+
+Deepgram's `endpointing` and `utterance_end_ms` parameters are not implemented and
+do not control `--pause-segmentation-seconds`. WhisperLiveKit currently marks every
+committed `Results` message as `speech_final` and emits its existing
+`UtteranceEnd` event from VAD-derived silence lines. These are compatibility
+approximations, not Deepgram's separate endpointing and word-gap timers.
 
 **Client Messages:**
 - Binary audio frames
@@ -572,7 +583,9 @@ After applying a diff, check that `len(lines) == msg["n_lines"]`. A mismatch ind
 
 ## Silence Representation
 
-Silence segments are represented as lines with `speaker` set to `-2` and `text` set to `null`:
+Silence segments are represented as lines with `speaker` set to `-2`. Their
+`text` is `null` with diarization and an empty string without diarization, so
+clients should identify them by `speaker`:
 
 ```json
 {
@@ -583,7 +596,15 @@ Silence segments are represented as lines with `speaker` set to `-2` and `text` 
 }
 ```
 
-Silence segments are only generated for pauses longer than 5 seconds.
+Silence segments are generated when a VAD pause is longer than
+`--pause-segmentation-seconds`, which defaults to 5 seconds. The qualifying pause
+creates one stable line boundary without changing word text or timestamps, both
+with and without diarization. Use `--pause-segmentation-seconds 0` to disable these
+boundaries. The boundary is committed after the pause ends, when speech resumes
+or end of input is received; an in-progress pause is not added to `lines`. The
+native `/asr` WebSocket uses the server-wide setting. The
+Deepgram-compatible `/v1/listen` endpoint uses the same server-wide setting;
+Deepgram's `endpointing` query parameter is not mapped to it.
 
 ---
 
