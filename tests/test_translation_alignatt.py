@@ -308,31 +308,29 @@ def test_factory_routes_alignatt_engine():
 def test_translation_processor_plumbing_with_fake_sidecar(sidecar):
     """Drive AudioProcessor.translation_processor as a bound coroutine over a
     real queue: tokens and tails in, Translation segments and buffer out."""
-    from types import SimpleNamespace
-
-    from whisperlivekit.audio_processor import SENTINEL, AudioProcessor
+    from whisperlivekit.audio_processor import SENTINEL, ResultAggregator, TranslationWorker
     from whisperlivekit.timed_objects import State
 
-    processor = SimpleNamespace(
-        translation_queue=asyncio.Queue(),
-        translation=make_client(sidecar),
-        state=State(),
-        lock=asyncio.Lock(),
+    aggregator = object.__new__(ResultAggregator)
+    aggregator.state = State()
+
+    worker = TranslationWorker(
+        translation_backend=make_client(sidecar),
+        in_queue=asyncio.Queue(),
+        aggregator=aggregator,
     )
 
     async def scenario():
-        task = asyncio.create_task(
-            AudioProcessor.translation_processor(processor)
-        )
-        await processor.translation_queue.put(token("Hello", 0.0, 0.4))
-        await processor.translation_queue.put(token("world.", 0.5, 0.9))
-        await processor.translation_queue.put(
+        task = asyncio.create_task(worker.run())
+        await worker.queue.put(token("Hello", 0.0, 0.4))
+        await worker.queue.put(token("world.", 0.5, 0.9))
+        await worker.queue.put(
             HypothesisTail(start=1.0, end=1.5, text="next words")
         )
         await asyncio.sleep(0.5)
-        await processor.translation_queue.put(SENTINEL)
+        await worker.queue.put(SENTINEL)
         await asyncio.wait_for(task, timeout=10)
 
     asyncio.run(scenario())
-    assert processor.state.new_translation, "no validated translation produced"
-    assert processor.state.new_translation[0].text == "HELLO WORLD. [F]"
+    assert aggregator.state.new_translation, "no validated translation produced"
+    assert aggregator.state.new_translation[0].text == "HELLO WORLD. [F]"
