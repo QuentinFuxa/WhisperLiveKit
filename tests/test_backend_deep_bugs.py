@@ -456,6 +456,29 @@ def test_load_cif_without_checkpoint_preserves_never_fire():
     assert never_fire is True
 
 
+def test_load_cif_accepts_a_weights_only_state_dict(tmp_path):
+    import torch
+
+    from whisperlivekit.simul_whisper.eow_detection import load_cif
+
+    checkpoint_path = tmp_path / "cif.pt"
+    expected = torch.nn.Linear(16, 1)
+    torch.save(expected.state_dict(), checkpoint_path)
+    cfg = SimpleNamespace(cif_ckpt_path=str(checkpoint_path), never_fire=False)
+
+    loaded, always_fire, never_fire = load_cif(
+        cfg, n_audio_state=16, device="cpu"
+    )
+
+    assert loaded is not None
+    assert always_fire is False
+    assert never_fire is False
+    for parameter, expected_parameter in zip(
+        loaded.parameters(), expected.parameters(), strict=True
+    ):
+        assert torch.equal(parameter, expected_parameter)
+
+
 def test_nllw_language_code_maps_whisper_chinese_aliases():
     from whisperlivekit.core import _nllw_language_code
 
