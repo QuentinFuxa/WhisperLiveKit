@@ -124,8 +124,10 @@ For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLi
 | **Qwen3-ASR streaming (HF, CUDA/MPS/CPU)** | `uv sync --extra qwen3-streaming` | `pip install -e ".[qwen3-streaming]"` |
 | **Qwen3-ASR vLLM Metal (Apple Silicon)** | Install vLLM with the official vllm-metal script first, then `uv sync --extra qwen3-vllm-metal` | Install vLLM with the official vllm-metal script first, then `pip install -e ".[qwen3-vllm-metal]"` |
 | **Speaker diarization (Sortformer / NeMo 3)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
-| *[Not recommended]* Speaker diarization with Diart | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
+| *[Not recommended]* Speaker diarization with Diart (Python 3.11 or 3.12) | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
 | **Canary-1b-v2 (NeMo, CUDA/CPU)** | `uv sync --extra canary` | `pip install -e ".[canary]"` |
+
+The Diart profile is limited to Python 3.11 and 3.12 because Diart 0.9.2 requires NumPy below 2. Use Sortformer for diarization on Python 3.13.
 
 Supported GPU profiles:
 
