@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and support
+    url: https://github.com/QuentinFuxa/WhisperLiveKit/discussions/categories/q-a
+    about: Ask usage and troubleshooting questions in GitHub Discussions.
+  - name: Private security report
+    url: https://github.com/QuentinFuxa/WhisperLiveKit/security/advisories/new
+    about: Report a suspected vulnerability privately.

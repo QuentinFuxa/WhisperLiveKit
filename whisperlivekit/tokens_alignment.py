@@ -237,6 +237,11 @@ class TokensAlignment:
                     if segments[-1].text:
                         segments[-1].text += segment.text
                     segments[-1].end = segment.end
+                    if segment.tokens:
+                        if segments[-1].tokens:
+                            segments[-1].tokens.extend(segment.tokens)
+                        else:
+                            segments[-1].tokens = list(segment.tokens)
                 else:
                     segments.append(segment)
 

@@ -27,7 +27,7 @@ def load_cif(cfg, n_audio_state, device):
     cif_linear = torch.nn.Linear(n_audio_state, 1)
     always_fire = False
     never_fire = cfg.never_fire
-    checkpoint = torch.load(cfg.cif_ckpt_path, map_location=device)
+    checkpoint = torch.load(cfg.cif_ckpt_path, map_location=device, weights_only=True)
     cif_linear.load_state_dict(checkpoint)
     cif_linear.to(device)
     return cif_linear, always_fire, never_fire

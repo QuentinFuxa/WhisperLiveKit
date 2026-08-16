@@ -1,0 +1,47 @@
+name: Feature request
+description: Propose a focused improvement to WhisperLiveKit
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    id: before-submitting
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and discussions for similar proposals.
+          required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Describe the user problem and why existing behavior does not solve it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behavior, API, or command line interface.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: List alternatives or workarounds you considered.
+
+  - type: textarea
+    id: validation-plan
+    attributes:
+      label: Validation plan
+      description: Explain how the change could be tested, benchmarked, or demonstrated with TestHarness.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to help implement this feature.
