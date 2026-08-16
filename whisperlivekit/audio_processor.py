@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import traceback
 from time import time
 from typing import Any, AsyncGenerator, List, Optional, Union
@@ -451,14 +452,23 @@ class AudioProcessor:
                     end = pending.end if pending.end is not None else end_time
                     if end is None or end < start:
                         end = start
-                    final_tokens = [
-                        ASRToken(
-                            start=start,
-                            end=end,
-                            text=text,
-                            detected_language=pending.detected_language,
+                    word_matches = list(re.finditer(r"\S+", text))
+                    word_duration = (end - start) / len(word_matches)
+                    final_tokens = []
+                    for index, word_match in enumerate(word_matches):
+                        text_start = 0 if index == 0 else word_matches[index - 1].end()
+                        final_tokens.append(
+                            ASRToken(
+                                start=start + index * word_duration,
+                                end=(
+                                    end
+                                    if index == len(word_matches) - 1
+                                    else start + (index + 1) * word_duration
+                                ),
+                                text=text[text_start:word_match.end()],
+                                detected_language=pending.detected_language,
+                            )
                         )
-                    ]
                     _buffer_transcript = Transcript()
 
             final_committed_end = final_tokens[-1].end if final_tokens else None

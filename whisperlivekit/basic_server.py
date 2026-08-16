@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
 from whisperlivekit.config import parse_cors_origins
+from whisperlivekit.timed_objects import FrontData
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger().setLevel(logging.WARNING)
@@ -186,6 +187,19 @@ async def deepgram_websocket_endpoint(websocket: WebSocket):
 # OpenAI-compatible REST API  (/v1/audio/transcriptions)
 # ---------------------------------------------------------------------------
 
+_DIARIZED_JSON_REQUIRES_DIARIZATION = (
+    "response_format=diarized_json requires diarization to be enabled on the "
+    "server. Start the server with --diarization."
+)
+_OPENAI_RESPONSE_FORMATS = frozenset({
+    "json",
+    "verbose_json",
+    "diarized_json",
+    "text",
+    "srt",
+    "vtt",
+})
+
 async def _convert_to_pcm(audio_bytes: bytes) -> bytes:
     """Convert any audio format to PCM s16le mono 16kHz using ffmpeg."""
     proc = await asyncio.create_subprocess_exec(
@@ -264,7 +278,7 @@ def _format_openai_response(front_data, response_format: str, language: Optional
             from fastapi import HTTPException
             raise HTTPException(
                 status_code=400,
-                detail="response_format=diarized_json requires diarization to be enabled on the server. Start the server with --diarization.",
+                detail=_DIARIZED_JSON_REQUIRES_DIARIZATION,
             )
         segments = []
         text_parts = []
@@ -403,7 +417,7 @@ async def create_transcription(
 ):
     """OpenAI-compatible audio transcription endpoint.
 
-    Accepts the same parameters as OpenAI's /v1/audio/transcriptions API.
+    Implements the compatibility-oriented subset documented in docs/API.md.
     The `model` parameter is accepted but ignored (uses the server's configured
     backend); `prompt` is likewise accepted but has no effect.
     """
@@ -412,6 +426,20 @@ async def create_transcription(
 
     if not _token_ok(_bearer_token(request)):
         raise HTTPException(status_code=401, detail="invalid or missing API token")
+
+    if response_format not in _OPENAI_RESPONSE_FORMATS:
+        allowed = ", ".join(sorted(_OPENAI_RESPONSE_FORMATS))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported response_format={response_format!r}. Expected one of: {allowed}.",
+        )
+
+    diarization_enabled = bool(getattr(config, "diarization", False))
+    if response_format == "diarized_json" and not diarization_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail=_DIARIZED_JSON_REQUIRES_DIARIZATION,
+        )
 
     audio_bytes = await file.read()
     if not audio_bytes:
@@ -488,9 +516,15 @@ async def create_transcription(
         )
 
     if final_result is None:
-        return JSONResponse({"text": ""})
+        final_result = FrontData()
 
-    result = _format_openai_response(final_result, response_format, language, duration, diarization_enabled=processor.args.diarization)
+    result = _format_openai_response(
+        final_result,
+        response_format,
+        language,
+        duration,
+        diarization_enabled=diarization_enabled,
+    )
 
     if isinstance(result, str):
         return PlainTextResponse(result)

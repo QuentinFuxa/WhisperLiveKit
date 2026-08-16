@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import json
 import sys
 from types import SimpleNamespace
 
@@ -743,7 +744,7 @@ async def test_audio_processor_split_lags_are_zero_when_timestamps_are_aligned()
 
 
 @pytest.mark.asyncio
-async def test_audio_processor_finish_commits_pending_buffer_when_backend_flush_is_empty():
+async def test_audio_processor_finish_commits_pending_buffer_as_interpolated_words():
     from whisperlivekit.audio_processor import AudioProcessor
     from whisperlivekit.metrics_collector import SessionMetrics
     from whisperlivekit.timed_objects import State, Transcript
@@ -758,10 +759,11 @@ async def test_audio_processor_finish_commits_pending_buffer_when_backend_flush_
     processor = object.__new__(AudioProcessor)
     processor.transcription = EmptyFinishBackend()
     processor.state = State()
+    pending_text = "Concord  returned to its place amidst the tents"
     processor.state.buffer_transcription = Transcript(
         start=0.55,
         end=3.05,
-        text="Concord returned to its place amidst the tents",
+        text=pending_text,
     )
     processor.state.end_buffer = 3.5
     processor.lock = asyncio.Lock()
@@ -771,10 +773,26 @@ async def test_audio_processor_finish_commits_pending_buffer_when_backend_flush_
 
     await processor._finish_transcription()
 
-    assert len(processor.state.new_tokens) == 1
-    assert processor.state.new_tokens[0].text == "Concord returned to its place amidst the tents"
+    expected_words = [
+        "Concord",
+        "returned",
+        "to",
+        "its",
+        "place",
+        "amidst",
+        "the",
+        "tents",
+    ]
+    tokens = processor.state.new_tokens
+
+    assert [token.text.strip() for token in tokens] == expected_words
+    assert "".join(token.text for token in tokens) == pending_text
+    word_duration = (3.05 - 0.55) / len(expected_words)
+    for index, token in enumerate(tokens):
+        assert token.start == pytest.approx(0.55 + index * word_duration)
+        assert token.end == pytest.approx(0.55 + (index + 1) * word_duration)
     assert processor.state.buffer_transcription.text == ""
-    assert processor.metrics.n_tokens_produced == 1
+    assert processor.metrics.n_tokens_produced == len(expected_words)
 
 
 def test_verbose_json_fallback_creates_segment_when_text_has_no_lines():
@@ -937,6 +955,192 @@ def test_openai_rest_diarized_json_rejects_when_diarization_disabled(monkeypatch
         )
     assert exc_info.value.status_code == 400
     assert "diarization" in exc_info.value.detail.lower()
+
+
+@pytest.mark.asyncio
+async def test_openai_rest_rejects_diarized_json_before_expensive_work(monkeypatch):
+    basic_server = _import_basic_server(monkeypatch)
+    expensive_calls = []
+
+    class UnreadUpload:
+        async def read(self):
+            expensive_calls.append("read")
+            return b"encoded audio"
+
+    async def forbidden_conversion(audio_bytes):
+        expensive_calls.append("convert")
+        return audio_bytes
+
+    class ForbiddenAudioProcessor:
+        def __init__(self, **kwargs):
+            expensive_calls.append("asr")
+
+    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
+    monkeypatch.setattr(basic_server.config, "diarization", False)
+    monkeypatch.setattr(basic_server, "_convert_to_pcm", forbidden_conversion)
+    monkeypatch.setattr(basic_server, "AudioProcessor", ForbiddenAudioProcessor)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        await basic_server.create_transcription(
+            request=SimpleNamespace(headers={}),
+            file=UnreadUpload(),
+            model="ignored",
+            language="en",
+            prompt="",
+            response_format="diarized_json",
+            timestamp_granularities=None,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert expensive_calls == []
+
+
+@pytest.mark.asyncio
+async def test_openai_rest_rejects_unknown_response_format_before_expensive_work(monkeypatch):
+    basic_server = _import_basic_server(monkeypatch)
+    expensive_calls = []
+
+    class UnreadUpload:
+        async def read(self):
+            expensive_calls.append("read")
+            return b"encoded audio"
+
+    async def forbidden_conversion(audio_bytes):
+        expensive_calls.append("convert")
+        return audio_bytes
+
+    class ForbiddenAudioProcessor:
+        def __init__(self, **kwargs):
+            expensive_calls.append("asr")
+
+    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
+    monkeypatch.setattr(basic_server, "_convert_to_pcm", forbidden_conversion)
+    monkeypatch.setattr(basic_server, "AudioProcessor", ForbiddenAudioProcessor)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        await basic_server.create_transcription(
+            request=SimpleNamespace(headers={}),
+            file=UnreadUpload(),
+            model="ignored",
+            language="en",
+            prompt="",
+            response_format="xml",
+            timestamp_granularities=None,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "Unsupported response_format='xml'" in exc_info.value.detail
+    assert expensive_calls == []
+
+
+@pytest.mark.parametrize(
+    ("response_format", "expected_body"),
+    [
+        (
+            "json",
+            {
+                "text": "",
+                "usage": {"type": "duration", "seconds": 1},
+            },
+        ),
+        (
+            "verbose_json",
+            {
+                "task": "transcribe",
+                "language": "en",
+                "duration": 1.0,
+                "text": "",
+                "words": [],
+                "segments": [],
+                "usage": {"type": "duration", "seconds": 1},
+            },
+        ),
+        (
+            "diarized_json",
+            {
+                "task": "transcribe",
+                "duration": 1.0,
+                "text": "",
+                "segments": [],
+                "usage": {"type": "duration", "seconds": 1},
+            },
+        ),
+        ("text", ""),
+        ("srt", ""),
+        ("vtt", "WEBVTT\n"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_openai_rest_empty_result_uses_requested_formatter(
+    monkeypatch,
+    response_format,
+    expected_body,
+):
+    from whisperlivekit.timed_objects import FrontData
+
+    basic_server = _import_basic_server(monkeypatch)
+    formatted_inputs = []
+    real_formatter = basic_server._format_openai_response
+
+    class EncodedUpload:
+        async def read(self):
+            return b"encoded audio"
+
+    class EmptyResults:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    class EmptyAudioProcessor:
+        def __init__(self, **kwargs):
+            self.is_pcm_input = False
+
+        async def create_tasks(self):
+            return EmptyResults()
+
+        async def process_audio(self, audio_bytes):
+            pass
+
+        async def cleanup(self):
+            pass
+
+    async def fake_conversion(audio_bytes):
+        assert audio_bytes == b"encoded audio"
+        return b"\0" * 32_000
+
+    def tracking_formatter(*args, **kwargs):
+        formatted_inputs.append(args[0])
+        return real_formatter(*args, **kwargs)
+
+    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
+    monkeypatch.setattr(basic_server.config, "diarization", True)
+    monkeypatch.setattr(basic_server, "_convert_to_pcm", fake_conversion)
+    monkeypatch.setattr(basic_server, "AudioProcessor", EmptyAudioProcessor)
+    monkeypatch.setattr(basic_server, "_format_openai_response", tracking_formatter)
+
+    response = await basic_server.create_transcription(
+        request=SimpleNamespace(headers={}),
+        file=EncodedUpload(),
+        model="ignored",
+        language="en",
+        prompt="",
+        response_format=response_format,
+        timestamp_granularities=None,
+    )
+
+    assert len(formatted_inputs) == 1
+    assert isinstance(formatted_inputs[0], FrontData)
+    assert formatted_inputs[0].lines == []
+    if isinstance(expected_body, dict):
+        assert json.loads(response.body) == expected_body
+    else:
+        assert response.body.decode() == expected_body
 
 
 def test_openai_rest_json_includes_duration_usage(monkeypatch):

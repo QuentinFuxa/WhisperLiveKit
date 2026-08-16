@@ -8,7 +8,8 @@ This document describes all APIs: the WebSocket streaming API, the OpenAI-compat
 
 ### POST /v1/audio/transcriptions
 
-Drop-in replacement for the OpenAI Audio Transcriptions API. Accepts the same parameters.
+Compatibility-oriented subset of the OpenAI Audio Transcriptions API. Only the
+parameters listed below are accepted, and some are currently ignored as noted.
 
 ```bash
 curl http://localhost:8000/v1/audio/transcriptions \
@@ -24,14 +25,17 @@ curl http://localhost:8000/v1/audio/transcriptions \
 | `model`                  | string   | `""`     | Accepted but ignored (uses server's backend) |
 | `language`               | string   | `null`   | ISO 639-1 language code or null for auto-detection |
 | `prompt`                 | string   | `""`     | Accepted for compatibility, not yet used |
-| `response_format`        | string   | `"json"` | `json`, `verbose_json`, `text`, `srt`, `vtt` |
+| `response_format`        | string   | `"json"` | `json`, `verbose_json`, `diarized_json`, `text`, `srt`, `vtt` |
 | `timestamp_granularities`| array    | `null`   | Accepted for compatibility |
 
 **Response formats:**
 
 `json` (default):
 ```json
-{"text": "Hello world, how are you?"}
+{
+  "text": "Hello world, how are you?",
+  "usage": {"type": "duration", "seconds": 7}
+}
 ```
 
 `verbose_json`:
@@ -41,14 +45,57 @@ curl http://localhost:8000/v1/audio/transcriptions \
   "language": "en",
   "duration": 7.16,
   "text": "Hello world",
-  "words": [{"word": "Hello", "start": 0.0, "end": 0.5}, ...],
-  "segments": [{"id": 0, "start": 0.0, "end": 3.5, "text": "Hello world"}]
+  "words": [
+    {"word": "Hello", "start": 0.0, "end": 0.5},
+    {"word": "world", "start": 0.5, "end": 1.0}
+  ],
+  "segments": [
+    {"id": 0, "start": 0.0, "end": 1.0, "text": "Hello world"}
+  ],
+  "usage": {"type": "duration", "seconds": 7}
+}
+```
+
+`diarized_json`:
+
+This format requires the server to be started with `--diarization`. Requests
+made without diarization enabled return HTTP 400 before the audio is processed.
+
+```json
+{
+  "task": "transcribe",
+  "duration": 7.16,
+  "text": "A: Hello world\nB: Hi there",
+  "segments": [
+    {
+      "type": "transcript.text.segment",
+      "id": "seg_001",
+      "start": 0.0,
+      "end": 1.0,
+      "text": "Hello world",
+      "speaker": "A"
+    },
+    {
+      "type": "transcript.text.segment",
+      "id": "seg_002",
+      "start": 1.1,
+      "end": 2.0,
+      "text": "Hi there",
+      "speaker": "B"
+    }
+  ],
+  "usage": {"type": "duration", "seconds": 7}
 }
 ```
 
 `text`: Plain text response.
 
 `srt` / `vtt`: Subtitle format.
+
+When no speech is detected, the endpoint still returns the schema selected by
+`response_format`. JSON formats contain empty text and segment or word arrays
+where applicable. Text and SRT responses are empty, while VTT contains its
+`WEBVTT` header.
 
 ### GET /v1/models
 
