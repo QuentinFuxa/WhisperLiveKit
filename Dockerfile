@@ -1,7 +1,7 @@
-FROM ghcr.io/astral-sh/uv:0.10.4 AS uvbin
+FROM ghcr.io/astral-sh/uv:0.12.3 AS uvbin
 
 # --- MARK: Builder Stage
-FROM nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04 AS builder-gpu
+FROM nvidia/cuda:13.3.1-cudnn-devel-ubuntu24.04 AS builder-gpu
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
@@ -47,7 +47,7 @@ RUN set -eux; \
   uv sync --frozen --no-editable --no-cache "$@"
 
 # --- MARK: Runtime Stage 
-FROM nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04
+FROM nvidia/cuda:13.3.1-cudnn-runtime-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
