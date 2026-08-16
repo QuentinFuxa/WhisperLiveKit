@@ -9,6 +9,21 @@ logger = logging.getLogger(__name__)
 FUNASR_LANGUAGES = frozenset({"auto", "zh", "yue", "en", "ja", "ko"})
 
 
+def validate_pause_segmentation_seconds(value: float) -> float:
+    """Return a normalized pause threshold or raise for invalid input."""
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "pause_segmentation_seconds must be finite and non-negative."
+        ) from exc
+    if not math.isfinite(normalized) or normalized < 0:
+        raise ValueError(
+            "pause_segmentation_seconds must be finite and non-negative."
+        )
+    return normalized
+
+
 def parse_cors_origins(origins: Optional[str]) -> list[str]:
     """Parse comma-separated CORS origins for FastAPI."""
     if origins is None:
@@ -160,7 +175,15 @@ class WhisperLiveKitConfig:
     canary_lid_min_sec: float = 2.0
     canary_lid_min_conf: float = 0.5
 
+    # Keep new fields at the end to preserve positional dataclass construction.
+    # Pauses longer than this become stable transcript boundaries; 0 disables.
+    pause_segmentation_seconds: float = 5.0
+
     def __post_init__(self):
+        self.pause_segmentation_seconds = validate_pause_segmentation_seconds(
+            self.pause_segmentation_seconds
+        )
+
         # .en model suffix forces English for Whisper-family backends.
         if (
             self.backend != "funasr"
