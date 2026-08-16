@@ -1,1 +1,3 @@
-IMPORTANT: Ensure you’ve thoroughly reviewed the [AGENTS.md](AGENTS.md) file before beginning any work.
+# Changelog
+
+Release notes for each version are published in [GitHub Releases](https://github.com/QuentinFuxa/WhisperLiveKit/releases).
