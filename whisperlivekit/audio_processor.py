@@ -1,8 +1,9 @@
 import asyncio
 import logging
+import math
 import re
 import traceback
-from time import time
+from time import perf_counter, time
 from typing import Any, AsyncGenerator, List, Optional, Union
 
 import numpy as np
@@ -26,14 +27,42 @@ logger.setLevel(logging.DEBUG)
 SENTINEL = object() # unique sentinel object for end of stream marker
 MIN_DURATION_REAL_SILENCE = 5
 
-async def get_all_from_queue(queue: asyncio.Queue) -> Union[object, Silence, np.ndarray, List[Any]]:
+
+def resolve_coalesce_min_s(min_s: Any) -> float:
+    """Effective coalescing threshold in seconds; invalid values disable.
+
+    Deferral stops once the accrued audio reaches the threshold, so held-back
+    audio is bounded by min_s plus one chunk.
+    """
+    value = float(min_s or 0.0)
+    if not math.isfinite(value):
+        logger.warning(
+            "asr_coalesce_min_s=%s is non-finite; coalescing disabled.",
+            min_s,
+        )
+        return 0.0
+    if value < 0.0:
+        logger.warning("asr_coalesce_min_s=%s is negative; coalescing disabled.", min_s)
+        return 0.0
+    return value
+
+
+def should_defer_inference(deferred_s: float, chunk_s: float, min_s: float) -> bool:
+    """Whether to buffer this chunk instead of running process_iter()."""
+    if min_s <= 0.0:
+        return False
+    return deferred_s + chunk_s < min_s
+
+async def get_all_from_queue(
+    queue: asyncio.Queue,
+) -> Union[object, Silence, ChangeSpeaker, np.ndarray, List[Any]]:
     items: List[Any] = []
 
     first_item = await queue.get()
     queue.task_done()
     if first_item is SENTINEL:
         return first_item
-    if isinstance(first_item, Silence):
+    if isinstance(first_item, (Silence, ChangeSpeaker)):
         return first_item
     items.append(first_item)
 
@@ -43,7 +72,7 @@ async def get_all_from_queue(queue: asyncio.Queue) -> Union[object, Silence, np.
         next_item = queue._queue[0]
         if next_item is SENTINEL:
             break
-        if isinstance(next_item, Silence):
+        if isinstance(next_item, (Silence, ChangeSpeaker)):
             break
         items.append(await queue.get())
         queue.task_done()
@@ -431,18 +460,51 @@ class AudioProcessor:
         if self.translation_queue:
             await self.translation_queue.put(SENTINEL)
 
-    async def _finish_transcription(self) -> None:
-        """Call finish() on the online processor to flush remaining tokens."""
+    async def _run_counted_transcription_call(self, method, *args):
+        """Run one ASR call and record its duration, call count, and tokens."""
+        _t0 = perf_counter()
+        tokens, processed_upto = await asyncio.to_thread(method, *args)
+        self.metrics.transcription_durations.append(perf_counter() - _t0)
+        self.metrics.n_transcription_calls += 1
+        tokens = tokens or []
+        self.metrics.n_tokens_produced += len(tokens)
+        return tokens, processed_upto
+
+    async def _run_counted_process_iter(self):
+        """Run process_iter(), recording it in metrics like the normal path."""
+        return await self._run_counted_transcription_call(
+            self.transcription.process_iter
+        )
+
+    async def _finish_transcription(self, pending_tokens=None) -> None:
+        """Call finish() on the online processor to flush remaining tokens.
+
+        pending_tokens carries anything already committed by a coalescing drain,
+        which has already been counted by that drain. The terminal backend call
+        is measured independently and only its own returned tokens increment the
+        token metric.
+        """
         if not self.transcription:
             return
         try:
             if hasattr(self.transcription, 'finish'):
-                final_tokens, end_time = await asyncio.to_thread(self.transcription.finish)
+                finished_tokens, end_time = (
+                    await self._run_counted_transcription_call(
+                        self.transcription.finish
+                    )
+                )
             else:
                 # SimulStreamingOnlineProcessor uses start_silence() → process_iter(is_last=True)
-                final_tokens, end_time = await asyncio.to_thread(self.transcription.start_silence)
+                finished_tokens, end_time = (
+                    await self._run_counted_transcription_call(
+                        self.transcription.start_silence
+                    )
+                )
 
-            final_tokens = final_tokens or []
+            # pending_tokens were already counted by the explicit coalescing drain.
+            # The helper above counted only tokens newly returned by finish().
+            final_tokens = (pending_tokens or []) + finished_tokens
+            synthetic_token_count = 0
             _buffer_transcript = self.transcription.get_buffer()
             if not final_tokens and self.state.buffer_transcription and self.state.buffer_transcription.text:
                 pending = self.state.buffer_transcription
@@ -469,6 +531,7 @@ class AudioProcessor:
                                 detected_language=pending.detected_language,
                             )
                         )
+                    synthetic_token_count = len(final_tokens)
                     _buffer_transcript = Transcript()
 
             final_committed_end = final_tokens[-1].end if final_tokens else None
@@ -484,7 +547,9 @@ class AudioProcessor:
                     )
             if final_tokens:
                 logger.info(f"Finish flushed {len(final_tokens)} tokens")
-                self.metrics.n_tokens_produced += len(final_tokens)
+                # Synthetic buffer recovery did not come from a counted backend
+                # call, but it still creates output tokens exposed to consumers.
+                self.metrics.n_tokens_produced += synthetic_token_count
                 async with self.lock:
                     self.state.tokens.extend(final_tokens)
                     self.state.buffer_transcription = _buffer_transcript
@@ -502,6 +567,9 @@ class AudioProcessor:
     async def transcription_processor(self) -> None:
         """Process audio chunks for transcription."""
         cumulative_pcm_duration_stream_time = 0.0
+
+        coalesce_min_s = resolve_coalesce_min_s(getattr(self.args, "asr_coalesce_min_s", 0.0))
+        deferred_audio_s = 0.0
 
         while True:
             try:
@@ -524,7 +592,13 @@ class AudioProcessor:
 
                 if item is SENTINEL:
                     logger.debug("Transcription processor received sentinel. Finishing.")
-                    await self._finish_transcription()
+                    drained_tokens = []
+                    if deferred_audio_s > 0.0:
+                        # finish() runs no inference on LocalAgreement, so deferred
+                        # audio would never be transcribed at all.
+                        drained_tokens, _ = await self._run_counted_process_iter()
+                        deferred_audio_s = 0.0
+                    await self._finish_transcription(pending_tokens=drained_tokens)
                     break
 
                 asr_internal_buffer_duration_s = len(getattr(self.transcription, 'audio_buffer', [])) / self.transcription.SAMPLING_RATE
@@ -534,10 +608,25 @@ class AudioProcessor:
                 new_tokens = []
                 current_audio_processed_upto = self.state.end_buffer
 
+                # Boundary handlers reset the processor, and on LocalAgreement a
+                # token needs two agreeing passes to commit. Give deferred audio
+                # its first pass here so the handler's own pass is its second,
+                # exactly as when every chunk is inferred on arrival.
+                if deferred_audio_s > 0.0 and not isinstance(item, np.ndarray):
+                    new_tokens, current_audio_processed_upto = await self._run_counted_process_iter()
+                    deferred_audio_s = 0.0
+
                 if isinstance(item, Silence):
                     if item.is_starting:
-                        new_tokens, current_audio_processed_upto = await asyncio.to_thread(
-                            self.transcription.start_silence
+                        started, silence_processed_upto = (
+                            await self._run_counted_transcription_call(
+                                self.transcription.start_silence
+                            )
+                        )
+                        new_tokens = new_tokens + (started or [])
+                        current_audio_processed_upto = max(
+                            current_audio_processed_upto,
+                            silence_processed_upto,
                         )
                         asr_processing_logs += " + Silence starting"
                     if item.has_ended:
@@ -551,21 +640,37 @@ class AudioProcessor:
                     new_tokens = new_tokens or []
                     current_audio_processed_upto = max(current_audio_processed_upto, stream_time_end_of_current_pcm)
                 elif isinstance(item, ChangeSpeaker):
-                    self.transcription.new_speaker(item)
-                    continue
+                    speaker_tokens, speaker_processed_upto = (
+                        await self._run_counted_transcription_call(
+                            self.transcription.new_speaker,
+                            item,
+                        )
+                    )
+                    new_tokens = new_tokens + speaker_tokens
+                    current_audio_processed_upto = max(
+                        current_audio_processed_upto,
+                        speaker_processed_upto,
+                    )
+                    asr_processing_logs += f" + Speaker {item.speaker}"
                 elif isinstance(item, np.ndarray):
                     pcm_array = item
                     logger.info(asr_processing_logs)
                     cumulative_pcm_duration_stream_time += len(pcm_array) / self.sample_rate
                     stream_time_end_of_current_pcm = cumulative_pcm_duration_stream_time
                     self.transcription.insert_audio_chunk(pcm_array, stream_time_end_of_current_pcm)
-                    _t0 = time()
-                    new_tokens, current_audio_processed_upto = await asyncio.to_thread(self.transcription.process_iter)
-                    _dur = time() - _t0
-                    self.metrics.transcription_durations.append(_dur)
-                    self.metrics.n_transcription_calls += 1
-                    new_tokens = new_tokens or []
-                    self.metrics.n_tokens_produced += len(new_tokens)
+
+                    chunk_s = len(pcm_array) / self.sample_rate
+                    if should_defer_inference(deferred_audio_s, chunk_s, coalesce_min_s):
+                        # Nothing to publish: the hypothesis buffer only changes
+                        # when process_iter() runs, and re-publishing it raw would
+                        # undo the committed-prefix strip applied below.
+                        deferred_audio_s += chunk_s
+                        continue
+                    deferred_audio_s = 0.0
+
+                    new_tokens, current_audio_processed_upto = (
+                        await self._run_counted_process_iter()
+                    )
 
                 _buffer_transcript = self.transcription.get_buffer()
                 buffer_text = _buffer_transcript.text

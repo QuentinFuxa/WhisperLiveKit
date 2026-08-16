@@ -101,14 +101,18 @@ class SimulStreamingOnlineProcessor:
             audio_tensor = torch.from_numpy(audio).float()
             self.model.insert_audio(audio_tensor)
 
-    def new_speaker(self, change_speaker: ChangeSpeaker):
-        """Handle speaker change event."""
-        self.process_iter(is_last=True)
+    def new_speaker(
+        self,
+        change_speaker: ChangeSpeaker,
+    ) -> Tuple[List[ASRToken], float]:
+        """Flush and return the previous speaker's final tokens before reset."""
+        tokens, processed_upto = self.process_iter(is_last=True)
         self.model.refresh_segment(complete=True)
         self.model.speaker = change_speaker.speaker
         self.model.global_time_offset = change_speaker.start
         self._last_committed_end = max(self._last_committed_end, change_speaker.start)
         self._recent_words = []
+        return tokens or [], processed_upto
 
     def get_buffer(self):
         concat_buffer = Transcript.from_tokens(tokens= self.buffer, sep='')
