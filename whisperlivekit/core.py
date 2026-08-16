@@ -374,6 +374,16 @@ class _ASRTokenNormalizer:
     def start_silence(self, *args, **kwargs):
         return self._convert(self._inner.start_silence(*args, **kwargs))
 
+    def new_speaker(self, *args, **kwargs):
+        """Preserve Qwen boundary tokens discarded by its compatibility API.
+
+        The current qwen3 processors implement new_speaker() as a bare call to
+        start_silence() and drop its return value. Calling start_silence()
+        directly keeps the identical reset behavior while exposing the tokens
+        and processed position required by AudioProcessor.
+        """
+        return self.start_silence()
+
     def __getattr__(self, name):
         attr = getattr(self._inner, name)
         if name in self._WRAP and callable(attr):

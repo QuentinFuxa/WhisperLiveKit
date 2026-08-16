@@ -134,7 +134,43 @@ export TORCH_CUDA_ARCH_LIST="8.0 9.0 10.0 12.0 12.1a"
 
 After applying the fix, restart `wlk`. Incoming streams will now compile kernels targeting `sm_121a` without crashing.
 
+## CPU throughput
+
+### Transcription falls further and further behind on CPU
+
+If the transcript lags more the longer a session runs, the machine is spending
+more time on ASR than the stream produces audio. Watch the `Compute` lag shown
+in seconds in the web UI: if it keeps increasing during a steady stream, the
+backlog is growing faster than the backend can clear it.
+
+Each inference pass costs roughly the same regardless of how much *new* audio it
+covers, so when chunks are short most of that work re-encodes audio the previous
+pass already saw. `--asr-coalesce-min-s` waits for more new audio before running
+a pass, which cuts the number of passes at the cost of updating the transcript
+less often:
+
+```bash
+wlk --model base --asr-coalesce-min-s 0.75
+```
+
+Off by default. Three things worth knowing before you tune it:
+
+- It is most useful with the whisper-family backends, whose processors infer
+  once per arriving chunk. The outer gate is available to every backend, but
+  backends that already batch internally gain little or nothing and a threshold
+  above their own cadence only adds latency.
+- The useful value depends on how large the incoming chunks already are, and the
+  response is a step rather than a gradual curve: a threshold below the typical
+  chunk size does almost nothing, and just above it can halve the passes. Start
+  near your chunk size and measure.
+- Words reach the screen in larger, less frequent updates, and the first word of
+  an utterance arrives later. Held-back audio is bounded by the threshold plus
+  one chunk, and is always drained at silences, speaker changes and end of
+  stream, so nothing is delayed past a boundary.
+
+If compute time is comfortably below elapsed time and the transcript still lags,
+this is not the right fix.
+
 ---
 
 Need help with another recurring issue? Open a GitHub discussion or PR and reference this document so we can keep it current.
-

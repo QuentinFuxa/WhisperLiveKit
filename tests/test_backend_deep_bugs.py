@@ -815,6 +815,8 @@ async def test_audio_processor_finish_commits_pending_buffer_as_interpolated_wor
         assert token.start == pytest.approx(0.55 + index * word_duration)
         assert token.end == pytest.approx(0.55 + (index + 1) * word_duration)
     assert processor.state.buffer_transcription.text == ""
+    assert processor.metrics.n_transcription_calls == 1
+    assert len(processor.metrics.transcription_durations) == 1
     assert processor.metrics.n_tokens_produced == len(expected_words)
 
 
