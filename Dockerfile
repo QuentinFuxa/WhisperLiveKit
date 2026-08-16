@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.10.4 AS uvbin
+FROM ghcr.io/astral-sh/uv:0.12.3 AS uvbin
 
 # --- MARK: Builder Stage
 FROM nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04 AS builder-gpu
