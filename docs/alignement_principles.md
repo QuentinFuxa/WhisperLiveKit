@@ -1,71 +1,62 @@
-### Alignment between STT Tokens and Diarization Segments 
+# Alignment between transcription and diarization
 
-- Example 1: The punctuation from STT and the speaker change from Diarization come in the prediction `t`
-- Example 2: The punctuation from STT comes from prediction `t`, but the speaker change from Diarization come in the prediction `t-1`
-- Example 3: The punctuation from STT comes from prediction `t-1`, but the speaker change from Diarization come in the prediction `t`
+WhisperLiveKit aligns timestamped ASR tokens with timestamped diarization
+spans. Punctuation is not required to detect a speaker turn.
 
-> `#` Is the split between the `t-1` prediction and `t` prediction.  
+For every committed ASR token covered by the diarization timeline:
 
+1. Measure its overlap with the available speaker spans.
+2. Select the speaker with the largest overlap.
+3. Start a new output line when that speaker differs from the previous token.
 
-## Example 1:
+The output uses 1-based speaker IDs, while Sortformer uses 0-based IDs
+internally. A token that crosses a speaker boundary stays intact and is
+assigned to the side with the larger overlap. A zero-duration token is
+assigned to the speaker span that contains its timestamp. A standalone
+punctuation token closes the preceding speaker line, including when its
+timestamp falls exactly on the next speaker boundary.
+
 ```text
-punctuations_segments : __#_______.__________________!____
-diarization_segments:
-SPK1                    __#____________
-SPK2                      #            ___________________
--->
-ALIGNED SPK1            __#_______.
-ALIGNED SPK2              #        __________________!____
-
-t-1 output:
-SPK1:                   __#
-SPK2: NO
-DIARIZATION BUFFER: NO
-
-t output:
-SPK1:                       __#__.
-SPK2:                             __________________!____
-DIARIZATION BUFFER: No
+ASR tokens:       [Hello ][there ][Goodbye ][now]
+Diarization:      [ speaker 1    ][ speaker 2     ]
+Output line 1:    [Hello there   ]
+Output line 2:                    [Goodbye now    ]
 ```
 
-## Example 2:
+## Diarization lag
+
+Transcription can run ahead of diarization. Tokens that start at or after the
+latest diarization timestamp remain in `buffer_diarization` instead of being
+assigned speculatively.
+
 ```text
-punctuations_segments : _____#__.___________
-diarization_segments:
-SPK1                    ___  #
-SPK2                       __#______________
--->
-ALIGNED SPK1            _____#__.
-ALIGNED SPK2                 #   ___________
-
-t-1 output:
-SPK1:                   ___  #
-SPK2:
-DIARIZATION BUFFER:        __#
-
-t output:
-SPK1:                      __#__.
-SPK2:                            ___________
-DIARIZATION BUFFER: No
+ASR tokens:       [first ][second]
+Diarization:      [ speaker 1 ]
+Lines:            [first ]
+Buffer:                   [second]
 ```
 
-## Example 3:
-```text
-punctuations_segments : ___.__#__________
-diarization_segments:
-SPK1                    ______#__
-SPK2                          #  ________
--->
-ALIGNED SPK1            ___.  #
-ALIGNED SPK2                __#__________
+Each refresh rebuilds the lines from the committed token timestamps. When
+diarization catches up, buffered text moves once into the resolved speaker
+line without losing text or word timestamps.
 
-t-1 output:
-SPK1:                   ___.  #
-SPK2:
-DIARIZATION BUFFER:         __#
+## Translation spans
 
-t output:
-SPK1:                         #
-SPK2:                       __#___________
-DIARIZATION BUFFER: NO
-```
+A validated translation may cover source tokens that diarization splits into
+several speaker lines. WhisperLiveKit attaches that translation exactly once,
+to the speech line with the largest temporal overlap. A point translation on
+an internal boundary belongs to the following line. If no line overlaps the
+translation, the nearest speech line is used; equal distances select the
+preceding line by stable transcript order.
+
+The association is rebuilt on every refresh, so the same translated text is
+not appended twice when the client requests another snapshot.
+
+## Silence and model limits
+
+Explicit silence is always a separate line with `speaker: -2`. It is never
+folded into a speech line or held in the diarization buffer.
+
+The alignment selects one speaker per ASR token. It does not change the
+number of speakers supported by the configured diarization model, and it does
+not represent simultaneous speakers within one token.

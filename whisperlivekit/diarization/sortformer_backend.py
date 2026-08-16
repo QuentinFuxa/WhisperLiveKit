@@ -283,6 +283,9 @@ class SortformerDiarizationOnline:
         preds_np = self.total_preds[0].cpu().numpy()
         active_speakers = np.argmax(preds_np, axis=1)
 
+        if not len(active_speakers):
+            return []
+
         if self._len_prediction is None:
             self._len_prediction = len(active_speakers) #12
 
@@ -298,19 +301,21 @@ class SortformerDiarizationOnline:
             for idx, spk in enumerate(current_chunk_preds):
                 current_time = round(base_time + idx * frame_duration, 2)
                 if spk != current_spk:
-                    new_segments.append(SpeakerSegment(
-                        speaker=current_spk,
-                        start=start_time,
-                        end=current_time
-                    ))
+                    new_segments.append(
+                        SpeakerSegment(
+                            speaker=current_spk,
+                            start=start_time,
+                            end=current_time,
+                        )
+                    )
                     start_time = current_time
                     current_spk = spk
             new_segments.append(
                 SpeakerSegment(
-                        speaker=current_spk,
-                        start=start_time,
-                        end=current_time
-            )
+                    speaker=current_spk,
+                    start=start_time,
+                    end=round(base_time + len(current_chunk_preds) * frame_duration, 2),
+                )
             )
         return new_segments
 
