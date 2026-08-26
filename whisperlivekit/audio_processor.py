@@ -920,6 +920,12 @@ class AudioProcessor:
                     async with self.lock:
                         self.state.new_translation.append(new_translation)
                         self.state.new_translation_buffer = new_translation_buffer
+                elif new_translation_buffer is not None:
+                    # A backend can return a provisional buffer with no finalized
+                    # translation (None). Forward the buffer so the display shows
+                    # the provisional draft before the final arrives.
+                    async with self.lock:
+                        self.state.new_translation_buffer = new_translation_buffer
             except Exception as e:
                 logger.warning(f"Exception in translation_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")

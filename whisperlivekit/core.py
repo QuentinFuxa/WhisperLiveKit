@@ -314,11 +314,21 @@ class TranscriptionEngine:
             elif getattr(config, "translation_backend", "nllb") in ("mlx-llm-mt", "hunyuan-mlx"):
                 from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
                 model_id = getattr(config, "mlx_llm_mt_model", "hy-mt2-1.8b-8bit")
-                self.translation_model = MlxLlmTranslation(
-                    model_id=model_id,
-                    target_language=config.target_language,
-                    source_language=config.lan,
-                )
+                if getattr(config, "mlx_llm_mt_simultaneous", False):
+                    from whisperlivekit.translation_mlx_llm_mt_simul import (
+                        MlxLlmTranslationSimul,
+                    )
+                    self.translation_model = MlxLlmTranslationSimul(
+                        model_id=model_id,
+                        target_language=config.target_language,
+                        source_language=config.lan,
+                    )
+                else:
+                    self.translation_model = MlxLlmTranslation(
+                        model_id=model_id,
+                        target_language=config.target_language,
+                        source_language=config.lan,
+                    )
             else:
                 if config.backend in {"qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"}:
                     raise ValueError(

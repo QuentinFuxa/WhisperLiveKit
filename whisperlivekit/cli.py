@@ -823,11 +823,13 @@ def cmd_bench(args: list):
                              "When set, the benchmark runs the translation path and "
                              "reports translation metrics.")
     parser.add_argument("--target-language", default=None, dest="target_language",
-                        help="Target language for translation (e.g. en, it)")
+                        help="Target language for translation (e.g. en)")
     parser.add_argument("--simultaneous", action="store_true", default=False,
-                        help="Use the simultaneous-MT variant of the translation backend")
+                        help="Use the simultaneous-MT variant of the translation backend "
+                             "(AlignAtt commit policy over the unstable ASR tail)")
     parser.add_argument("--reference-translation", default=None, dest="reference_translation",
-                        help="Reference translation text for accuracy scoring (BLEU/chrF)")
+                        help="Reference translation text for accuracy scoring (BLEU/chrF). "
+                             "Compared against the concatenated translation output.")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Show detailed logs")
 
