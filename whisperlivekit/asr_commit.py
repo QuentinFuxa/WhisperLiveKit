@@ -343,6 +343,13 @@ class StableCommitTransform:
             stable_iterations=self._stable_iterations,
         )
 
+        # Track the cumulative committed text on the inner processor so it can
+        # deduplicate at finalization (emit only the uncommitted delta, not the
+        # full re-decoded text). Soft-coupled: only affects backends that declare
+        # an `_emitted_stable` attribute (e.g. MlxQwen3AsrOnlineProcessor).
+        if hasattr(inner, "_emitted_stable"):
+            inner._emitted_stable = update.committed_text
+
         if update.delta_text:
             tok = ASRToken(
                 start=end_time,

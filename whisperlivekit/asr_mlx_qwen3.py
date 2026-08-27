@@ -68,6 +68,30 @@ def _ensure_model(model_id: str):
     return _MODEL_CACHE[model_id]
 
 
+def _compute_finalize_delta(final_text: str, emitted_stable: str) -> str:
+    """Return the uncommitted portion of final_text for finalization.
+
+    Deduplicates against text the StableCommitTransform already committed during
+    streaming (tracked in the processor's _emitted_stable). Three cases:
+
+    - emitted_stable is empty: no streaming commit happened (very short utterance
+      or first utterance) → emit the full final_text.
+    - final_text starts with emitted_stable: the re-decode confirmed the streaming
+      prefix → emit only the suffix (the uncommitted delta).
+    - final_text does NOT start with emitted_stable: the re-decode corrected the
+      prefix → emit the full corrected text. Known limitation: the stale prefix
+      emitted during streaming remains in the output; the diff protocol treats the
+      full corrected text as a new token rather than retracting the stale prefix.
+    """
+    final = final_text.strip()
+    emitted = emitted_stable.strip() if emitted_stable else ""
+    if not emitted:
+        return final
+    if final.startswith(emitted):
+        return final[len(emitted):].strip()
+    return final
+
+
 class MlxQwen3AsrOnlineProcessor:
     """WLK online processor wrapping mlx-qwen3-asr's streaming API.
 
@@ -189,17 +213,19 @@ class MlxQwen3AsrOnlineProcessor:
             except Exception as exc:  # two-pass failure is non-fatal
                 logger.warning("mlx-qwen3-asr two-pass failed (utt=%.1fs, stream_text=%r): %s", utt_audio_s, self._text[:60], exc)
         # Reset the rolling-decode state for the next utterance.
+        # Compute the dedup delta BEFORE resetting _emitted_stable.
+        text_to_emit = _compute_finalize_delta(final_text, self._emitted_stable)
         self._utt_audio = []
         self._text = ""
         self._stable_text = ""
         self._emitted_stable = ""
         self._state = self._new_state()
         self._started = True
-        if final_text and final_text.strip():
+        if text_to_emit:
             tok = ASRToken(
                 start=self._audio_end_time,
                 end=self._audio_end_time,
-                text=final_text,
+                text=text_to_emit,
                 speaker=-1,
                 detected_language=self.language,
             )

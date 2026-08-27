@@ -591,3 +591,215 @@ class TestToWlkToken:
         assert result.speaker == 3
         assert result.detected_language == "en"
         assert result.probability == 0.95
+
+
+# ---------------------------------------------------------------------------
+# AC-3: finalization dedup (no text duplication)
+# ---------------------------------------------------------------------------
+
+class TestFinalizeDedup:
+    """Integration tests for AC-3: _finalize_utterance must emit only the
+    uncommitted delta, not the full re-decoded text, to avoid duplicating the
+    stable prefix that was already emitted during streaming."""
+
+    def test_compute_finalize_delta_no_emitted(self):
+        """No streaming commit → emit full text."""
+        from whisperlivekit.asr_mlx_qwen3 import _compute_finalize_delta
+
+        assert _compute_finalize_delta("alpha beta gamma", "") == "alpha beta gamma"
+
+    def test_compute_finalize_delta_prefix_match(self):
+        """final_text starts with emitted_stable → emit only the suffix."""
+        from whisperlivekit.asr_mlx_qwen3 import _compute_finalize_delta
+
+        assert _compute_finalize_delta("alpha beta gamma delta", "alpha beta") == "gamma delta"
+
+    def test_compute_finalize_delta_exact_match(self):
+        """final_text == emitted_stable → emit nothing (already fully committed)."""
+        from whisperlivekit.asr_mlx_qwen3 import _compute_finalize_delta
+
+        assert _compute_finalize_delta("alpha beta", "alpha beta") == ""
+
+    def test_compute_finalize_delta_correction(self):
+        """Re-decode corrected the prefix → emit full corrected text."""
+        from whisperlivekit.asr_mlx_qwen3 import _compute_finalize_delta
+
+        # The re-decode changed "alpha beta" to "alpha bet" — emit the full
+        # corrected text; the stale prefix remains (known limitation).
+        assert _compute_finalize_delta("alpha bet gamma", "alpha beta") == "alpha bet gamma"
+
+    def test_transform_updates_emitted_stable(self):
+        """StableCommitTransform tracks committed text on inner._emitted_stable."""
+        transform = StableCommitTransform(hold_back_units=0, stable_iterations=1)
+
+        class FakeInner:
+            def __init__(self):
+                self._text = ""
+                self._emitted_stable = ""
+
+            def get_hypothesis(self):
+                class T:
+                    text = self._text
+                return T()
+
+        inner = FakeInner()
+        # Pass 1: no commit (no prior hypothesis)
+        inner._text = "one two three"
+        transform(([], 1.0), inner)
+        assert inner._emitted_stable == ""
+
+        # Pass 2: growing hypothesis — commits stable prefix
+        inner._text = "one two three four"
+        transform(([], 2.0), inner)
+        assert inner._emitted_stable  # something was committed
+        assert "one" in inner._emitted_stable
+
+    def test_integration_no_duplication(self):
+        """Integration: streaming process_iter commits a stable prefix via
+        StableCommitTransform, then start_silence finalizes with only the
+        delta — the combined output has NO duplication.
+
+        This test exercises the real StableCommitTransform, AsrWrapper, and
+        _compute_finalize_delta together. The FakeInner simulates
+        MlxQwen3AsrOnlineProcessor's _finalize_utterance by calling the real
+        _compute_finalize_delta with the _emitted_stable that the transform
+        populated during streaming.
+
+        Falsifier: on the pre-fix code (full-text finalize, _emitted_stable
+        never populated), the finalized token would repeat the full text,
+        producing "alpha beta ... alpha beta gamma delta"."""
+        from whisperlivekit.asr_mlx_qwen3 import _compute_finalize_delta
+
+        transform = StableCommitTransform(hold_back_units=0, stable_iterations=1)
+        all_emitted = []  # collect every token text emitted
+
+        class FakeInner:
+            """Simulates MlxQwen3AsrOnlineProcessor: tracks _emitted_stable
+            (populated by the transform during streaming) and finalizes via
+            the real _compute_finalize_delta."""
+
+            def __init__(self):
+                self._text = ""
+                self._stable_text = ""
+                self._emitted_stable = ""
+                self._audio_end_time = 0.0
+
+            def get_hypothesis(self):
+                class T:
+                    text = self._text
+                return T()
+
+            def get_buffer(self):
+                class T:
+                    text = self._text[len(self._stable_text):] if self._stable_text else self._text
+                return T()
+
+            def process_iter(self, is_last=False):
+                return [], self._audio_end_time
+
+            def start_silence(self):
+                # Simulate the re-decode producing the full clean text.
+                final_text = "alpha beta gamma delta"
+                # Use the REAL dedup logic (same as _finalize_utterance).
+                text_to_emit = _compute_finalize_delta(final_text, self._emitted_stable)
+                self._emitted_stable = ""
+                if text_to_emit:
+                    return [ASRToken(0, 0, text_to_emit)], 0.0
+                return [], 0.0
+
+            def finish(self):
+                return self.start_silence()
+
+            sep = " "
+
+        inner = FakeInner()
+        wrapper = AsrWrapper(inner, transforms=[transform])
+
+        # Streaming pass 1: hypothesis appears
+        inner._text = "alpha beta gamma"
+        tokens, _ = wrapper.process_iter()
+        all_emitted.extend(t.text for t in tokens)
+
+        # Streaming pass 2: hypothesis grows — stable prefix commits
+        inner._text = "alpha beta gamma delta"
+        tokens, _ = wrapper.process_iter()
+        all_emitted.extend(t.text for t in tokens)
+
+        # The transform should have committed a stable prefix during streaming.
+        assert inner._emitted_stable, "streaming should have committed a prefix"
+        streaming_text = inner._emitted_stable
+
+        # Finalize: start_silence triggers _finalize_utterance.
+        tokens, _ = wrapper.start_silence()
+        all_emitted.extend(t.text for t in tokens)
+
+        # Combine all emitted text.
+        combined = " ".join(all_emitted).strip()
+
+        # The combined output must be the full utterance with NO duplication.
+        # The streaming commits emitted the stable prefix; the finalization
+        # emitted only the delta (the remaining suffix).
+        assert combined == "alpha beta gamma delta", (
+            f"duplication detected: combined={combined!r}"
+        )
+
+        # Verify the finalized token is only the delta, not the full text.
+        finalize_text = tokens[0].text if tokens else ""
+        assert streaming_text not in finalize_text, (
+            f"finalized token repeats streaming prefix: {finalize_text!r}"
+        )
+
+    def test_integration_no_duplication_short_utterance(self):
+        """Short utterance where no streaming commit happens (_emitted_stable
+        is empty): finalization emits the full text (no duplication because
+        nothing was committed during streaming)."""
+        from whisperlivekit.asr_mlx_qwen3 import _compute_finalize_delta
+
+        transform = StableCommitTransform(hold_back_units=6, stable_iterations=2)
+        all_emitted = []
+
+        class FakeInner:
+            def __init__(self):
+                self._text = ""
+                self._emitted_stable = ""
+                self._audio_end_time = 0.0
+
+            def get_hypothesis(self):
+                class T:
+                    text = self._text
+                return T()
+
+            def process_iter(self, is_last=False):
+                return [], self._audio_end_time
+
+            def start_silence(self):
+                final_text = "short"
+                text_to_emit = _compute_finalize_delta(final_text, self._emitted_stable)
+                self._emitted_stable = ""
+                if text_to_emit:
+                    return [ASRToken(0, 0, text_to_emit)], 0.0
+                return [], 0.0
+
+            def finish(self):
+                return self.start_silence()
+
+            sep = " "
+
+        inner = FakeInner()
+        wrapper = AsrWrapper(inner, transforms=[transform])
+
+        # Only one streaming pass with a short hypothesis.
+        inner._text = "short"
+        tokens, _ = wrapper.process_iter()
+        all_emitted.extend(t.text for t in tokens)
+
+        # With hold_back=6 and stable_iterations=2, nothing is committed.
+        assert inner._emitted_stable == ""
+        assert all_emitted == []
+
+        # Finalize: emit the full text (no streaming commit to dedup against).
+        tokens, _ = wrapper.start_silence()
+        all_emitted.extend(t.text for t in tokens)
+
+        combined = " ".join(all_emitted).strip()
+        assert combined == "short"
