@@ -63,6 +63,17 @@ class WhisperLiveKitConfig:
     mlx_llm_mt_simul_mass_threshold: float = 0.5
     mlx_llm_mt_simul_soft_max_s: float = 4.0
     mlx_llm_mt_simul_hard_max_s: float = 20.0
+
+    # mlx-qwen3-asr backend (pure-MLX qwen3-asr; coexists with mlx-lm on transformers 5.x)
+    mlx_qwen3_asr_model: str = "Qwen/Qwen3-ASR-0.6B"
+    mlx_qwen3_asr_context: str = ""  # hotword bias (space-separated terms)
+    mlx_qwen3_asr_chunk_sec: float = 2.0
+    mlx_qwen3_asr_max_context_sec: float = 30.0
+    mlx_qwen3_asr_finalization_mode: str = "accuracy"
+    # Stable-commit wrapper parameters (Job 1: hold-back and iteration count)
+    mlx_qwen3_asr_hold_back_units: int = 6
+    mlx_qwen3_asr_stable_iterations: int = 2
+>>>>>>> 02c6a69 (feat: mlx-qwen3-asr ASR backend + generalized ASR wrapper layer)
     alignatt_preset: Optional[str] = None
     # quality | balanced | low; see docs/translation-alignatt.md
     alignatt_latency: str = "balanced"

@@ -133,6 +133,16 @@ BACKENDS = [
         "devices": ["cuda"],
     },
     {
+        "id": "mlx-qwen3-asr",
+        "name": "MLX Qwen3-ASR",
+        "module": "mlx_qwen3_asr",
+        "install": "pip install mlx-qwen3-asr",
+        "description": "Pure-MLX Qwen3-ASR (moona3k) on Apple Silicon — no torch/transformers",
+        "platform": "darwin-arm64",
+        "streaming": "native",
+        "devices": ["mlx"],
+    },
+    {
         "id": "openai-api",
         "name": "OpenAI API",
         "module": "openai",
