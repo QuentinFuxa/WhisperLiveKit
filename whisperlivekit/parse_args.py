@@ -949,11 +949,6 @@ def parse_args():
         "commits target tokens via the AlignAtt attention policy (calibrated "
         "zh→en Hunyuan heads).",
         dest="mlx_llm_mt_simultaneous",
-        choices=["nllb", "alignatt"],
-        help="Translation engine for --target-language: 'nllb' (in-process, "
-        "CPU-friendly) or 'alignatt' (Alignatt4LLM sidecar over WebSocket, "
-        "streaming LLM translation with attention-gated commits; requires a "
-        "running alignatt-mt-server).",
     )
     translation_group.add_argument(
         "--alignatt-url",

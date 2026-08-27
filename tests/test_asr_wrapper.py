@@ -594,11 +594,11 @@ class TestToWlkToken:
 
 
 # ---------------------------------------------------------------------------
-# AC-3: finalization dedup (no text duplication)
+# finalization dedup (no text duplication)
 # ---------------------------------------------------------------------------
 
 class TestFinalizeDedup:
-    """Integration tests for AC-3: _finalize_utterance must emit only the
+    """Integration tests for finalization dedup: _finalize_utterance must emit only the
     uncommitted delta, not the full re-decoded text, to avoid duplicating the
     stable prefix that was already emitted during streaming."""
 
