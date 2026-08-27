@@ -83,9 +83,13 @@ class MlxQwen3AsrOnlineProcessor:
 
     def __init__(self, asr, logfile=None):
         # `asr` is a config bundle carrying model_id / language / hotwords / chunk params.
-        # We build it from the online_factory kwargs (see core.py wiring).
+        # We build it from the online_factory kwargs (see core.py wiring). When `asr`
+        # is a SessionASRProxy, prefer its per-session language override over the
+        # server-wide default (the proxy delegates __getattr__ to the shared ASR, so
+        # getattr(asr, 'language') would return the server-wide value without this).
         self.model_id = getattr(asr, "model_id", "Qwen/Qwen3-ASR-0.6B")
-        self.language = _resolve_language(getattr(asr, "language", None))
+        session_lang = getattr(asr, "_session_language", None)
+        self.language = _resolve_language(session_lang or getattr(asr, "language", None))
         self.hotwords = getattr(asr, "hotwords", "") or ""
         self.chunk_size_sec = getattr(asr, "chunk_size_sec", 2.0)
         self.max_context_sec = getattr(asr, "max_context_sec", 30.0)
@@ -203,9 +207,17 @@ class MlxQwen3AsrOnlineProcessor:
         return [], self._audio_end_time
 
     def get_buffer(self):
-        # Return a Transcript (start, end, text) — the unstable rolling text.
+        # Return a Transcript (start, end, text) — the UNSTABLE tail only (not the
+        # committed stable prefix). WLK's contract: get_buffer returns the unstable
+        # hypothesis tail (not yet committed); process_iter returns the committed
+        # ASRToken list. Returning the full rolling text double-counts the committed
+        # prefix for any consumer that reads get_buffer (display, and the AlignAtt
+        # translator which drafts over the tail via HypothesisTail).
         from whisperlivekit.timed_objects import Transcript
-        return Transcript(start=None, end=self._audio_end_time, text=self._text)
+        stable = self._stable_text
+        text = self._text
+        tail = text[len(stable):] if stable and text.startswith(stable) else text
+        return Transcript(start=None, end=self._audio_end_time, text=tail)
 
     def finish(self) -> Tuple[List, float]:
         # Session end: finalize any leftover utterance (no trailing silence fired).
