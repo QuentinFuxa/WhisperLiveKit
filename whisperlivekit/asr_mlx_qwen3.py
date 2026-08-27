@@ -7,7 +7,7 @@ stabilizing prefix). Unlike WLK's built-in `qwen3-streaming` backend (which
 uses `qwen3-asr-causal`, a torch/transformers package that pins
 transformers==4.57.6 and conflicts with recent mlx-lm), this backend is pure
 MLX: no torch, no transformers version conflict. It coexists cleanly with
-mlx-lm and the Hunyuan-MLX translation backend on transformers 5.x.
+mlx-lm on transformers 5.x.
 
 The online processor adapts mlx-qwen3-asr's streaming API to WLK's
 `insert_audio_chunk` / `process_iter` / `start_silence` / `finish` /
@@ -205,6 +205,15 @@ class MlxQwen3AsrOnlineProcessor:
             )
             return [tok], self._audio_end_time
         return [], self._audio_end_time
+
+    def get_hypothesis(self):
+        # Return a Transcript (start, end, text) with the FULL rolling hypothesis
+        # (the committed stable prefix PLUS the unstable tail). This is the seam
+        # StableCommitTransform reads to compute the stable prefix across decode
+        # passes. Contrast get_buffer(), which returns only the unstable tail
+        # (the WLK contract for display and the AlignAtt HypothesisTail).
+        from whisperlivekit.timed_objects import Transcript
+        return Transcript(start=None, end=self._audio_end_time, text=self._text)
 
     def get_buffer(self):
         # Return a Transcript (start, end, text) — the UNSTABLE tail only (not the

@@ -176,12 +176,17 @@ class TestUpdateStablePrefixCommit:
 
 class TestStableCommitTransform:
     def test_transform_commits_stable_prefix(self):
-        """The transform reads hypothesis from inner.get_buffer() and commits stable text."""
+        """The transform reads hypothesis from inner.get_hypothesis() and commits stable text."""
         transform = StableCommitTransform(hold_back_units=1, stable_iterations=1)
 
         class FakeInner:
             def __init__(self):
                 self._buffer_text = ""
+
+            def get_hypothesis(self):
+                class FakeTranscript:
+                    text = self._buffer_text
+                return FakeTranscript()
 
             def get_buffer(self):
                 class FakeTranscript:
@@ -211,6 +216,11 @@ class TestStableCommitTransform:
             def __init__(self):
                 self._buffer_text = "alpha beta"
 
+            def get_hypothesis(self):
+                class FakeTranscript:
+                    text = self._buffer_text
+                return FakeTranscript()
+
             def get_buffer(self):
                 class FakeTranscript:
                     text = self._buffer_text
@@ -233,6 +243,11 @@ class TestStableCommitTransform:
         class FakeInner:
             def __init__(self):
                 self._buffer_text = "test data"
+
+            def get_hypothesis(self):
+                class FakeTranscript:
+                    text = self._buffer_text
+                return FakeTranscript()
 
             def get_buffer(self):
                 class FakeTranscript:
@@ -262,15 +277,62 @@ class TestStableCommitTransform:
         wrapper.start_silence()
         assert not transform._state.previous_hypothesis_units  # state cleared
 
-    def test_empty_buffer_no_crash(self):
+    def test_empty_hypothesis_no_crash(self):
         transform = StableCommitTransform()
 
         class FakeInner:
-            def get_buffer(self):
+            def get_hypothesis(self):
                 return None
 
         result = transform(([], 1.0), FakeInner())
         assert result == ([], 1.0)
+
+    def test_get_hypothesis_full_text_not_buffer_tail(self):
+        """The transform reads the FULL rolling hypothesis (get_hypothesis), not
+        the unstable tail (get_buffer). With a committed prefix already present,
+        get_buffer returns only the tail; the transform must still see the full
+        text to compute the stable prefix across passes — this is the bug the
+        get_hypothesis seam fixes (reading get_buffer emitted garbage deltas
+        omitting the committed prefix)."""
+        transform = StableCommitTransform(hold_back_units=0, stable_iterations=1)
+
+        class FakeInner:
+            def __init__(self):
+                # The inner processor tracks a committed stable prefix and the
+                # full rolling text. get_hypothesis returns the full text;
+                # get_buffer returns only the tail (WLK contract).
+                self._stable = ""
+                self._full = ""
+
+            def get_hypothesis(self):
+                class T:
+                    text = self._full
+                return T()
+
+            def get_buffer(self):
+                class T:
+                    text = self._full[len(self._stable):] if self._stable and self._full.startswith(self._stable) else self._full
+                return T()
+
+        inner = FakeInner()
+        # Pass 1: full rolling text "alpha beta gamma"
+        inner._full = "alpha beta gamma"
+        transform(([], 1.0), inner)
+
+        # Pass 2: same text — stable across passes, so with hold_back=0 and
+        # stable_iterations=1 the prefix commits. get_buffer would return only
+        # "gamma" (the tail after "alpha beta"); the transform must commit
+        # from the full hypothesis, producing a delta containing "alpha".
+        inner._stable = "alpha beta"  # simulate the backend's stable_text advancing
+        inner._full = "alpha beta gamma"
+        result = transform(([], 2.0), inner)
+        tokens, _ = result
+        assert len(tokens) == 1
+        # The delta must contain the committed prefix units, not just the tail.
+        assert "alpha" in tokens[0].text
+        # Sanity: get_buffer returns only the tail ("gamma"), proving this test
+        # would fail if the transform read get_buffer.
+        assert inner.get_buffer().text.strip() == "gamma"
 
 
 # ---------------------------------------------------------------------------

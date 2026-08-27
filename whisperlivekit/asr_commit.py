@@ -306,9 +306,12 @@ class StableCommitTransform:
     """Stateful transform that applies Job 1 (stable/unstable split).
 
     Designed for use in ``AsrWrapper``'s transform chain. On each
-    ``process_iter`` call it reads the rolling hypothesis from
-    ``inner.get_buffer()`` and commits only the prefix that stays stable
-    across decode passes.
+    ``process_iter`` call it reads the full rolling hypothesis from
+    ``inner.get_hypothesis()`` (stable prefix + unstable tail) and commits
+    only the prefix that stays stable across decode passes. The inner
+    processor's ``get_buffer()`` returns only the unstable tail (the WLK
+    contract for display/AlignAtt), so the transform must use
+    ``get_hypothesis()`` to see the full rolling text.
 
     At utterance boundaries (``start_silence`` / ``finish``) the wrapper
     calls ``reset()`` so the state aligns with the next utterance.
@@ -327,7 +330,10 @@ class StableCommitTransform:
         from whisperlivekit.timed_objects import ASRToken
 
         _, end_time = result
-        buffer = inner.get_buffer()
+        # Read the FULL rolling hypothesis (stable prefix + unstable tail).
+        # get_buffer() returns only the unstable tail (WLK contract); using it
+        # here would omit the committed prefix and emit garbage deltas.
+        buffer = inner.get_hypothesis()
         hypothesis = getattr(buffer, "text", "") or ""
 
         update = update_stable_text_commit(

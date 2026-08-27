@@ -348,9 +348,11 @@ class TranscriptionEngine:
                         source_language=config.lan,
                     )
             else:
-                # qwen3+NLLB guard removed: the _ASRTokenNormalizer already converts
-                # qwen3 tokens to ASRToken (with has_punctuation), so the in-process
-                # NLLB path works. See lc_terminal investigation.
+                if config.backend in {"qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"}:
+                    raise ValueError(
+                        f"{config.backend} does not support in-process NLLB translation; "
+                        "use --translation-backend alignatt with an alignatt-mt-server sidecar."
+                    )
                 try:
                     from nllw import load_model
                 except ImportError:
