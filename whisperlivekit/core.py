@@ -311,6 +311,14 @@ class TranscriptionEngine:
                     latency=config.alignatt_latency,
                     context_text=config.alignatt_context,
                 )
+            elif getattr(config, "translation_backend", "nllb") in ("mlx-llm-mt", "hunyuan-mlx"):
+                from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
+                model_id = getattr(config, "mlx_llm_mt_model", "hy-mt2-1.8b-8bit")
+                self.translation_model = MlxLlmTranslation(
+                    model_id=model_id,
+                    target_language=config.target_language,
+                    source_language=config.lan,
+                )
             else:
                 if config.backend in {"qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"}:
                     raise ValueError(
@@ -508,6 +516,10 @@ def online_translation_factory(args, translation_model):
     from whisperlivekit.translation_alignatt import AlignAttRemoteEngine
     if isinstance(translation_model, AlignAttRemoteEngine):
         return translation_model.new_session(args.target_language)
+    # mlx-llm-mt is a per-session instance; return it directly.
+    from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
+    if isinstance(translation_model, MlxLlmTranslation):
+        return translation_model
     #should be at speaker level in the future:
     #one shared nllb model for all speaker
     #one tokenizer per speaker/language

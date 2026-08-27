@@ -23,6 +23,9 @@ class SampleResult:
     # Speed
     processing_time_s: float
     rtf: float
+    # WER is N/A when the sample reference is empty (the zh_long sample has no
+    # matching reference; it is for MT-RTF and translation quality, not ASR WER).
+    wer_applicable: bool = True
 
     # Latency (from SessionMetrics)
     avg_latency_ms: float = 0.0
@@ -40,6 +43,17 @@ class SampleResult:
     # Memory
     peak_memory_mb: Optional[float] = None
 
+    # Translation metrics (populated when a translation backend is configured)
+    first_translation_time_s: Optional[float] = None
+    provisional_before_final: bool = False
+    mt_call_count: Optional[int] = None
+    translation_time_s: Optional[float] = None
+    translation_rtf: Optional[float] = None
+    translation_accuracy: Optional[float] = None
+    translation_metric_name: Optional[str] = None
+    reference_translation: str = ""
+    hypothesis_translation: str = ""
+
     # Texts
     hypothesis: str = ""
     reference: str = ""
@@ -55,6 +69,7 @@ class SampleResult:
             "category": self.category,
             "duration_s": round(self.duration_s, 2),
             "wer": round(self.wer, 4),
+            "wer_applicable": self.wer_applicable,
             "wer_details": self.wer_details,
             "processing_time_s": round(self.processing_time_s, 2),
             "rtf": round(self.rtf, 3),
@@ -66,6 +81,15 @@ class SampleResult:
             "timing_valid": self.timing_valid,
             "timing_monotonic": self.timing_monotonic,
             "peak_memory_mb": round(self.peak_memory_mb, 1) if self.peak_memory_mb else None,
+            "first_translation_time_s": round(self.first_translation_time_s, 3) if self.first_translation_time_s is not None else None,
+            "provisional_before_final": self.provisional_before_final,
+            "mt_call_count": self.mt_call_count,
+            "translation_time_s": round(self.translation_time_s, 3) if self.translation_time_s is not None else None,
+            "translation_rtf": round(self.translation_rtf, 3) if self.translation_rtf is not None else None,
+            "translation_accuracy": round(self.translation_accuracy, 2) if self.translation_accuracy is not None else None,
+            "translation_metric_name": self.translation_metric_name,
+            "reference_translation": self.reference_translation,
+            "hypothesis_translation": self.hypothesis_translation,
             "hypothesis": self.hypothesis,
             "reference": self.reference,
             "source": self.source,
@@ -82,6 +106,9 @@ class BenchmarkReport:
     timestamp: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"))
     system_info: Dict[str, Any] = field(default_factory=dict)
     results: List[SampleResult] = field(default_factory=list)
+    translation_backend: Optional[str] = None
+    target_language: Optional[str] = None
+    simultaneous: bool = False
 
     # --- Aggregate properties ---
 
@@ -136,6 +163,53 @@ class BenchmarkReport:
     def p95_latency_ms(self) -> float:
         vals = [r.p95_latency_ms for r in self.results if r.p95_latency_ms > 0]
         return sum(vals) / len(vals) if vals else 0.0
+
+    # --- Translation aggregates (populated when a translation backend ran) ---
+
+    @property
+    def has_translation(self) -> bool:
+        return any(
+            r.mt_call_count is not None
+            or r.translation_rtf is not None
+            or (r.hypothesis_translation or "")
+            for r in self.results
+        )
+
+    def has_wer(self) -> bool:
+        return any(r.wer_applicable for r in self.results)
+
+    @property
+    def total_translation_time_s(self) -> float:
+        return sum(r.translation_time_s for r in self.results if r.translation_time_s)
+
+    @property
+    def overall_translation_rtf(self) -> float:
+        if self.total_audio_s <= 0:
+            return 0.0
+        return self.total_translation_time_s / self.total_audio_s
+
+    @property
+    def avg_translation_time_s(self) -> float:
+        vals = [r.translation_time_s for r in self.results if r.translation_time_s]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    @property
+    def avg_first_translation_time_s(self) -> float:
+        vals = [r.first_translation_time_s for r in self.results if r.first_translation_time_s is not None]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    @property
+    def total_mt_calls(self) -> int:
+        return sum(r.mt_call_count for r in self.results if r.mt_call_count)
+
+    @property
+    def n_provisional_before_final(self) -> int:
+        return sum(1 for r in self.results if r.provisional_before_final)
+
+    @property
+    def avg_translation_accuracy(self) -> Optional[float]:
+        vals = [r.translation_accuracy for r in self.results if r.translation_accuracy is not None]
+        return sum(vals) / len(vals) if vals else None
 
     # --- Per-dimension breakdowns ---
 
@@ -200,6 +274,17 @@ class BenchmarkReport:
                 "wer_by_category": {
                     k: round(v, 4) for k, v in self.wer_by_category().items()
                 },
+            },
+            "translation": {
+                "has_translation": self.has_translation,
+                "total_translation_time_s": round(self.total_translation_time_s, 2),
+                "overall_translation_rtf": round(self.overall_translation_rtf, 3),
+                "avg_first_translation_time_s": round(self.avg_first_translation_time_s, 3),
+                "total_mt_calls": self.total_mt_calls,
+                "n_provisional_before_final": self.n_provisional_before_final,
+                "avg_translation_accuracy": round(self.avg_translation_accuracy, 2)
+                if self.avg_translation_accuracy is not None
+                else None,
             },
             "results": [r.to_dict() for r in self.results],
         }
@@ -271,3 +356,96 @@ def get_system_info() -> Dict[str, Any]:
 
     info["backend_versions"] = versions
     return info
+
+
+# ---------------------------------------------------------------------------
+# Translation accuracy scoring
+# ---------------------------------------------------------------------------
+
+def compute_translation_accuracy(
+    hypothesis: str, reference: str
+) -> tuple:
+    """Score a translation hypothesis against a reference.
+
+    Returns ``(score, metric_name)`` where ``score`` is in 0–100.
+
+    Tiered fallback:
+      1. sacrebleu BLEU (if sacrebleu is importable)
+      2. chrF (compact in-house implementation, char n-gram F-beta)
+      3. exact word-overlap ratio (last resort)
+
+    A ``hypothesis`` that is empty or whitespace scores 0.
+    """
+    hyp = (hypothesis or "").strip()
+    ref = (reference or "").strip()
+    if not hyp or not ref:
+        return 0.0, "none"
+
+    # Tier 1: sacrebleu BLEU.
+    try:
+        import sacrebleu
+
+        bleu = sacrebleu.corpus_bleu([hyp], [[ref]]).score
+        return float(bleu), "bleu"
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    # Tier 2: chrF (compact implementation).
+    try:
+        chrf = _chrf_score(hyp, ref)
+        return chrf, "chrf"
+    except Exception:
+        pass
+
+    # Tier 3: exact word-overlap ratio.
+    hyp_words = hyp.split()
+    ref_words = ref.split()
+    if not hyp_words or not ref_words:
+        return 0.0, "word_overlap"
+    hyp_set = set(hyp_words)
+    ref_set = set(ref_words)
+    overlap = len(hyp_set & ref_set)
+    ratio = overlap / max(len(hyp_set | ref_set), 1)
+    return ratio * 100.0, "word_overlap"
+
+
+def _chrf_score(hypothesis: str, reference: str, max_n: int = 6, beta: float = 2.0) -> float:
+    """Compact chrF (character n-gram F-beta) score in 0–100.
+
+    Averages char n-gram precision/recall over orders 1..max_n with word
+    boundary spaces preserved (sacrebleu default). No smoothing; matches
+    sacrebleu's chrF (non-++) closely enough for a fallback metric.
+    """
+    def _ngrams(text: str, n: int):
+        if len(text) < n:
+            return {}
+        counts = {}
+        for i in range(len(text) - n + 1):
+            g = text[i : i + n]
+            counts[g] = counts.get(g, 0) + 1
+        return counts
+
+    precisions = []
+    recalls = []
+    for n in range(1, max_n + 1):
+        hg = _ngrams(hypothesis, n)
+        rg = _ngrams(reference, n)
+        if not hg or not rg:
+            continue
+        overlap = 0
+        for g, c in hg.items():
+            overlap += min(c, rg.get(g, 0))
+        p = overlap / sum(hg.values())
+        r = overlap / sum(rg.values())
+        precisions.append(p)
+        recalls.append(r)
+    if not precisions:
+        return 0.0
+    p = sum(precisions) / len(precisions)
+    r = sum(recalls) / len(recalls)
+    if p + r == 0:
+        return 0.0
+    f = (1 + beta * beta) * (p * r) / (r + beta * beta * p)
+    return f * 100.0

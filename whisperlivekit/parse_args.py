@@ -864,11 +864,22 @@ def parse_args():
         "--translation-backend",
         type=str,
         default="nllb",
-        choices=["nllb", "alignatt"],
+        choices=["nllb", "alignatt", "mlx-llm-mt", "hunyuan-mlx"],
         help="Translation engine for --target-language: 'nllb' (in-process, "
         "CPU-friendly) or 'alignatt' (Alignatt4LLM sidecar over WebSocket, "
         "streaming LLM translation with attention-gated commits; requires a "
-        "running alignatt-mt-server).",
+        "running alignatt-mt-server) or 'mlx-llm-mt' (in-process MLX "
+        "translation via mlx-lm; Hunyuan-MT is the first config) or "
+        "'hunyuan-mlx' (alias for mlx-llm-mt).",
+    )
+    translation_group.add_argument(
+        "--mlx-llm-mt-model",
+        type=str,
+        default="hy-mt2-1.8b-8bit",
+        help="Model id for --translation-backend mlx-llm-mt "
+        "(default: hy-mt2-1.8b-8bit; also: hy-mt2-1.8b-4bit, hy-mt2-7b-4bit, "
+        "hunyuan-mt-7b-4bit, translategemma-4b-it-4bit).",
+        dest="mlx_llm_mt_model",
     )
     translation_group.add_argument(
         "--alignatt-url",
