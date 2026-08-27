@@ -26,11 +26,10 @@ import time
 from typing import Any, List, Optional, Tuple
 
 from whisperlivekit.simul_mt_capture import (
-    ALIGNMENT_HEADS,
-    TOP_HEAD,
     apply_commit_policy,
     committed_src_end_from_text,
     install_capture,
+    lookup_calibration,
     source_span,
 )
 from whisperlivekit.timed_objects import ASRToken, HypothesisTail, TimedText, Translation
@@ -61,7 +60,6 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
             source_language=source_language,
             warmup=warmup,
         )
-        self.wants_hypothesis_tail = True
         # Per-instance simultaneous state.
         self._tail: Optional[HypothesisTail] = None
         self._committed_simul: List[ASRToken] = []  # committed tokens (open utterance)
@@ -79,10 +77,37 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         self._emitted_partial: str = ""
         self._capture: Optional[dict] = None
         self._capture_installed = False
-        logger.info(
-            "MlxLlmTranslationSimul: alignment heads=%s top=%s",
-            ALIGNMENT_HEADS, TOP_HEAD,
-        )
+
+        # Resolve calibration for this (model_repo, source, target) tuple.
+        # Found → activate simultaneous mode (install capture with calibrated
+        # heads). Not found → silently deactivate: behave as the base class
+        # (translate-on-close, no provisional, no capture). This is the
+        # graceful-degrade path — the user gets correct translation, just not
+        # simultaneous. AlignAtt4LLM hard-fails (RuntimeError) on missing
+        # heads; WLK degrades gracefully instead.
+        cal = lookup_calibration(self._config.repo, source_language, target_language)
+        if cal is not None:
+            self._simul_active = True
+            self._simul_heads = cal.heads
+            self._simul_top_head = cal.top_head
+            self.wants_hypothesis_tail = True
+            logger.info(
+                "MlxLlmTranslationSimul: calibration found for "
+                "(model=%s, src=%s, tgt=%s) — heads=%s top=%s",
+                self._config.repo, source_language, target_language,
+                cal.heads, cal.top_head,
+            )
+        else:
+            self._simul_active = False
+            self._simul_heads = []
+            self._simul_top_head = (0, 0)
+            self.wants_hypothesis_tail = False
+            logger.warning(
+                "MlxLlmTranslationSimul: no calibration for "
+                "(model=%s, src=%s, tgt=%s) — deactivating simultaneous mode "
+                "(translation works via base; no provisional)",
+                self._config.repo, source_language, target_language,
+            )
 
     # ------------------------------------------------------------------
     # Model load + capture installation
@@ -98,7 +123,7 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         """
         model, tokenizer = self._ensure_model(self._config)
         if not self._capture_installed:
-            self._capture = install_capture(model, ALIGNMENT_HEADS)
+            self._capture = install_capture(model, self._simul_heads)
             self._capture_installed = True
         return model, tokenizer
 
@@ -171,7 +196,7 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
                     tokens.pop()
                     break
         committed_len = apply_commit_policy(
-            self._capture, TOP_HEAD, len(tokens), src_start, src_end, cend
+            self._capture, self._simul_top_head, len(tokens), src_start, src_end, cend
         )
         committed_tokens = tokens[:committed_len]
         committed_text_out = tokenizer.decode(committed_tokens).strip()
@@ -210,7 +235,7 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         cend = committed_src_end_from_text(tokenizer, src_ids, committed_text)
         # The capture still holds the last call's attentions (not cleared).
         committed_len = apply_commit_policy(
-            self._capture, TOP_HEAD, len(draft["tokens"]), src_start, src_end, cend
+            self._capture, self._simul_top_head, len(draft["tokens"]), src_start, src_end, cend
         )
         committed_tokens = draft["tokens"][:committed_len]
         return tokenizer.decode(committed_tokens).strip()
@@ -275,6 +300,9 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
     # ------------------------------------------------------------------
 
     def insert_tokens(self, items: List[Any]) -> None:
+        if not self._simul_active:
+            super().insert_tokens(items)
+            return
         for item in items:
             if isinstance(item, HypothesisTail):
                 self._tail = item
@@ -297,6 +325,8 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
                 self._tail = None
 
     def process(self) -> Tuple[Optional[Translation], TimedText]:
+        if not self._simul_active:
+            return super().process()
         # 1. Finals first (punctuation-closed segments): full base-class translation.
         if self._pending_finals:
             text, start, end = self._pending_finals.pop(0)
@@ -377,6 +407,8 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         translation). This avoids duplication: the only committed Translation
         for each utterance is the final quality pass.
         """
+        if not self._simul_active:
+            return super().validate_buffer_and_reset()
         start = self._segment_start(self._utterance_start())
         end = self._utterance_end() or self._segment_start(None)
         if self._committed_simul:

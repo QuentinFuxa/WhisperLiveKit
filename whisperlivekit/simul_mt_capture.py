@@ -19,7 +19,8 @@ Load-bearing details (learned during development):
 """
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -45,6 +46,69 @@ HEAD_TS_SCORES: Dict[Tuple[int, int], float] = {
     (4, 12): 0.3587,
     (1, 10): 0.3231,
 }
+
+# Language codes that count as "Chinese" for registry key normalization.
+_ZH_CODES = {"zh", "zh-cn", "zh-tw", "zh-hans", "zh-hant", "cmn", "yue"}
+
+
+@dataclass
+class CalibrationEntry:
+    """A calibrated (model, source, target) tuple's alignment heads.
+
+    ``heads`` is the list of (layer, head) indices to capture.
+    ``ts_scores`` maps each head to its alignment-stream score.
+    ``top_head`` is the primary commit-signal head.
+    """
+    heads: List[Tuple[int, int]]
+    ts_scores: Dict[Tuple[int, int], float]
+    top_head: Tuple[int, int]
+
+
+# Per-(model_repo, source_lang, target_lang) calibration registry. Only
+# tuples that have passed the AlignAtt4LLM promotion gate (TS > 0.1 for
+# >=8 heads, stability, eligible_for_promotion) are seeded here. The
+# simultaneous variant looks up its (repo, src, tgt) at init; a missing
+# tuple triggers silent deactivation (translate-on-close, no provisional).
+#
+# The 8bit entry is calibrated on tencent/Hy-MT2-1.8B (bf16 base model);
+# the heads transfer to the 8bit MLX quantization. The 4bit quantization
+# was probed (48.9% argmax match vs 8bit — attention patterns differ too
+# much) and the formal promotion gate could not be run (AlignAtt4LLM
+# requires PyTorch/transformers, which can't load MLX-format repos), so
+# 4bit is NOT seeded — it silently deactivates (translation still works
+# via the base class).
+CALIBRATION_REGISTRY: Dict[Tuple[str, str, str], CalibrationEntry] = {
+    ("mlx-community/Hy-MT2-1.8B-8bit", "zh", "en"): CalibrationEntry(
+        heads=ALIGNMENT_HEADS,
+        ts_scores=HEAD_TS_SCORES,
+        top_head=TOP_HEAD,
+    ),
+}
+
+
+def _normalize_lang(lang: str) -> str:
+    """Normalize a language code for registry lookup. Chinese variants
+    collapse to ``zh`` (matching ``resolve_prompt``'s normalization)."""
+    lang = (lang or "").strip().lower()
+    if lang in _ZH_CODES:
+        return "zh"
+    return lang
+
+
+def lookup_calibration(
+    model_repo: str, source_lang: str, target_lang: str
+) -> Optional[CalibrationEntry]:
+    """Look up the calibration entry for a (model_repo, source, target) tuple.
+
+    Returns the ``CalibrationEntry`` if the tuple is calibrated, or ``None``
+    if it is not (the caller should silently deactivate in that case).
+    """
+    key = (
+        model_repo,
+        _normalize_lang(source_lang),
+        _normalize_lang(target_lang),
+    )
+    return CALIBRATION_REGISTRY.get(key)
 
 
 class CapturedAttention(nn.Module):

@@ -33,13 +33,16 @@ from whisperlivekit.translation_mlx_llm_mt_simul import MlxLlmTranslationSimul
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_simul(model_id="hy-mt2-1.8b-8bit"):
+def _make_simul(model_id="hy-mt2-1.8b-8bit", source_language="zh"):
     """Create a simul backend with _translate_text mocked (no model download).
 
     ``_translate_simul`` is left unmocked by default so individual tests can
     override it; tests that exercise the release/commit logic mock it.
     """
-    b = MlxLlmTranslationSimul(model_id=model_id, target_language="en", warmup=False)
+    b = MlxLlmTranslationSimul(
+        model_id=model_id, target_language="en",
+        source_language=source_language, warmup=False,
+    )
     b._translate_text = lambda text: f"[EN:{text}]"
     # Prevent the capture-install path from touching mlx-lm during unit tests.
     b._ensure_simul_model = lambda: (None, None)  # type: ignore[assignment]
@@ -235,9 +238,10 @@ def test_heads_log_on_construction(caplog):
     """A log line names the alignment heads in use at construction."""
     with caplog.at_level(logging.INFO):
         MlxLlmTranslationSimul(
-            model_id="hy-mt2-1.8b-8bit", target_language="en", warmup=False
+            model_id="hy-mt2-1.8b-8bit", target_language="en",
+            source_language="zh", warmup=False
         )
-    assert any("alignment heads" in r.message and "(9, 5)" in r.message for r in caplog.records)
+    assert any("calibration found" in r.message and "(9, 5)" in r.message for r in caplog.records)
 
 
 def test_top_head_is_l9_h5():
@@ -377,7 +381,8 @@ def test_core_factory_creates_simul_when_flag_set():
         from whisperlivekit.translation_mlx_llm_mt_simul import MlxLlmTranslationSimul
         model_id = cfg.mlx_llm_mt_model
         engine.translation_model = MlxLlmTranslationSimul(
-            model_id=model_id, target_language=cfg.target_language, warmup=False,
+            model_id=model_id, target_language=cfg.target_language,
+            source_language=cfg.lan, warmup=False,
         )
     assert isinstance(engine.translation_model, MlxLlmTranslationSimul)
     assert isinstance(engine.translation_model, MlxLlmTranslation)
@@ -392,8 +397,173 @@ def test_online_translation_factory_returns_simul_directly():
     from whisperlivekit.core import online_translation_factory
 
     simul = MlxLlmTranslationSimul(
-        model_id="hy-mt2-1.8b-8bit", target_language="en", warmup=False
+        model_id="hy-mt2-1.8b-8bit", target_language="en",
+        source_language="zh", warmup=False
     )
     args = Namespace(target_language="en", lan="zh")
     result = online_translation_factory(args, simul)
     assert result is simul
+
+
+# ---------------------------------------------------------------------------
+# Per-(model, src, target) head registry + silent deactivation
+# ---------------------------------------------------------------------------
+
+def test_registry_has_8bit_zh_en_entry():
+    """The calibration registry seeds the 8bit zh→en tuple with the 8
+    calibrated heads and top head (9, 5)."""
+    from whisperlivekit.simul_mt_capture import CALIBRATION_REGISTRY, lookup_calibration
+
+    entry = lookup_calibration("mlx-community/Hy-MT2-1.8B-8bit", "zh", "en")
+    assert entry is not None
+    assert entry.heads == ALIGNMENT_HEADS
+    assert entry.top_head == TOP_HEAD
+    # The registry key is the tuple.
+    assert ("mlx-community/Hy-MT2-1.8B-8bit", "zh", "en") in CALIBRATION_REGISTRY
+
+
+def test_registry_normalizes_zh_variants():
+    """Chinese language variants (zh-tw, zh-cn, zh-hans, etc.) normalize to
+    ``zh`` for registry lookup."""
+    from whisperlivekit.simul_mt_capture import lookup_calibration
+
+    for variant in ("zh", "zh-tw", "zh-cn", "zh-hans", "zh-hant"):
+        entry = lookup_calibration("mlx-community/Hy-MT2-1.8B-8bit", variant, "en")
+        assert entry is not None, f"{variant} should match the zh→en entry"
+
+
+def test_registry_missing_tuple_returns_none():
+    """An uncalibrated tuple (e.g. TranslateGemma zh→en or 8bit en→it) returns
+    None from the registry lookup."""
+    from whisperlivekit.simul_mt_capture import lookup_calibration
+
+    # Different model repo (TranslateGemma).
+    assert lookup_calibration("mlx-community/translategemma-4b-it-4bit", "zh", "en") is None
+    # Same repo but wrong direction.
+    assert lookup_calibration("mlx-community/Hy-MT2-1.8B-8bit", "en", "it") is None
+    # 4bit repo is not calibrated.
+    assert lookup_calibration("mlx-community/Hy-MT2-1.8B-4bit", "zh", "en") is None
+
+
+def test_calibrated_tuple_activates_simul():
+    """A calibrated tuple (8bit zh→en) activates simultaneous mode: heads are
+    installed, wants_hypothesis_tail is True, and the provisional appears
+    during speech."""
+    b = _make_simul(model_id="hy-mt2-1.8b-8bit", source_language="zh")
+    assert b._simul_active is True
+    assert b.wants_hypothesis_tail is True
+    assert b._simul_heads == ALIGNMENT_HEADS
+    assert b._simul_top_head == TOP_HEAD
+    # Provisional appears during speech (not just at close).
+    b._translate_simul = lambda source, committed: "Hello"
+    b.insert_tokens([_token("你好", 0.0, 0.5), _tail("世界", 0.5, 1.0)])
+    tr, buf = b.process()
+    assert tr is None
+    assert buf.text == "Hello"
+
+
+def test_uncalibrated_tuple_deactivates_simul(caplog):
+    """An uncalibrated tuple (TranslateGemma zh→en) deactivates: no
+    provisional, wants_hypothesis_tail is False, translation works via base,
+    and a warning is logged naming the missing tuple."""
+    with caplog.at_level(logging.WARNING):
+        b = MlxLlmTranslationSimul(
+            model_id="translategemma-4b-it-4bit", target_language="en",
+            source_language="zh", warmup=False,
+        )
+    assert b._simul_active is False
+    assert b.wants_hypothesis_tail is False
+    # Warning names the missing tuple.
+    assert any(
+        "no calibration" in r.message
+        and "translategemma" in r.message
+        for r in caplog.records
+    )
+    # Translation still works via the base class (no provisional).
+    b._translate_text = lambda text: f"[EN:{text}]"
+    b.insert_tokens([_token("hello", 0.0, 0.5), _token(".", 0.5, 0.6)])
+    tr, buf = b.process()
+    assert isinstance(tr, Translation)
+    assert tr.text == "[EN:hello.]"
+
+
+def test_uncalibrated_tuple_no_provisional_during_speech():
+    """A deactivated tuple does NOT produce a provisional during speech — it
+    behaves exactly like the base class (translate-on-close only). A
+    silently-deactivated tuple would pass 'translation correct' but lose the
+    simultaneous feature; this test catches that regression."""
+    b = MlxLlmTranslationSimul(
+        model_id="translategemma-4b-it-4bit", target_language="en",
+        source_language="zh", warmup=False,
+    )
+    assert b._simul_active is False
+    b._translate_text = lambda text: f"[EN:{text}]"
+    # Feed tokens WITHOUT punctuation (open utterance, no close).
+    b.insert_tokens([_token("hello", 0.0, 0.5), _token("world", 0.5, 1.0)])
+    tr, buf = b.process()
+    # No validated Translation (utterance still open).
+    assert tr is None
+    # Buffer shows the untranslated source text (base class behaviour),
+    # NOT a translated provisional.
+    assert "[EN:" not in buf.text
+    assert "hello" in buf.text or "world" in buf.text
+
+
+def test_uncalibrated_direction_deactivates_simul():
+    """A calibrated model but uncalibrated direction (8bit en→it) also
+    deactivates."""
+    b = MlxLlmTranslationSimul(
+        model_id="hy-mt2-1.8b-8bit", target_language="it",
+        source_language="en", warmup=False,
+    )
+    assert b._simul_active is False
+    assert b.wants_hypothesis_tail is False
+
+
+def test_4bit_zh_en_deactivates_without_calibration():
+    """The 4bit zh→en tuple is NOT in the registry (calibration probe showed
+    only 48.9% argmax match vs 8bit; the formal promotion gate could not be
+    run). It silently deactivates — translation still works via the base."""
+    b = MlxLlmTranslationSimul(
+        model_id="hy-mt2-1.8b-4bit", target_language="en",
+        source_language="zh", warmup=False,
+    )
+    assert b._simul_active is False
+    assert b.wants_hypothesis_tail is False
+    # Translation still works via the base class.
+    b._translate_text = lambda text: f"[EN:{text}]"
+    b.insert_tokens([_token("hello", 0.0, 0.5), _token(".", 0.5, 0.6)])
+    tr, buf = b.process()
+    assert isinstance(tr, Translation)
+    assert tr.text == "[EN:hello.]"
+
+
+def test_deactivated_simul_uses_base_insert_tokens():
+    """When deactivated, insert_tokens delegates to the base class — tokens
+    go into ``_buffer_tokens`` (base), not ``_committed_simul`` (simul)."""
+    b = MlxLlmTranslationSimul(
+        model_id="translategemma-4b-it-4bit", target_language="en",
+        source_language="zh", warmup=False,
+    )
+    assert b._simul_active is False
+    b.insert_tokens([_token("hello", 0.0, 0.5)])
+    # Base class uses _buffer_tokens; simul uses _committed_simul.
+    assert len(b._buffer_tokens) == 1
+    assert len(b._committed_simul) == 0
+
+
+def test_deactivated_simul_validate_uses_base():
+    """When deactivated, validate_buffer_and_reset delegates to the base
+    class — it returns a validated Translation (not the provisional buffer
+    pattern the simul uses)."""
+    b = MlxLlmTranslationSimul(
+        model_id="translategemma-4b-it-4bit", target_language="en",
+        source_language="zh", warmup=False,
+    )
+    assert b._simul_active is False
+    b._translate_text = lambda text: f"[EN:{text}]"
+    b.insert_tokens([_token("hello", 0.0, 0.5), _token("world", 0.5, 1.0)])
+    tr, buf = b.validate_buffer_and_reset()
+    # Base class returns a validated Translation (not None like the simul).
+    assert isinstance(tr, Translation)
+    assert tr.text == "[EN:helloworld]"
