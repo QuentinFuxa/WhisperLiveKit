@@ -19,7 +19,7 @@ Load-bearing details (learned during development):
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 import mlx.core as mx
@@ -58,16 +58,23 @@ class CalibrationEntry:
     ``heads`` is the list of (layer, head) indices to capture.
     ``ts_scores`` maps each head to its alignment-stream score.
     ``top_head`` is the primary commit-signal head.
+    ``disabled_quants`` lists quant suffixes (e.g. ``"4bit"``) that share
+    the model id but whose attention patterns diverge too far from the
+    calibrated weights to use these heads; a repo matching one of them
+    silently deactivates (returns ``None`` from ``lookup_calibration``).
     """
     heads: List[Tuple[int, int]]
     ts_scores: Dict[Tuple[int, int], float]
     top_head: Tuple[int, int]
+    disabled_quants: set = field(default_factory=set)
 
 
-# Per-(model_repo, source_lang, target_lang) calibration registry. Only
-# tuples that have passed the AlignAtt4LLM promotion gate (TS > 0.1 for
-# >=8 heads, stability, eligible_for_promotion) are seeded here. The
-# simultaneous variant looks up its (repo, src, tgt) at init; a missing
+# Per-(model_id, source_lang, target_lang) calibration registry. The key is
+# a NORMALIZED model id (org prefix and quant suffix stripped) so the same
+# calibration entry is reusable across implementations (MLX, vLLM/CUDA) and
+# quantizations. Only tuples that have passed the AlignAtt4LLM promotion gate
+# (TS > 0.1 for >=8 heads, stability, eligible_for_promotion) are seeded here.
+# The simultaneous variant looks up its (repo, src, tgt) at init; a missing
 # tuple triggers silent deactivation (translate-on-close, no provisional).
 #
 # The 8bit entry is calibrated on tencent/Hy-MT2-1.8B (bf16 base model);
@@ -75,13 +82,19 @@ class CalibrationEntry:
 # was probed (48.9% argmax match vs 8bit — attention patterns differ too
 # much) and the formal promotion gate could not be run (AlignAtt4LLM
 # requires PyTorch/transformers, which can't load MLX-format repos), so
-# 4bit is NOT seeded — it silently deactivates (translation still works
-# via the base class).
+# 4bit is in ``disabled_quants`` — it silently deactivates (translation still
+# works via the base class).
+#
+# TODO: refactor heads to load from external JSON files (the AlignAtt4LLM
+# ``translation_heads_<model>_<direction>.json`` pattern) instead of being
+# hardcoded in Python, so calibration entries are shareable across
+# implementations (MLX, vLLM, etc.) without code changes.
 CALIBRATION_REGISTRY: Dict[Tuple[str, str, str], CalibrationEntry] = {
-    ("mlx-community/Hy-MT2-1.8B-8bit", "zh", "en"): CalibrationEntry(
+    ("hy-mt2-1.8b", "zh", "en"): CalibrationEntry(
         heads=ALIGNMENT_HEADS,
         ts_scores=HEAD_TS_SCORES,
         top_head=TOP_HEAD,
+        disabled_quants={"4bit"},
     ),
 }
 
@@ -95,20 +108,61 @@ def _normalize_lang(lang: str) -> str:
     return lang
 
 
+# Recognized MLX quant suffixes, longest first so '-4bit' doesn't shadow
+# a hypothetical '-4bit-grouped' (none currently exist, but this is robust).
+_QUANT_SUFFIXES = ("-8bit", "-4bit", "-bf16", "-f16")
+
+
+def _normalize_model_id(repo: str) -> str:
+    """Normalize a model repo to a canonical model id: strip the org prefix
+    (everything up to and including the last ``/``) and the quant suffix,
+    then lowercase. Calibration entries are keyed by model id only, so the
+    same architecture across quants (8bit/4bit/bf16) and implementations
+    (MLX ``mlx-community/…``, vLLM ``tencent/…``) shares a single entry.
+    """
+    name = (repo or "").rsplit("/", 1)[-1].lower()
+    for suffix in _QUANT_SUFFIXES:
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    return name
+
+
+def _extract_quant(repo: str) -> str:
+    """Extract the quant suffix from a model repo (e.g. ``'4bit'`` from
+    ``'mlx-community/Hy-MT2-1.8B-4bit'``). Returns ``''`` if no known suffix."""
+    name = (repo or "").rsplit("/", 1)[-1].lower()
+    for suffix in _QUANT_SUFFIXES:
+        if name.endswith(suffix):
+            return suffix[1:]  # strip leading '-'
+    return ""
+
+
 def lookup_calibration(
     model_repo: str, source_lang: str, target_lang: str
 ) -> Optional[CalibrationEntry]:
     """Look up the calibration entry for a (model_repo, source, target) tuple.
 
-    Returns the ``CalibrationEntry`` if the tuple is calibrated, or ``None``
-    if it is not (the caller should silently deactivate in that case).
+    The repo is normalized to a model id (org prefix + quant suffix stripped)
+    before lookup, so all quants of the same architecture share one entry.
+    If the model id matches but the repo's quant is in the entry's
+    ``disabled_quants``, returns ``None`` (silently deactivates).
+
+    Returns the ``CalibrationEntry`` if the tuple is calibrated and not
+    quant-disabled, or ``None`` if it is not (the caller should silently
+    deactivate in that case).
     """
     key = (
-        model_repo,
+        _normalize_model_id(model_repo),
         _normalize_lang(source_lang),
         _normalize_lang(target_lang),
     )
-    return CALIBRATION_REGISTRY.get(key)
+    entry = CALIBRATION_REGISTRY.get(key)
+    if entry is None:
+        return None
+    if _extract_quant(model_repo) in entry.disabled_quants:
+        return None
+    return entry
 
 
 class CapturedAttention(nn.Module):

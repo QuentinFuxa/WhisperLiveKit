@@ -410,16 +410,16 @@ def test_online_translation_factory_returns_simul_directly():
 # ---------------------------------------------------------------------------
 
 def test_registry_has_8bit_zh_en_entry():
-    """The calibration registry seeds the 8bit zh→en tuple with the 8
-    calibrated heads and top head (9, 5)."""
+    """The calibration registry seeds the zh→en tuple (keyed by normalized model
+    id ``hy-mt2-1.8b``) with the 8 calibrated heads and top head (9, 5)."""
     from whisperlivekit.simul_mt_capture import CALIBRATION_REGISTRY, lookup_calibration
 
     entry = lookup_calibration("mlx-community/Hy-MT2-1.8B-8bit", "zh", "en")
     assert entry is not None
     assert entry.heads == ALIGNMENT_HEADS
     assert entry.top_head == TOP_HEAD
-    # The registry key is the tuple.
-    assert ("mlx-community/Hy-MT2-1.8B-8bit", "zh", "en") in CALIBRATION_REGISTRY
+    # The registry key is the normalized model id (no org prefix, no quant).
+    assert ("hy-mt2-1.8b", "zh", "en") in CALIBRATION_REGISTRY
 
 
 def test_registry_normalizes_zh_variants():
@@ -432,16 +432,31 @@ def test_registry_normalizes_zh_variants():
         assert entry is not None, f"{variant} should match the zh→en entry"
 
 
+def test_registry_normalizes_model_repo_to_id():
+    """The registry normalizes the model repo to a canonical model id: strips
+    the org prefix (``mlx-community/``, ``tencent/``) and the quant suffix
+    (``-8bit``, ``-4bit``), so all quants of the same architecture share one
+    calibration entry."""
+    from whisperlivekit.simul_mt_capture import _normalize_model_id
+
+    assert _normalize_model_id("mlx-community/Hy-MT2-1.8B-8bit") == "hy-mt2-1.8b"
+    assert _normalize_model_id("mlx-community/Hy-MT2-1.8B-4bit") == "hy-mt2-1.8b"
+    assert _normalize_model_id("tencent/Hy-MT2-1.8B") == "hy-mt2-1.8b"
+    assert _normalize_model_id("mlx-community/translategemma-4b-it-4bit") == "translategemma-4b-it"
+    assert _normalize_model_id("Hy-MT2-1.8B-8bit") == "hy-mt2-1.8b"
+
+
 def test_registry_missing_tuple_returns_none():
     """An uncalibrated tuple (e.g. TranslateGemma zh→en or 8bit en→it) returns
     None from the registry lookup."""
     from whisperlivekit.simul_mt_capture import lookup_calibration
 
-    # Different model repo (TranslateGemma).
+    # Different model (TranslateGemma) — no matching model id.
     assert lookup_calibration("mlx-community/translategemma-4b-it-4bit", "zh", "en") is None
-    # Same repo but wrong direction.
+    # Same model id but wrong direction.
     assert lookup_calibration("mlx-community/Hy-MT2-1.8B-8bit", "en", "it") is None
-    # 4bit repo is not calibrated.
+    # 4bit shares the model id but is in disabled_quants (attention patterns
+    # diverge too far from the calibrated 8bit weights).
     assert lookup_calibration("mlx-community/Hy-MT2-1.8B-4bit", "zh", "en") is None
 
 
@@ -521,9 +536,10 @@ def test_uncalibrated_direction_deactivates_simul():
 
 
 def test_4bit_zh_en_deactivates_without_calibration():
-    """The 4bit zh→en tuple is NOT in the registry (calibration probe showed
-    only 48.9% argmax match vs 8bit; the formal promotion gate could not be
-    run). It silently deactivates — translation still works via the base."""
+    """The 4bit zh→en tuple shares the model id with the 8bit entry but is in
+    ``disabled_quants`` (calibration probe showed only 48.9% argmax match vs
+    8bit; the formal promotion gate could not be run). It silently deactivates
+    — translation still works via the base."""
     b = MlxLlmTranslationSimul(
         model_id="hy-mt2-1.8b-4bit", target_language="en",
         source_language="zh", warmup=False,
