@@ -33,9 +33,31 @@ from whisperlivekit.simul_mt_capture import (
     source_span,
 )
 from whisperlivekit.timed_objects import ASRToken, HypothesisTail, TimedText, Translation
-from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation, _strip_hy_placeholder
+from whisperlivekit.translation_mlx_llm_mt import (
+    MlxLlmTranslation,
+    _HY_PLACEHOLDER_TEXT,
+    _placeholder_stop_check,
+    _strip_hy_placeholder,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _placeholder_ids(tokenizer) -> list:
+    """Id sequence of the Hunyuan placeholder for this tokenizer (may be empty).
+
+    Mirrors the id-resolution inside ``_placeholder_stop_check``; the simul
+    paths use it to truncate the token stream itself (not just the decoded
+    string) so the stashed draft the release path reads is placeholder-free.
+    """
+    try:
+        try:
+            ids = tokenizer.encode(_HY_PLACEHOLDER_TEXT, add_special_tokens=False)
+        except TypeError:
+            ids = tokenizer.encode(_HY_PLACEHOLDER_TEXT)
+    except Exception:
+        return []
+    return list(ids) if 0 < len(ids) <= 16 else []
 
 
 class MlxLlmTranslationSimul(MlxLlmTranslation):
@@ -187,6 +209,10 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         )
         tokens: List[int] = []
         eos = self._eos_token
+        # In-loop early stop: end decode the moment the placeholder is emitted
+        # instead of paying for the hallucinated tail and cutting it afterwards
+        # (same predicate the base engine uses in _translate_text).
+        stop_at_placeholder = _placeholder_stop_check(tokenizer)
         for chunk in gen:
             tokens.append(chunk.token)
             # Stop at EOS for efficiency; the policy commits a prefix anyway.
@@ -195,8 +221,22 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
                 if eos in det:
                     tokens.pop()
                     break
-        committed_len = apply_commit_policy(
-            self._capture, self._simul_top_head, len(tokens), src_start, src_end, cend
+            if stop_at_placeholder is not None and stop_at_placeholder(chunk):
+                break
+        # Cut the token stream itself at the first placeholder occurrence so
+        # the commit policy, the committed text, and the stashed draft the
+        # release path reads never contain placeholder tokens.
+        ph_ids = _placeholder_ids(tokenizer)
+        if ph_ids:
+            for i in range(len(tokens) - len(ph_ids) + 1):
+                if tuple(tokens[i:i + len(ph_ids)]) == tuple(ph_ids):
+                    del tokens[i:]
+                    break
+        committed_len = min(
+            apply_commit_policy(
+                self._capture, self._simul_top_head, len(tokens), src_start, src_end, cend
+            ),
+            len(tokens),
         )
         committed_tokens = tokens[:committed_len]
         committed_text_out = _strip_hy_placeholder(tokenizer.decode(committed_tokens))

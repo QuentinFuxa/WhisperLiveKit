@@ -583,3 +583,155 @@ def test_deactivated_simul_validate_uses_base():
     # Base class returns a validated Translation (not None like the simul).
     assert isinstance(tr, Translation)
     assert tr.text == "[EN:helloworld]"
+
+
+# ---------------------------------------------------------------------------
+# In-loop early stop at the Hunyuan placeholder token — simul paths
+# ---------------------------------------------------------------------------
+# Mirrors the base-engine stub-stream tests in test_mlx_llm_mt.py, but drives
+# _translate_simul (the commit-policy decode) and _release_held (the cached
+# draft release). Proof: decode stops early at the placeholder, the committed
+# text is truncated at the placeholder, and the stashed draft the release path
+# reads contains no placeholder tokens.
+
+_HY_PLACEHOLDER = "<｜hy_place▁holder▁no▁2｜>"
+
+
+class _SimChunk:
+    """Minimal stand-in for mlx_lm's GenerationResponse."""
+
+    def __init__(self, token, text):
+        self.token = token
+        self.text = text
+
+
+def _install_fake_mlx_lm_simul(monkeypatch, chunks, consumed):
+    """Inject stub ``mlx_lm`` whose ``stream_generate`` yields ``chunks`` and
+    records each yielded chunk in ``consumed`` (mutable) so tests can assert
+    how much of the stream the decode loop consumed before stopping."""
+    import sys
+    import types
+
+    def fake_stream_generate(model, tokenizer, prompt=None, max_tokens=None, **kw):
+        for c in chunks:
+            consumed.append(c)
+            yield c
+
+    mlx_lm = types.ModuleType("mlx_lm")
+    mlx_lm.stream_generate = fake_stream_generate
+    sample_utils = types.ModuleType("mlx_lm.sample_utils")
+    sample_utils.make_sampler = lambda **kw: None
+    sample_utils.make_logits_processors = lambda **kw: []
+    mlx_lm.sample_utils = sample_utils
+    monkeypatch.setitem(sys.modules, "mlx_lm", mlx_lm)
+    monkeypatch.setitem(sys.modules, "mlx_lm.sample_utils", sample_utils)
+
+
+class _SimTokenizer:
+    """Stub tokenizer: configurable placeholder id sequence, no real vocab."""
+
+    def __init__(self, placeholder_ids, eos_token="", decode_map=None):
+        self._placeholder_ids = placeholder_ids
+        self.eos_token = eos_token
+        self._decode_map = decode_map or {}
+
+    def encode(self, text, add_special_tokens=True):
+        if text == _HY_PLACEHOLDER:
+            return list(self._placeholder_ids)
+        return [1]  # prompt / any other text encodes to one id
+
+    def decode(self, ids, skip_special_tokens=True):
+        return self._decode_map.get(ids[0] if ids else -1, "")
+
+    def apply_chat_template(self, messages, add_generation_prompt=False, tokenize=True, **kw):
+        return "PROMPT 你好世界"
+
+
+def _simul_backend_with_tokenizer(monkeypatch, tokenizer, chunks):
+    """Simul backend wired to the stub tokenizer + fake stream_generate. The
+    commit policy is stubbed to 'commit everything' so the placeholder
+    truncation (not the policy) is what must keep the output clean. Returns
+    (backend, consumed)."""
+    import whisperlivekit.translation_mlx_llm_mt_simul as sms
+
+    b = MlxLlmTranslationSimul(
+        model_id="hy-mt2-1.8b-8bit", target_language="en",
+        source_language="zh", warmup=False,
+    )
+    b._eos_token = ""  # exercise only the placeholder-stop path
+    b._ensure_simul_model = lambda: (object(), tokenizer)
+    b._capture = type("C", (), {"clear": lambda self: None})()
+    monkeypatch.setattr(sms, "source_span", lambda tok, prompt_str, text: (0, 1))
+    monkeypatch.setattr(sms, "committed_src_end_from_text", lambda tok, ids, text: 0)
+    # Commit policy asks for everything; the truncation + clamp must keep the
+    # output placeholder-free regardless of what the policy requests.
+    monkeypatch.setattr(sms, "apply_commit_policy", lambda *a, **k: 10**6)
+    consumed = []
+    _install_fake_mlx_lm_simul(monkeypatch, chunks, consumed)
+    return b, consumed
+
+
+def test_simul_early_stops_on_single_id_placeholder(monkeypatch):
+    """Hy-MT2-1.8B case: placeholder is one id — decode stops at that id, the
+    hallucinated tail is never consumed, the committed text is truncated at
+    the placeholder, and the stashed draft is placeholder-free."""
+    chunks = [
+        _SimChunk(500, "Hello"),
+        _SimChunk(120020, _HY_PLACEHOLDER),  # the placeholder, one id
+        *[_SimChunk(9000 + i, "废") for i in range(20)],  # hallucinated tail
+    ]
+    tok = _SimTokenizer(placeholder_ids=[120020], decode_map={500: "Hello"})
+    b, consumed = _simul_backend_with_tokenizer(monkeypatch, tok, chunks)
+
+    out = b._translate_simul("你好世界", "你好")
+
+    assert out == "Hello"  # placeholder and tail never reach the committed text
+    assert len(consumed) == 2  # stopped right at the placeholder id
+    assert 120020 not in b._last_draft["tokens"]  # stash is placeholder-free
+
+
+def test_simul_early_stops_on_fragmented_placeholder(monkeypatch):
+    """Fragmented (multi-id) placeholder: the rolling window fires after the
+    last fragment, and the token stream is cut at the sequence start so the
+    commit policy cannot index into placeholder tokens."""
+    frag_ids = [27, 15755, 250]
+    chunks = [
+        _SimChunk(500, "Hi"),
+        _SimChunk(frag_ids[0], "<"),
+        _SimChunk(frag_ids[1], "｜hy"),
+        _SimChunk(frag_ids[2], "_place▁holder▁no▁2｜>"),
+        _SimChunk(7000, "junk"),
+        _SimChunk(9001, "更多"),
+    ]
+    tok = _SimTokenizer(placeholder_ids=frag_ids, decode_map={500: "Hi"})
+    b, consumed = _simul_backend_with_tokenizer(monkeypatch, tok, chunks)
+
+    out = b._translate_simul("你好世界", "你好")
+
+    assert out == "Hi"
+    assert len(consumed) == 4  # stopped right after the last fragment
+    assert not any(t in b._last_draft["tokens"] for t in frag_ids)
+
+
+def test_simul_release_held_from_clean_stash(monkeypatch):
+    """The release path re-commits from the stashed draft (no new decode);
+    because the stash was truncated at the placeholder, released text is
+    clean even with a commit policy that wants every token."""
+    chunks = [
+        _SimChunk(500, "Hello"),
+        _SimChunk(120020, _HY_PLACEHOLDER),
+        *[_SimChunk(9000 + i, "废") for i in range(20)],
+    ]
+    tok = _SimTokenizer(placeholder_ids=[120020], decode_map={500: "Hello"})
+    b, consumed = _simul_backend_with_tokenizer(monkeypatch, tok, chunks)
+
+    b._translate_simul("你好世界", "你好")
+    assert b._last_draft is not None
+
+    # Release with a larger committed boundary: same stashed tokens, no MT
+    # call, no decode — and no placeholder in the released text.
+    released = b._release_held("你好世界")
+
+    assert 120020 not in b._last_draft["tokens"]
+    assert _HY_PLACEHOLDER not in (b._emitted_partial or "")
+    assert len(consumed) == 2  # release must not re-run the stream
