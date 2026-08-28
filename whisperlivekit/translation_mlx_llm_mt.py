@@ -15,6 +15,7 @@ Duck-typed contract (same shape as nllw.OnlineTranslation):
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -31,6 +32,27 @@ from whisperlivekit.translation_profiles import (  # noqa: E402
 from whisperlivekit.translation_profiles import (  # noqa: E402
     MtModelProfile as MlxLlmMtModelConfig,
 )
+
+
+_HY_PLACEHOLDER_RE = re.compile(r"<[\|｜][^\|｜]*[\|｜]>")
+
+
+def _strip_hy_placeholder(text: str) -> str:
+    """Truncate at the first Hunyuan placeholder token and everything after it.
+
+    The model occasionally emits ``<｜hy_place▁holder▁no▁2｜>`` (fullwidth pipes,
+    U+FF5C) and then hallucinates free text after it. Stripping just the token
+    leaves the hallucination in the output, so cut from the placeholder onward.
+    Applied at source (in the translation engine) so every consumer — terminal,
+    overlay, transcript file, simul commit policy — sees clean text; the display
+    layers strip defensively as well.
+    """
+    if not text:
+        return text
+    m = _HY_PLACEHOLDER_RE.search(text)
+    if m:
+        text = text[: m.start()]
+    return text.strip()
 
 
 class MlxLlmTranslation:
@@ -152,7 +174,7 @@ class MlxLlmTranslation:
                 break
         if eos:
             out = out.replace(eos, "")
-        return out.strip()
+        return _strip_hy_placeholder(out)
 
     # WLK 5-method contract (model-agnostic)
 
