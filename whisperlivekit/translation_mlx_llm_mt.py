@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
 from whisperlivekit.timed_objects import ASRToken, TimedText, Translation
@@ -34,7 +35,43 @@ from whisperlivekit.translation_profiles import (  # noqa: E402
 )
 
 
+_HY_PLACEHOLDER_TEXT = "<｜hy_place▁holder▁no▁2｜>"
 _HY_PLACEHOLDER_RE = re.compile(r"<[\|｜][^\|｜]*[\|｜]>")
+
+
+def _placeholder_stop_check(tokenizer):
+    """Build a per-call predicate that fires when the placeholder was just emitted.
+
+    Returns ``None`` when the placeholder can't be matched as a token sequence
+    (encode failed or fragmented into too many BPE pieces to window reliably);
+    the caller then relies on the post-hoc string strip alone.
+
+    Hy-MT2-1.8B encodes the placeholder as a single id — an exact, zero-cost
+    match. Hunyuan-MT-7B fragments it into ~13 byte-level BPE ids, so a rolling
+    id window is used instead: it fires only when the model emits the exact id
+    sequence consecutively, which is still far cheaper than decoding the
+    hallucinated tail and letting ``_strip_hy_placeholder`` cut it afterwards.
+    """
+    try:
+        try:
+            ids = tokenizer.encode(_HY_PLACEHOLDER_TEXT, add_special_tokens=False)
+        except TypeError:
+            ids = tokenizer.encode(_HY_PLACEHOLDER_TEXT)
+    except Exception:
+        return None
+    ids = tuple(ids)
+    if not ids or len(ids) > 16:
+        return None
+    if len(ids) == 1:
+        target = ids[0]
+        return lambda chunk: getattr(chunk, "token", None) == target
+    window: deque = deque(maxlen=len(ids))
+
+    def _check(chunk) -> bool:
+        window.append(getattr(chunk, "token", None))
+        return len(window) == len(ids) and tuple(window) == ids
+
+    return _check
 
 
 def _strip_hy_placeholder(text: str) -> str:
@@ -46,6 +83,11 @@ def _strip_hy_placeholder(text: str) -> str:
     Applied at source (in the translation engine) so every consumer — terminal,
     overlay, transcript file, simul commit policy — sees clean text; the display
     layers strip defensively as well.
+
+    The decode loop additionally stops in-loop at the placeholder when the
+    tokenizer encodes it to a short id sequence (see ``_placeholder_stop_check``),
+    so the hallucinated tail is never decoded at all. This strip stays as the
+    defensive fallback for tokenizers/pathologies the in-loop stop can't match.
     """
     if not text:
         return text
@@ -161,6 +203,9 @@ class MlxLlmTranslation:
             repetition_penalty=self._config.repetition_penalty
         )
         out = ""
+        # In-loop early stop: end decode the moment the placeholder is emitted
+        # instead of paying for the hallucinated tail and cutting it afterwards.
+        stop_at_placeholder = _placeholder_stop_check(tokenizer)
         for chunk in stream_generate(
             model,
             tokenizer,
@@ -171,6 +216,8 @@ class MlxLlmTranslation:
         ):
             out += chunk.text if hasattr(chunk, "text") else str(chunk)
             if eos and out.endswith(eos):
+                break
+            if stop_at_placeholder is not None and stop_at_placeholder(chunk):
                 break
         if eos:
             out = out.replace(eos, "")
