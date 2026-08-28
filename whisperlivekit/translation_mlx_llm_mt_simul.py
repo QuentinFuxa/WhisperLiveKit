@@ -33,7 +33,7 @@ from whisperlivekit.simul_mt_capture import (
     source_span,
 )
 from whisperlivekit.timed_objects import ASRToken, HypothesisTail, TimedText, Translation
-from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
+from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation, _strip_hy_placeholder
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +199,7 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
             self._capture, self._simul_top_head, len(tokens), src_start, src_end, cend
         )
         committed_tokens = tokens[:committed_len]
-        committed_text_out = tokenizer.decode(committed_tokens).strip()
+        committed_text_out = _strip_hy_placeholder(tokenizer.decode(committed_tokens))
         # Stash the draft for the release path (same source, bigger boundary).
         self._last_draft = {
             "tokens": tokens,
@@ -238,7 +238,7 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
             self._capture, self._simul_top_head, len(draft["tokens"]), src_start, src_end, cend
         )
         committed_tokens = draft["tokens"][:committed_len]
-        return tokenizer.decode(committed_tokens).strip()
+        return _strip_hy_placeholder(tokenizer.decode(committed_tokens))
 
     def _make_sampler(self):
         from mlx_lm.sample_utils import make_sampler
