@@ -11,6 +11,7 @@ validate:
 """
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from whisperlivekit.asr_commit import (
@@ -803,3 +804,185 @@ class TestFinalizeDedup:
 
         combined = " ".join(all_emitted).strip()
         assert combined == "short"
+
+
+# ---------------------------------------------------------------------------
+# two-session ASR isolation (Blocker 2 regression test)
+# ---------------------------------------------------------------------------
+
+class FakeAsrConfig:
+    """Minimal ASR config bundle for constructing MlxQwen3AsrOnlineProcessor."""
+
+    model_id = "Qwen/Qwen3-ASR-0.6B"
+    language = "en"
+    hotwords = ""
+    chunk_size_sec = 2.0
+    max_context_sec = 30.0
+    finalization_mode = "latest"
+    sep = ""
+
+
+class TestSessionIsolation:
+    """Two-session ASR isolation: prove MlxQwen3AsrOnlineProcessor instances
+    created from the same shared model do not share mutable per-session state.
+
+    The model is loaded once via _MODEL_CACHE and shared; per-instance state
+    (_state, _text, _stable_text, _emitted_stable, _utt_audio) must be
+    independent so two concurrent sessions don't cross-contaminate."""
+
+    def test_model_cache_is_shared(self, monkeypatch):
+        """Two processors receive the same model object from _MODEL_CACHE
+        (loaded once, not twice)."""
+        from whisperlivekit.asr_mlx_qwen3 import (
+            _MODEL_CACHE,
+            MlxQwen3AsrOnlineProcessor,
+        )
+
+        _MODEL_CACHE.clear()
+        shared_model = object()
+
+        def mock_ensure(model_id):
+            if model_id not in _MODEL_CACHE:
+                _MODEL_CACHE[model_id] = shared_model
+            return _MODEL_CACHE[model_id]
+
+        monkeypatch.setattr("whisperlivekit.asr_mlx_qwen3._ensure_model", mock_ensure)
+        monkeypatch.setattr(MlxQwen3AsrOnlineProcessor, "_warmup", lambda self: None)
+
+        proc1 = MlxQwen3AsrOnlineProcessor(FakeAsrConfig())
+        proc2 = MlxQwen3AsrOnlineProcessor(FakeAsrConfig())
+
+        assert proc1._model_obj is proc2._model_obj
+        assert proc1._model_obj is shared_model
+        assert len(_MODEL_CACHE) == 1
+
+    def test_per_instance_state_is_independent(self, monkeypatch):
+        """_state, _text, _stable_text, _emitted_stable, _utt_audio are
+        per-instance — mutating one processor's fields does not affect the other."""
+        from whisperlivekit.asr_mlx_qwen3 import MlxQwen3AsrOnlineProcessor
+
+        shared_model = object()
+        monkeypatch.setattr(
+            "whisperlivekit.asr_mlx_qwen3._ensure_model",
+            lambda mid: shared_model,
+        )
+        monkeypatch.setattr(MlxQwen3AsrOnlineProcessor, "_warmup", lambda self: None)
+
+        proc1 = MlxQwen3AsrOnlineProcessor(FakeAsrConfig())
+        proc2 = MlxQwen3AsrOnlineProcessor(FakeAsrConfig())
+
+        assert proc1._model_obj is proc2._model_obj
+
+        proc1._text = "alpha beta"
+        proc1._stable_text = "alpha"
+        proc1._emitted_stable = "alpha"
+        proc1._utt_audio = [np.zeros(10, dtype=np.float32)]
+        proc1._state = object()
+
+        assert proc2._text == ""
+        assert proc2._stable_text == ""
+        assert proc2._emitted_stable == ""
+        assert proc2._utt_audio == []
+        assert proc2._state is None
+
+    def test_feed_audio_does_not_leak_across_sessions(self, monkeypatch):
+        """insert_audio_chunk on one processor does not change the other's
+        state or text fields."""
+        from whisperlivekit.asr_mlx_qwen3 import MlxQwen3AsrOnlineProcessor
+
+        shared_model = object()
+        monkeypatch.setattr(
+            "whisperlivekit.asr_mlx_qwen3._ensure_model",
+            lambda mid: shared_model,
+        )
+        monkeypatch.setattr(MlxQwen3AsrOnlineProcessor, "_warmup", lambda self: None)
+        monkeypatch.setattr(
+            MlxQwen3AsrOnlineProcessor, "_new_state", lambda self: object()
+        )
+        monkeypatch.setattr(
+            MlxQwen3AsrOnlineProcessor,
+            "_feed",
+            lambda self, audio: setattr(self, "_text", "hello world") or setattr(self, "_stable_text", "hello"),
+        )
+
+        proc1 = MlxQwen3AsrOnlineProcessor(FakeAsrConfig())
+        proc2 = MlxQwen3AsrOnlineProcessor(FakeAsrConfig())
+
+        proc1.insert_audio_chunk(np.zeros(100, dtype=np.float32), 1.0)
+
+        assert proc1._state is not None
+        assert proc1._text == "hello world"
+        assert proc1._stable_text == "hello"
+
+        assert proc2._state is None
+        assert proc2._text == ""
+        assert proc2._stable_text == ""
+
+
+# ---------------------------------------------------------------------------
+# per-session language override (Blocker 3 regression test)
+# ---------------------------------------------------------------------------
+
+class TestSessionLanguageOverride:
+    """Per-session language override reaches MlxQwen3AsrOnlineProcessor
+    through SessionASRProxy. A session with language='ja' must resolve to
+    Japanese, not the server-wide default."""
+
+    def test_session_language_reaches_processor(self, monkeypatch):
+        """SessionASRProxy with language='ja' causes the processor to resolve
+        to Japanese, not the server-wide 'en' default."""
+        from whisperlivekit.asr_mlx_qwen3 import MlxQwen3AsrOnlineProcessor
+        from whisperlivekit.session_asr_proxy import SessionASRProxy
+
+        shared_model = object()
+        monkeypatch.setattr(
+            "whisperlivekit.asr_mlx_qwen3._ensure_model",
+            lambda mid: shared_model,
+        )
+        monkeypatch.setattr(MlxQwen3AsrOnlineProcessor, "_warmup", lambda self: None)
+
+        base_asr = FakeAsrConfig()
+        proxy = SessionASRProxy(base_asr, language="ja")
+
+        assert proxy._session_language == "ja"
+
+        processor = MlxQwen3AsrOnlineProcessor(proxy)
+        assert processor.language == "Japanese"
+
+    def test_no_override_uses_server_language(self, monkeypatch):
+        """Without a per-session override, the processor uses the server-wide
+        language from the ASR config bundle."""
+        from whisperlivekit.asr_mlx_qwen3 import MlxQwen3AsrOnlineProcessor
+
+        shared_model = object()
+        monkeypatch.setattr(
+            "whisperlivekit.asr_mlx_qwen3._ensure_model",
+            lambda mid: shared_model,
+        )
+        monkeypatch.setattr(MlxQwen3AsrOnlineProcessor, "_warmup", lambda self: None)
+
+        config = FakeAsrConfig()
+        config.language = "zh"
+        processor = MlxQwen3AsrOnlineProcessor(config)
+        assert processor.language == "Chinese"
+
+    def test_session_override_wins_over_server_default(self, monkeypatch):
+        """When both a server-wide default and a per-session override exist,
+        the per-session override wins (the processor reads _session_language
+        from the proxy, not the delegated server-wide attribute)."""
+        from whisperlivekit.asr_mlx_qwen3 import MlxQwen3AsrOnlineProcessor
+        from whisperlivekit.session_asr_proxy import SessionASRProxy
+
+        shared_model = object()
+        monkeypatch.setattr(
+            "whisperlivekit.asr_mlx_qwen3._ensure_model",
+            lambda mid: shared_model,
+        )
+        monkeypatch.setattr(MlxQwen3AsrOnlineProcessor, "_warmup", lambda self: None)
+
+        base_asr = FakeAsrConfig()  # server-wide language = "en"
+        proxy = SessionASRProxy(base_asr, language="zh")
+        processor = MlxQwen3AsrOnlineProcessor(proxy)
+
+        assert processor.language == "Chinese"
+        assert processor.language != "English"

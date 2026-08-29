@@ -483,6 +483,15 @@ conflicts = [[
 ], [
     { package = "whisperlivekit", extra = "mlx-llm-mt" },
     { package = "whisperlivekit", extra = "qwen3-vllm-metal" },
+], [
+    { package = "whisperlivekit", extra = "mlx-qwen3-asr" },
+    { package = "whisperlivekit", extra = "qwen3-streaming" },
+], [
+    { package = "whisperlivekit", extra = "mlx-qwen3-asr" },
+    { package = "whisperlivekit", extra = "qwen3-vllm" },
+], [
+    { package = "whisperlivekit", extra = "mlx-qwen3-asr" },
+    { package = "whisperlivekit", extra = "qwen3-vllm-metal" },
 ]]
 
 [options]

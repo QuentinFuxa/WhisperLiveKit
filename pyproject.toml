@@ -179,6 +179,18 @@ conflicts = [
         { extra = "mlx-llm-mt" },
         { extra = "qwen3-vllm-metal" },
     ],
+    [
+        { extra = "mlx-qwen3-asr" },
+        { extra = "qwen3-streaming" },
+    ],
+    [
+        { extra = "mlx-qwen3-asr" },
+        { extra = "qwen3-vllm" },
+    ],
+    [
+        { extra = "mlx-qwen3-asr" },
+        { extra = "qwen3-vllm-metal" },
+    ],
 ]
 
 [tool.uv.sources]
