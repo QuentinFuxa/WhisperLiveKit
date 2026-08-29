@@ -34,8 +34,8 @@ from whisperlivekit.simul_mt_capture import (
 )
 from whisperlivekit.timed_objects import ASRToken, HypothesisTail, TimedText, Translation
 from whisperlivekit.translation_mlx_llm_mt import (
-    MlxLlmTranslation,
     _HY_PLACEHOLDER_TEXT,
+    MlxLlmTranslation,
     _placeholder_stop_check,
     _strip_hy_placeholder,
 )

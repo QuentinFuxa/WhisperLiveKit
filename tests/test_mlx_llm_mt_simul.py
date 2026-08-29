@@ -730,7 +730,7 @@ def test_simul_release_held_from_clean_stash(monkeypatch):
 
     # Release with a larger committed boundary: same stashed tokens, no MT
     # call, no decode — and no placeholder in the released text.
-    released = b._release_held("你好世界")
+    b._release_held("你好世界")
 
     assert 120020 not in b._last_draft["tokens"]
     assert _HY_PLACEHOLDER not in (b._emitted_partial or "")
