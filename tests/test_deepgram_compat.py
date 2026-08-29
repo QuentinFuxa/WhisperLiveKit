@@ -119,6 +119,15 @@ def test_linear16_options_select_exact_pcm_contract():
     assert options.pcm_input is True
 
 
+def test_context_option_is_preserved_for_the_session_processor():
+    options = DeepgramOptions.from_query_params(
+        {"context": "WhisperLiveKit, Qwen3-ASR"},
+        vac_enabled=True,
+    )
+
+    assert options.context == "WhisperLiveKit, Qwen3-ASR"
+
+
 @pytest.mark.parametrize(
     ("params", "message"),
     [
@@ -1084,7 +1093,7 @@ async def test_close_stream_drains_results_before_summary_and_close(monkeypatch)
     DelayedFinalProcessor.instances = []
     monkeypatch.setattr(audio_processor_module, "AudioProcessor", DelayedFinalProcessor)
     websocket = RecordingWebSocket(
-        {"endpointing": "false"},
+        {"endpointing": "false", "context": "WhisperLiveKit, Qwen3-ASR"},
         [{"type": "websocket.receive", "text": '{"type":"CloseStream"}'}],
     )
 
@@ -1095,6 +1104,7 @@ async def test_close_stream_drains_results_before_summary_and_close(monkeypatch)
     )
 
     processor = DelayedFinalProcessor.instances[0]
+    assert processor.kwargs["context"] == "WhisperLiveKit, Qwen3-ASR"
     assert processor.create_tasks_calls == 1
     assert processor.processed == [b""]
     assert processor.cleanup_called

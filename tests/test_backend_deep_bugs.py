@@ -847,6 +847,129 @@ def _import_basic_server(monkeypatch):
     return importlib.import_module("whisperlivekit.basic_server")
 
 
+@pytest.mark.asyncio
+async def test_native_websocket_passes_context_and_advertises_capability(monkeypatch):
+    from fastapi import WebSocketDisconnect
+
+    basic_server = _import_basic_server(monkeypatch)
+    processor_kwargs = []
+
+    class RecordingSocket:
+        query_params = {
+            "language": "fr",
+            "context": "WhisperLiveKit, Qwen3-ASR",
+        }
+        headers = {}
+
+        def __init__(self):
+            self.sent = []
+            self.accepted = False
+
+        async def accept(self):
+            self.accepted = True
+
+        async def send_json(self, message):
+            self.sent.append(message)
+
+        async def receive_bytes(self):
+            raise WebSocketDisconnect()
+
+    class EmptyProcessor:
+        def __init__(self, **kwargs):
+            processor_kwargs.append(kwargs)
+
+        async def create_tasks(self):
+            async def results():
+                if False:
+                    yield None
+
+            return results()
+
+        async def cleanup(self):
+            pass
+
+    asr = SimpleNamespace(backend_choice="faster-whisper")
+    monkeypatch.setattr(
+        basic_server,
+        "transcription_engine",
+        SimpleNamespace(
+            args=SimpleNamespace(
+                backend="faster-whisper",
+                backend_policy="localagreement",
+            ),
+            asr=asr,
+        ),
+    )
+    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
+    monkeypatch.setattr(basic_server, "AudioProcessor", EmptyProcessor)
+    websocket = RecordingSocket()
+
+    await basic_server.websocket_endpoint(websocket)
+
+    assert websocket.accepted
+    assert processor_kwargs[0]["language"] == "fr"
+    assert processor_kwargs[0]["context"] == "WhisperLiveKit, Qwen3-ASR"
+    config_message = next(m for m in websocket.sent if m["type"] == "config")
+    assert config_message["context"] == {
+        "supported": True,
+        "maxCharacters": 1000,
+        "backend": "faster-whisper",
+    }
+
+
+@pytest.mark.asyncio
+async def test_openai_rest_rejects_unsupported_context_before_expensive_work(
+    monkeypatch,
+):
+    basic_server = _import_basic_server(monkeypatch)
+    expensive_calls = []
+
+    class UnreadUpload:
+        async def read(self):
+            expensive_calls.append("read")
+            return b"encoded audio"
+
+    async def forbidden_conversion(audio_bytes):
+        expensive_calls.append("convert")
+        return audio_bytes
+
+    class ForbiddenAudioProcessor:
+        def __init__(self, **kwargs):
+            expensive_calls.append("asr")
+
+    monkeypatch.setattr(
+        basic_server,
+        "transcription_engine",
+        SimpleNamespace(
+            args=SimpleNamespace(
+                backend="qwen3-streaming",
+                backend_policy="simulstreaming",
+            ),
+            asr=SimpleNamespace(),
+        ),
+    )
+    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
+    monkeypatch.setattr(basic_server, "_convert_to_pcm", forbidden_conversion)
+    monkeypatch.setattr(basic_server, "AudioProcessor", ForbiddenAudioProcessor)
+
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        await basic_server.create_transcription(
+            request=SimpleNamespace(headers={}),
+            file=UnreadUpload(),
+            model="ignored",
+            language="en",
+            prompt="must not be ignored",
+            response_format="json",
+            timestamp_granularities=None,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "not supported by backend 'qwen3-streaming'" in exc_info.value.detail
+    assert expensive_calls == []
+
+
 def test_openai_rest_diarized_json_preserves_speaker_labels(monkeypatch):
     basic_server = _import_basic_server(monkeypatch)
 
@@ -1109,6 +1232,7 @@ async def test_openai_rest_empty_result_uses_requested_formatter(
 
     basic_server = _import_basic_server(monkeypatch)
     formatted_inputs = []
+    processor_kwargs = []
     real_formatter = basic_server._format_openai_response
 
     class EncodedUpload:
@@ -1124,6 +1248,7 @@ async def test_openai_rest_empty_result_uses_requested_formatter(
 
     class EmptyAudioProcessor:
         def __init__(self, **kwargs):
+            processor_kwargs.append(kwargs)
             self.is_pcm_input = False
 
         async def create_tasks(self):
@@ -1154,12 +1279,13 @@ async def test_openai_rest_empty_result_uses_requested_formatter(
         file=EncodedUpload(),
         model="ignored",
         language="en",
-        prompt="",
+        prompt="WhisperLiveKit, Qwen3-ASR",
         response_format=response_format,
         timestamp_granularities=None,
     )
 
     assert len(formatted_inputs) == 1
+    assert processor_kwargs[0]["context"] == "WhisperLiveKit, Qwen3-ASR"
     assert isinstance(formatted_inputs[0], FrontData)
     assert formatted_inputs[0].lines == []
     if isinstance(expected_body, dict):

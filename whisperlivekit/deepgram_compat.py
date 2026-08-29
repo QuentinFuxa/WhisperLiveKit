@@ -87,6 +87,7 @@ class DeepgramOptions:
     endpointing_ms: Optional[int]
     utterance_end_ms: Optional[int]
     pcm_input: Optional[bool] = None
+    context: Optional[str] = None
 
     @classmethod
     def from_query_params(
@@ -157,6 +158,7 @@ class DeepgramOptions:
             endpointing_ms=endpointing_ms,
             utterance_end_ms=utterance_end_ms,
             pcm_input=True if encoding == "linear16" else None,
+            context=params.get("context"),
         )
 
 
@@ -940,6 +942,7 @@ async def handle_deepgram_websocket(
             mode="full",
             stream_event_queue=event_queue,
             pcm_input=options.pcm_input,
+            context=options.context,
         )
     except ValueError as exc:
         await _reject_connection(websocket, str(exc))
