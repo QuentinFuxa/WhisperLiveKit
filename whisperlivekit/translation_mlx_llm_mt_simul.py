@@ -131,6 +131,21 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
                 self._config.repo, source_language, target_language,
             )
 
+    def new_session(self, target_language: str = "") -> "MlxLlmTranslationSimul":
+        """Create a per-session simul client sharing the loaded model/cache
+        but with fresh simultaneous state (tail, committed tokens, draft).
+
+        Overrides the base ``new_session`` so the per-session client is a
+        ``MlxLlmTranslationSimul`` (not the base class), preserving the
+        simultaneous-MT behaviour across session boundaries.
+        """
+        return MlxLlmTranslationSimul(
+            model_id=self._model_id,
+            target_language=target_language or self._target_language,
+            source_language=self._source_language,
+            warmup=False,
+        )
+
     # ------------------------------------------------------------------
     # Model load + capture installation
     # ------------------------------------------------------------------
