@@ -818,6 +818,16 @@ def cmd_bench(args: list):
                         help="Export full report to JSON file")
     parser.add_argument("--transcriptions", action="store_true",
                         help="Show hypothesis vs reference for each sample")
+    parser.add_argument("--translation-backend", default=None, dest="translation_backend",
+                        help="Translation backend to exercise (e.g. mlx-llm-mt). "
+                             "When set, the benchmark runs the translation path and "
+                             "reports translation metrics.")
+    parser.add_argument("--target-language", default=None, dest="target_language",
+                        help="Target language for translation (e.g. en, it)")
+    parser.add_argument("--simultaneous", action="store_true", default=False,
+                        help="Use the simultaneous-MT variant of the translation backend")
+    parser.add_argument("--reference-translation", default=None, dest="reference_translation",
+                        help="Reference translation text for accuracy scoring (BLEU/chrF)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Show detailed logs")
 
@@ -871,6 +881,10 @@ async def _run_bench_new(parsed, languages, categories):
         languages=languages,
         categories=categories,
         quick=parsed.quick,
+        translation_backend=parsed.translation_backend,
+        target_language=parsed.target_language,
+        simultaneous=parsed.simultaneous,
+        reference_translation=parsed.reference_translation,
         on_progress=on_progress,
     )
 
