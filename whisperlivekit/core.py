@@ -516,10 +516,10 @@ def online_translation_factory(args, translation_model):
     from whisperlivekit.translation_alignatt import AlignAttRemoteEngine
     if isinstance(translation_model, AlignAttRemoteEngine):
         return translation_model.new_session(args.target_language)
-    # mlx-llm-mt is a per-session instance; return it directly.
+    # mlx-llm-mt: create a per-session client (fresh state) sharing the model cache.
     from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
     if isinstance(translation_model, MlxLlmTranslation):
-        return translation_model
+        return translation_model.new_session(args.target_language)
     #should be at speaker level in the future:
     #one shared nllb model for all speaker
     #one tokenizer per speaker/language

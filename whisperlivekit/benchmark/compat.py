@@ -15,9 +15,6 @@ BACKEND_LANGUAGES: Dict[str, Optional[Set[str]]] = {
     "voxtral-mlx": None,
     "voxtral": None,
     "qwen3-streaming": None,
-    # Pure-MLX Qwen3-ASR (mlx-qwen3-asr package): multilingual, same
-    # language coverage as the qwen3 ASR model family.
-    "mlx-qwen3-asr": None,
 }
 
 
@@ -65,12 +62,6 @@ def detect_available_backends() -> List[str]:
     except ImportError:
         pass
 
-    try:
-        import mlx_qwen3_asr  # noqa: F401
-        backends.append("mlx-qwen3-asr")
-    except ImportError:
-        pass
-
     return backends
 
 
@@ -89,7 +80,7 @@ def resolve_backend(backend: str) -> str:
     # Priority order
     priority = [
         "faster-whisper", "mlx-whisper", "voxtral-mlx", "voxtral",
-        "whisper", "mlx-qwen3-asr",
+        "whisper",
     ]
     for p in priority:
         if p in available:

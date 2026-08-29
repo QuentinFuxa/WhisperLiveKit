@@ -22,8 +22,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from whisperlivekit.timed_objects import ASRToken, TimedText, Translation
 
-logger = logging.getLogger(__name__)
-
 # The profile dataclass + registry live in the neutral ``translation_profiles"
 # module so a future peer backend (vLLM, etc.) can share them without importing
 # this mlx-specific module.
@@ -33,6 +31,8 @@ from whisperlivekit.translation_profiles import (  # noqa: E402
 from whisperlivekit.translation_profiles import (  # noqa: E402
     MtModelProfile as MlxLlmMtModelConfig,
 )
+
+logger = logging.getLogger(__name__)
 
 
 _HY_PLACEHOLDER_TEXT = "<｜hy_place▁holder▁no▁2｜>"
@@ -138,6 +138,22 @@ class MlxLlmTranslation:
         self._mt_call_count: int = 0
         if warmup:
             self._warmup()
+
+    def new_session(self, target_language: str = "") -> "MlxLlmTranslation":
+        """Create a per-session translation client sharing the loaded model/cache
+        but with fresh per-instance state (buffer, pending finals, metrics).
+
+        Mirrors AlignAtt's ``new_session`` contract: the server-wide
+        ``MlxLlmTranslation`` holds the expensive model; each session gets its
+        own ``new_session()`` client so ``_buffer_tokens``, ``_pending_finals``,
+        and ``_last_buffer`` don't cross session boundaries.
+        """
+        return MlxLlmTranslation(
+            model_id=self._model_id,
+            target_language=target_language or self._target_language,
+            source_language=self._source_language,
+            warmup=False,  # model already loaded in the cache
+        )
 
     # ------------------------------------------------------------------
     # Model load + decode (generic; config-driven)

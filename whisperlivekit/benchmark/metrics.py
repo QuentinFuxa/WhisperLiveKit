@@ -175,6 +175,7 @@ class BenchmarkReport:
             for r in self.results
         )
 
+    @property
     def has_wer(self) -> bool:
         return any(r.wer_applicable for r in self.results)
 

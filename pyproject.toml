@@ -57,8 +57,9 @@ voxtral-mlx = [
     "mistral-common[audio]",
 ]
 # In-process MLX translation backend via mlx-lm (Hunyuan-MT as first config;
-# TranslateGemma etc. via the config registry). Install with --no-deps to
-# coexist with transformers 5.11.0.
+# TranslateGemma etc. via the config registry). Requires mlx-lm>=0.31.1 which
+# pulls transformers>=5; conflicts with qwen3-asr-causal[streaming] which pins
+# transformers==4.57.6. Declare the conflict below; install only one.
 mlx-llm-mt = [
     'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
     'mlx-lm>=0.31.1; sys_platform == "darwin" and platform_machine == "arm64"',
@@ -160,6 +161,18 @@ conflicts = [
     ],
     [
         { extra = "canary" },
+        { extra = "qwen3-vllm-metal" },
+    ],
+    [
+        { extra = "mlx-llm-mt" },
+        { extra = "qwen3-streaming" },
+    ],
+    [
+        { extra = "mlx-llm-mt" },
+        { extra = "qwen3-vllm" },
+    ],
+    [
+        { extra = "mlx-llm-mt" },
         { extra = "qwen3-vllm-metal" },
     ],
 ]

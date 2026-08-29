@@ -200,7 +200,6 @@ def _install_fake_mlx_lm(monkeypatch, chunks, consumed):
     yields ``chunks`` and appends each yielded chunk to ``consumed`` (mutable),
     so the test can assert how much of the stream the decode loop consumed
     before breaking out."""
-    import sys
     import types
 
     def fake_stream_generate(model, tokenizer, prompt=None, max_tokens=None, **kw):
@@ -324,3 +323,146 @@ def test_early_stop_does_not_affect_clean_output(monkeypatch):
 
     assert out == "Hello world"
     assert len(consumed) == 2
+
+
+# ---------------------------------------------------------------------------
+# Per-session state isolation: new_session shares the model cache but not
+# mutable translation state (buffer, pending finals, metrics).
+# ---------------------------------------------------------------------------
+
+def test_new_session_shares_model_cache_not_state(monkeypatch):
+    """Two sessions created via new_session must not share per-instance state
+    (_buffer_tokens, _pending_finals, _last_buffer, metrics)."""
+    # Stub the model load so we don't need real MLX.
+    monkeypatch.setattr(MlxLlmTranslation, "_warmup", lambda self: None)
+    monkeypatch.setattr(MlxLlmTranslation, "_ensure_model", lambda cls, config: ("model", "tokenizer"))
+
+    server = MlxLlmTranslation(model_id="hy-mt2-1.8b-8bit", warmup=False)
+    session_a = server.new_session("en")
+    session_b = server.new_session("ja")
+
+    # Different target languages
+    assert session_a._target_language == "en"
+    assert session_b._target_language == "ja"
+
+    # Different per-instance state objects
+    assert session_a._buffer_tokens is not session_b._buffer_tokens
+    assert session_a._pending_finals is not session_b._pending_finals
+    assert session_a._last_buffer is not session_b._last_buffer
+
+    # Mutating session A's state must not affect session B
+    session_a._buffer_tokens.append("token_a")
+    session_a._pending_finals.append(("text_a", 0.0, 1.0))
+    assert len(session_b._buffer_tokens) == 0
+    assert len(session_b._pending_finals) == 0
+
+
+def test_new_session_shares_model_cache(monkeypatch):
+    """new_session must share the model cache (_MODEL_CACHE), not reload."""
+    cache = {}
+    monkeypatch.setattr(MlxLlmTranslation, "_warmup", lambda self: None)
+
+    MlxLlmTranslation(model_id="hy-mt2-1.8b-8bit", warmup=False)._config
+    def fake_ensure(cls, config):
+        key = config.repo
+        if key not in cache:
+            cache[key] = ("model", "tokenizer")
+        return cache[key]
+    monkeypatch.setattr(MlxLlmTranslation, "_MODEL_CACHE", cache)
+    monkeypatch.setattr(MlxLlmTranslation, "_ensure_model", classmethod(fake_ensure))
+
+    server = MlxLlmTranslation(model_id="hy-mt2-1.8b-8bit", warmup=False)
+    # Populate the cache via _ensure_model
+    MlxLlmTranslation._ensure_model(server._config)
+
+    session = server.new_session("en")
+    assert session._model_id == server._model_id
+    # The cache is shared — new_session didn't reload
+    assert len(cache) == 1
+
+
+# ---------------------------------------------------------------------------
+# Session translation factory: the MLX backend routes through new_session,
+# not the nllw fallback.
+# ---------------------------------------------------------------------------
+
+def test_session_translation_factory_mlx(monkeypatch):
+    """session_translation_factory must route MlxLlmTranslation through
+    new_session (not fall through to nllw)."""
+    import types
+
+    from whisperlivekit.translation import session_translation_factory
+
+    monkeypatch.setattr(MlxLlmTranslation, "_warmup", lambda self: None)
+    monkeypatch.setattr(MlxLlmTranslation, "_ensure_model",
+                        classmethod(lambda cls, config: ("model", "tokenizer")))
+
+    server_model = MlxLlmTranslation(model_id="hy-mt2-1.8b-8bit", warmup=False)
+    args = types.SimpleNamespace(lan="zh", target_language="en")
+
+    session = session_translation_factory(args, server_model, "ja")
+
+    assert isinstance(session, MlxLlmTranslation)
+    assert session._target_language == "ja"
+    assert session is not server_model  # per-session, not shared
+    assert session._buffer_tokens is not server_model._buffer_tokens
+
+
+def test_session_translation_factory_mlx_default_target(monkeypatch):
+    """Default target (empty string) falls back to the server-wide target."""
+    import types
+
+    from whisperlivekit.translation import session_translation_factory
+
+    monkeypatch.setattr(MlxLlmTranslation, "_warmup", lambda self: None)
+    monkeypatch.setattr(MlxLlmTranslation, "_ensure_model",
+                        classmethod(lambda cls, config: ("model", "tokenizer")))
+
+    server_model = MlxLlmTranslation(
+        model_id="hy-mt2-1.8b-8bit", target_language="en", warmup=False)
+    args = types.SimpleNamespace(lan="zh", target_language="en")
+
+    session = session_translation_factory(args, server_model, "")
+    assert session._target_language == "en"
+
+
+# ---------------------------------------------------------------------------
+# has_wer is a property, not a method — 'if report.has_wer' must evaluate to
+# bool, not a truthy method object.
+# ---------------------------------------------------------------------------
+
+def test_has_wer_is_property():
+    """has_wer must be a property (not a method) so `if report.has_wer` tests
+    the bool, not the method object (which is always truthy)."""
+    from whisperlivekit.benchmark.metrics import BenchmarkReport, SampleResult
+
+    # All-N/A: no applicable WER
+    results_na = [SampleResult(sample_name="s1", language="en", category="test",
+                            duration_s=1.0, wer=0.0, wer_details={},
+                            processing_time_s=0.1, rtf=0.5, wer_applicable=False)]
+    report_na = BenchmarkReport(backend="test", model_size="0", results=results_na)
+    assert not report_na.has_wer  # property → bool, not method
+
+    # Mixed: some applicable, some not
+    results_mixed = [
+        SampleResult(sample_name="s1", language="en", category="test",
+                     duration_s=1.0, wer=0.15, wer_details={},
+                     processing_time_s=0.1, rtf=0.5, wer_applicable=True),
+        SampleResult(sample_name="s2", language="en", category="test",
+                     duration_s=1.0, wer=0.0, wer_details={},
+                     processing_time_s=0.1, rtf=0.5, wer_applicable=False),
+    ]
+    report_mixed = BenchmarkReport(backend="test", model_size="0", results=results_mixed)
+    assert report_mixed.has_wer  # at least one applicable
+
+    # All applicable
+    results_all = [
+        SampleResult(sample_name="s1", language="en", category="test",
+                     duration_s=1.0, wer=0.10, wer_details={},
+                     processing_time_s=0.1, rtf=0.5, wer_applicable=True),
+        SampleResult(sample_name="s2", language="en", category="test",
+                     duration_s=1.0, wer=0.20, wer_details={},
+                     processing_time_s=0.1, rtf=0.5, wer_applicable=True),
+    ]
+    report_all = BenchmarkReport(backend="test", model_size="0", results=results_all)
+    assert report_all.has_wer
