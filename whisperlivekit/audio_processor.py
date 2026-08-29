@@ -101,6 +101,7 @@ class AudioProcessor:
         """Initialize the audio processor with configuration, models, and state."""
         # Extract per-session options before passing to TranscriptionEngine
         session_language = kwargs.pop('language', None)
+        session_context = kwargs.pop('context', None)
         self.stream_event_queue = kwargs.pop('stream_event_queue', None)
         self._stream_events_after_snapshot = (
             asyncio.Queue() if self.stream_event_queue is not None else None
@@ -199,7 +200,12 @@ class AudioProcessor:
         self.diarization: Optional[Any] = None
 
         if self.args.transcription:
-            self.transcription = online_factory(self.args, models.asr, language=session_language)
+            self.transcription = online_factory(
+                self.args,
+                models.asr,
+                language=session_language,
+                context=session_context,
+            )
             self.sep = self.transcription.asr.sep
         if self.args.diarization:
             self.diarization = online_diarization_factory(self.args, models.diarization_model)

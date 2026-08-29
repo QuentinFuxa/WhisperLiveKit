@@ -24,7 +24,7 @@ curl http://localhost:8000/v1/audio/transcriptions \
 | `file`                   | file     | required | Audio file (any format ffmpeg can decode) |
 | `model`                  | string   | `""`     | Accepted but ignored (uses server's backend) |
 | `language`               | string   | `null`   | ISO 639-1 language code or null for auto-detection |
-| `prompt`                 | string   | `""`     | Accepted for compatibility, not yet used |
+| `prompt`                 | string   | `""`     | Per-request terminology or names used as decoder context (Whisper-family and SimulStreaming backends) |
 | `response_format`        | string   | `"json"` | `json`, `verbose_json`, `diarized_json`, `text`, `srt`, `vtt` |
 | `timestamp_granularities`| array    | `null`   | Accepted for compatibility |
 
@@ -159,6 +159,8 @@ async with deepgram.listen.v1.connect(
 **Supported Query Parameters:**
 
 - `language`: per-session source language
+- `context`: WLK extension for per-session terminology, names, or phrase-list
+  text used as decoder context
 - `model`: accepted for SDK compatibility; the server's configured WLK backend
   remains authoritative
 - `encoding=linear16`: select raw signed 16-bit PCM input; requires
@@ -389,11 +391,12 @@ ws://<host>:<port>/asr
 | Parameter  | Type   | Default  | Description |
 |------------|--------|----------|-------------|
 | `language` | string | _(none)_ | Per-session language override. ISO 639-1 code (e.g. `fr`, `en`) or `"auto"` for automatic detection. When omitted, uses the server-wide language setting. Multiple sessions with different languages work concurrently. |
+| `context` | string | _(none)_ | Terminology, names, or phrase-list text used as decoder context for this session. Maximum 1000 characters. |
 | `mode`     | string | `"full"` | Output mode. `"full"` sends complete state on every update. `"diff"` sends incremental diffs after an initial snapshot. |
 
 Example:
 ```
-ws://localhost:8000/asr?language=fr&mode=diff
+ws://localhost:8000/asr?language=fr&context=WhisperLiveKit%2C+Qwen3-ASR&mode=diff
 ```
 
 ### Connection Flow
@@ -417,7 +420,12 @@ Sent once, immediately after the connection is accepted.
 {
   "type": "config",
   "useAudioWorklet": true,
-  "mode": "full"
+  "mode": "full",
+  "context": {
+    "supported": true,
+    "maxCharacters": 1000,
+    "backend": "faster-whisper"
+  }
 }
 ```
 
@@ -426,6 +434,7 @@ Sent once, immediately after the connection is accepted.
 | `type`            | string | Always `"config"`. |
 | `useAudioWorklet` | bool   | `true` when the server expects PCM s16le 16kHz mono input (started with `--pcm-input`). `false` when the server expects encoded audio (decoded server-side via FFmpeg). |
 | `mode`            | string | `"full"` or `"diff"`, echoing the requested mode. |
+| `context`         | object | Decoder-context capability for the configured backend. |
 
 ### Transcription Update (full mode)
 
@@ -662,3 +671,22 @@ The `language` query parameter creates an isolated language context for the sess
 - Each WebSocket session can transcribe in a different language.
 - Sessions are thread-safe and do not interfere with each other.
 - Pass `"auto"` to use automatic language detection for the session regardless of the server-wide setting.
+
+## Per-Session Decoder Context
+
+The native and Deepgram-compatible WebSockets accept `context`; the
+OpenAI-compatible REST endpoint uses its standard `prompt` form field. The value
+is isolated per session and limited to 1000 characters.
+
+- LocalAgreement prepends the context to its rolling committed-transcript prompt
+  on every inference.
+- SimulStreaming adds it to a per-session copy of the static prompt, so it does
+  not scroll out as audio advances.
+- Whisper, Faster-Whisper, MLX Whisper, OpenAI API, and SimulStreaming support
+  this conditioning. FunASR, Canary, Qwen3, and Voxtral currently do not expose
+  a compatible prompt slot; requesting context with them returns HTTP 400 or a
+  WebSocket error with close code 4400 before audio processing starts.
+
+Context influences decoding but does not guarantee that a phrase will appear.
+N-best hypotheses, external scorer hooks, and public confidence streams remain
+separate capabilities and are not introduced by this option.

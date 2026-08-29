@@ -28,6 +28,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
@@ -330,6 +331,10 @@ def main():
         "--language", "-l", default=None,
         help="Override transcription language for this session (e.g. en, fr, auto)",
     )
+    parser.add_argument(
+        "--context", default=None,
+        help="Terminology or names used as decoder context for this session",
+    )
     parser.add_argument("--json", action="store_true", help="Output raw JSON responses")
     parser.add_argument(
         "--diff", action="store_true",
@@ -368,12 +373,14 @@ def main():
     url = args.url
     params = []
     if args.language:
-        params.append(f"language={args.language}")
+        params.append(("language", args.language))
+    if args.context:
+        params.append(("context", args.context))
     if args.diff:
-        params.append("mode=diff")
+        params.append(("mode", "diff"))
     if params:
         sep = "&" if "?" in url else "?"
-        url = f"{url}{sep}{'&'.join(params)}"
+        url = f"{url}{sep}{urlencode(params)}"
 
     result = asyncio.run(transcribe_audio(
         audio_path=str(audio_path),

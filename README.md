@@ -95,6 +95,7 @@ Per-session WebSocket query parameters:
 |---|---|---|
 | `language` | `?language=fr` | transcription language for this session (one shared engine serves mixed-language sessions) |
 | `target_language` | `?target_language=de` | translation target for this session (server must run with `--target-language`) |
+| `context` | `?context=WhisperLiveKit%2C+Qwen3-ASR` | terminology, names, or phrase-list text used to condition this session; supported by Whisper-family and SimulStreaming backends |
 | `mode` | `?mode=diff` | incremental snapshot/diff protocol instead of resending the full state (experimental, for integrators building their own client, see `diff_protocol.py`); the bundled web UI uses `full` |
 | `token` | `?token=...` | API token when the server runs with `--api-token` (also accepted as an `Authorization: Bearer` header) |
 

@@ -104,6 +104,7 @@ async def websocket_endpoint(websocket: WebSocket):
     session_language = websocket.query_params.get("language", None)
     mode = websocket.query_params.get("mode", "full")
     session_target_language = websocket.query_params.get("target_language", None)
+    session_context = websocket.query_params.get("context", None)
 
     try:
         audio_processor = AudioProcessor(
@@ -111,6 +112,7 @@ async def websocket_endpoint(websocket: WebSocket):
             language=session_language,
             mode=mode,
             target_language=session_target_language,
+            context=session_context,
         )
     except ValueError as e:
         # Bad per-session parameters (e.g. a language the backend does not
@@ -124,9 +126,10 @@ async def websocket_endpoint(websocket: WebSocket):
         return
     await websocket.accept()
     logger.info(
-        "WebSocket connection opened.%s%s",
+        "WebSocket connection opened.%s%s%s",
         f" language={session_language}" if session_language else "",
         f" target_language={session_target_language}" if session_target_language else "",
+        f" context_chars={len(session_context)}" if session_context else "",
     )
     diff_tracker = None
     if mode == "diff":
@@ -135,7 +138,17 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("Client requested diff mode")
 
     try:
-        await websocket.send_json({"type": "config", "useAudioWorklet": bool(config.pcm_input), "mode": mode})
+        from whisperlivekit.session_asr_proxy import session_context_capability
+
+        await websocket.send_json({
+            "type": "config",
+            "useAudioWorklet": bool(config.pcm_input),
+            "mode": mode,
+            "context": session_context_capability(
+                transcription_engine.args,
+                transcription_engine.asr,
+            ),
+        })
     except Exception as e:
         logger.warning(f"Failed to send config to client: {e}")
 
@@ -422,7 +435,8 @@ async def create_transcription(
 
     Implements the compatibility-oriented subset documented in docs/API.md.
     The `model` parameter is accepted but ignored (uses the server's configured
-    backend); `prompt` is likewise accepted but has no effect.
+    backend). `prompt` supplies decoder context for backends that expose text
+    conditioning and returns HTTP 400 for backends that do not.
     """
     global transcription_engine
     from fastapi import HTTPException
@@ -444,6 +458,19 @@ async def create_transcription(
             detail=_DIARIZED_JSON_REQUIRES_DIARIZATION,
         )
 
+    # Validate decoder context before reading or converting a potentially large
+    # upload. AudioProcessor validates again at the session factory boundary.
+    from whisperlivekit.session_asr_proxy import validate_session_context
+
+    try:
+        prompt = validate_session_context(
+            getattr(transcription_engine, "args", config),
+            getattr(transcription_engine, "asr", None),
+            prompt,
+        ) or ""
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     audio_bytes = await file.read()
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
@@ -463,6 +490,7 @@ async def create_transcription(
         processor = AudioProcessor(
             transcription_engine=transcription_engine,
             language=language,
+            context=prompt,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
