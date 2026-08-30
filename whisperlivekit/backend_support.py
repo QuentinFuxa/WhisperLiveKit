@@ -52,6 +52,18 @@ def mlx_qwen3_asr_backend_available():
     qwen3-streaming backend, which pins transformers==4.57.6).
     """
     return module_available("mlx_qwen3_asr")
+def nemotron_mlx_asr_backend_available():
+    """Return True if the Nemotron MLX ASR transducer backend is available.
+
+    Requires Apple Silicon (Darwin/arm64) with mlx and mlx_audio installed.
+    Pure-MLX: no torch, transformers, or nemo_toolkit.
+    """
+    return (
+        platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+        and module_available("mlx")
+        and module_available("mlx_audio")
+    )
 
 
 

@@ -102,6 +102,16 @@ BACKENDS = [
         "devices": ["mlx"],
     },
     {
+        "id": "nemotron-mlx-asr",
+        "name": "Nemotron MLX ASR",
+        "module": "mlx_audio",
+        "install": "pip install whisperlivekit[nemotron-mlx-asr]",
+        "description": "NVIDIA Nemotron-3.5 streaming transducer on Apple Silicon (MLX, native timestamps)",
+        "platform": "darwin-arm64",
+        "streaming": "native",
+        "devices": ["mlx"],
+    },
+    {
         "id": "voxtral",
         "name": "Voxtral HF",
         "module": "transformers",

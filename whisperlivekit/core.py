@@ -213,6 +213,17 @@ class TranscriptionEngine:
                 self.tokenizer = None
                 self.asr = VoxtralMLXASR(**transcription_common_params)
                 logger.info("Using Voxtral MLX native backend")
+            elif config.backend == "nemotron-mlx-asr":
+                from whisperlivekit.asr_nemotron_mlx import NemotronMLXASR
+                self.tokenizer = None
+                nemotron_mlx_params = {
+                    "nemotron_mlx_asr_model": config.nemotron_mlx_asr_model,
+                    "nemotron_mlx_asr_att_context": config.nemotron_mlx_asr_att_context,
+                    "nemotron_mlx_asr_two_pass": config.nemotron_mlx_asr_two_pass,
+                    "lan": config.lan,
+                }
+                self.asr = NemotronMLXASR(**nemotron_mlx_params)
+                logger.info("Using Nemotron MLX ASR transducer backend")
             elif config.backend == "voxtral":
                 from whisperlivekit.voxtral_hf_streaming import VoxtralHFStreamingASR
                 self.tokenizer = None
@@ -463,6 +474,9 @@ def online_factory(args, asr, language=None, context=None):
         if getattr(asr, "audio_backend", "standard") == "causal":
             return _ASRTokenNormalizer(Qwen3VLLMMetalCausalOnlineProcessor(asr))
         return _ASRTokenNormalizer(Qwen3VLLMMetalOnlineProcessor(asr))
+    if backend == "nemotron-mlx-asr":
+        from whisperlivekit.asr_nemotron_mlx import NemotronMLXOnlineProcessor
+        return NemotronMLXOnlineProcessor(asr)
     if backend == "voxtral-mlx":
         from whisperlivekit.voxtral_mlx_asr import VoxtralMLXOnlineProcessor
         return VoxtralMLXOnlineProcessor(asr)

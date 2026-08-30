@@ -243,7 +243,7 @@ def parse_args():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "funasr", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming", "mlx-qwen3-asr", "canary"],
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "funasr", "voxtral", "voxtral-mlx", "mlx-qwen3-asr", "nemotron-mlx-asr", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming", "canary"],
         help="Select the ASR backend implementation. Use 'funasr' for SenseVoiceSmall through LocalAgreement (zh/yue/en/ja/ko or auto). Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-streaming' for Qwen3-ASR through plain HF Transformers with a bounded-recompute audio cache (CUDA/MPS/CPU, no vLLM; requires an explicit --language). Use 'canary' for NVIDIA Canary through NeMo on CUDA or CPU with LocalAgreement.",
     )
     parser.add_argument(
@@ -916,6 +916,36 @@ def parse_args():
         default=0.5,
         dest="canary_lid_min_conf",
         help="Minimum LID confidence (0-1) required to lock the detected language.",
+    )
+
+    # Nemotron MLX ASR backend arguments
+    nemotron_group = parser.add_argument_group(
+        "Nemotron MLX ASR arguments (only used with --backend nemotron-mlx-asr)"
+    )
+    nemotron_group.add_argument(
+        "--nemotron-mlx-asr-model",
+        type=str,
+        default="nvidia/nemotron-3.5-asr-streaming-0.6b",
+        dest="nemotron_mlx_asr_model",
+        help="Nemotron ASR model id (HuggingFace or local path). "
+             "Default nvidia/nemotron-3.5-asr-streaming-0.6b.",
+    )
+    nemotron_group.add_argument(
+        "--nemotron-mlx-asr-att-context",
+        type=int,
+        nargs=2,
+        default=[56, 6],
+        dest="nemotron_mlx_asr_att_context",
+        help="Encoder attention context [left, right] in subsampled frames. "
+             "Default 56 6 (left cache, right+1 feed chunk).",
+    )
+    nemotron_group.add_argument(
+        "--nemotron-mlx-asr-two-pass",
+        action="store_true",
+        default=False,
+        dest="nemotron_mlx_asr_two_pass",
+        help="Re-decode the full utterance at finalization for accuracy "
+             '(uses the model\'s max look-ahead; default off for latency).',
     )
 
     translation_group = parser.add_argument_group("Translation backend")
