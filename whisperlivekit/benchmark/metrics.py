@@ -1,205 +1,122 @@
-"""Benchmark result data structures and aggregation."""
+"""Benchmark records. Failed and skipped samples remain in the report."""
 
 import platform
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class SampleResult:
-    """Result from benchmarking one audio sample."""
-
     sample_name: str
     language: str
     category: str
     duration_s: float
-
-    # Quality
-    wer: float
-    wer_details: Dict[str, int]
-
-    # Speed
-    processing_time_s: float
-    rtf: float
-
-    # Latency (from SessionMetrics)
-    avg_latency_ms: float = 0.0
-    p95_latency_ms: float = 0.0
+    status: str = "ok"
+    error: str = ""
+    wer: Optional[float] = None
+    wer_details: Dict[str, int] = field(default_factory=dict)
+    # Successful ASR calls only; excludes model loading and audio pacing.
+    processing_time_s: Optional[float] = None
+    rtf: Optional[float] = None
+    wall_time_s: Optional[float] = None
+    startup_time_s: Optional[float] = None
+    first_text_time_s: Optional[float] = None
+    # These are inference-call durations, not audio-to-text latencies.
+    avg_latency_ms: Optional[float] = None
+    p95_latency_ms: Optional[float] = None
     n_transcription_calls: int = 0
-
-    # Pipeline stats
     n_lines: int = 0
     n_tokens: int = 0
-
-    # Timing quality
     timing_valid: bool = True
     timing_monotonic: bool = True
-
-    # Memory
-    peak_memory_mb: Optional[float] = None
-
-    # Texts
     hypothesis: str = ""
     reference: str = ""
-
-    # Source
     source: str = ""
     tags: List[str] = field(default_factory=list)
+    audio_sha256: str = ""
+    effective_config: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "sample": self.sample_name,
-            "language": self.language,
-            "category": self.category,
-            "duration_s": round(self.duration_s, 2),
-            "wer": round(self.wer, 4),
-            "wer_details": self.wer_details,
-            "processing_time_s": round(self.processing_time_s, 2),
-            "rtf": round(self.rtf, 3),
-            "avg_latency_ms": round(self.avg_latency_ms, 1),
-            "p95_latency_ms": round(self.p95_latency_ms, 1),
-            "n_transcription_calls": self.n_transcription_calls,
-            "n_lines": self.n_lines,
-            "n_tokens": self.n_tokens,
-            "timing_valid": self.timing_valid,
-            "timing_monotonic": self.timing_monotonic,
-            "peak_memory_mb": round(self.peak_memory_mb, 1) if self.peak_memory_mb else None,
-            "hypothesis": self.hypothesis,
-            "reference": self.reference,
-            "source": self.source,
-            "tags": self.tags,
-        }
+        result = asdict(self)
+        result["sample"] = result.pop("sample_name")
+        result["asr_call_mean_ms"] = result.pop("avg_latency_ms")
+        result["asr_call_p95_ms"] = result.pop("p95_latency_ms")
+        return result
 
 
 @dataclass
 class BenchmarkReport:
-    """Aggregated benchmark report with system info and per-sample results."""
-
     backend: str
     model_size: str
-    timestamp: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"))
+    timestamp: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S%z"))
     system_info: Dict[str, Any] = field(default_factory=dict)
     results: List[SampleResult] = field(default_factory=list)
+    feed_speed: float = 0
 
-    # --- Aggregate properties ---
+    @property
+    def successful_results(self) -> List[SampleResult]:
+        return [r for r in self.results if r.status == "ok"]
 
     @property
     def n_samples(self) -> int:
         return len(self.results)
 
     @property
+    def n_failed(self) -> int:
+        return sum(r.status in ("error", "timeout") for r in self.results)
+
+    @property
     def total_audio_s(self) -> float:
-        return sum(r.duration_s for r in self.results)
+        return sum(r.duration_s for r in self.successful_results)
 
     @property
     def total_processing_s(self) -> float:
-        return sum(r.processing_time_s for r in self.results)
+        return sum(r.processing_time_s or 0 for r in self.successful_results)
 
     @property
-    def avg_wer(self) -> float:
-        if not self.results:
-            return 0.0
-        return sum(r.wer for r in self.results) / len(self.results)
+    def avg_wer(self) -> Optional[float]:
+        values = [r.wer for r in self.successful_results if r.wer is not None]
+        return sum(values) / len(values) if values else None
 
     @property
-    def weighted_wer(self) -> float:
-        """Micro-averaged WER: total errors / total reference words."""
-        total_errors = sum(
-            r.wer_details.get("substitutions", 0) +
-            r.wer_details.get("insertions", 0) +
-            r.wer_details.get("deletions", 0)
-            for r in self.results
-        )
-        total_ref = sum(r.wer_details.get("ref_words", 0) for r in self.results)
-        return total_errors / max(total_ref, 1)
+    def weighted_wer(self) -> Optional[float]:
+        scored = [r for r in self.successful_results if r.wer is not None]
+        errors = sum(sum(r.wer_details.get(k, 0) for k in
+                         ("substitutions", "insertions", "deletions")) for r in scored)
+        words = sum(r.wer_details.get("ref_words", 0) for r in scored)
+        return errors / words if words else None
 
     @property
-    def avg_rtf(self) -> float:
-        if not self.results:
-            return 0.0
-        return sum(r.rtf for r in self.results) / len(self.results)
-
-    @property
-    def overall_rtf(self) -> float:
-        if self.total_audio_s <= 0:
-            return 0.0
-        return self.total_processing_s / self.total_audio_s
-
-    @property
-    def avg_latency_ms(self) -> float:
-        vals = [r.avg_latency_ms for r in self.results if r.avg_latency_ms > 0]
-        return sum(vals) / len(vals) if vals else 0.0
-
-    @property
-    def p95_latency_ms(self) -> float:
-        vals = [r.p95_latency_ms for r in self.results if r.p95_latency_ms > 0]
-        return sum(vals) / len(vals) if vals else 0.0
-
-    # --- Per-dimension breakdowns ---
-
-    def _group_by(self, key: str) -> Dict[str, List[SampleResult]]:
-        groups: Dict[str, List[SampleResult]] = {}
-        for r in self.results:
-            k = getattr(r, key, "unknown")
-            groups.setdefault(k, []).append(r)
-        return groups
-
-    def wer_by_language(self) -> Dict[str, float]:
-        return {
-            lang: sum(r.wer for r in group) / len(group)
-            for lang, group in sorted(self._group_by("language").items())
-        }
-
-    def rtf_by_language(self) -> Dict[str, float]:
-        return {
-            lang: sum(r.rtf for r in group) / len(group)
-            for lang, group in sorted(self._group_by("language").items())
-        }
-
-    def wer_by_category(self) -> Dict[str, float]:
-        return {
-            cat: sum(r.wer for r in group) / len(group)
-            for cat, group in sorted(self._group_by("category").items())
-        }
-
-    @property
-    def languages(self) -> List[str]:
-        return sorted(set(r.language for r in self.results))
-
-    @property
-    def categories(self) -> List[str]:
-        return sorted(set(r.category for r in self.results))
+    def overall_rtf(self) -> Optional[float]:
+        return self.total_processing_s / self.total_audio_s if self.total_audio_s else None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "benchmark_version": "1.0",
+            "benchmark_version": "2.0",
             "timestamp": self.timestamp,
             "system_info": self.system_info,
-            "config": {
-                "backend": self.backend,
-                "model_size": self.model_size,
+            "config": {"backend": self.backend, "model_size": self.model_size,
+                       "feed_speed": self.feed_speed},
+            "measurement": {
+                "rtf": "successful ASR call time / audio duration",
+                "wall_time_s": "audio feed and EOF drain, excluding startup and cleanup",
+                "first_text_time_s": "first committed text since feed start; paced runs only",
+                "asr_call_p95_ms": "last 4096 inference calls per sample, not word latency",
+                "memory": "not measured",
+                "model_revisions": "not resolved; pin model artifacts for published comparisons",
             },
             "summary": {
                 "n_samples": self.n_samples,
-                "total_audio_s": round(self.total_audio_s, 1),
-                "total_processing_s": round(self.total_processing_s, 1),
-                "avg_wer": round(self.avg_wer, 4),
-                "weighted_wer": round(self.weighted_wer, 4),
-                "avg_rtf": round(self.avg_rtf, 3),
-                "overall_rtf": round(self.overall_rtf, 3),
-                "avg_latency_ms": round(self.avg_latency_ms, 1),
-                "p95_latency_ms": round(self.p95_latency_ms, 1),
-                "wer_by_language": {
-                    k: round(v, 4) for k, v in self.wer_by_language().items()
-                },
-                "rtf_by_language": {
-                    k: round(v, 3) for k, v in self.rtf_by_language().items()
-                },
-                "wer_by_category": {
-                    k: round(v, 4) for k, v in self.wer_by_category().items()
-                },
+                "n_successful": len(self.successful_results),
+                "n_failed": self.n_failed,
+                "n_skipped": sum(r.status == "skipped" for r in self.results),
+                "total_audio_s": self.total_audio_s,
+                "total_processing_s": self.total_processing_s,
+                "avg_wer": self.avg_wer,
+                "weighted_wer": self.weighted_wer,
+                "overall_rtf": self.overall_rtf,
             },
             "results": [r.to_dict() for r in self.results],
         }
@@ -212,6 +129,21 @@ def get_system_info() -> Dict[str, Any]:
         "machine": platform.machine(),
         "python_version": platform.python_version(),
     }
+    from importlib.metadata import PackageNotFoundError, version
+    from pathlib import Path
+
+    try:
+        info["whisperlivekit_version"] = version("whisperlivekit")
+    except PackageNotFoundError:
+        info["whisperlivekit_version"] = None
+    root = Path(__file__).resolve().parents[2]
+    if (root / ".git").exists():
+        info["git_commit"] = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=root, text=True,
+        ).strip()
+        info["git_dirty"] = bool(subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=root, text=True,
+        ).strip())
 
     # CPU info
     try:
