@@ -311,13 +311,25 @@ def apply_commit_policy(
     src_start: int,
     src_end: int,
     committed_src_end: int,
+    mode: str = "argmax",
+    mass_threshold: float = 0.5,
 ) -> int:
     """Apply the AlignAtt commit policy with the top alignment head.
 
     For each generated target token (decode step), check if the top head's
-    attention argmax over the source span lands on a source token index <
-    ``committed_src_end`` (i.e. ASR has committed that source token). The
+    attention over the source span indicates the token aligns to a source
+    token ASR has already committed (index < committed_src_end). The
     committable prefix is contiguous: the first HOLD stops it.
+
+    mode:
+      - ``"argmax"`` (default): commit if the argmax source position is
+        within the committed span. Brittle — a single spike on the unstable
+        tail holds the whole token even if most attention is safe.
+      - ``"mass"``: commit if the fraction of attention mass on committed
+        source tokens exceeds ``mass_threshold`` (default 0.5). More
+        tolerant — commits tokens whose majority of attention is safe,
+        giving the viewer more provisional content during speech. Measured
+        best in livecaption A/B (more provisional content + less final lag).
 
     Returns the number of committed target tokens (a contiguous prefix
     length). If no attention was captured for the top head's layer, all
@@ -336,8 +348,14 @@ def apply_commit_policy(
     for i, s in enumerate(steps):
         a = np.array(s)[0]  # (H, 1, Lk)
         src_attn = a[head, 0, src_start:src_end]  # (n_src,)
-        amax = int(np.argmax(src_attn))
-        if amax < committed_src_end:
+        if mode == "mass":
+            accessible_mass = float(src_attn[:committed_src_end].sum())
+            total_mass = float(src_attn.sum()) + 1e-12
+            commit = (accessible_mass / total_mass) >= mass_threshold
+        else:  # argmax (default)
+            amax = int(np.argmax(src_attn))
+            commit = amax < committed_src_end
+        if commit:
             committed_len = i + 1
         else:
             break

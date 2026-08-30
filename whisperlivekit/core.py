@@ -322,6 +322,8 @@ class TranscriptionEngine:
                         model_id=model_id,
                         target_language=config.target_language,
                         source_language=config.lan,
+                        commit_mode=getattr(config, "mlx_llm_mt_simul_commit", "argmax"),
+                        mass_threshold=getattr(config, "mlx_llm_mt_simul_mass_threshold", 0.5),
                     )
                 else:
                     self.translation_model = MlxLlmTranslation(

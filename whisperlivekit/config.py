@@ -59,6 +59,8 @@ class WhisperLiveKitConfig:
     # Simultaneous-MT variant of mlx-llm-mt: drafts over the unstable ASR tail
     # with the AlignAtt commit policy (calibrated zh→en Hunyuan heads).
     mlx_llm_mt_simultaneous: bool = False
+    mlx_llm_mt_simul_commit: str = "argmax"  # argmax | mass
+    mlx_llm_mt_simul_mass_threshold: float = 0.5
     alignatt_preset: Optional[str] = None
     # quality | balanced | low; see docs/translation-alignatt.md
     alignatt_latency: str = "balanced"
