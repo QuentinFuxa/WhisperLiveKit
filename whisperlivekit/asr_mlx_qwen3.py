@@ -9,6 +9,7 @@ import threading
 
 import numpy as np
 
+from whisperlivekit.backend_support import QWEN_LANGUAGES
 from whisperlivekit.session_asr_proxy import merge_session_context
 from whisperlivekit.timed_objects import ASRToken, Transcript
 
@@ -30,7 +31,7 @@ def _resolve_language(language):
     if key in {"fil", "filipino"}:
         return "Filipino"
     key = TO_LANGUAGE_CODE.get(key, key.split("-")[0])
-    if key in LANGUAGES:
+    if key in QWEN_LANGUAGES and key in LANGUAGES:
         return LANGUAGES[key].title()
     raise ValueError(f"Unsupported Qwen3 ASR language: {language!r}")
 
