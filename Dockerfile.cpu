@@ -25,7 +25,8 @@ RUN uv python install 3.12
 
 # Install dependencies first to leverage caching
 ARG EXTRAS=cpu
-COPY pyproject.toml uv.lock /app/
+COPY pyproject.toml uv.lock README.md LICENSE /app/
+COPY third_party /app/third_party
 RUN set -eux; \
   set --; \
   for extra in $(echo "${EXTRAS:-}" | tr ',' ' '); do \
@@ -60,12 +61,10 @@ RUN apt-get update && \
 COPY --from=uvbin /uv /uvx /bin/
 
 # Copy the Python version
-COPY --from=builder-cpu --chown=python:python /python /python
+COPY --from=builder-cpu /python /python
 
 # Copy the virtual environment with all dependencies installed
 COPY --from=builder-cpu /app/.venv /app/.venv
-
-RUN update-ca-certificates
 
 EXPOSE 8000
 
