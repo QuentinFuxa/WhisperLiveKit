@@ -156,6 +156,7 @@ class AudioProcessor:
         self.ffmpeg_reader_task: Optional[asyncio.Task] = None
 
         self.overload_error: Optional[str] = None
+        self.transcription_error: Optional[str] = None
         queue_options = {
             "timeout": getattr(self.args, "backpressure_timeout", 30.0),
             "on_overload": self._on_overload,
@@ -232,6 +233,11 @@ class AudioProcessor:
         for queue in (self.transcription_queue, self.diarization_queue, self.translation_queue):
             if isinstance(queue, ProcessingQueue):
                 queue.close()
+
+    def _fail_transcription(self, exc):
+        self.transcription_error = f"ASR failed: {type(exc).__name__}: {exc}"
+        logger.exception("Closing failed transcription session")
+        self._close_queues()
 
     async def _emit_stream_event(self, kind: str, timestamp: float) -> None:
         """Publish a protocol-neutral event on the submitted audio clock."""
@@ -602,8 +608,7 @@ class AudioProcessor:
             # End of stream finalizes the last segment even without punctuation
             await self._flush_pending_translation_tokens()
         except Exception as e:
-            logger.warning(f"Error finishing transcription: {e}")
-            logger.debug(f"Traceback: {traceback.format_exc()}")
+            self._fail_transcription(e)
 
     async def transcription_processor(self) -> None:
         """Process audio chunks for transcription."""
@@ -775,14 +780,14 @@ class AudioProcessor:
             except (PipelineClosed, PipelineOverloaded):
                 return
             except Exception as e:
-                logger.warning(f"Exception in transcription_processor: {e}")
-                logger.warning(f"Traceback: {traceback.format_exc()}")
+                self._fail_transcription(e)
+                return
 
         if self.is_stopping:
             logger.info("Transcription processor finishing due to stopping flag.")
-            if self.diarization_queue:
+            if self.diarization_queue and not getattr(self.diarization_queue, "closed", False):
                 await self.diarization_queue.put(SENTINEL)
-            if self.translation_queue:
+            if self.translation_queue and not getattr(self.translation_queue, "closed", False):
                 await self.translation_queue.put(SENTINEL)
 
         logger.info("Transcription processor task finished.")
@@ -857,6 +862,9 @@ class AudioProcessor:
                 if getattr(self, "overload_error", None):
                     yield FrontData(status="error", error=self.overload_error)
                     return
+                if getattr(self, "transcription_error", None):
+                    yield FrontData(status="error", error=self.transcription_error)
+                    return
                 if self.audio_input.error:
                     yield FrontData(status="error", error=f"FFmpeg error: {self.audio_input.error}")
                     return
@@ -914,6 +922,8 @@ class AudioProcessor:
                     pending_queue.task_done()
 
                 if self.is_stopping and self._processing_tasks_done():
+                    if getattr(self, "transcription_error", None):
+                        continue
                     logger.info("Results formatter: All upstream processors are done and in stopping state. Terminating.")
                     return
 
@@ -1044,6 +1054,9 @@ class AudioProcessor:
     async def process_audio(self, message: Optional[bytes]) -> None:
         """Process incoming audio data."""
 
+        if getattr(self, "transcription_error", None):
+            raise RuntimeError(self.transcription_error)
+
         if not self.beg_loop:
             self.beg_loop = time()
             self.metrics.session_start = self.beg_loop
@@ -1064,7 +1077,12 @@ class AudioProcessor:
 
         self.metrics.n_chunks_received += 1
 
-        await self.audio_input.write(message)
+        try:
+            await self.audio_input.write(message)
+        except PipelineClosed:
+            if getattr(self, "transcription_error", None):
+                raise RuntimeError(self.transcription_error) from None
+            raise
 
     async def handle_pcm_data(self) -> None:
         await self.audio_input.drain()

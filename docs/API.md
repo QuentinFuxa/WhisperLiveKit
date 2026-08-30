@@ -479,6 +479,11 @@ Sent repeatedly as audio is processed. This message has **no `type` field**.
 | `remaining_time_diarization`   | float  | Seconds of audio waiting for speaker diarization. |
 | `error`                        | string | Only present when an error occurred (e.g. FFmpeg failure). |
 
+An ASR exception during decoding or EOF terminates the session with
+`status: "error"`. Keep the text already confirmed before that error; the session
+did not complete successfully. `wlk bench` retains such a sample as failed and
+excludes it from WER/CER and compute summaries.
+
 #### Line Object
 
 Each element in `lines` has the following shape:
