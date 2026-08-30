@@ -184,3 +184,38 @@ async def test_asr_failure_is_reported_and_keeps_the_last_confirmed_text(monkeyp
         if 'consumer' in locals():
             consumer.cancel()
             await asyncio.gather(consumer, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_formatter_drains_results_that_finish_during_a_client_send():
+    import asyncio
+    from argparse import Namespace
+    from dataclasses import asdict
+
+    from whisperlivekit.config import WhisperLiveKitConfig
+    from whisperlivekit.core import TranscriptionEngine
+    from whisperlivekit.timed_objects import ASRToken
+
+    engine = object.__new__(TranscriptionEngine)
+    engine.args = Namespace(**asdict(WhisperLiveKitConfig(transcription=False, vac=False, pcm_input=True)))
+    engine.asr = None
+    engine.translation_model = None
+    processor = AudioProcessor(transcription_engine=engine)
+    processor.transcription_task = asyncio.get_running_loop().create_future()
+    processor.state.new_tokens = [ASRToken(start=0, end=1, text='First.')]
+    output = processor.results_formatter()
+    try:
+        first = await anext(output)
+        assert ''.join(line.text for line in first.lines) == 'First.'
+        # A WebSocket send can suspend the consumer while the final ASR call
+        # finishes. That new output must be formatted before the generator ends.
+        processor.state.new_tokens = [ASRToken(start=1, end=2, text=' Last words')]
+        processor.is_stopping = True
+        processor.transcription_task.set_result(None)
+        final = await anext(output)
+        assert 'Last words' in ''.join(line.text for line in final.lines)
+        with pytest.raises(StopAsyncIteration):
+            await anext(output)
+    finally:
+        await output.aclose()
+        await processor.cleanup()
