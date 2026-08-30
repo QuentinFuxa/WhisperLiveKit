@@ -1,4 +1,4 @@
-"""Guards against silently-empty ASR output.
+"""Pipeline failure reporting and guards against silently-empty ASR output.
 
 Two real incidents motivated these: the torch 2.13 MLX device mismatch
 (#383) and CTranslate2 wheels shipping PTX newer than the GPU driver. In
@@ -219,3 +219,74 @@ async def test_formatter_drains_results_that_finish_during_a_client_send():
     finally:
         await output.aclose()
         await processor.cleanup()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_phase", ["chunk", "eof"])
+async def test_diarization_failure_reaches_the_client_and_stops_input(monkeypatch, failure_phase):
+    import asyncio
+    from argparse import Namespace
+    from dataclasses import asdict
+
+    from whisperlivekit.config import WhisperLiveKitConfig
+    from whisperlivekit.core import TranscriptionEngine
+
+    class Diarizer:
+        buffer_audio = []
+
+        def __init__(self):
+            self.calls = 0
+            self.called = asyncio.Event()
+            self.closed = False
+
+        def insert_audio_chunk(self, audio):
+            pass
+
+        def insert_silence(self, duration):
+            pass
+
+        async def diarize(self):
+            self.calls += 1
+            self.called.set()
+            if failure_phase == "chunk" or self.calls > 1:
+                raise RuntimeError("speaker decoder fixture failed")
+            return []
+
+        def close(self):
+            self.closed = True
+
+    diarizer = Diarizer()
+    monkeypatch.setattr("whisperlivekit.audio_processor.online_diarization_factory", lambda *args: diarizer)
+    engine = object.__new__(TranscriptionEngine)
+    engine.args = Namespace(**asdict(WhisperLiveKitConfig(
+        transcription=False, diarization=True, vac=False, pcm_input=True, min_chunk_size=.5,
+    )))
+    engine.asr = None
+    engine.translation_model = None
+    engine.diarization_model = SimpleNamespace()
+    processor = AudioProcessor(transcription_engine=engine)
+    records = []
+
+    async def collect(generator):
+        async for response in generator:
+            records.append(response)
+
+    try:
+        consumer = asyncio.create_task(collect(await processor.create_tasks()))
+        await processor.process_audio(b"\x01\x00" * 8000)
+        await asyncio.wait_for(diarizer.called.wait(), 1)
+        if failure_phase == "eof":
+            await processor.process_audio(b"")
+        await asyncio.wait_for(consumer, 1)
+        assert records[-1].status == "error"
+        assert "speaker decoder fixture failed" in records[-1].error
+        assert processor.diarization_queue.closed
+        with pytest.raises(RuntimeError, match="speaker decoder fixture failed"):
+            await processor.process_audio(b"\x01\x00" * 8000)
+        await asyncio.wait_for(processor.diarization_task, 1)
+    finally:
+        await processor.cleanup()
+        if "consumer" in locals():
+            consumer.cancel()
+            await asyncio.gather(consumer, return_exceptions=True)
+    assert diarizer.closed
