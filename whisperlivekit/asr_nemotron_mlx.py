@@ -7,13 +7,15 @@ are encoder emission times, not forced word alignments.
 from __future__ import annotations
 
 import sys
-import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
 from whisperlivekit.timed_objects import ASRToken, Transcript
 
-_MLX_LOCK = threading.RLock()
+# MLX graphs retain stream IDs owned by the thread that created them.
+# Keep model loading and every decode on that same thread across sessions.
+_MLX_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="wlk-nemotron-mlx")
 _DEFAULT_LANGUAGE_TAGS = {
     "de": "de-DE", "en": "en-US", "es": "es-ES", "fr": "fr-FR",
     "it": "it-IT", "ja": "ja-JP", "ko": "ko-KR", "pt": "pt-PT", "zh": "zh-CN",
@@ -42,18 +44,20 @@ class NemotronMLXASR:
     backend_choice = "nemotron-mlx-asr"
 
     def __init__(self, logfile=sys.stderr, **kwargs):
-        import mlx.core as mx
-        from mlx_audio.stt import load
-
         self.model_id = kwargs.get('nemotron_mlx_asr_model', 'mlx-community/nemotron-3.5-asr-streaming-0.6b')
         self.att_context = list(kwargs.get('nemotron_mlx_asr_att_context', [56, 6]))
         if len(self.att_context) != 2 or any(value < 0 for value in self.att_context):
             raise ValueError('Nemotron attention context must contain two non-negative integers')
-        with _MLX_LOCK:
-            self.model = load(self.model_id, strict=True)
-            self.original_language = _normalize_language(kwargs.get('lan'), self.model.prompt_dictionary)
-            self.model.generate(mx.zeros((8000,), dtype=mx.float32),
-                                language=self.original_language, att_context_size=self.att_context)
+        _MLX_EXECUTOR.submit(self._load_model, kwargs.get("lan")).result()
+
+    def _load_model(self, language):
+        import mlx.core as mx
+        from mlx_audio.stt import load
+
+        self.model = load(self.model_id, strict=True)
+        self.original_language = _normalize_language(language, self.model.prompt_dictionary)
+        self.model.generate(mx.zeros((8000,), dtype=mx.float32),
+                            language=self.original_language, att_context_size=self.att_context)
 
 
 class NemotronMLXOnlineProcessor:
@@ -88,32 +92,34 @@ class NemotronMLXOnlineProcessor:
         self._audio_end = audio_stream_end_time
 
     def _process(self, *, final=False):
+        return _MLX_EXECUTOR.submit(self._process_on_model_thread, final=final).result()
+
+    def _process_on_model_thread(self, *, final=False):
         import mlx.core as mx
         from mlx_audio.stt.models.nemotron_asr.audio import StreamingLogMelSpectrogram
         from mlx_audio.stt.models.nemotron_asr.streaming import ConformerStreamingState
 
-        with _MLX_LOCK:
-            if not self._pending and self._encoder is None:
-                return [], self._audio_end
-            if self._encoder is None:
-                self._encoder = ConformerStreamingState(self.model.encoder, att_context_size=self.asr.att_context)
-                self._mel = StreamingLogMelSpectrogram(self.model.preprocessor_config)
-            audio = np.concatenate(self._pending) if self._pending else np.empty(0, dtype=np.float32)
-            self._pending.clear()
-            mel = self._mel.push(mx.array(audio), final=final)
-            tokens = []
-            for encoded in self._encoder.push(mel, final=final):
-                prompted = self.model.apply_prompt(encoded, self.language)
-                tokens.extend(self._decode_chunk(prompted))
-            hidden = self._decoder_hidden or ()
-            self._encoder.materialize(*hidden)
-            if final:
-                self._encoder = self._mel = None
-                self._frame_offset = 0
-                self._last_token = self.model.blank_id
-                self._decoder_hidden = None
-                self._detected_language = self.language
-            return tokens, self._audio_end
+        if not self._pending and self._encoder is None:
+            return [], self._audio_end
+        if self._encoder is None:
+            self._encoder = ConformerStreamingState(self.model.encoder, att_context_size=self.asr.att_context)
+            self._mel = StreamingLogMelSpectrogram(self.model.preprocessor_config)
+        audio = np.concatenate(self._pending) if self._pending else np.empty(0, dtype=np.float32)
+        self._pending.clear()
+        mel = self._mel.push(mx.array(audio), final=final)
+        tokens = []
+        for encoded in self._encoder.push(mel, final=final):
+            prompted = self.model.apply_prompt(encoded, self.language)
+            tokens.extend(self._decode_chunk(prompted))
+        hidden = self._decoder_hidden or ()
+        self._encoder.materialize(*hidden)
+        if final:
+            self._encoder = self._mel = None
+            self._frame_offset = 0
+            self._last_token = self.model.blank_id
+            self._decoder_hidden = None
+            self._detected_language = self.language
+        return tokens, self._audio_end
 
     def _decode_chunk(self, prompted):
         # The greedy recurrence follows mlx-audio's Model._decode_prompted_chunks;

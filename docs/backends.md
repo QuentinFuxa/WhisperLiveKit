@@ -210,9 +210,10 @@ and weight layout; passing that repository directly to the MLX loader fails.
 WLK feeds mlx-audio's incremental mel frontend and cached Conformer encoder.
 A small RNNT loop retains decoder state between pushes. Pauses, speaker changes
 and EOF flush the final mel/encoder frames; there is no separate VAD or full
-utterance re-decode. Sessions have separate caches and language prompts, while
-the shared model is serialized. Session terminology context is unsupported and
-rejected explicitly.
+utterance re-decode. Sessions have separate caches and language prompts. Model
+loading and decoding stay on one dedicated thread because cached MLX streams
+cannot migrate between caller threads. Session terminology context is
+unsupported and rejected explicitly.
 
 `--nemotron-mlx-asr-att-context 56 6` is the default left/right encoder context.
 Emitted token timestamps follow encoder frames and are clipped to received

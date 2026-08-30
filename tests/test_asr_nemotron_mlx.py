@@ -1,4 +1,6 @@
 """Exercise PCM buffering, RNNT commits and session boundaries on the MLX CPU device."""
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import numpy as np
@@ -42,6 +44,7 @@ def shared(monkeypatch):
             mx.eval(*arrays)
 
     class Model:
+        thread_ids = set()
         encoder = None
         encoder_config = SimpleNamespace(subsampling_factor=8)
         preprocessor_config = SimpleNamespace(hop_length=160)
@@ -51,6 +54,7 @@ def shared(monkeypatch):
         max_symbols = 10
 
         def decoder(self, current, hidden):
+            self.thread_ids.add(threading.get_ident())
             last = -1 if current is None else int(current.item())
             count = 1 if hidden is None else int(hidden[0].item()) + 1
             return mx.array([[[last]]]), (mx.array([count]), mx.array([0]))
@@ -97,8 +101,11 @@ def test_interleaved_sessions_have_separate_decoder_state_and_language(shared):
     chinese.insert_audio_chunk(np.full(1280, 4), 0.08)
     fr_audio = np.concatenate([np.ones(1280), np.full(1280, 2)])
     french.insert_audio_chunk(fr_audio, 0.16)
-    zh_head, _ = chinese.process_iter()
-    fr_tokens, _ = french.process_iter()
+    with ThreadPoolExecutor(max_workers=2) as callers:
+        zh_result = callers.submit(chinese.process_iter)
+        fr_result = callers.submit(french.process_iter)
+        zh_head, _ = zh_result.result()
+        fr_tokens, _ = fr_result.result()
     chinese.insert_audio_chunk(np.full(800, 5), 0.13)
     zh_tail, _ = chinese.new_speaker()
     assert ''.join(t.text for t in zh_head + zh_tail) == '你好世界'
@@ -107,6 +114,9 @@ def test_interleaved_sessions_have_separate_decoder_state_and_language(shared):
     assert all(t.detected_language == 'fr-FR' for t in fr_tokens)
     assert automatic.language is None and shared.original_language == 'fr-FR'
     assert french.finish()[0] == []
+    # A lock alone allows calls to migrate between caller threads, which breaks
+    # cached MLX streams. Both sessions must keep the same model thread.
+    assert len(shared.model.thread_ids) == 1
     with pytest.raises(ValueError, match='not supported'):
         online_factory(args, shared, language='not-a-language')
     with pytest.raises(ValueError, match='context'):
