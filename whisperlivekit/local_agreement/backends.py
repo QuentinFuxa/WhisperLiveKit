@@ -188,8 +188,9 @@ class MLXWhisper(ASRBase):
             raise ValueError(f"Model name '{model_name}' is not recognized or not supported.")
 
     def transcribe(self, audio, init_prompt=""):
-        if self.transcribe_kargs:
-            logger.warning("Transcribe kwargs (vad, task) are not compatible with MLX Whisper and will be ignored.")
+        options = dict(self.transcribe_kargs)
+        options.pop("vad", None)
+        options.pop("vad_filter", None)
         segments = self.model(
             audio,
             language=self.original_language,
@@ -197,6 +198,7 @@ class MLXWhisper(ASRBase):
             word_timestamps=True,
             condition_on_previous_text=True,
             path_or_hf_repo=self.model_size_or_path,
+            **options,
         )
         return segments.get("segments", [])
 
