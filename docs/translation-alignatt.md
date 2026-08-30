@@ -1,80 +1,73 @@
-# AlignAtt translation backend (Alignatt4LLM sidecar)
+# Simultaneous translation with AlignAtt4LLM
 
-`--translation-backend alignatt` replaces the in-process NLLB translator
-with [Alignatt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM): a
-decoder-only LLM (Gemma-4-E4B by default) drafts the translation, and the
-AlignAtt policy commits only the target prefix whose attention lands on
-source words the ASR has actually committed. Output is append-only: a
-committed translation is never retracted.
+[AlignAtt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM) is a companion project by Quentin Fuxa and Dominik Macháček. Their [paper, accepted to IWSLT 2026](https://arxiv.org/abs/2606.03967), describes how to apply AlignAtt to decoder-only LLMs using selected translation alignment heads and runtime query/key capture.
 
-## Why it pairs well with WhisperLiveKit
+WhisperLiveKit is a client of its `alignatt-mt-server`: WLK handles audio, ASR, and display; the separate process loads the translation model. This lets an ASR client on one machine use a CUDA translation server on another, without combining their Python environments.
 
-- The unstable ASR hypothesis tail is sent to the translator as
-  "inaccessible" source: the model drafts ahead over it, but cannot commit
-  against it. When the ASR commits those words, the sidecar releases the
-  held target tokens from its cached draft without a new MT call, so
-  translation latency tracks ASR commit latency instead of adding to it.
-- With the qwen3 causal backend (append-only commits, English-only tower),
-  en to de/it/zh/cs/fr translation restores multilingual output while the
-  whole chain stays append-only end to end.
-- Punctuation, silence and speaker-change boundaries trigger a full-quality
-  re-translation of the finished line (the streamed partial is reused as a
-  prefill, so the upgrade is cheap).
+## What is shared with the paper
 
-## Running the sidecar (CUDA box, one-time setup)
+The translation policy and runtime come from AlignAtt4LLM. The paper evaluates a specific Qwen3-ASR/forced-alignment and Gemma cascade for English to German, Italian, and Chinese. Changing the WLK ASR backend, hardware, or buffering creates a different configuration; the paper's latency and quality results do not automatically transfer to it.
 
-The MT engine is vLLM-on-CUDA only (about 40 GB VRAM with the defaults).
-In a clone of Alignatt4LLM:
+For citation metadata, see [the README citation](../README.md#research-and-citation) and [the paper](https://arxiv.org/abs/2606.03967).
+
+## Start the translation server
+
+Use a separate CUDA environment. Follow the [AlignAtt4LLM installation instructions](https://github.com/QuentinFuxa/Alignatt4LLM#install), which pin its inference dependencies and model revisions. Models must be present in the Hugging Face cache; the Gemma model requires access to its gated weights.
 
 ```bash
-tools/bootstrap/setup_inference_qwen_asr_vllm.sh   # pinned vLLM stack, Python 3.13
-
-# Gemma-4-E4B is gated on Hugging Face: accept the license, then
-huggingface-cli download google/gemma-4-E4B-it
-
+git clone https://github.com/QuentinFuxa/Alignatt4LLM.git
+cd Alignatt4LLM
+tools/bootstrap/setup_inference_qwen_asr_vllm.sh
+# Complete the model-cache setup documented in that repository, then:
 .venv-inference/bin/alignatt-mt-server --preset gemma_low_latency --port 8765
 ```
 
-Supported directions ship as calibrated alignment-head files:
-en to de, it, zh, cs, fr for Gemma; en to de for the ungated Qwen3-1.7B
-fallback (`--mt-backend qwen_vllm_alignatt`). The server rejects other
-directions at session init with the supported list.
+The MT server checks source/target directions against the calibrated alignment-head files it has installed. Consult its returned `unsupported_direction` error for the supported list. An ASR model's language coverage does not imply the same translation coverage.
 
-## Running WhisperLiveKit against it
+## Connect WhisperLiveKit
+
+For English audio and German translation:
 
 ```bash
+wlk --model base --language en --target-language de \
+    --translation-backend alignatt \
+    --alignatt-url ws://localhost:8765
+```
+
+Replace `localhost` with the reachable translation-server host when using separate machines. Install WhisperLiveKit and its ASR extra in its own environment. The `translation` extra is for NLLB and is not required by this remote backend.
+
+For the causal Qwen3 ASR route:
+
+```bash
+pip install "whisperlivekit[qwen3-streaming]"
 wlk --backend qwen3-streaming --language en \
     --qwen3-streaming-audio-backend causal \
-    --target-language de \
-    --translation-backend alignatt \
+    --target-language de --translation-backend alignatt \
     --alignatt-url ws://gpu-host:8765
 ```
 
-Per-session targets keep working: `ws://host:8000/asr?target_language=zh`.
-If the sidecar is down or the direction unsupported, the session keeps
-transcribing, translation stays empty, and the client reconnects with
-backoff (append-only output is preserved across reconnects).
+Use an explicit source language matching the audio. A native WebSocket session can override both the source and target with `/asr?language=fr&target_language=zh`. Each MT connection receives its session's direction; supported directions still depend on the server's calibration.
 
-## Latency points
+## Streaming behavior
 
-| `--alignatt-latency` | behavior | typical word-to-translation p50 (causal ASR) |
-|---|---|---|
-| `quality` | committed words only, one unit of target holdback | commit lag + 1-2 s |
-| `balanced` (default) | drafts over the unstable tail, releases on commit | about commit lag + 0.3 s |
-| `low` | balanced, plus zero target-side holdback | lowest; pair with `--qwen3-streaming-hold-back-words 2` (about 2.5 s end to end) |
+Committed source words are sent with timestamps. In `balanced` and `low` modes, WLK also sends its current unstable hypothesis tail without timestamps. AlignAtt4LLM can draft over that tail while restricting emission to source words already committed. If source commitment advances without changing the draft's prompt, the server can release held translation tokens without another decode.
 
-`--translate-on-complete` composes with this backend as a finals-only mode:
-tokens are held until punctuation, so the sidecar only runs full-quality
-utterance translations (the cheapest multi-session configuration).
+| `--alignatt-latency` | Client behavior |
+|---|---|
+| `quality` | Sends committed words only; requests one unit of target holdback |
+| `balanced` (default) | Also sends the unstable ASR tail; keeps the server's holdback settings |
+| `low` | Sends the tail and requests zero target holdback and minimum emission size |
 
-`--alignatt-context "talk title, glossary terms"` injects domain context
-into the MT prompt for every session of the server.
+These are policy settings, not measured latency guarantees. `--alignatt-context "talk title, glossary terms"` supplies server-wide translation context. `--translate-on-complete` holds source tokens until WLK finalizes a segment, which reduces partial translation updates.
 
-## Protocol
+Partial translations are exposed as `buffer_translation`. Within an open utterance, accepted partials extend the existing prefix. The protocol also supports a final translation that replaces the partial at the line level; this is not a blanket guarantee that all displayed text is immutable.
 
-The client speaks protocol v1 of `alignatt-mt-server`, specified in the
-Alignatt4LLM repository under `docs/mt_server_protocol.md`. The WLK side
-lives in [translation_alignatt.py](../whisperlivekit/translation_alignatt.py)
-and is exercised against an in-process fake sidecar in
-[tests/test_translation_alignatt.py](../tests/test_translation_alignatt.py)
-(no GPU needed).
+## Current limits
+
+The protocol adapter is covered by a local WebSocket scenario test, including a partial before punctuation, a final at a boundary, and the remaining words at end-of-stream. This checks transport and WLK state propagation, not model quality. The IWSLT evaluation remains in the research repository.
+
+If the server is unavailable or rejects a direction, WLK keeps transcribing and exposes `translation_error` in full/diff results and in the browser. Reconnection uses backoff and sends the accepted target prefix and recent history. A successful update clears the error.
+
+Silence and speaker boundaries request the final quality pass before committing a translation segment. End-of-stream drains pending finals and an unpunctuated last utterance. Cleanup closes the WebSocket, including on cancellation. If the remote server cannot finish, the last partial remains a buffer and `translation_error` explicitly reports incomplete translation. These lifecycle guarantees are checked against the local protocol server; quality and CUDA performance still require the real MT model.
+
+The [protocol specification](https://github.com/QuentinFuxa/Alignatt4LLM/blob/main/docs/mt_server_protocol.md) is authoritative. The WLK implementation is [translation_alignatt.py](../whisperlivekit/translation_alignatt.py), with [protocol tests](../tests/test_translation_alignatt.py).
