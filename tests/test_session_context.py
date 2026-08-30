@@ -113,14 +113,17 @@ def test_context_only_proxy_keeps_server_language():
 
 def test_simulstreaming_context_uses_an_isolated_static_config(monkeypatch):
     import whisperlivekit.simul_whisper as simul_module
-    from whisperlivekit.core import online_factory
+    from whisperlivekit.core import SimulStreamingASR, online_factory
+
+    class RecordingSimulASR(_RecordingASR, SimulStreamingASR):
+        pass
 
     class FakeProcessor:
         def __init__(self, asr):
             self.asr = asr
 
     monkeypatch.setattr(simul_module, "SimulStreamingOnlineProcessor", FakeProcessor)
-    shared = _RecordingASR(language="en")
+    shared = RecordingSimulASR(language="en")
     shared.cfg = SimpleNamespace(
         language="en",
         static_init_prompt="global terminology",
@@ -239,3 +242,26 @@ def test_plain_session_cannot_observe_another_sessions_language_override():
         ("first", "fr", "termes\nhistorique"),
         ("second", "en", ""),
     ]
+
+
+def test_native_stream_sessions_bypass_the_default_whisper_policy(monkeypatch):
+    import sys
+    from types import ModuleType
+
+    from whisperlivekit.core import online_factory
+
+    class NativeProcessor:
+        def __init__(self, asr):
+            self.asr = asr
+            self.language = asr._session_language or asr.original_language
+
+    qwen = ModuleType('whisperlivekit.qwen3_streaming')
+    qwen.Qwen3StreamingOnlineProcessor = NativeProcessor
+    monkeypatch.setitem(sys.modules, qwen.__name__, qwen)
+    shared = _RecordingASR(language='en')
+    shared.backend_choice = 'qwen3-streaming'
+    args = SimpleNamespace(backend='qwen3-streaming', backend_policy='simulstreaming')
+    french = online_factory(args, shared, language='fr')
+    english = online_factory(args, shared, language='en')
+    assert french.language == 'fr' and english.language == 'en'
+    assert shared.original_language == 'en'
