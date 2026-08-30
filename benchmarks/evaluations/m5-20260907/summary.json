@@ -1,0 +1,924 @@
+{
+  "reports": {
+    "whisper-small-la-en": {
+      "file": "whisper-small-la-en.json.gz",
+      "uncompressed_sha256": "b43d90ae0c2f0f89fff90c177d12460e78010b7e29914176c91ce391afbe2113",
+      "source": {
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "machine": "arm64",
+        "python_version": "3.12.12",
+        "whisperlivekit_version": "0.2.26",
+        "git_commit": "b2baee95069e956f1a29dabf0df1ef735ec89cc2",
+        "git_dirty": false,
+        "cpu": "Apple M5",
+        "ram_gb": 32,
+        "accelerator": "Apple Silicon (MPS)",
+        "backend_versions": {
+          "faster-whisper": "1.2.1",
+          "mlx-whisper": "0.4.3",
+          "transformers": "5.15.0",
+          "torch": "2.11.0",
+          "mlx": "0.31.2",
+          "mlx-lm": "0.31.3",
+          "mlx-metal": "0.31.2",
+          "numpy": "2.4.4",
+          "psutil": "7.2.2"
+        }
+      },
+      "summary": {
+        "n": 90,
+        "completed": 90,
+        "invalid_timestamps": 0,
+        "statuses": {
+          "ok": 90
+        },
+        "quality": 0.11664482306684142,
+        "reference_units": 2289,
+        "errors": 267,
+        "finalization_time_s_p95": 0.7022030579952115,
+        "finalization_time_s_count": 90,
+        "first_visible_time_s_p95": 3.0963472788018405,
+        "first_visible_time_s_count": 90,
+        "source_end_lag_s_p95": 0.7060162913039669,
+        "source_end_lag_s_count": 90,
+        "rss_peak_bytes": 1208139776,
+        "rss_peak_bytes_count": 90,
+        "mlx_peak_bytes": 1230804318,
+        "mlx_peak_bytes_count": 90
+      },
+      "readiness_issues": [],
+      "warmup": [
+        {
+          "status": "ok",
+          "startup_time_s": 3.8026102500007255,
+          "rss_peak_bytes": 1185742848,
+          "mlx_peak_bytes": 1228821452
+        }
+      ],
+      "passes": {
+        "1": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.11664482306684142,
+          "reference_units": 763,
+          "errors": 89,
+          "finalization_time_s_p95": 0.7742423791947655,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.218750993752473,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.7765711856055413,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 972406784,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230804098,
+          "mlx_peak_bytes_count": 30
+        },
+        "2": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.11664482306684142,
+          "reference_units": 763,
+          "errors": 89,
+          "finalization_time_s_p95": 0.6445232207945079,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.070829016302741,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.64835132255018,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1020264448,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230804098,
+          "mlx_peak_bytes_count": 30
+        },
+        "3": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.11664482306684142,
+          "reference_units": 763,
+          "errors": 89,
+          "finalization_time_s_p95": 0.5808614041969118,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.019148564695206,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.5861918874987161,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1208139776,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230804318,
+          "mlx_peak_bytes_count": 30
+        }
+      }
+    },
+    "whisper-small-la-fr": {
+      "file": "whisper-small-la-fr.json.gz",
+      "uncompressed_sha256": "2709a8b3067fc96fa1cc238a96745ec5a05393e9321d89f06cd81e53a7faaaf9",
+      "source": {
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "machine": "arm64",
+        "python_version": "3.12.12",
+        "whisperlivekit_version": "0.2.26",
+        "git_commit": "b2baee95069e956f1a29dabf0df1ef735ec89cc2",
+        "git_dirty": false,
+        "cpu": "Apple M5",
+        "ram_gb": 32,
+        "accelerator": "Apple Silicon (MPS)",
+        "backend_versions": {
+          "faster-whisper": "1.2.1",
+          "mlx-whisper": "0.4.3",
+          "transformers": "5.15.0",
+          "torch": "2.11.0",
+          "mlx": "0.31.2",
+          "mlx-lm": "0.31.3",
+          "mlx-metal": "0.31.2",
+          "numpy": "2.4.4",
+          "psutil": "7.2.2"
+        }
+      },
+      "summary": {
+        "n": 90,
+        "completed": 90,
+        "invalid_timestamps": 0,
+        "statuses": {
+          "ok": 90
+        },
+        "quality": 0.17777777777777778,
+        "reference_units": 2565,
+        "errors": 456,
+        "finalization_time_s_p95": 0.6996401062591757,
+        "finalization_time_s_count": 90,
+        "first_visible_time_s_p95": 6.265268004347308,
+        "first_visible_time_s_count": 90,
+        "source_end_lag_s_p95": 0.7056213661585939,
+        "source_end_lag_s_count": 90,
+        "rss_peak_bytes": 1947484160,
+        "rss_peak_bytes_count": 90,
+        "mlx_peak_bytes": 1230738762,
+        "mlx_peak_bytes_count": 90
+      },
+      "readiness_issues": [],
+      "warmup": [
+        {
+          "status": "ok",
+          "startup_time_s": 2.592927041987423,
+          "rss_peak_bytes": 1217478656,
+          "mlx_peak_bytes": 1228133776
+        }
+      ],
+      "passes": {
+        "1": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.17777777777777778,
+          "reference_units": 855,
+          "errors": 152,
+          "finalization_time_s_p95": 0.7212251081509747,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 5.832890906241662,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.7255559792003772,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1631518720,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230738652,
+          "mlx_peak_bytes_count": 30
+        },
+        "2": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.17777777777777778,
+          "reference_units": 855,
+          "errors": 152,
+          "finalization_time_s_p95": 0.6709905543553759,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 6.089141385049149,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.6757633267515926,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1779580928,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230738652,
+          "mlx_peak_bytes_count": 30
+        },
+        "3": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.17777777777777778,
+          "reference_units": 855,
+          "errors": 152,
+          "finalization_time_s_p95": 0.6490909497057142,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 6.0559405291998685,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.6531878724045813,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1947484160,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230738762,
+          "mlx_peak_bytes_count": 30
+        }
+      }
+    },
+    "whisper-small-la-zh": {
+      "file": "whisper-small-la-zh.json.gz",
+      "uncompressed_sha256": "3910a481942234c694457803d28759d9bc6cbfa5718b3e2f55f8fd912c4eedcd",
+      "source": {
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "machine": "arm64",
+        "python_version": "3.12.12",
+        "whisperlivekit_version": "0.2.26",
+        "git_commit": "b2baee95069e956f1a29dabf0df1ef735ec89cc2",
+        "git_dirty": false,
+        "cpu": "Apple M5",
+        "ram_gb": 32,
+        "accelerator": "Apple Silicon (MPS)",
+        "backend_versions": {
+          "faster-whisper": "1.2.1",
+          "mlx-whisper": "0.4.3",
+          "transformers": "5.15.0",
+          "torch": "2.11.0",
+          "mlx": "0.31.2",
+          "mlx-lm": "0.31.3",
+          "mlx-metal": "0.31.2",
+          "numpy": "2.4.4",
+          "psutil": "7.2.2"
+        }
+      },
+      "summary": {
+        "n": 90,
+        "completed": 90,
+        "invalid_timestamps": 0,
+        "statuses": {
+          "ok": 90
+        },
+        "quality": 0.2530769230769231,
+        "reference_units": 3900,
+        "errors": 987,
+        "finalization_time_s_p95": 1.0006239642498258,
+        "finalization_time_s_count": 90,
+        "first_visible_time_s_p95": 8.78361031845197,
+        "first_visible_time_s_count": 90,
+        "source_end_lag_s_p95": 1.004292820504314,
+        "source_end_lag_s_count": 90,
+        "rss_peak_bytes": 1435779072,
+        "rss_peak_bytes_count": 90,
+        "mlx_peak_bytes": 1230739698,
+        "mlx_peak_bytes_count": 90
+      },
+      "readiness_issues": [],
+      "warmup": [
+        {
+          "status": "ok",
+          "startup_time_s": 2.6332711249997374,
+          "rss_peak_bytes": 1242005504,
+          "mlx_peak_bytes": 1228493848
+        }
+      ],
+      "passes": {
+        "1": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.2553846153846154,
+          "reference_units": 1300,
+          "errors": 332,
+          "finalization_time_s_p95": 0.5390948940577797,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 7.499427474999537,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.5414359834592904,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1435779072,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230739588,
+          "mlx_peak_bytes_count": 30
+        },
+        "2": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.25,
+          "reference_units": 1300,
+          "errors": 325,
+          "finalization_time_s_p95": 1.0006239642498258,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 7.688531603800946,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 1.004292820504314,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1023655936,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230739698,
+          "mlx_peak_bytes_count": 30
+        },
+        "3": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.25384615384615383,
+          "reference_units": 1300,
+          "errors": 330,
+          "finalization_time_s_p95": 1.0674369187487147,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 9.58389018560556,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 1.0724374124999425,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 961495040,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 1230739698,
+          "mlx_peak_bytes_count": 30
+        }
+      }
+    },
+    "whisper-small-la-zh-continuous": {
+      "file": "whisper-small-la-zh-continuous.json.gz",
+      "uncompressed_sha256": "195a45f2417b8d690d7c157166454919bf087905b73b71c7f498431d3267958e",
+      "source": {
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "machine": "arm64",
+        "python_version": "3.12.12",
+        "whisperlivekit_version": "0.2.26",
+        "git_commit": "b2baee95069e956f1a29dabf0df1ef735ec89cc2",
+        "git_dirty": false,
+        "cpu": "Apple M5",
+        "ram_gb": 32,
+        "accelerator": "Apple Silicon (MPS)",
+        "backend_versions": {
+          "faster-whisper": "1.2.1",
+          "mlx-whisper": "0.4.3",
+          "transformers": "5.15.0",
+          "torch": "2.11.0",
+          "mlx": "0.31.2",
+          "mlx-lm": "0.31.3",
+          "mlx-metal": "0.31.2",
+          "numpy": "2.4.4",
+          "psutil": "7.2.2"
+        }
+      },
+      "summary": {
+        "n": 1,
+        "completed": 1,
+        "invalid_timestamps": 0,
+        "statuses": {
+          "ok": 1
+        },
+        "quality": null,
+        "reference_units": 0,
+        "errors": 0,
+        "finalization_time_s_p95": 0.007256166994920932,
+        "finalization_time_s_count": 1,
+        "first_visible_time_s_p95": 5.7767419169977074,
+        "first_visible_time_s_count": 1,
+        "source_end_lag_s_p95": 0.015362874997663312,
+        "source_end_lag_s_count": 1,
+        "rss_peak_bytes": 1775042560,
+        "rss_peak_bytes_count": 1,
+        "mlx_peak_bytes": 1228854950,
+        "mlx_peak_bytes_count": 1
+      },
+      "readiness_issues": [],
+      "warmup": [],
+      "passes": {
+        "1": {
+          "n": 1,
+          "completed": 1,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 1
+          },
+          "quality": null,
+          "reference_units": 0,
+          "errors": 0,
+          "finalization_time_s_p95": 0.007256166994920932,
+          "finalization_time_s_count": 1,
+          "first_visible_time_s_p95": 5.7767419169977074,
+          "first_visible_time_s_count": 1,
+          "source_end_lag_s_p95": 0.015362874997663312,
+          "source_end_lag_s_count": 1,
+          "rss_peak_bytes": 1775042560,
+          "rss_peak_bytes_count": 1,
+          "mlx_peak_bytes": 1228854950,
+          "mlx_peak_bytes_count": 1
+        }
+      }
+    },
+    "nemotron-native-en": {
+      "file": "nemotron-native-en.json.gz",
+      "uncompressed_sha256": "20a0b14b9aa0dcd634c95f097346de8cee7da12ee567d621f7efb2090882a166",
+      "source": {
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "machine": "arm64",
+        "python_version": "3.12.12",
+        "whisperlivekit_version": "0.2.26",
+        "git_commit": "1842f4c6e4b3258d2776ecee688586417193f510",
+        "git_dirty": false,
+        "cpu": "Apple M5",
+        "ram_gb": 32,
+        "accelerator": "Apple Silicon (MPS)",
+        "backend_versions": {
+          "faster-whisper": "1.2.1",
+          "transformers": "5.15.0",
+          "torch": "2.11.0",
+          "mlx": "0.31.2",
+          "mlx-metal": "0.31.2",
+          "mlx-audio": "0.5.1",
+          "numpy": "2.3.5",
+          "psutil": "7.2.2"
+        }
+      },
+      "summary": {
+        "n": 90,
+        "completed": 90,
+        "invalid_timestamps": 0,
+        "statuses": {
+          "ok": 90
+        },
+        "quality": 0.1926605504587156,
+        "reference_units": 2289,
+        "errors": 441,
+        "finalization_time_s_p95": 0.10879327920047217,
+        "finalization_time_s_count": 90,
+        "first_visible_time_s_p95": 3.120599171353388,
+        "first_visible_time_s_count": 90,
+        "source_end_lag_s_p95": 0.11591714579969978,
+        "source_end_lag_s_count": 90,
+        "rss_peak_bytes": 1856471040,
+        "rss_peak_bytes_count": 90,
+        "mlx_peak_bytes": 2021709128,
+        "mlx_peak_bytes_count": 90
+      },
+      "readiness_issues": [],
+      "warmup": [
+        {
+          "status": "ok",
+          "startup_time_s": 3.6723922079982003,
+          "rss_peak_bytes": 1842462720,
+          "mlx_peak_bytes": 2019156264
+        }
+      ],
+      "passes": {
+        "1": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.1926605504587156,
+          "reference_units": 763,
+          "errors": 147,
+          "finalization_time_s_p95": 0.11420156670355934,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.1179271374989184,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.11957296859595166,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1854144512,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2021709128,
+          "mlx_peak_bytes_count": 30
+        },
+        "2": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.1926605504587156,
+          "reference_units": 763,
+          "errors": 147,
+          "finalization_time_s_p95": 0.09743522294229472,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.1203474899506545,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.10326005449873611,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1854586880,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2021692744,
+          "mlx_peak_bytes_count": 30
+        },
+        "3": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.1926605504587156,
+          "reference_units": 763,
+          "errors": 147,
+          "finalization_time_s_p95": 0.10130571469926507,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.1200995229562976,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.10538684129569423,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1856471040,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2021692744,
+          "mlx_peak_bytes_count": 30
+        }
+      }
+    },
+    "nemotron-native-fr": {
+      "file": "nemotron-native-fr.json.gz",
+      "uncompressed_sha256": "c843c761cbeba8a3dd6c8708587ceaf5605a7299e035acb72bab29bbac15ff23",
+      "source": {
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "machine": "arm64",
+        "python_version": "3.12.12",
+        "whisperlivekit_version": "0.2.26",
+        "git_commit": "1842f4c6e4b3258d2776ecee688586417193f510",
+        "git_dirty": false,
+        "cpu": "Apple M5",
+        "ram_gb": 32,
+        "accelerator": "Apple Silicon (MPS)",
+        "backend_versions": {
+          "faster-whisper": "1.2.1",
+          "transformers": "5.15.0",
+          "torch": "2.11.0",
+          "mlx": "0.31.2",
+          "mlx-metal": "0.31.2",
+          "mlx-audio": "0.5.1",
+          "numpy": "2.3.5",
+          "psutil": "7.2.2"
+        }
+      },
+      "summary": {
+        "n": 90,
+        "completed": 90,
+        "invalid_timestamps": 0,
+        "statuses": {
+          "ok": 90
+        },
+        "quality": 0.1497076023391813,
+        "reference_units": 2565,
+        "errors": 384,
+        "finalization_time_s_p95": 0.11343360625542116,
+        "finalization_time_s_count": 90,
+        "first_visible_time_s_p95": 4.1405326418491315,
+        "first_visible_time_s_count": 90,
+        "source_end_lag_s_p95": 0.11660635435226076,
+        "source_end_lag_s_count": 90,
+        "rss_peak_bytes": 1859239936,
+        "rss_peak_bytes_count": 90,
+        "mlx_peak_bytes": 2028367408,
+        "mlx_peak_bytes_count": 90
+      },
+      "readiness_issues": [],
+      "warmup": [
+        {
+          "status": "ok",
+          "startup_time_s": 2.592739875006373,
+          "rss_peak_bytes": 1842053120,
+          "mlx_peak_bytes": 2019194012
+        }
+      ],
+      "passes": {
+        "1": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.1497076023391813,
+          "reference_units": 855,
+          "errors": 128,
+          "finalization_time_s_p95": 0.12321255015121996,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.9344372626474056,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.12570118765463095,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1856323584,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2028367408,
+          "mlx_peak_bytes_count": 30
+        },
+        "2": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.1497076023391813,
+          "reference_units": 855,
+          "errors": 128,
+          "finalization_time_s_p95": 0.10495698735030597,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.912851582853908,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.1069848751477546,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1858895872,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2028355312,
+          "mlx_peak_bytes_count": 30
+        },
+        "3": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.1497076023391813,
+          "reference_units": 855,
+          "errors": 128,
+          "finalization_time_s_p95": 0.10349946250207714,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 3.9119150729471572,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.10565691700132424,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1859239936,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2028355312,
+          "mlx_peak_bytes_count": 30
+        }
+      }
+    },
+    "nemotron-native-zh": {
+      "file": "nemotron-native-zh.json.gz",
+      "uncompressed_sha256": "41b84b3b451a543cf8e5a03a1777b7e2e083f4fd1776a59ba660e3d6a8ca0f98",
+      "source": {
+        "platform": "macOS-27.0-arm64-arm-64bit",
+        "machine": "arm64",
+        "python_version": "3.12.12",
+        "whisperlivekit_version": "0.2.26",
+        "git_commit": "1842f4c6e4b3258d2776ecee688586417193f510",
+        "git_dirty": false,
+        "cpu": "Apple M5",
+        "ram_gb": 32,
+        "accelerator": "Apple Silicon (MPS)",
+        "backend_versions": {
+          "faster-whisper": "1.2.1",
+          "transformers": "5.15.0",
+          "torch": "2.11.0",
+          "mlx": "0.31.2",
+          "mlx-metal": "0.31.2",
+          "mlx-audio": "0.5.1",
+          "numpy": "2.3.5",
+          "psutil": "7.2.2"
+        }
+      },
+      "summary": {
+        "n": 90,
+        "completed": 90,
+        "invalid_timestamps": 0,
+        "statuses": {
+          "ok": 90
+        },
+        "quality": 0.22615384615384615,
+        "reference_units": 3900,
+        "errors": 882,
+        "finalization_time_s_p95": 0.05150114404896158,
+        "finalization_time_s_count": 90,
+        "first_visible_time_s_p95": 4.143544334002945,
+        "first_visible_time_s_count": 90,
+        "source_end_lag_s_p95": 0.05544617080388665,
+        "source_end_lag_s_count": 90,
+        "rss_peak_bytes": 1854308352,
+        "rss_peak_bytes_count": 90,
+        "mlx_peak_bytes": 2021337360,
+        "mlx_peak_bytes_count": 90
+      },
+      "readiness_issues": [],
+      "warmup": [
+        {
+          "status": "ok",
+          "startup_time_s": 1.8268760409991955,
+          "rss_peak_bytes": 1844215808,
+          "mlx_peak_bytes": 2014900456
+        }
+      ],
+      "passes": {
+        "1": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.22615384615384615,
+          "reference_units": 1300,
+          "errors": 294,
+          "finalization_time_s_p95": 0.04583466684634913,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 4.143435096050962,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.049351164402003794,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1853014016,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2021337360,
+          "mlx_peak_bytes_count": 30
+        },
+        "2": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.22615384615384615,
+          "reference_units": 1300,
+          "errors": 294,
+          "finalization_time_s_p95": 0.05174390624888474,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 4.143831358296302,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.05628600420110183,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1853751296,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2021335824,
+          "mlx_peak_bytes_count": 30
+        },
+        "3": {
+          "n": 30,
+          "completed": 30,
+          "invalid_timestamps": 0,
+          "statuses": {
+            "ok": 30
+          },
+          "quality": 0.22615384615384615,
+          "reference_units": 1300,
+          "errors": 294,
+          "finalization_time_s_p95": 0.051686333452380495,
+          "finalization_time_s_count": 30,
+          "first_visible_time_s_p95": 4.142032970902801,
+          "first_visible_time_s_count": 30,
+          "source_end_lag_s_p95": 0.055847464556979795,
+          "source_end_lag_s_count": 30,
+          "rss_peak_bytes": 1854308352,
+          "rss_peak_bytes_count": 30,
+          "mlx_peak_bytes": 2021335824,
+          "mlx_peak_bytes_count": 30
+        }
+      }
+    }
+  },
+  "comparisons": {
+    "nemotron-native-en-vs-whisper-small-la": {
+      "numerical_gate": "fail",
+      "quality_within_one_point_all_passes": false,
+      "qualifying_metrics": [
+        "finalization_time_s_p95"
+      ],
+      "passes": [
+        {
+          "repeat": 1,
+          "quality_delta_pp": 7.601572739187419,
+          "gains": {
+            "finalization_time_s_p95": 0.8524989463605283,
+            "rss_peak_bytes": -0.9067581001162575,
+            "mlx_peak_bytes": -0.6425921324808588
+          }
+        },
+        {
+          "repeat": 2,
+          "quality_delta_pp": 7.601572739187419,
+          "gains": {
+            "finalization_time_s_p95": 0.8488258920723047,
+            "rss_peak_bytes": -0.8177511562178827,
+            "mlx_peak_bytes": -0.6425788208579721
+          }
+        },
+        {
+          "repeat": 3,
+          "quality_delta_pp": 7.601572739187419,
+          "gains": {
+            "finalization_time_s_p95": 0.8255939989000844,
+            "rss_peak_bytes": -0.5366359728230652,
+            "mlx_peak_bytes": -0.6425785272553781
+          }
+        }
+      ],
+      "streaming_review": "required; inspect the continuous run and retained hypotheses"
+    },
+    "nemotron-native-fr-vs-whisper-small-la": {
+      "numerical_gate": "pass",
+      "quality_within_one_point_all_passes": true,
+      "qualifying_metrics": [
+        "finalization_time_s_p95"
+      ],
+      "passes": [
+        {
+          "repeat": 1,
+          "quality_delta_pp": -2.8070175438596494,
+          "gains": {
+            "finalization_time_s_p95": 0.8291621454124033,
+            "rss_peak_bytes": -0.13778871259289005,
+            "mlx_peak_bytes": -0.64808946619481
+          }
+        },
+        {
+          "repeat": 2,
+          "quality_delta_pp": -2.8070175438596494,
+          "gains": {
+            "finalization_time_s_p95": 0.8435790389759827,
+            "rss_peak_bytes": -0.04456945045434879,
+            "mlx_peak_bytes": -0.6480796379506248
+          }
+        },
+        {
+          "repeat": 3,
+          "quality_delta_pp": -2.8070175438596494,
+          "gains": {
+            "finalization_time_s_p95": 0.8405470565426896,
+            "rss_peak_bytes": 0.04531190846758926,
+            "mlx_peak_bytes": -0.6480794906498606
+          }
+        }
+      ],
+      "streaming_review": "required; inspect the continuous run and retained hypotheses"
+    },
+    "nemotron-native-zh-vs-whisper-small-la": {
+      "numerical_gate": "pass",
+      "quality_within_one_point_all_passes": true,
+      "qualifying_metrics": [
+        "finalization_time_s_p95"
+      ],
+      "passes": [
+        {
+          "repeat": 1,
+          "quality_delta_pp": -2.9230769230769225,
+          "gains": {
+            "finalization_time_s_p95": 0.9149784808730972,
+            "rss_peak_bytes": -0.2905982905982907,
+            "mlx_peak_bytes": -0.6423761612192489
+          }
+        },
+        {
+          "repeat": 2,
+          "quality_delta_pp": -2.384615384615385,
+          "gains": {
+            "finalization_time_s_p95": 0.9482883599657965,
+            "rss_peak_bytes": -0.8109124665887739,
+            "mlx_peak_bytes": -0.6423747663984103
+          }
+        },
+        {
+          "repeat": 3,
+          "quality_delta_pp": -2.7692307692307683,
+          "gains": {
+            "finalization_time_s_p95": 0.9515790277209365,
+            "rss_peak_bytes": -0.9285677771151062,
+            "mlx_peak_bytes": -0.6423747663984103
+          }
+        }
+      ],
+      "streaming_review": "required; inspect the continuous run and retained hypotheses"
+    }
+  },
+  "pending": [
+    "qwen-metal-en",
+    "qwen-metal-fr",
+    "qwen-metal-zh",
+    "qwen-metal-zh-continuous",
+    "qwen-native-en",
+    "qwen-native-fr",
+    "qwen-native-zh",
+    "qwen-native-zh-continuous",
+    "nemotron-native-zh-continuous"
+  ],
+  "environment_review": "Power conditions changed during this series; see METHODS.md before interpreting latency gates."
+}
