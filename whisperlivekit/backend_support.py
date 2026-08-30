@@ -4,6 +4,13 @@ import platform
 
 logger = logging.getLogger(__name__)
 
+# https://huggingface.co/Qwen/Qwen3-ASR-1.7B#released-models-description-and-download
+QWEN_LANGUAGES = {
+    "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru",
+    "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs",
+    "fil", "fa", "el", "hu", "mk", "ro",
+}
+
 
 def module_available(module_name):
     """Return True if the given module can be imported."""

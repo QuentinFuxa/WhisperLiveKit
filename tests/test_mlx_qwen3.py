@@ -100,6 +100,8 @@ def test_sessions_keep_their_language_context_and_cjk_boundaries(native):
     final, _ = chinese.finish()
     assert text(committed + final) == '你好世界'
     assert automatic.get_buffer().text == ''
+    with pytest.raises(ValueError, match='Unsupported Qwen3 ASR language'):
+        online_factory(args, shared, language='sw')
     assert shared.language == 'French' and shared.hotwords == 'WLK'
 
 

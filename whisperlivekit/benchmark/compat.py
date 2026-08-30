@@ -3,20 +3,16 @@
 import logging
 from typing import Dict, List, Optional, Set
 
+from whisperlivekit.backend_support import QWEN_LANGUAGES
+
 logger = logging.getLogger(__name__)
 
-# https://huggingface.co/Qwen/Qwen3-ASR-1.7B#released-models-description-and-download
-_QWEN_LANGUAGES = {
-    "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru",
-    "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs",
-    "fil", "fa", "el", "hu", "mk", "ro",
-}
 
 # Language support per backend.
 # None means all Whisper-supported languages.
 # A set means only those languages are supported.
 BACKEND_LANGUAGES: Dict[str, Optional[Set[str]]] = {
-    "mlx-qwen3-asr": _QWEN_LANGUAGES,
+    "mlx-qwen3-asr": QWEN_LANGUAGES,
     "whisper": None,
     "faster-whisper": None,
     "mlx-whisper": None,
@@ -38,7 +34,7 @@ def backend_supports_language(backend: str, language: str) -> bool:
     if backend in ("qwen3-streaming", "qwen3-vllm", "qwen3-vllm-metal"):
         # This CLI uses the default windowed/standard tower, not the
         # English-only experimental causal tower. Use its published inventory.
-        return language in _QWEN_LANGUAGES
+        return language in QWEN_LANGUAGES
     if backend not in BACKEND_LANGUAGES:
         raise ValueError(f"Unknown benchmark backend: {backend}")
     langs = BACKEND_LANGUAGES[backend]
