@@ -48,6 +48,9 @@ The `cpu` and `cu129` extras select PyTorch indexes through uv's source configur
 
 `qwen3-vllm` uses its own CUDA dependency stack and conflicts with `cu129`. Other backend combinations also conflict; [pyproject.toml](../pyproject.toml) declares the full list. Keep the [AlignAtt4LLM translation server](translation-alignatt.md) in its own environment.
 
+The [dependency audit](dependency-audit.md) records security fixes, affected
+backend environments and upgrades blocked by upstream compatibility constraints.
+
 ## Docker
 
 Initialize submodules before building either image:

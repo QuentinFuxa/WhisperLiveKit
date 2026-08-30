@@ -917,3 +917,33 @@ def test_concatenate_diar_segments_does_not_mutate_stored_segments():
     ]
     second = alignment.concatenate_diar_segments()
     assert [(s.start, s.end, s.speaker) for s in second] == [(0.0, 2.0, 0), (2.0, 4.0, 1)]
+
+
+def test_checkpoint_loaders_accept_tensors_and_reject_pickle_code(tmp_path):
+    import pickle
+
+    import torch
+
+    from whisperlivekit.whisper import _load_checkpoint, _load_lora_state, _load_sharded_checkpoint
+
+    path = tmp_path / "adapter_model.bin"
+    weights = {"weight": torch.arange(4)}
+    torch.save(weights, path)
+    for loaded in (_load_checkpoint(path, "cpu"), _load_checkpoint(path, "cpu", in_memory=True),
+                   _load_checkpoint(path, "cpu", checkpoint_bytes=path.read_bytes()),
+                   _load_sharded_checkpoint([path], "cpu"), _load_lora_state(str(tmp_path))):
+        torch.testing.assert_close(loaded["weight"], weights["weight"])
+
+    class PickleCode:
+        def __reduce__(self):
+            return eval, ("{'unexpected_code_execution': True}",)
+
+    torch.save(PickleCode(), path)
+    loaders = [lambda: _load_checkpoint(path, "cpu"),
+               lambda: _load_checkpoint(path, "cpu", in_memory=True),
+               lambda: _load_checkpoint(path, "cpu", checkpoint_bytes=path.read_bytes()),
+               lambda: _load_sharded_checkpoint([path], "cpu"),
+               lambda: _load_lora_state(str(tmp_path))]
+    for load in loaders:
+        with pytest.raises(pickle.UnpicklingError, match="Unsupported global"):
+            load()

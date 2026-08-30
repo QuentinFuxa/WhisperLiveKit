@@ -283,7 +283,7 @@ def _load_lora_state(lora_path: str):
             ) from exc
         return load_file(safe_path)
     if os.path.isfile(bin_path):
-        return torch.load(bin_path, map_location="cpu")
+        return torch.load(bin_path, map_location="cpu", weights_only=True)
     raise FileNotFoundError(
         f"No adapter weights found under {lora_path}. Expected adapter_model.safetensors or adapter_model.bin."
     )
@@ -407,7 +407,7 @@ def _load_checkpoint(
     """
     if checkpoint_bytes is not None:
         with io.BytesIO(checkpoint_bytes) as fp:
-            return torch.load(fp, map_location=device)
+            return torch.load(fp, map_location=device, weights_only=True)
 
     file_path = Path(file_path)
     suffix = file_path.suffix.lower()
@@ -425,10 +425,10 @@ def _load_checkpoint(
             with open(file_path, "rb") as f:
                 checkpoint_bytes = f.read()
             with io.BytesIO(checkpoint_bytes) as fp:
-                return torch.load(fp, map_location=device)
+                return torch.load(fp, map_location=device, weights_only=True)
         else:
             with open(file_path, "rb") as fp:
-                return torch.load(fp, map_location=device)
+                return torch.load(fp, map_location=device, weights_only=True)
 
 
 def _load_sharded_checkpoint(
@@ -456,7 +456,7 @@ def _load_sharded_checkpoint(
     else:
         for shard_path in shard_files:
             with open(shard_path, "rb") as fp:
-                shard_dict = torch.load(fp, map_location=device)
+                shard_dict = torch.load(fp, map_location=device, weights_only=True)
             if isinstance(shard_dict, dict):
                 merged_state_dict.update(shard_dict)
 

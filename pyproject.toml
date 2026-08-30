@@ -28,7 +28,7 @@ dependencies = [
     "websockets",
     "huggingface-hub>=0.25.0",
     "faster-whisper>=1.2.0",
-    "torch>=2.0.0",
+    "torch>=2.6.0",
     "torchaudio>=2.0.0",
     "tqdm",
     "tiktoken",
@@ -85,9 +85,9 @@ qwen3-streaming = [
     "qwen3-asr-causal[streaming]>=0.1.0",
 ]
 listen = ["sounddevice>=0.4.6"]
-cpu = ["torch>=2.0.0", "torchaudio>=2.0.0"]
+cpu = ["torch>=2.6.0", "torchaudio>=2.0.0"]
 cu129 = [
-    "torch>=2.0.0",
+    "torch>=2.6.0",
     "torchaudio>=2.0.0",
     'triton>=2.0.0; platform_machine == "x86_64" and (sys_platform == "linux" or sys_platform == "linux2")',
 ]
