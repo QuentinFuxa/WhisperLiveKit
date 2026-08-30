@@ -21,6 +21,17 @@ record includes model loading and is excluded from quality and steady-state
 latency summaries. Downloads happen before timing. Model files are hashed after
 the run. Startup is not a cold filesystem-cache measurement.
 
+The per-clip `startup_time_s` starts inside the running benchmark process,
+after CLI and metadata imports. `measure_startup.py` records a separate fresh
+process's import and engine-initialization time using the same cached model.
+That measurement ends when the engine constructor returns, including any warmup
+it performs. Whisper transcribes its cached JFK warmup file; native Qwen and
+Nemotron decode half a second of silence. It excludes subsequent pipeline audio
+and does not represent HTTP server readiness. Constructor warmup may compile
+kernels, so this is not a measurement of model loading alone.
+The cached JFK WAV has SHA-256
+`59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e`.
+
 Reports use schema 3.1. Each audio packet is delivered at an absolute deadline
 corresponding to its last sample; EOF follows the final write without another
 sleep. Earlier schema-3.0 trials accumulated pacing drift and waited after the
@@ -38,6 +49,14 @@ backend: English, French, Chinese, continuous Chinese. The order is fixed, not
 randomized. Three passes reveal repeat variation but are not 90 independent
 utterances or a confidence interval for unseen speech. Ordinary desktop activity
 is not controlled. Only this M5 host is measured; no NVIDIA result is implied.
+
+Power logging detected a transition from AC to battery at 14:29 UTC, during
+Whisper's Chinese run. The earlier English/French runs were observed on AC;
+Nemotron's English/French runs were on battery. Their raw latency differences
+therefore do not establish a gain under matched power conditions. At 31% battery,
+the driver was paused while allowing the current Nemotron Chinese child to
+finish. Quality outputs remain available; numerical gates must be read with
+this limitation, and must not be treated as an integration decision.
 
 ## Model and runtime configuration
 
@@ -97,7 +116,8 @@ quality threshold. Original references and hypotheses remain available to inspec
 
 First visible text includes provisional text; first committed text is separate.
 EOF finalization starts after the last audio feed returns. Source-end lag also
-includes slow feeding/backpressure and must be read alongside EOF time. ASR RTF
+includes slow feeding/backpressure and must be read alongside EOF time. Shifting
+delay into audio feeding does not establish faster completion. ASR RTF
 counts inference calls, including dispatch/lock waits as well as model work;
 it is not GPU kernel time or end-to-end latency. Per-pass and pooled p95 use
 linear interpolation over clip measurements.
@@ -106,7 +126,10 @@ RSS is sampled process memory at 50 ms intervals. MLX reports allocator peak
 since each sample's reset and active allocations at completion. The two memory
 quantities are separate and must not be added on unified memory. Warmup/startup
 memory is retained separately from warmed-pass peaks. The harness and pipeline
-are part of the measured process. Line timestamp flags check ordering and
+are part of the measured process, and the harness retains past output snapshots.
+RSS therefore describes the whole test process. A gain confined to RSS needs
+confirmation without retained snapshots before claiming lower server memory or
+using it to justify integration. Line timestamp flags check ordering and
 nonnegative durations; they are not an assessment of word-alignment accuracy.
 
 Failed/skipped clips remain in the JSON, with any partial hypothesis and error.

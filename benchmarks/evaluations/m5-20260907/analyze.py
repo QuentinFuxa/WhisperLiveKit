@@ -63,7 +63,7 @@ def identities(report):
                    for row in report["results"])
 
 
-def readiness(report, language):
+def readiness(report, language, *, continuous=False):
     reasons = []
     if report["benchmark_version"] != "3.1" or report["measurement"].get("audio_pacing") != PACING:
         reasons.append("missing corrected chunk-end pacing")
@@ -74,18 +74,24 @@ def readiness(report, language):
     if not report.get("corpus_sha256") or not report.get("model_artifacts"):
         reasons.append("missing corpus or model provenance")
     rows = report["results"]
-    if Counter(row["repeat"] for row in rows) != {1: 30, 2: 30, 3: 30}:
-        reasons.append("expected three passes of 30 clips")
-    for repeat in (1, 2, 3):
-        if len({row["sample"] for row in rows if row["repeat"] == repeat}) != 30:
-            reasons.append(f"pass {repeat} does not contain 30 distinct clips")
+    if continuous:
+        if len(rows) != 1 or abs(rows[0]["duration_s"] - 600) > .001:
+            reasons.append("expected one ten-minute continuous stream")
+        if any(row["reference"] for row in rows):
+            reasons.append("truncated continuous stream must not have an aggregate reference")
+    else:
+        if Counter(row["repeat"] for row in rows) != {1: 30, 2: 30, 3: 30}:
+            reasons.append("expected three passes of 30 clips")
+        for repeat in (1, 2, 3):
+            if len({row["sample"] for row in rows if row["repeat"] == repeat}) != 30:
+                reasons.append(f"pass {repeat} does not contain 30 distinct clips")
     if any(row["language"] != language for row in rows):
         reasons.append("mixed languages")
     if any(row["status"] != "ok" or row["translation_errors"] for row in rows):
         reasons.append("failed or skipped clip")
     if any(not row["timing_valid"] or not row["timing_monotonic"] for row in rows):
         reasons.append("invalid timestamp ordering")
-    if len(report["warmup_results"]) != 1 or report["warmup_results"][0]["status"] != "ok":
+    if not continuous and (len(report["warmup_results"]) != 1 or report["warmup_results"][0]["status"] != "ok"):
         reasons.append("missing or failed warmup")
     return reasons
 
@@ -132,9 +138,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     loaded = {}
-    result = {"reports": {}, "comparisons": {}, "pending": []}
+    result = {"reports": {}, "comparisons": {}, "pending": [],
+              "environment_review": "Power conditions changed during this series; see METHODS.md before interpreting latency gates."}
     table = ["# M5 backend screening", "",
              "Generated from the retained schema-3.1 reports. Incomplete runs are not ranked.", "",
+             result["environment_review"], "",
              "| Backend | Language | Completed | WER/CER % | EOF p95 s | First visible p95 s | Source-end lag p95 s | RSS GiB | MLX GiB |",
              "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
 
@@ -160,7 +168,7 @@ def main():
                 result["reports"][key] = {
                     "file": path.name, "uncompressed_sha256": hashlib.sha256(raw).hexdigest(),
                     "source": report["system_info"], "summary": summary,
-                    "readiness_issues": [] if continuous else readiness(report, language),
+                    "readiness_issues": readiness(report, language, continuous=continuous),
                     "warmup": [{k: row[k] for k in ("status", "startup_time_s", *MEMORY)}
                                for row in report["warmup_results"]],
                     "passes": {str(repeat): summarize([row for row in report["results"] if row["repeat"] == repeat], language)
