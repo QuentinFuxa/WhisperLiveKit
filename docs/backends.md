@@ -12,6 +12,10 @@ wlk --backend mlx-whisper --backend-policy localagreement --language fr --direct
 ```
 
 Without `--direct-english-translation`, it transcribes in the source language.
+This MLX mode has not passed real-audio validation: the tested Whisper small
+snapshot produces repetitive or incorrect translations on French and Chinese
+FLEURS clips, including incorrect translations outside WLK. Forwarding the
+decoding task fixes the ignored option but does not establish translation quality.
 Translated word timestamps are approximate; Whisper does not provide reliable
 word alignment for translated speech. Translation into other languages uses the
 [separate translation stage](translation-mlx.md).
