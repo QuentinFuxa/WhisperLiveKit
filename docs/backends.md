@@ -168,3 +168,29 @@ The full conflict list is in `[tool.uv].conflicts` in
 Diart supports Python 3.11–3.12; use Sortformer on Python 3.13.
 The vLLM Metal path additionally needs the vLLM Metal runtime; the source checkout
 pins a Python 3.12 macOS ARM64 wheel in `[tool.uv.sources]`.
+
+## Qwen3-ASR through native MLX (candidate)
+
+The `mlx-qwen3-asr` extra uses the upstream incremental audio API:
+
+```bash
+pip install 'whisperlivekit[mlx-qwen3-asr]'
+wlk --backend mlx-qwen3-asr --language fr
+```
+
+The adapter commits the model's stable prefix and drains `finish_streaming()`
+on pauses, speaker changes and EOF. WLK owns voice activity detection. Model
+loading and warmup run once at engine startup; sessions have separate decoder
+state and share a serialized model. Session language (including `auto`) and
+terminology context are passed to the native stream.
+
+`--mlx-qwen3-asr-finalization-mode accuracy` enables the upstream tail refinement;
+`latency` skips it. The chunk default is two seconds. There is no second decode
+of the whole utterance and no independent WLK stable-prefix policy. An upstream
+revision of text already confirmed to clients raises an error rather than
+appending a duplicate corrected sentence.
+
+Timestamps describe decode chunk bounds, not aligned words. This backend is
+still under evaluation on the fixed [benchmark corpus](../benchmarks/README.md);
+passing the adapter regression scenarios alone does not establish a latency or
+accuracy advantage over the existing backends.
