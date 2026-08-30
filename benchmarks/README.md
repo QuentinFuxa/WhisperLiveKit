@@ -42,10 +42,17 @@ publishing a comparison. Keep downloads outside measured runs.
 
 ## Measurements
 
-JSON schema 3 includes hypotheses, references, WER/CER edit counts, errors,
+JSON schema 3.1 includes hypotheses, references, WER/CER edit counts, errors,
 audio hashes, effective configuration, dependency versions, hardware, source
 commit and dirty state. Separate startup/warmup records do not contribute to
 measured quality or latency. All measured repetitions retain their sample IDs.
+
+Paced audio packets are sent when their final sample becomes available, using
+absolute deadlines. Processing and scheduler delays do not accumulate into
+every later deadline; backpressure can still delay delivery. EOF follows the
+last write directly, including when the last packet is short. Older 3.0 reports
+used relative waits after packets, which gave decoding an artificial interval
+before EOF; do not compare their latency values with 3.1 runs.
 
 - **ASR RTF:** successful inference-call time divided by audio duration.
 - **Startup:** harness/model initialization. For a fresh process, the separate

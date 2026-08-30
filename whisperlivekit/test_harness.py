@@ -40,6 +40,7 @@ Usage::
 
 import asyncio
 import logging
+import math
 import subprocess
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -618,16 +619,28 @@ class TestHarness:
             speed: Playback speed multiplier.
             chunk_duration: Duration of each chunk sent (seconds).
         """
-        chunk_bytes = int(chunk_duration * SAMPLE_RATE * BYTES_PER_SAMPLE)
+        if not math.isfinite(speed) or speed < 0:
+            raise ValueError("Feed speed must be finite and non-negative")
+        if not math.isfinite(chunk_duration) or chunk_duration * SAMPLE_RATE < 1:
+            raise ValueError("Chunk duration must be finite and at least one audio sample")
+        chunk_bytes = int(chunk_duration * SAMPLE_RATE) * BYTES_PER_SAMPLE
+        loop = asyncio.get_running_loop()
+        started = loop.time()
         offset = 0
         while offset < len(pcm_data):
             end = min(offset + chunk_bytes, len(pcm_data))
+            if speed > 0:
+                # A captured packet is available only after its final sample.
+                # Absolute deadlines avoid accumulating write/scheduler delays,
+                # and leave no artificial drain interval after the last packet.
+                due = started + end / (SAMPLE_RATE * BYTES_PER_SAMPLE) / speed
+                delay = due - loop.time()
+                if delay > 0:
+                    await asyncio.sleep(delay)
             await self._processor.process_audio(pcm_data[offset:end])
             chunk_seconds = (end - offset) / (SAMPLE_RATE * BYTES_PER_SAMPLE)
             self._audio_position += chunk_seconds
             offset = end
-            if speed > 0:
-                await asyncio.sleep(chunk_duration / speed)
 
     # ── Pause / silence ──
 

@@ -127,12 +127,13 @@ class BenchmarkReport:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "benchmark_version": "3.0",
+            "benchmark_version": "3.1",
             "timestamp": self.timestamp,
             "system_info": self.system_info,
             "config": {"backend": self.backend, "model_size": self.model_size,
                        "feed_speed": self.feed_speed},
             "measurement": {
+                "audio_pacing": "speed>0: absolute chunk-end deadlines; no post-feed sleep. speed=0: immediate",
                 "rtf": "successful ASR call time / audio duration",
                 "wall_time_s": "audio feed and EOF drain, excluding startup and cleanup",
                 "first_text_time_s": "first committed text since feed start; paced runs only",
@@ -144,7 +145,7 @@ class BenchmarkReport:
                 "mlx_peak_bytes": "MLX allocator peak since per-sample reset; separate from RSS, do not add them",
                 "quality": "NFC, lowercase, punctuation-normalized WER; Chinese uses CER with whitespace removed",
                 "asr_call_p95_ms": "last 4096 inference calls per sample, not word latency",
-                "model_revisions": "not resolved; pin model artifacts for published comparisons",
+                "model_revisions": "explicit local artifacts are hashed; floating Hub aliases are not resolved",
             },
             "corpus_sha256": self.corpus_sha256,
             "model_artifacts": self.model_artifacts,
