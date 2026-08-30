@@ -10,8 +10,6 @@ Each test is parameterized by backend so that adding a new backend
 automatically gets test coverage. Tests use AudioPlayer for timeline
 control — play segments, pause (inject silence), resume, cut.
 
-Designed for AI agent automation: an agent can modify code, run these
-tests, and validate transcription quality, timing, and streaming behavior.
 """
 
 import logging
@@ -546,6 +544,7 @@ async def test_metrics_collected(backend, short_sample):
         assert m.n_chunks_received > 0, "No chunks recorded"
         assert m.n_transcription_calls > 0, "No transcription calls"
         assert len(m.transcription_durations) > 0, "No transcription durations"
+        assert m.total_processing_time_s > 0, "ASR processing time was not recorded"
         assert m.n_tokens_produced > 0, "No tokens produced"
 
         logger.info(

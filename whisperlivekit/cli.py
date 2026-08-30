@@ -18,6 +18,8 @@ import logging
 import platform
 import sys
 
+from whisperlivekit.timed_objects import format_subtitle_timestamp as _subtitle_timestamp
+
 logger = logging.getLogger(__name__)
 
 
@@ -795,16 +797,6 @@ def _format_subtitle(result, fmt: str) -> str:
     return "\n".join(lines_out)
 
 
-def _subtitle_timestamp(seconds: float, fmt: str) -> str:
-    """Format seconds as SRT or VTT timestamp."""
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    ms = int(round((seconds % 1) * 1000))
-    sep = "," if fmt == "srt" else "."
-    return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
-
-
 # ---------------------------------------------------------------------------
 # `wlk bench` subcommand
 # ---------------------------------------------------------------------------
@@ -832,23 +824,19 @@ def cmd_bench(args: list):
                         help="Comma-separated language codes, or 'all' (default: en)")
     parser.add_argument("--categories", default=None,
                         help="Comma-separated categories: clean,noisy,multilingual,meeting")
+    parser.add_argument("--manifest", help="Fixed corpus manifest (audio must already be cached)")
+    parser.add_argument("--continuous", action="store_true", help="Use the manifest's continuous streams")
+    parser.add_argument("--repeats", type=int, default=1, help="Measured passes over each sample")
+    parser.add_argument("--warmup", action="store_true", help="Record a separate startup/warmup sample per language")
+    parser.add_argument("--config", help="JSON object of additional engine options, including pinned model paths")
     parser.add_argument("--quick", action="store_true",
                         help="Quick mode: small subset for smoke tests")
     parser.add_argument("--json", default=None, dest="json_out",
                         help="Export full report to JSON file")
     parser.add_argument("--transcriptions", action="store_true",
                         help="Show hypothesis vs reference for each sample")
-    parser.add_argument("--translation-backend", default=None, dest="translation_backend",
-                        help="Translation backend to exercise (e.g. mlx-llm-mt). "
-                             "When set, the benchmark runs the translation path and "
-                             "reports translation metrics.")
-    parser.add_argument("--target-language", default=None, dest="target_language",
-                        help="Target language for translation (e.g. en, it)")
-    parser.add_argument("--simultaneous", action="store_true", default=False,
-                        help="Use the simultaneous-MT variant of the translation backend "
-                             "(AlignAtt commit policy over the unstable ASR tail)")
-    parser.add_argument("--reference-translation", default=None, dest="reference_translation",
-                        help="Reference translation text for accuracy scoring (BLEU/chrF)")
+    parser.add_argument("--speed", type=float, default=0,
+                        help="Audio feed speed: 0=immediate, 1=real time (default: 0)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Show detailed logs")
 
@@ -886,6 +874,11 @@ def _suppress_logging():
 
 async def _run_bench_new(parsed, languages, categories):
     """Run the benchmark using the new benchmark module."""
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from whisperlivekit.benchmark.datasets import load_manifest
     from whisperlivekit.benchmark.report import print_report, print_transcriptions, write_json
     from whisperlivekit.benchmark.runner import BenchmarkRunner
 
@@ -902,17 +895,19 @@ async def _run_bench_new(parsed, languages, categories):
         languages=languages,
         categories=categories,
         quick=parsed.quick,
-        translation_backend=parsed.translation_backend,
-        target_language=parsed.target_language,
-        simultaneous=parsed.simultaneous,
-        reference_translation=parsed.reference_translation,
+        speed=parsed.speed,
         on_progress=on_progress,
+        samples=load_manifest(parsed.manifest, continuous=parsed.continuous) if parsed.manifest else None,
+        repeats=parsed.repeats, warmup=parsed.warmup,
+        engine_kwargs=json.loads(Path(parsed.config).read_text()) if parsed.config else None,
     )
 
     print("\n  Downloading benchmark samples (cached after first run)...",
           file=sys.stderr)
 
     report = await runner.run()
+    if parsed.manifest:
+        report.corpus_sha256 = hashlib.sha256(Path(parsed.manifest).read_bytes()).hexdigest()
 
     print_report(report)
 
@@ -922,6 +917,8 @@ async def _run_bench_new(parsed, languages, categories):
     if parsed.json_out:
         write_json(report, parsed.json_out)
         print(f"  Results exported to: {parsed.json_out}\n", file=sys.stderr)
+    if report.n_failed or any(r.status in {"error", "timeout"} for r in report.warmup_results) or not report.successful_results:
+        raise SystemExit(1)
 
 
 # ---------------------------------------------------------------------------

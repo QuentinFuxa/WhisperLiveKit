@@ -20,6 +20,10 @@
 </p>
 
 
+<p align="center">
+<a href="https://trendshift.io/repositories/14685?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-14685" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/14685" alt="QuentinFuxa%2FWhisperLiveKit | Trendshift" width="250" height="55"/></a>
+</p>
+
 ### Powered by Leading Research:
 
 - Simul-[Whisper](https://arxiv.org/pdf/2406.10052)/[Streaming](https://arxiv.org/abs/2506.17077) (SOTA 2025) - Ultra-low latency transcription using [AlignAtt policy](https://arxiv.org/pdf/2305.11408). 

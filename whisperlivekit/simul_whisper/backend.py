@@ -303,6 +303,10 @@ class SimulStreamingASR:
 
         if self.decoder_type is None:
             self.decoder_type = 'greedy' if self.beams == 1 else 'beam'
+        if self.decoder_type not in ('greedy', 'beam'):
+            raise ValueError("decoder_type must be 'greedy' or 'beam'")
+        if self.decoder_type == 'greedy' and self.beams != 1:
+            raise ValueError("The greedy decoder requires --beams 1")
 
         self.fast_encoder = False
         self._resolved_model_path = None
@@ -374,7 +378,7 @@ class SimulStreamingASR:
                 audio_max_len=self.audio_max_len,
                 audio_min_len=self.audio_min_len,
                 cif_ckpt_path=self.cif_ckpt_path,
-                decoder_type="beam",
+                decoder_type=self.decoder_type,
                 beam_size=self.beams,
                 task="translate" if self.direct_english_translation else "transcribe",
                 never_fire=self.never_fire,

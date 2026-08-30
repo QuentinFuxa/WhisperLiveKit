@@ -111,6 +111,7 @@ jobs:
           PY
 
   test:
+    # Required status-check name in the main branch ruleset.
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
@@ -126,7 +127,15 @@ jobs:
       - name: Install package with test deps
         run: pip install -e ".[test]" qwen3-asr-causal
 
-      # test_pipeline.py downloads real models and audio; it stays a local
-      # suite (see CLAUDE.md). CI runs the dependency-light tests.
-      - name: Run test suite
-        run: pytest -q tests/ --ignore=tests/test_pipeline.py
+      - name: Install FFmpeg for audio integration tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Run regression suite
+        run: pytest -q tests/ --ignore=tests/test_pipeline.py --ignore=tests/test_asr_coalescing_pipeline.py
+
+      # Keep real-audio coverage visible: this step downloads Whisper tiny
+      # and LibriSpeech audio and feeds it at real-time speed.
+      - name: Verify Whisper streaming boundaries with real audio
+        run: pytest -q tests/test_asr_coalescing_pipeline.py

@@ -1,386 +1,186 @@
-"""Simultaneous-MT capture layer: MLX Q/K attention capture + AlignAtt commit policy.
+"""Scoped Hunyuan attention capture for AlignAtt on mlx-lm.
 
-mlx-lm's ``hunyuan_v1_dense.Attention`` fuses Q/K into
-``scaled_dot_product_attention`` and discards the attention weights; this
-wrapper replicates the forward with a manual ``softmax(QK^T)`` so the
-alignment-head attention is capturable. The forward is bit-identical to the
-original (only attention storage is added).
-
-The 8 production head indices + TS scores come from a calibration run on
-tencent/Hy-MT2-1.8B (zh→en), hardcoded here so the simultaneous variant is
-self-contained.
-
-Load-bearing details (learned during development):
-  1. ``create_attention_mask`` returns the string ``"causal"``, not an
-     array — the manual forward must build the additive causal mask itself.
-  2. ``__call__`` dispatch is on the TYPE, not the instance — must use a
-     wrapper ``nn.Module`` whose class defines ``__call__``, not an
-     instance ``__call__`` assignment.
+Output uses native fused attention. Only selected heads are materialized for
+alignment. Callers hold the shared model lock throughout the capture context.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
-
-# MLX is macOS-arm64-only; importing at module level breaks test collection on
-# Linux (ModuleNotFoundError: No module named 'mlx'). The imports are deferred
-# to call time — CapturedAttention.__call__ and install_capture import mlx.core /
-# mlx.nn when they actually need them, not at module import time.
-
-# 8 calibrated production head indices (layer, head) for tencent/Hy-MT2-1.8B
-# zh→en. Top head (L9, H5, TS=0.79) is the primary alignment signal; the
-# others are cross-check / stability heads. Hardcoded from the calibration
-# run so the variant is self-contained.
-ALIGNMENT_HEADS: List[Tuple[int, int]] = [
-    (9, 5), (13, 1), (9, 6), (12, 11), (14, 2), (14, 0), (4, 12), (1, 10),
-]
-TOP_HEAD: Tuple[int, int] = (9, 5)
-
-# TS (alignment-stream) scores for each calibrated head. Used for TS-weighted
-# multi-head voting. Keys are (layer, head) tuples matching ALIGNMENT_HEADS.
-HEAD_TS_SCORES: Dict[Tuple[int, int], float] = {
-    (9, 5): 0.7942,
-    (13, 1): 0.7270,
-    (9, 6): 0.5638,
-    (12, 11): 0.5507,
-    (14, 2): 0.5070,
-    (14, 0): 0.4380,
-    (4, 12): 0.3587,
-    (1, 10): 0.3231,
-}
-
-# 8 calibrated production head indices for tencent/Hy-MT2-1.8B ja→zh.
-# Top head (L9, H5, TS=0.89) is the primary alignment signal. The top 3
-# heads (L9/H5, L13/H1, L9/H6) are identical to zh→en, suggesting these
-# are general alignment heads for the hunyuan_v1_dense architecture, not
-# direction-specific; the ja→zh TS scores are uniformly higher (kanji→hanzi
-# is often 1:1, simplifying word alignment). 219 aligned pairs from
-# larryvrh/WikiMatrix-v1-Ja_Zh-filtered; promotion gate passed (3/3 splits
-# stable, max TS delta 0.0244 < 0.03 threshold). Hardcoded from the
-# calibration run so the variant is self-contained.
-JA_ZH_ALIGNMENT_HEADS: List[Tuple[int, int]] = [
-    (9, 5), (13, 1), (9, 6), (4, 12), (1, 10), (2, 9), (8, 8), (8, 6),
-]
-JA_ZH_TOP_HEAD: Tuple[int, int] = (9, 5)
-
-# TS scores for the ja→zh heads. Keys match JA_ZH_ALIGNMENT_HEADS.
-JA_ZH_HEAD_TS_SCORES: Dict[Tuple[int, int], float] = {
-    (9, 5): 0.8910,
-    (13, 1): 0.7758,
-    (9, 6): 0.7665,
-    (4, 12): 0.6956,
-    (1, 10): 0.5907,
-    (2, 9): 0.5420,
-    (8, 8): 0.5014,
-    (8, 6): 0.4418,
-}
-
-# 8 calibrated production head indices for tencent/Hy-MT2-1.8B en→zh.
-# Top head (L9, H5, TS=0.86) is the primary alignment signal. The top 2
-# heads (L9/H5, L13/H1) are IDENTICAL across all three calibrated directions
-# (zh→en, ja→zh, en→zh) — strong evidence these are general alignment heads
-# for the hunyuan_v1_dense architecture, not direction-specific. 5/8 heads
-# shared across all three directions. 1138 aligned pairs (Mxode en-zh);
-# promotion gate passed (3/3 splits stable, max TS delta 0.0086 < 0.03).
-# Hardcoded from the calibration run so the variant is self-contained.
-EN_ZH_ALIGNMENT_HEADS: List[Tuple[int, int]] = [
-    (9, 5), (13, 1), (4, 12), (12, 11), (9, 6), (1, 10), (14, 2), (8, 8),
-]
-EN_ZH_TOP_HEAD: Tuple[int, int] = (9, 5)
-
-# TS scores for the en→zh heads. Keys match EN_ZH_ALIGNMENT_HEADS.
-EN_ZH_HEAD_TS_SCORES: Dict[Tuple[int, int], float] = {
-    (9, 5): 0.8589,
-    (13, 1): 0.7914,
-    (4, 12): 0.5811,
-    (12, 11): 0.5701,
-    (9, 6): 0.5281,
-    (1, 10): 0.4856,
-    (14, 2): 0.4637,
-    (8, 8): 0.3118,
-}
-
-# Language codes that count as "Chinese" for registry key normalization.
-_ZH_CODES = {"zh", "zh-cn", "zh-tw", "zh-hans", "zh-hant", "cmn", "yue"}
+from contextlib import contextmanager
+from dataclasses import dataclass
+from types import MappingProxyType
 
 
-@dataclass
-class CalibrationEntry:
-    """A calibrated (model, source, target) tuple's alignment heads.
-
-    ``heads`` is the list of (layer, head) indices to capture.
-    ``ts_scores`` maps each head to its alignment-stream score.
-    ``top_head`` is the primary commit-signal head.
-    ``disabled_quants`` lists quant suffixes (e.g. ``"4bit"``) that share
-    the model id but whose attention patterns diverge too far from the
-    calibrated weights to use these heads; a repo matching one of them
-    silently deactivates (returns ``None`` from ``lookup_calibration``).
-    """
-    heads: List[Tuple[int, int]]
-    ts_scores: Dict[Tuple[int, int], float]
-    top_head: Tuple[int, int]
-    disabled_quants: set = field(default_factory=set)
-
-
-# Per-(model_id, source_lang, target_lang) calibration registry. The key is
-# a NORMALIZED model id (org prefix and quant suffix stripped) so the same
-# calibration entry is reusable across implementations (MLX, vLLM/CUDA) and
-# quantizations. Only tuples that have passed the AlignAtt4LLM promotion gate
-# (TS > 0.1 for >=8 heads, stability, eligible_for_promotion) are seeded here.
-# The simultaneous variant looks up its (repo, src, tgt) at init; a missing
-# tuple triggers silent deactivation (translate-on-close, no provisional).
-#
-# The 8bit entry is calibrated on tencent/Hy-MT2-1.8B (bf16 base model);
-# the heads transfer to the 8bit MLX quantization. The 4bit quantization
-# was probed (48.9% argmax match vs 8bit — attention patterns differ too
-# much) and the formal promotion gate could not be run (AlignAtt4LLM
-# requires PyTorch/transformers, which can't load MLX-format repos), so
-# 4bit is in ``disabled_quants`` — it silently deactivates (translation still
-# works via the base class).
-#
-# TODO: refactor heads to load from external JSON files (the AlignAtt4LLM
-# ``translation_heads_<model>_<direction>.json`` pattern) instead of being
-# hardcoded in Python, so calibration entries are shareable across
-# implementations (MLX, vLLM, etc.) without code changes.
-CALIBRATION_REGISTRY: Dict[Tuple[str, str, str], CalibrationEntry] = {
-    ("hy-mt2-1.8b", "zh", "en"): CalibrationEntry(
-        heads=ALIGNMENT_HEADS,
-        ts_scores=HEAD_TS_SCORES,
-        top_head=TOP_HEAD,
-        disabled_quants={"4bit"},
-    ),
-    ("hy-mt2-1.8b", "ja", "zh"): CalibrationEntry(
-        heads=JA_ZH_ALIGNMENT_HEADS,
-        ts_scores=JA_ZH_HEAD_TS_SCORES,
-        top_head=JA_ZH_TOP_HEAD,
-        disabled_quants={"4bit"},
-    ),
-    ("hy-mt2-1.8b", "en", "zh"): CalibrationEntry(
-        heads=EN_ZH_ALIGNMENT_HEADS,
-        ts_scores=EN_ZH_HEAD_TS_SCORES,
-        top_head=EN_ZH_TOP_HEAD,
-        disabled_quants={"4bit"},
-    ),
-}
-
-
-def _normalize_lang(lang: str) -> str:
-    """Normalize a language code for registry lookup. Chinese variants
-    collapse to ``zh`` (matching ``resolve_prompt``'s normalization)."""
-    lang = (lang or "").strip().lower()
-    if lang in _ZH_CODES:
-        return "zh"
-    return lang
-
-
-# Recognized MLX quant suffixes, longest first so '-4bit' doesn't shadow
-# a hypothetical '-4bit-grouped' (none currently exist, but this is robust).
-_QUANT_SUFFIXES = ("-8bit", "-4bit", "-bf16", "-f16")
-
-
-def _normalize_model_id(repo: str) -> str:
-    """Normalize a model repo to a canonical model id: strip the org prefix
-    (everything up to and including the last ``/``) and the quant suffix,
-    then lowercase. Calibration entries are keyed by model id only, so the
-    same architecture across quants (8bit/4bit/bf16) and implementations
-    (MLX ``mlx-community/…``, vLLM ``tencent/…``) shares a single entry.
-    """
-    name = (repo or "").rsplit("/", 1)[-1].lower()
-    for suffix in _QUANT_SUFFIXES:
-        if name.endswith(suffix):
-            name = name[: -len(suffix)]
-            break
-    return name
-
-
-def _extract_quant(repo: str) -> str:
-    """Extract the quant suffix from a model repo (e.g. ``'4bit'`` from
-    ``'mlx-community/Hy-MT2-1.8B-4bit'``). Returns ``''`` if no known suffix."""
-    name = (repo or "").rsplit("/", 1)[-1].lower()
-    for suffix in _QUANT_SUFFIXES:
-        if name.endswith(suffix):
-            return suffix[1:]  # strip leading '-'
-    return ""
-
-
-def lookup_calibration(
-    model_repo: str, source_lang: str, target_lang: str
-) -> Optional[CalibrationEntry]:
-    """Look up the calibration entry for a (model_repo, source, target) tuple.
-
-    The repo is normalized to a model id (org prefix + quant suffix stripped)
-    before lookup, so all quants of the same architecture share one entry.
-    If the model id matches but the repo's quant is in the entry's
-    ``disabled_quants``, returns ``None`` (silently deactivates).
-
-    Returns the ``CalibrationEntry`` if the tuple is calibrated and not
-    quant-disabled, or ``None`` if it is not (the caller should silently
-    deactivate in that case).
-    """
-    key = (
-        _normalize_model_id(model_repo),
-        _normalize_lang(source_lang),
-        _normalize_lang(target_lang),
-    )
-    entry = CALIBRATION_REGISTRY.get(key)
-    if entry is None:
-        return None
-    if _extract_quant(model_repo) in entry.disabled_quants:
-        return None
-    return entry
+@dataclass(frozen=True)
+class AttentionRows:
+    query_start: int
+    weights: object
 
 
 class CapturedAttention:
-    """Wraps ``hunyuan_v1_dense.Attention``; replicates the forward with a
-    manual ``softmax(QK^T)`` so attention weights are capturable for the
-    alignment heads.
-
-    Only stores attention for selected layers (the layers containing
-    calibrated heads); other layers compute attention manually but discard
-    it (small overhead). Shares the original projections/norms/rope — no
-    weight duplication.
-
-    Does NOT inherit from ``nn.Module`` at import time — ``install_capture``
-    dynamically creates the real class with ``nn.Module`` as base when MLX
-    is available, so the module is collectable without MLX installed.
-    """
-
-    def __init__(self, orig, layer_idx, capture, selected_layers):
-        self.orig = orig
-        self.layer_idx = layer_idx
+    def __init__(self, original, layer, heads, capture, target_start):
+        self.original = original
+        self.layer = layer
+        self.heads = heads
         self.capture = capture
-        self.selected_layers = selected_layers
+        self.target_start = target_start
 
     def __call__(self, x, mask=None, cache=None):
         import mlx.core as mx
-        a = self.orig
-        B, L, D = x.shape
-        q, k, v = a.q_proj(x), a.k_proj(x), a.v_proj(x)
-        q = q.reshape(B, L, a.n_heads, a.head_dim).transpose(0, 2, 1, 3)
-        k = k.reshape(B, L, a.n_kv_heads, a.head_dim).transpose(0, 2, 1, 3)
-        v = v.reshape(B, L, a.n_kv_heads, a.head_dim).transpose(0, 2, 1, 3)
-        if cache is not None:
-            q = a.rope(q, offset=cache.offset)
-            k = a.rope(k, offset=cache.offset)
-        else:
-            q = a.rope(q)
-            k = a.rope(k)
+        from mlx_lm.models.base import scaled_dot_product_attention
+
+        a = self.original
+        batch, length, _ = x.shape
+        offset = int(cache.offset) if cache is not None else 0
+        q = a.q_proj(x).reshape(batch, length, a.n_heads, a.head_dim).transpose(0, 2, 1, 3)
+        k = a.k_proj(x).reshape(batch, length, a.n_kv_heads, a.head_dim).transpose(0, 2, 1, 3)
+        v = a.v_proj(x).reshape(batch, length, a.n_kv_heads, a.head_dim).transpose(0, 2, 1, 3)
+        q, k = a.rope(q, offset=offset), a.rope(k, offset=offset)
         if a.use_qk_norm:
-            q = a.query_layernorm(q)
-            k = a.key_layernorm(k)
+            q, k = a.query_layernorm(q), a.key_layernorm(k)
         if cache is not None:
             k, v = cache.update_and_fetch(k, v)
-        # GQA: repeat KV heads to match Q heads
-        if a.n_kv_heads != a.n_heads:
-            rep = a.n_heads // a.n_kv_heads
-            k = mx.repeat(k, rep, axis=1)
-            v = mx.repeat(v, rep, axis=1)
-        scores = (q @ k.transpose(0, 1, 3, 2)) * a.scale
-        if mask is not None:
-            if isinstance(mask, str):  # "causal" sentinel from create_attention_mask
-                Lq, Lk = scores.shape[-2], scores.shape[-1]
-                idx = mx.arange(Lq)[:, None]
-                scores = scores + mx.where(
-                    idx >= mx.arange(Lk)[None, :], 0.0, -float("inf")
+        output = scaled_dot_product_attention(q, k, v, cache=cache, scale=a.scale, mask=mask)
+        first = max(0, self.target_start - offset)
+        if first < length:
+            if batch != 1 or not isinstance(k, mx.array):
+                raise ValueError("Alignment capture requires one sequence and an unquantized KV cache")
+            keys = k[0, [h // (a.n_heads // a.n_kv_heads) for h in self.heads]]
+            queries = q[0, list(self.heads), first:, :]
+            scores = (queries @ keys.transpose(0, 2, 1)) * a.scale
+            if isinstance(mask, str):
+                if mask != "causal":
+                    raise ValueError(f"Unsupported attention mask: {mask}")
+                visible = mx.arange(offset + first, offset + length)[:, None] >= mx.arange(k.shape[-2])
+                scores = mx.where(visible, scores, -float("inf"))
+            elif mask is not None:
+                selected_mask = mask[..., first:, :]
+                if selected_mask.dtype == mx.bool_:
+                    scores = mx.where(selected_mask, scores, -float("inf"))
+                else:
+                    scores = scores + selected_mask
+            weights = mx.softmax(scores, axis=-1, precise=True).astype(mx.float32)
+            for index, head in enumerate(self.heads):
+                self.capture.setdefault((self.layer, head), []).append(
+                    AttentionRows(offset + first, weights[index])
                 )
-            else:
-                scores = scores + mask
-        attn = mx.softmax(scores, axis=-1)
-        out = (attn @ v).transpose(0, 2, 1, 3).reshape(B, L, -1)
-        if self.layer_idx in self.selected_layers:
-            self.capture.setdefault(self.layer_idx, []).append(
-                attn.astype(mx.float32)
-            )
-        return a.o_proj(out)
+        return a.o_proj(output.transpose(0, 2, 1, 3).reshape(batch, length, -1))
 
 
-def install_capture(model, heads=ALIGNMENT_HEADS):
-    """Patch a loaded mlx-lm hunyuan_v1_dense model to capture attention for
-    the selected head layers.
-
-    Idempotent: if a layer's ``self_attn`` is already a ``CapturedAttention``
-    (e.g. the shared cached model was patched by another simul instance), it
-    is not re-wrapped.
-
-    Returns a ``dict[layer_idx -> list of attn tensors]`` that fills on each
-    forward pass; clear it between runs.
-    """
+@contextmanager
+def capture_attention(model, heads, *, target_start=0):
+    """Install for one generation and always restore the original layers."""
     import mlx.nn as nn
+    from mlx_lm.models.hunyuan_v1_dense import Attention
 
-    # Dynamically create the nn.Module-backed class so __call__ dispatch
-    # works correctly with mlx-lm's model layers (the TYPE dispatch
-    # requirement). The base class is nn.Module; CapturedAttention's methods
-    # are copied onto it. This keeps the module collectable without MLX.
-    class _CapturedAttentionNN(CapturedAttention, nn.Module):
-        def __init__(self, orig, layer_idx, capture, selected_layers):
+    class Wrapper(CapturedAttention, nn.Module):
+        def __init__(self, *args):
             nn.Module.__init__(self)
-            CapturedAttention.__init__(self, orig, layer_idx, capture, selected_layers)
+            CapturedAttention.__init__(self, *args)
 
-    selected_layers = {h[0] for h in heads}
-    capture: Dict[int, list] = {}
-    for i, block in enumerate(model.model.layers):
-        if isinstance(block.self_attn, CapturedAttention):
-            # Already patched (shared model); point at the existing capture dict.
-            capture = block.self_attn.capture
-            continue
-        block.self_attn = _CapturedAttentionNN(
-            block.self_attn, i, capture, selected_layers
-        )
-    return capture
-
-
-def source_span(tok, prompt_str, source_text):
-    """Find the ``[start, end)`` token positions of ``source_text`` within
-    ``prompt_str``. The source sits as a contiguous block (BPE-merged) in the
-    user content; locate it by encoding source alone and matching the id
-    subsequence from the end."""
+    layers, selected = model.model.layers, {}
+    for layer, head in heads:
+        if not 0 <= layer < len(layers):
+            raise ValueError(f"Calibration layer out of range: {layer}")
+        original = layers[layer].self_attn
+        if not isinstance(original, Attention):
+            raise ValueError("MLX alignment capture currently supports hunyuan_v1_dense only")
+        if not 0 <= head < original.n_heads:
+            raise ValueError(f"Calibration head out of range: {(layer, head)}")
+        selected.setdefault(layer, set()).add(head)
+    if not selected:
+        raise ValueError("Alignment capture requires calibrated heads")
+    capture, originals = {}, {}
     try:
-        src_ids = tok.encode(source_text, add_special_tokens=False)
-        pids = tok.encode(prompt_str, add_special_tokens=False)
-    except TypeError:
-        src_ids = tok.encode(source_text)
-        pids = tok.encode(prompt_str)
-    n = len(src_ids)
-    for i in range(len(pids) - n, -1, -1):
-        if pids[i : i + n] == src_ids:
-            return i, i + n
-    return len(pids) - n - 4, len(pids) - 4
+        for layer, chosen in selected.items():
+            originals[layer] = layers[layer].self_attn
+            layers[layer].self_attn = Wrapper(originals[layer], layer, tuple(sorted(chosen)), capture, target_start)
+        yield capture
+    finally:
+        for layer, original in originals.items():
+            layers[layer].self_attn = original
 
 
-def committed_src_end_from_text(tok, src_ids, committed_text):
-    """Map the committed source-text prefix to a source-token boundary.
+def snapshot_capture(capture):
+    """Detach a draft's attention from the model and from later sessions."""
+    import numpy as np
 
-    Decodes increasing source-token prefixes and keeps the longest whose
-    decoded text is a prefix of ``committed_text`` (rounds DOWN to the last
-    complete BPE token — a partial BPE token at the boundary is held,
-    conservative). Returns a source-token count (0-indexed boundary within the
-    source span).
+    snapshot = {}
+    for head, entries in capture.items():
+        rows = []
+        for entry in entries:
+            weights = np.array(entry.weights, dtype=np.float32, copy=True)
+            weights.flags.writeable = False
+            rows.append(AttentionRows(entry.query_start, weights))
+        snapshot[head] = tuple(rows)
+    return MappingProxyType(snapshot)
 
-    Decode artifacts: a token that carries half a UTF-8 character decodes
-    with a trailing U+FFFD when the prefix is cut mid-character. Those are
-    stripped before the prefix test — without this the first byte-split
-    boundary froze the commit frontier for the rest of the segment
-    (measured: cend stuck at 3 of 21 tokens while the committed text grew
-    17 -> 37 chars)."""
-    if not committed_text:
-        return 0
-    cend = 0
-    for k in range(1, len(src_ids) + 1):
-        try:
-            decoded = tok.decode(src_ids[:k])
-        except Exception:
-            break
+
+def source_span(tokenizer, prompt, source):
+    """Locate source tokens exactly; an approximate span can commit wrong text."""
+    source_ids = tokenizer.encode(source, add_special_tokens=False)
+    prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
+    if source_ids:
+        for start in range(len(prompt_ids) - len(source_ids), -1, -1):
+            if prompt_ids[start:start + len(source_ids)] == source_ids:
+                return start, start + len(source_ids)
+    raise ValueError("Cannot locate the source token span in the translation prompt")
+
+
+def committed_src_end_from_text(tokenizer, source_ids, committed_text):
+    end = 0
+    for count in range(1, len(source_ids) + 1):
+        decoded = tokenizer.decode(source_ids[:count])
         if decoded.endswith("\ufffd"):
-            decoded = decoded.rstrip("\ufffd")
-        if (decoded and len(decoded) <= len(committed_text)
-                and committed_text.startswith(decoded)):
-            cend = k
-        else:
+            continue
+        if not decoded or not committed_text.startswith(decoded):
             break
-    return cend
+        end = count
+    return end
 
 
-def _paper_stabilized_argmax(span_rows: "np.ndarray") -> "np.ndarray":
+def apply_commit_policy(capture, heads, n_tokens, prompt_length, src_start, src_end,
+                        committed_src_end, mode="paper", mass_threshold=0.5):
+    """Return a contiguous target prefix backed by captured target-query rows."""
+    import numpy as np
+
+    if mode not in {"paper", "argmax", "mass"}:
+        raise ValueError(f"Unknown alignment policy: {mode}")
+    if not 0 < mass_threshold <= 1 or not 0 <= committed_src_end <= src_end - src_start:
+        raise ValueError("Invalid alignment frontier or mass threshold")
+    if n_tokens == 0:
+        return 0
+    if not heads or any(not capture.get(head) for head in heads):
+        raise RuntimeError("Missing alignment attention; translation draft was not committed")
+    per_head = []
+    for head in heads:
+        rows = {}
+        for entry in capture[head]:
+            for index, row in enumerate(np.asarray(entry.weights)):
+                rows[entry.query_start + index] = row[src_start:src_end]
+        per_head.append(rows)
+    available = 0
+    while available < n_tokens and all(prompt_length + available in rows for rows in per_head):
+        available += 1
+    if not available:
+        raise RuntimeError("No target-query attention captured for translation draft")
+    values = np.array([[rows[prompt_length + i] for rows in per_head] for i in range(available)])
+    if values.shape[-1] != src_end - src_start or not values.shape[-1] or not np.isfinite(values).all():
+        raise RuntimeError("Invalid source attention in translation draft")
+    if committed_src_end == 0:
+        return 0
+    if mode == "paper":
+        accepts = _paper_stabilized_argmax(values) < committed_src_end + 1
+    elif mode == "argmax":
+        accepts = values[:, 0].argmax(axis=-1) < committed_src_end
+    else:
+        total = values[:, 0].sum(axis=-1)
+        accepts = values[:, 0, :committed_src_end].sum(axis=-1) / np.maximum(total, 1e-12) >= mass_threshold
+    accepts &= np.all(values.sum(axis=-1) > 0, axis=-1)
+    held = np.flatnonzero(~accepts)
+    return int(held[0]) if held.size else available
+
+
+def _paper_stabilized_argmax(span_rows):
     """Stabilized source argmax per draft token (paper §4.4 branch B).
 
     ``span_rows``: (T, H, S) decode-step attention over the source span for
@@ -414,111 +214,3 @@ def _paper_stabilized_argmax(span_rows: "np.ndarray") -> "np.ndarray":
         lo, hi = max(0, s - half), min(S, s + half + 1)
         zf[:, s] = np.median(z[:, lo:hi], axis=1)
     return zf.argmax(axis=1)
-
-
-def apply_commit_policy(
-    capture: Dict[int, list],
-    top_head: Tuple[int, int],
-    n_tokens: int,
-    src_start: int,
-    src_end: int,
-    committed_src_end: int,
-    mode: str = "argmax",
-    mass_threshold: float = 0.5,
-    heads: Optional[List[Tuple[int, int]]] = None,
-) -> int:
-    """Apply the AlignAtt commit policy with the top alignment head.
-
-    For each generated target token (decode step), check if the top head's
-    attention over the source span indicates the token aligns to a source
-    token ASR has already committed (index < committed_src_end). The
-    committable prefix is contiguous: the first HOLD stops it.
-
-    mode:
-      - ``"argmax"`` (default): commit if the argmax source position is
-        within the committed span. Brittle — a single spike on the unstable
-        tail holds the whole token even if most attention is safe.
-      - ``"mass"``: commit if the fraction of attention mass on committed
-        source tokens exceeds ``mass_threshold`` (default 0.5). More
-        tolerant — commits tokens whose majority of attention is safe,
-        giving more provisional content during speech.
-      - ``"paper"``: the paper's §4.4 decision rule. Head-averaged rows over
-        ``heads`` (default: the calibrated set), per-head prefix-online
-        Welford z-normalization, width-7 median filter along the source
-        axis, stabilized argmax vs the accessible frontier (gate: argmax <
-        committed_src_end + b, b=1). The mass gates are off (tau=0), as in
-        the paper's official operating points. First-failure scan emits the
-        longest accepting prefix.
-
-    Returns the number of committed target tokens (a contiguous prefix
-    length). If no attention was captured for the top head's layer, all
-    tokens are committed (degenerates to no-hold).
-    """
-    import numpy as np
-
-    layer, head = top_head
-    if mode == "paper":
-        heads = list(heads or ALIGNMENT_HEADS)
-        by_layer: Dict[int, list] = {}
-        for (l, h) in heads:
-            if l in capture:
-                by_layer.setdefault(l, [])
-        if not by_layer:
-            return n_tokens
-        T = None
-        span_mats = []
-        for l, layer_steps in by_layer.items():
-            steps = [np.array(s) for s in capture[l]
-                     if np.array(s).ndim == 4 and np.array(s).shape[2] == 1][:n_tokens]
-            if T is None:
-                T = len(steps)
-            T = min(T, len(steps))
-            hidx = [h for (ll, h) in heads if ll == l]
-            spans = [s[0, hidx, 0, src_start:src_end] for s in steps]  # each (H_l, S)
-            span_mats.append((hidx, spans))
-        if not T:
-            return n_tokens
-        # assemble (T, H_total, S): heads ordered as in ``heads``
-        H_total = len(heads)
-        S = src_end - src_start
-        rows = np.zeros((T, H_total, S), dtype=np.float64)
-        layer_heads = {}
-        for (l, h) in heads:
-            layer_heads.setdefault(l, []).append(h)
-        for l, hs in layer_heads.items():
-            steps = [np.array(s) for s in capture[l]
-                     if np.array(s).ndim == 4 and np.array(s).shape[2] == 1][:T]
-            for t, s in enumerate(steps):
-                rows[t, [heads.index((l, hh)) for hh in hs], :] = s[0, hs, 0, src_start:src_end]
-        argmax_pos = _paper_stabilized_argmax(rows)
-        committed_len = 0
-        for t in range(T):
-            if int(argmax_pos[t]) < committed_src_end + 1:  # b=1
-                committed_len = t + 1
-            else:
-                break
-        return committed_len
-
-    layer, head = top_head
-    if layer not in capture:
-        return n_tokens
-    # Decode-step attentions only: shape (H, 1, Lk). Prefill steps have
-    # shape (H, Lq, Lk) with Lq > 1 — filter them out.
-    steps = [s for s in capture[layer] if np.array(s).shape[2] == 1]
-    steps = steps[:n_tokens]
-    committed_len = 0
-    for i, s in enumerate(steps):
-        a = np.array(s)[0]  # (H, 1, Lk)
-        src_attn = a[head, 0, src_start:src_end]  # (n_src,)
-        if mode == "mass":
-            accessible_mass = float(src_attn[:committed_src_end].sum())
-            total_mass = float(src_attn.sum()) + 1e-12
-            commit = (accessible_mass / total_mass) >= mass_threshold
-        else:  # argmax (default)
-            amax = int(np.argmax(src_attn))
-            commit = amax < committed_src_end
-        if commit:
-            committed_len = i + 1
-        else:
-            break
-    return committed_len

@@ -64,75 +64,34 @@ Validate with:
 
 ```python
 import torch
-print(torch.cuda.is_available(), torch.cuda.get_device_name())
+print(torch.cuda.is_available())
+if torch.cuda.is_available():
+    print(torch.cuda.get_device_name())
 ```
 
-### `CTranslate2 device count: 0` or `Could not infer dtype of ctranslate2._ext.StorageView`
-> Follow-up in issue #284
+### CTranslate2 does not detect the GPU
 
-`ctranslate2` publishes separate CPU and CUDA wheels. The default `pip install ctranslate2` brings the CPU build, which makes WhisperLiveKit fall back to CPU tensors and leads to the dtype error above.
+The Linux and Windows pip wheels support GPU execution; a zero device count does not by itself mean that you installed a separate CPU-only wheel. See the [CTranslate2 installation documentation](https://opennmt.net/CTranslate2/installation.html) for runtime-library requirements.
 
-1. Uninstall the CPU build: `pip uninstall -y ctranslate2`.
-2. Install the CUDA wheel that matches your toolkit (example for CUDA 13.0):
-   ```bash
-   pip install ctranslate2==4.5.0 -f https://opennmt.net/ctranslate2/whl/cu130
-   ```
-   (See the [CTranslate2 installation table](https://opennmt.net/CTranslate2/installation.html) for other CUDA versions.)
-3. Verify:
-   ```python
-   import ctranslate2
-   print("CUDA devices:", ctranslate2.get_cuda_device_count())
-   print("CUDA compute types:", ctranslate2.get_supported_compute_types("cuda", 0))
-   ```
+Check both runtimes in the environment that launches WLK:
 
-**Note for aarch64 systems (e.g., NVIDIA DGX Spark):** Pre-built CUDA wheels may not be available for all CUDA versions on ARM architectures. If the wheel installation fails, you may need to compile CTranslate2 from source with CUDA support enabled.
+```python
+import ctranslate2
+import torch
 
-If you intentionally want CPU inference, run `wlk --backend whisper` to avoid mixing CPU-only CTranslate2 with a GPU Torch build.
-
----
-
-## Hopper / Blackwell (`sm_121a`) systems
-> Reported in issues #276 and #284 (NVIDIA DGX Spark)
-
-CUDA 12.1a GPUs (e.g., NVIDIA GB10 on DGX Spark) ship before some toolchains know about the architecture ID, so Triton/PTXAS need manual configuration.
-
-### Error: `ptxas fatal : Value 'sm_121a' is not defined for option 'gpu-name'`
-
-If you encounter this error after compiling CTranslate2 from source on aarch64 systems, Triton's bundled `ptxas` may not support the `sm_121a` architecture. The solution is to replace Triton's `ptxas` with the system's CUDA `ptxas`:
-
-```bash
-# Find your Python environment's Triton directory
-python -c "import triton; import os; print(os.path.dirname(triton.__file__))"
-
-# Copy the system ptxas to Triton's backend directory
-# Replace <triton_path> with the output above
-cp /usr/local/cuda/bin/ptxas <triton_path>/backends/nvidia/bin/ptxas
+print("Torch:", torch.__version__, "CUDA:", torch.version.cuda)
+print("Torch GPU available:", torch.cuda.is_available())
+print("CTranslate2:", ctranslate2.__version__)
+print("CTranslate2 GPU count:", ctranslate2.get_cuda_device_count())
 ```
 
-For example, in a virtual environment:
-```bash
-cp /usr/local/cuda/bin/ptxas ~/wlk/lib/python3.12/site-packages/triton/backends/nvidia/bin/ptxas
-```
+PyTorch and CTranslate2 load their own libraries. A working Torch CUDA probe does not prove that CTranslate2 can find compatible cuBLAS/cuDNN libraries. Preserve the full error and check the driver, platform, installed wheel, and library search paths before replacing packages.
 
-**Note:** On DGX Spark systems, CUDA is typically already in `PATH` (`/usr/local/cuda/bin`), so explicit `CUDA_HOME` and `PATH` exports may not be necessary. Verify with `which ptxas` before copying.
+### Triton or PTXAS rejects a GPU architecture
 
-### Alternative: Environment variable approach
+An error such as `Value 'sm_121a' is not defined for option 'gpu-name'` indicates that the invoked compiler does not recognize the requested architecture. Collect the GPU/driver information from `nvidia-smi`, the CUDA compiler version, and the installed Torch/Triton versions. GPU compute capability and CUDA toolkit version are different identifiers.
 
-If the above doesn't work, you can try setting environment variables (though this may not resolve the `sm_121a` issue on all systems):
-
-```bash
-export CUDA_HOME="/usr/local/cuda-13.0"
-export PATH="$CUDA_HOME/bin:$PATH"
-export LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
-
-# Tell Triton where the new ptxas lives
-export TRITON_PTXAS_PATH="$CUDA_HOME/bin/ptxas"
-
-# Force PyTorch to JIT kernels for all needed architectures
-export TORCH_CUDA_ARCH_LIST="8.0 9.0 10.0 12.0 12.1a"
-```
-
-After applying the fix, restart `wlk`. Incoming streams will now compile kernels targeting `sm_121a` without crashing.
+Use a compiler and runtime combination supporting that GPU. Avoid copying binaries over files inside an installed Triton package: that creates an environment the lockfile cannot reproduce. Consult the upstream runtime's installation and compatibility documentation for the exact versions involved.
 
 ## CPU throughput
 

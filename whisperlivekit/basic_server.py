@@ -5,31 +5,38 @@ import os
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
 from whisperlivekit.api_auth import websocket_token
-from whisperlivekit.config import parse_cors_origins
+from whisperlivekit.config import WhisperLiveKitConfig, parse_cors_origins
+from whisperlivekit.processing_queue import PipelineClosed, PipelineOverloaded
 from whisperlivekit.timed_objects import FrontData
+from whisperlivekit.timed_objects import format_subtitle_timestamp as _srt_timestamp
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logging.getLogger().setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
-config = parse_args()
+config = WhisperLiveKitConfig()
 transcription_engine = None
 
 _API_TOKEN = getattr(config, "api_token", None) or os.environ.get("WLK_API_TOKEN") or None
 
 
-def _token_ok(candidate: Optional[str]) -> bool:
+def _token_ok(candidate: Optional[str], connection=None) -> bool:
     """No token configured = open server; otherwise constant-time compare."""
-    if _API_TOKEN is None:
-        return True
-    return bool(candidate) and hmac.compare_digest(candidate, _API_TOKEN)
+    settings = getattr(getattr(getattr(connection, "app", None), "state", None), "config", None)
+    expected = _API_TOKEN if settings is None else settings.api_token or os.environ.get("WLK_API_TOKEN") or None
+    return expected is None or bool(candidate) and hmac.compare_digest(candidate, expected)
+
+
+def _session_settings(connection):
+    state = getattr(getattr(connection, "app", None), "state", None)
+    return (
+        getattr(state, "config", config),
+        getattr(state, "transcription_engine", None) or transcription_engine,
+    )
 
 
 def _bearer_token(request: Request) -> Optional[str]:
@@ -41,28 +48,21 @@ def _bearer_token(request: Request) -> Optional[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global transcription_engine
-    transcription_engine = TranscriptionEngine(config=config)
+    app.state.transcription_engine = TranscriptionEngine(config=app.state.config)
     yield
 
-app = FastAPI(lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=parse_cors_origins(config.cors_origins),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-@app.get("/")
+router = APIRouter()
+
+@router.get("/")
 async def get():
     return HTMLResponse(get_inline_ui_html())
 
 
-@app.get("/health")
-async def health():
+@router.get("/health")
+async def health(request: Request):
     """Health check endpoint."""
-    global transcription_engine
+    config, transcription_engine = _session_settings(request)
     backend = getattr(transcription_engine.config, "backend", "whisper") if transcription_engine else None
     return JSONResponse({
         "status": "ok",
@@ -79,6 +79,9 @@ async def handle_websocket_results(websocket, results_generator, diff_tracker=No
                 await websocket.send_json(diff_tracker.to_message(response))
             else:
                 await websocket.send_json(response.to_dict())
+            if response.status == "error":
+                await websocket.close(code=1011, reason="transcription failed")
+                return
         # when the results_generator finishes it means all audio has been processed
         logger.info("Results generator finished. Sending 'ready_to_stop' to client.")
         await websocket.send_json({"type": "ready_to_stop"})
@@ -88,14 +91,14 @@ async def handle_websocket_results(websocket, results_generator, diff_tracker=No
         logger.exception(f"Error in WebSocket results handler: {e}")
 
 
-@app.websocket("/asr")
+@router.websocket("/asr")
 async def websocket_endpoint(websocket: WebSocket):
-    global transcription_engine
+    config, transcription_engine = _session_settings(websocket)
 
     # Authentication (when --api-token / WLK_API_TOKEN is set): accept the
     # token either as a query parameter or an Authorization: Bearer header.
     ws_token = websocket_token(websocket)
-    if not _token_ok(ws_token):
+    if not _token_ok(ws_token, websocket):
         await websocket.close(code=4401, reason="invalid or missing API token")
         logger.warning("WebSocket rejected: invalid or missing API token")
         return
@@ -124,20 +127,21 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.close(code=4400, reason="invalid session parameters")
         logger.warning("WebSocket rejected: %s", e)
         return
-    await websocket.accept()
-    logger.info(
-        "WebSocket connection opened.%s%s%s",
-        f" language={session_language}" if session_language else "",
-        f" target_language={session_target_language}" if session_target_language else "",
-        f" context_chars={len(session_context)}" if session_context else "",
-    )
-    diff_tracker = None
-    if mode == "diff":
-        from whisperlivekit.diff_protocol import DiffTracker
-        diff_tracker = DiffTracker()
-        logger.info("Client requested diff mode")
-
+    websocket_task = None
     try:
+        await websocket.accept()
+        logger.info(
+            "WebSocket connection opened.%s%s%s",
+            f" language={session_language}" if session_language else "",
+            f" target_language={session_target_language}" if session_target_language else "",
+            f" context_chars={len(session_context)}" if session_context else "",
+        )
+        diff_tracker = None
+        if mode == "diff":
+            from whisperlivekit.diff_protocol import DiffTracker
+            diff_tracker = DiffTracker()
+            logger.info("Client requested diff mode")
+
         from whisperlivekit.session_asr_proxy import session_context_capability
 
         await websocket.send_json({
@@ -149,13 +153,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 transcription_engine.asr,
             ),
         })
-    except Exception as e:
-        logger.warning(f"Failed to send config to client: {e}")
-
-    results_generator = await audio_processor.create_tasks()
-    websocket_task = asyncio.create_task(handle_websocket_results(websocket, results_generator, diff_tracker))
-
-    try:
+        results_generator = await audio_processor.create_tasks()
+        websocket_task = asyncio.create_task(
+            handle_websocket_results(websocket, results_generator, diff_tracker)
+        )
         while True:
             message = await websocket.receive_bytes()
             await audio_processor.process_audio(message)
@@ -168,16 +169,20 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket disconnected by client during message receiving loop.")
     except Exception as e:
         logger.error(f"Unexpected error in websocket_endpoint main loop: {e}", exc_info=True)
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "error": getattr(audio_processor, "overload_error", None) or "Unable to process audio.",
+            })
+            await websocket.close(code=1011, reason="transcription failed")
+        except Exception:
+            logger.debug("WebSocket was already disconnected", exc_info=True)
     finally:
         logger.info("Cleaning up WebSocket endpoint...")
-        if not websocket_task.done():
-            websocket_task.cancel()
-        try:
-            await websocket_task
-        except asyncio.CancelledError:
-            logger.info("WebSocket results handler task was cancelled.")
-        except Exception as e:
-            logger.warning(f"Exception while awaiting websocket_task completion: {e}")
+        if websocket_task is not None:
+            if not websocket_task.done():
+                websocket_task.cancel()
+            await asyncio.gather(websocket_task, return_exceptions=True)
 
         await audio_processor.cleanup()
         logger.info("WebSocket endpoint cleaned up successfully.")
@@ -187,11 +192,11 @@ async def websocket_endpoint(websocket: WebSocket):
 # Deepgram-compatible WebSocket API  (/v1/listen)
 # ---------------------------------------------------------------------------
 
-@app.websocket("/v1/listen")
+@router.websocket("/v1/listen")
 async def deepgram_websocket_endpoint(websocket: WebSocket):
     """Deepgram-compatible live transcription WebSocket."""
-    global transcription_engine
-    if not _token_ok(websocket_token(websocket)):
+    config, transcription_engine = _session_settings(websocket)
+    if not _token_ok(websocket_token(websocket), websocket):
         await websocket.close(code=4401, reason="invalid or missing API token")
         logger.warning("Deepgram WebSocket rejected: invalid or missing API token")
         return
@@ -216,23 +221,62 @@ _OPENAI_RESPONSE_FORMATS = frozenset({
     "vtt",
 })
 
+_MAX_AUDIO_BYTES = 512 * 1024 * 1024
+
+
 async def _convert_to_pcm(audio_bytes: bytes) -> bytes:
-    """Convert any audio format to PCM s16le mono 16kHz using ffmpeg."""
+    """Convert audio with bounded output and a reaped process on every exit."""
+    from fastapi import HTTPException
+
     proc = await asyncio.create_subprocess_exec(
         "ffmpeg", "-i", "pipe:0",
-        "-f", "s16le", "-acodec", "pcm_s16le",
-        "-ar", "16000", "-ac", "1",
-        "-loglevel", "error",
-        "pipe:1",
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
+        "-f", "s16le", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+        "-loglevel", "error", "pipe:1",
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate(input=audio_bytes)
-    if proc.returncode != 0:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail=f"Audio conversion failed: {stderr.decode().strip()}")
-    return stdout
+
+    async def feed():
+        try:
+            for offset in range(0, len(audio_bytes), 65536):
+                proc.stdin.write(audio_bytes[offset:offset + 65536])
+                await proc.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # ffmpeg's exit code and stderr explain an invalid input
+        finally:
+            proc.stdin.close()
+
+    async def read_errors():
+        tail = b""
+        while chunk := await proc.stderr.read(65536):
+            tail = (tail + chunk)[-16384:]
+        return tail.decode(errors="replace").strip()
+
+    feeder = asyncio.create_task(feed())
+    errors = asyncio.create_task(read_errors())
+    try:
+        pcm = bytearray()
+        while chunk := await proc.stdout.read(65536):
+            if len(pcm) + len(chunk) > _MAX_AUDIO_BYTES:
+                raise HTTPException(status_code=413, detail="Decoded audio exceeds the 512 MB limit")
+            pcm.extend(chunk)
+        await feeder
+        detail = await errors
+        await proc.wait()
+        if proc.returncode != 0:
+            raise HTTPException(status_code=400, detail=f"Audio conversion failed: {detail}")
+        return bytes(pcm)
+    finally:
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+            await proc.wait()
+        for task in (feeder, errors):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(feeder, errors, return_exceptions=True)
 
 
 def _parse_time_str(time_str: str) -> float:
@@ -411,17 +455,7 @@ def _format_openai_response(front_data, response_format: str, language: Optional
     }
 
 
-def _srt_timestamp(seconds: float, fmt: str) -> str:
-    """Format seconds as SRT (HH:MM:SS,mmm) or VTT (HH:MM:SS.mmm) timestamp."""
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    ms = int(round((seconds % 1) * 1000))
-    sep = "," if fmt == "srt" else "."
-    return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
-
-
-@app.post("/v1/audio/transcriptions")
+@router.post("/v1/audio/transcriptions")
 async def create_transcription(
     request: Request,
     file: UploadFile = File(...),
@@ -438,10 +472,10 @@ async def create_transcription(
     backend). `prompt` supplies decoder context for backends that expose text
     conditioning and returns HTTP 400 for backends that do not.
     """
-    global transcription_engine
+    config, transcription_engine = _session_settings(request)
     from fastapi import HTTPException
 
-    if not _token_ok(_bearer_token(request)):
+    if not _token_ok(_bearer_token(request), request):
         raise HTTPException(status_code=401, detail="invalid or missing API token")
 
     if response_format not in _OPENAI_RESPONSE_FORMATS:
@@ -471,18 +505,24 @@ async def create_transcription(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    audio_bytes = await file.read()
+    max_upload_mb = 512
+    audio_bytes = await file.read(_MAX_AUDIO_BYTES + 1)
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
-    max_upload_mb = 512
-    if len(audio_bytes) > max_upload_mb * 1024 * 1024:
+    if len(audio_bytes) > _MAX_AUDIO_BYTES:
         raise HTTPException(
             status_code=413,
             detail=f"Audio file exceeds the {max_upload_mb} MB upload limit",
         )
 
     # Convert to PCM for pipeline processing
-    pcm_data = await _convert_to_pcm(audio_bytes)
+    configured = float(getattr(config, "rest_timeout", 0) or 0)
+    try:
+        async with asyncio.timeout(configured if configured > 0 else 120):
+            pcm_data = await _convert_to_pcm(audio_bytes)
+    except TimeoutError:
+        raise HTTPException(status_code=408, detail="Audio conversion timed out")
+    del audio_bytes
     duration = len(pcm_data) / (16000 * 2)  # 16kHz, 16-bit
 
     # Process through the full pipeline
@@ -491,40 +531,46 @@ async def create_transcription(
             transcription_engine=transcription_engine,
             language=language,
             context=prompt,
+            pcm_input=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    # Force PCM input regardless of server config
-    processor.is_pcm_input = True
-
-    results_gen = await processor.create_tasks()
-
-    # Collect results in background while feeding audio
     final_result = None
+    collect_task = None
 
     async def collect():
         nonlocal final_result
         async for result in results_gen:
+            if result.status == "error":
+                raise HTTPException(
+                    status_code=503 if getattr(processor, "overload_error", None) else 500,
+                    detail=result.error or "Transcription failed",
+                )
             final_result = result
 
-    collect_task = asyncio.create_task(collect())
-
-    # Feed audio in chunks (1 second each)
-    chunk_size = 16000 * 2  # 1 second of PCM
-    for i in range(0, len(pcm_data), chunk_size):
-        await processor.process_audio(pcm_data[i:i + chunk_size])
-
-    # Signal end of audio
-    await processor.process_audio(b"")
-
-    # Wait for pipeline to finish. The budget scales with the audio length
+    # The feed/drain budget scales with the audio length
     # (issue #374: a fixed 120 s silently truncated long files) and can be
     # overridden with --rest-timeout.
     configured = float(getattr(config, "rest_timeout", 0) or 0)
     timeout_sec = configured if configured > 0 else max(120.0, duration * 2.5)
     timed_out = False
     try:
-        await asyncio.wait_for(collect_task, timeout=timeout_sec)
+        async with asyncio.timeout(timeout_sec):
+            results_gen = await processor.create_tasks()
+            collect_task = asyncio.create_task(collect())
+            chunk_size = 16000 * 2
+            for i in range(0, len(pcm_data), chunk_size):
+                await processor.process_audio(pcm_data[i:i + chunk_size])
+                # Uncontended queue writes may not suspend; let consumers and
+                # cancellation run while feeding a large in-memory file.
+                await asyncio.sleep(0)
+                if collect_task.done():
+                    await collect_task  # propagate errors while feeding
+            await processor.process_audio(b"")
+            await collect_task
+    except (PipelineClosed, PipelineOverloaded) as exc:
+        message = getattr(processor, "overload_error", None)
+        raise HTTPException(status_code=503 if message else 500, detail=message or str(exc)) from exc
     except asyncio.TimeoutError:
         timed_out = True
         logger.warning(
@@ -533,6 +579,10 @@ async def create_transcription(
             duration,
         )
     finally:
+        if collect_task is not None:
+            if not collect_task.done():
+                collect_task.cancel()
+            await asyncio.gather(collect_task, return_exceptions=True)
         await processor.cleanup()
 
     if timed_out:
@@ -562,10 +612,10 @@ async def create_transcription(
     return JSONResponse(result)
 
 
-@app.get("/v1/models")
-async def list_models():
+@router.get("/v1/models")
+async def list_models(request: Request):
     """OpenAI-compatible model listing endpoint."""
-    global transcription_engine
+    config, transcription_engine = _session_settings(request)
     backend = getattr(transcription_engine.config, "backend", "whisper") if transcription_engine else "whisper"
     model_size = getattr(transcription_engine.config, "model_size", "base") if transcription_engine else "base"
     return JSONResponse({
@@ -578,17 +628,36 @@ async def list_models():
     })
 
 
+def create_app(server_config: WhisperLiveKitConfig | None = None) -> FastAPI:
+    """Build an ASGI application without reading the host process's arguments."""
+    application = FastAPI(lifespan=lifespan)
+    application.state.config = server_config if server_config is not None else WhisperLiveKitConfig()
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=parse_cors_origins(application.state.config.cors_origins),
+        allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
+    )
+    application.include_router(router)
+    return application
+
+
+app = create_app(config)
+
+
 def main():
     """Entry point for the CLI command."""
     import uvicorn
 
     from whisperlivekit.cli import print_banner
 
+    settings = parse_args()
+    logging.basicConfig(level=settings.log_level)
+    config = settings
     ssl = bool(config.ssl_certfile and config.ssl_keyfile)
     print_banner(config, config.host, config.port, ssl=ssl)
 
     uvicorn_kwargs = {
-        "app": "whisperlivekit.basic_server:app",
+        "app": create_app(config),
         "host": config.host,
         "port": config.port,
         "reload": False,

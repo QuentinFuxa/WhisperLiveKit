@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def session_translation_factory(args, translation_model, target_language):
+def session_translation_factory(args, translation_model, target_language, source_language=None):
     """Create an OnlineTranslation for a session-specific target language.
 
     Shares the server-wide translation model; only the per-session decoder
@@ -27,17 +27,17 @@ def session_translation_factory(args, translation_model, target_language):
     if isinstance(translation_model, AlignAttRemoteEngine):
         # Direction validation happens at sidecar init; an unsupported
         # target degrades to empty translation output with one warning.
-        return translation_model.new_session(target_language)
+        return translation_model.new_session(target_language, source_language)
 
     from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
     if isinstance(translation_model, MlxLlmTranslation):
-        return translation_model.new_session(target_language)
+        return translation_model.new_session(target_language, source_language)
 
     from nllw import OnlineTranslation
 
-    from whisperlivekit.core import _nllw_language_code, online_translation_factory
+    from whisperlivekit.core import _nllw_language_code
 
-    source_language = _nllw_language_code(args.lan)
+    source_language = _nllw_language_code(source_language or args.lan)
     session_target = _nllw_language_code(target_language)
     try:
         return OnlineTranslation(translation_model, [source_language], [session_target])
@@ -47,4 +47,6 @@ def session_translation_factory(args, translation_model, target_language):
             "falling back to server-wide target %r.",
             target_language, e, args.target_language,
         )
-        return online_translation_factory(args, translation_model)
+        return OnlineTranslation(
+            translation_model, [source_language], [_nllw_language_code(args.target_language)]
+        )

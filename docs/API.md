@@ -474,6 +474,7 @@ Sent repeatedly as audio is processed. This message has **no `type` field**.
 | `buffer_transcription`         | string | Ephemeral transcription text not yet committed to a line. Displayed in real time but overwritten on every update. |
 | `buffer_diarization`           | string | Ephemeral text waiting for speaker attribution. |
 | `buffer_translation`           | string | Ephemeral translation text for the current buffer. |
+| `translation_error`            | string | MT unavailable/incomplete message; empty after recovery. Transcription can continue. |
 | `remaining_time_transcription` | float  | Seconds of audio waiting to be transcribed (processing lag). |
 | `remaining_time_diarization`   | float  | Seconds of audio waiting for speaker diarization. |
 | `error`                        | string | Only present when an error occurred (e.g. FFmpeg failure). |
@@ -553,6 +554,7 @@ All messages after the initial snapshot are diffs.
 | `buffer_transcription`         | string | Always      | Replaces the previous buffer value. |
 | `buffer_diarization`           | string | Always      | Replaces the previous buffer value. |
 | `buffer_translation`           | string | Always      | Replaces the previous buffer value. |
+| `translation_error`            | string | Always      | Replaces the MT error message; empty clears a prior error. |
 | `remaining_time_transcription` | float  | Always      | Replaces the previous value. |
 | `remaining_time_diarization`   | float  | Always      | Replaces the previous value. |
 | `error`                        | string | Conditional | Only present on error. |
@@ -626,6 +628,7 @@ def reconstruct_state(msg, lines):
         "buffer_transcription": msg.get("buffer_transcription", ""),
         "buffer_diarization": msg.get("buffer_diarization", ""),
         "buffer_translation": msg.get("buffer_translation", ""),
+        "translation_error": msg.get("translation_error", ""),
         "remaining_time_transcription": msg.get("remaining_time_transcription", 0),
         "remaining_time_diarization": msg.get("remaining_time_diarization", 0),
     }

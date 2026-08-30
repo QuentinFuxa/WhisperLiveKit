@@ -77,16 +77,19 @@ def _load_audio_pcm_soundfile(audio_path: str, sample_rate: int) -> Optional[byt
     downmixing; those stay ffmpeg's job.
     """
     try:
+        import numpy as np
         import soundfile as sf
     except ImportError:
         return None
     try:
-        data, sr = sf.read(str(audio_path), dtype="int16", always_2d=True)
+        data, sr = sf.read(str(audio_path), dtype="float32", always_2d=True)
     except Exception:
         return None
     if sr != sample_rate or data.shape[1] != 1:
         return None
-    return data[:, 0].tobytes()
+    # libsndfile does not scale floating-point WAV data when reading int16;
+    # normalized recordings would otherwise become almost entirely silence.
+    return np.clip(np.rint(data[:, 0] * 32768), -32768, 32767).astype("<i2").tobytes()
 
 
 def load_audio_pcm(audio_path: str, sample_rate: int = SAMPLE_RATE) -> bytes:
@@ -139,6 +142,7 @@ class TestState:
     audio_position: float = 0.0
     status: str = ""
     error: str = ""
+    translation_error: str = ""
 
     @classmethod
     def from_front_data(cls, front_data: FrontData, audio_position: float = 0.0) -> "TestState":
@@ -155,6 +159,7 @@ class TestState:
             audio_position=audio_position,
             status=d.get("status", ""),
             error=d.get("error", ""),
+            translation_error=d.get("translation_error", ""),
         )
 
     # ── Text accessors ──
@@ -517,32 +522,31 @@ class TestHarness:
         engine = _engine_cache[cache_key]
 
         self._processor = AudioProcessor(transcription_engine=engine)
-        self._results_gen = await self._processor.create_tasks()
+        try:
+            self._results_gen = await self._processor.create_tasks()
+        except BaseException:
+            await self._processor.cleanup()
+            raise
         self._collect_task = asyncio.create_task(self._collect_results())
         return self
 
     async def __aexit__(self, *exc: Any) -> None:
         if self._processor:
             await self._processor.cleanup()
-        if self._collect_task and not self._collect_task.done():
-            self._collect_task.cancel()
-            try:
-                await self._collect_task
-            except asyncio.CancelledError:
-                pass
+        if self._collect_task:
+            if not self._collect_task.done():
+                self._collect_task.cancel()
+            await asyncio.gather(self._collect_task, return_exceptions=True)
 
     async def _collect_results(self) -> None:
         """Background task: consume results from the pipeline."""
-        try:
-            async for front_data in self._results_gen:
-                self._state = TestState.from_front_data(front_data, self._audio_position)
-                self._history.append(self._state)
-                if self._on_update:
-                    self._on_update(self._state)
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.warning("Result collector ended: %s", e)
+        async for front_data in self._results_gen:
+            if front_data.status == "error":
+                raise RuntimeError(front_data.error or "Transcription pipeline failed")
+            self._state = TestState.from_front_data(front_data, self._audio_position)
+            self._history.append(self._state)
+            if self._on_update:
+                self._on_update(self._state)
 
     # ── Properties ──
 
@@ -704,15 +708,17 @@ class TestHarness:
 
         Returns:
             Final TestState with all committed lines and empty buffer.
+
+        Raises:
+            TimeoutError: the pipeline has not finished within the budget.
+            RuntimeError: the pipeline reported an error.
         """
-        await self._processor.process_audio(b"")
-        if self._collect_task:
-            try:
-                await asyncio.wait_for(self._collect_task, timeout=timeout)
-            except asyncio.TimeoutError:
-                logger.warning("Timed out waiting for pipeline to finish after %.0fs", timeout)
-            except asyncio.CancelledError:
-                pass
+        async with asyncio.timeout(timeout):
+            await self._processor.process_audio(b"")
+            if self._collect_task:
+                await self._collect_task
+        if self._state.translation_error:
+            raise RuntimeError(self._state.translation_error)
         return self._state
 
     async def cut(self, timeout: float = 5.0) -> TestState:

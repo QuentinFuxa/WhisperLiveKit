@@ -2,15 +2,14 @@
 
 import asyncio
 import math
-import sys
 from time import time
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from whisperlivekit.audio_input import AudioInput
 from whisperlivekit.audio_processor import (
-    MIN_DURATION_REAL_SILENCE,
     SENTINEL,
     AudioProcessor,
 )
@@ -29,13 +28,6 @@ from whisperlivekit.timed_objects import (
 from whisperlivekit.tokens_alignment import TokensAlignment
 
 
-def test_pause_segmentation_config_preserves_default():
-    config = WhisperLiveKitConfig()
-
-    assert config.pause_segmentation_seconds == 5.0
-    assert config.pause_segmentation_seconds == MIN_DURATION_REAL_SILENCE
-
-
 @pytest.mark.parametrize("value", [-0.1, math.inf, -math.inf, math.nan, "invalid"])
 def test_pause_segmentation_config_rejects_invalid_values(value):
     with pytest.raises(
@@ -45,22 +37,11 @@ def test_pause_segmentation_config_rejects_invalid_values(value):
         WhisperLiveKitConfig(pause_segmentation_seconds=value)
 
 
-def test_parse_args_accepts_pause_segmentation_seconds(monkeypatch):
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["wlk", "--pause-segmentation-seconds", "1.25"],
-    )
-
-    from whisperlivekit.parse_args import parse_args
-
-    assert parse_args().pause_segmentation_seconds == 1.25
-
-
 def _silence_processor(threshold: float) -> AudioProcessor:
     processor = object.__new__(AudioProcessor)
     processor.pause_segmentation_seconds = threshold
     processor.sample_rate = 100
+    processor.max_bytes_per_sec = 1000
     processor.total_pcm_samples = 0
     processor.current_silence = Silence(start=1.0, is_starting=True)
     processor.metrics = SessionMetrics()
@@ -70,6 +51,11 @@ def _silence_processor(threshold: float) -> AudioProcessor:
     processor.diarization_queue = None
     processor.translation_queue = None
     processor.vac = lambda _pcm: []
+    processor.audio_input = AudioInput(
+        pcm_input=True, sample_rate=100, channels=1, chunk_bytes=100, max_chunk_bytes=1000,
+        on_pcm=processor._process_pcm_array, on_eof=processor._finish_input,
+    )
+    processor.pcm_buffer = processor.audio_input.buffer
     return processor
 
 
@@ -205,7 +191,7 @@ async def test_eof_tail_extends_active_silence_before_committing_boundary():
     processor.current_silence = Silence(start=0.4, is_starting=True)
     processor.total_pcm_samples = 100
     processor.bytes_per_sample = 2
-    processor.pcm_buffer = bytearray(np.zeros(10, dtype=np.int16).tobytes())
+    processor.pcm_buffer[:] = bytearray(np.zeros(10, dtype=np.int16).tobytes())
     enqueued_audio = []
 
     async def capture_audio(chunk):
@@ -231,7 +217,7 @@ async def test_eof_tail_honors_vad_speech_start_and_enqueues_active_suffix():
     processor.current_silence = Silence(start=0.4, is_starting=True)
     processor.total_pcm_samples = 100
     processor.bytes_per_sample = 2
-    processor.pcm_buffer = bytearray(np.arange(10, dtype=np.int16).tobytes())
+    processor.pcm_buffer[:] = bytearray(np.arange(10, dtype=np.int16).tobytes())
     processor.vac = lambda _pcm: [{"start": 105}]
     enqueued_audio = []
 
@@ -258,7 +244,7 @@ async def test_eof_commits_active_pause_without_complete_pcm_sample(pcm_tail):
     processor.current_silence = Silence(start=0.3, is_starting=True)
     processor.total_pcm_samples = 100
     processor.bytes_per_sample = 2
-    processor.pcm_buffer = bytearray(pcm_tail)
+    processor.pcm_buffer[:] = bytearray(pcm_tail)
     processor.beg_loop = 1.0
     processor.is_stopping = False
     processor.is_pcm_input = True
@@ -363,7 +349,7 @@ async def test_full_mode_formatter_does_not_publish_in_progress_pause():
     processor.state = State(new_tokens=[ASRToken(0.0, 1.0, "speech")])
     processor.tokens_alignment = TokensAlignment(processor.state, processor.args, " ")
     processor.translation = None
-    processor._ffmpeg_error = None
+    processor.audio_input = SimpleNamespace(error=None)
     processor.last_response_content = FrontData()
     processor.metrics = SessionMetrics()
     processor.is_stopping = False

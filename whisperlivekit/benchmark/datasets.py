@@ -16,7 +16,6 @@ Datasets used:
 
 import json
 import logging
-import os
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,6 +43,8 @@ class BenchmarkSample:
     n_speakers: int = 1
     source: str = ""
     tags: Set[str] = field(default_factory=set)
+    expected_sha256: str = ""
+
 
     def to_dict(self) -> Dict:
         return {
@@ -58,6 +59,17 @@ class BenchmarkSample:
             "source": self.source,
             "tags": list(self.tags),
         }
+
+
+def load_manifest(path, *, continuous=False):
+    """Load a fixed corpus using its recorded cache location and hashes."""
+    manifest = json.loads(Path(path).read_text())
+    root = CACHE_DIR / manifest["cache_subdir"]
+    return [BenchmarkSample(
+        name=row["name"], path=str(root / row["file"]), reference=row["reference"],
+        duration=row["duration"], language=row["language"], category=row["category"],
+        sample_rate=row["sample_rate"], source=row["source"], expected_sha256=row["audio_sha256"],
+    ) for row in manifest["continuous" if continuous else "samples"]]
 
 
 # ---------------------------------------------------------------------------
@@ -205,34 +217,6 @@ BENCHMARK_CATALOG = {
         "skip": 0,
         "tags": {"multi_speaker", "long"},
         "max_duration": 60.0,
-    },
-    # Mandarin zh→en benchmark (local file, no download)
-    # Reference is empty: the audio content does not match any known transcript,
-    # so WER is not applicable. The sample is for MT-RTF and translation
-    # quality, not ASR WER.
-    "zh_long": {
-        "dataset": "local",
-        "language": "zh",
-        "category": "multilingual",
-        "n_samples": 1,
-        "skip": 0,
-        "tags": {"long", "zh_en"},
-        "path": os.environ.get("ZH_BENCH_WAV", ""),
-        "reference": "",
-        "duration": 31.6,
-    },
-    # English sample for en→it translation comparison. Set EN_BENCH_WAV to a
-    # local English audio file (the benchmark cache ships en_long_clean.wav).
-    "en_long_clean": {
-        "dataset": "local",
-        "language": "en",
-        "category": "clean",
-        "n_samples": 1,
-        "skip": 0,
-        "tags": {"long"},
-        "path": os.environ.get("EN_BENCH_WAV", ""),
-        "reference": "",
-        "duration": 60.0,
     },
 }
 
@@ -471,27 +455,6 @@ def _download_ami(max_duration: float = 60.0) -> List[Dict]:
 # Dispatcher — routes catalog entries to download functions
 # ---------------------------------------------------------------------------
 
-def _local_sample(name: str, spec: Dict) -> List[Dict]:
-    """Return metadata for a local audio file (no download).
-
-    The file path is stored as an absolute path in the ``file`` field so
-    ``get_benchmark_samples`` can resolve it without the cache directory.
-    """
-    path = spec.get("path")
-    if not path or not Path(path).exists():
-        logger.warning("Local sample %s: file not found at %s", name, path)
-        return []
-    return [{
-        "file": str(path),
-        "reference": spec.get("reference", ""),
-        "duration": spec.get("duration", 0.0),
-        "sample_rate": 16000,
-        "language": spec["language"],
-        "category": spec["category"],
-        "n_speakers": 1,
-        "source": f"local ({name})",
-    }]
-
 def _download_catalog_entry(name: str, spec: Dict) -> List[Dict]:
     """Download a single catalog entry and return metadata dicts."""
     dataset = spec["dataset"]
@@ -518,8 +481,6 @@ def _download_catalog_entry(name: str, spec: Dict) -> List[Dict]:
         )
     elif dataset == "edinburghcstr/ami":
         return _download_ami(max_duration=spec.get("max_duration", 60.0))
-    elif dataset == "local":
-        return _local_sample(name, spec)
     else:
         logger.warning("Unknown dataset: %s", dataset)
         return []
@@ -570,16 +531,6 @@ def get_benchmark_samples(
     # Download missing entries
     all_meta = cached.get("samples", {})
     for name, spec in entries.items():
-        # Local files: always re-resolve (no cache check needed).
-        if spec.get("dataset") == "local":
-            try:
-                resolved = _download_catalog_entry(name, spec)
-                if resolved:
-                    all_meta[name] = resolved
-            except Exception as e:
-                logger.warning("Failed to load local sample %s: %s", name, e)
-            continue
-
         if name in all_meta and not force:
             # Check file exists
             file_path = CACHE_DIR / all_meta[name][0]["file"]
@@ -603,10 +554,7 @@ def get_benchmark_samples(
         if name not in all_meta:
             continue
         for meta in all_meta[name]:
-            file_field = meta["file"]
-            # Local files store an absolute path; cached files are relative
-            # to CACHE_DIR.
-            file_path = Path(file_field) if Path(file_field).is_absolute() else CACHE_DIR / file_field
+            file_path = CACHE_DIR / meta["file"]
             if not file_path.exists():
                 continue
             catalog_entry = BENCHMARK_CATALOG.get(name, {})

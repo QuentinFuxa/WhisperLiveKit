@@ -1,0 +1,118 @@
+{
+  "system_info": {
+    "platform": "Linux-5.15.0-177-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "cpu": "H100 80GB HBM3",
+    "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  "lang": "en",
+  "mode": "unaware",
+  "speed": 0,
+  "n_samples": 4,
+  "sample_names": [
+    "en_librivox_continuous",
+    "en_30s",
+    "en_60s",
+    "en_120s"
+  ],
+  "total_audio_s": 390.0,
+  "total_benchmark_time_s": 1619.9,
+  "results": [
+    {
+      "label": "fw LA base",
+      "backend": "faster-whisper",
+      "model_size": "base",
+      "policy": "localagreement",
+      "color": "#4a9eff",
+      "marker": "o",
+      "size": 100,
+      "rtf": 0.0669,
+      "wer_pct": 10.6,
+      "n_samples": 4
+    },
+    {
+      "label": "fw LA small",
+      "backend": "faster-whisper",
+      "model_size": "small",
+      "policy": "localagreement",
+      "color": "#4a9eff",
+      "marker": "o",
+      "size": 220,
+      "rtf": 0.0953,
+      "wer_pct": 7.7,
+      "n_samples": 4
+    },
+    {
+      "label": "fw LA turbo",
+      "backend": "faster-whisper",
+      "model_size": "large-v3-turbo",
+      "policy": "localagreement",
+      "color": "#4a9eff",
+      "marker": "o",
+      "size": 340,
+      "rtf": 0.0901,
+      "wer_pct": 5.2,
+      "n_samples": 4
+    },
+    {
+      "label": "fw SS base",
+      "backend": "faster-whisper",
+      "model_size": "base",
+      "policy": "simulstreaming",
+      "color": "#4a9eff",
+      "marker": "s",
+      "size": 100,
+      "rtf": 0.0325,
+      "wer_pct": 8.8,
+      "n_samples": 4
+    },
+    {
+      "label": "fw SS small",
+      "backend": "faster-whisper",
+      "model_size": "small",
+      "policy": "simulstreaming",
+      "color": "#4a9eff",
+      "marker": "s",
+      "size": 220,
+      "rtf": 0.0515,
+      "wer_pct": 8.1,
+      "n_samples": 4
+    },
+    {
+      "label": "fw SS turbo",
+      "backend": "faster-whisper",
+      "model_size": "large-v3-turbo",
+      "policy": "simulstreaming",
+      "color": "#4a9eff",
+      "marker": "s",
+      "size": 340,
+      "rtf": 0.0371,
+      "wer_pct": 11.0,
+      "n_samples": 4
+    },
+    {
+      "label": "qwen3 causal",
+      "backend": "qwen3-streaming",
+      "model_size": "0.6b",
+      "policy": "",
+      "color": "#b06ee8",
+      "marker": "D",
+      "size": 220,
+      "rtf": 0.0767,
+      "wer_pct": 7.3,
+      "n_samples": 4
+    },
+    {
+      "label": "qwen3 windowed",
+      "backend": "qwen3-streaming",
+      "model_size": "0.6b",
+      "policy": "",
+      "color": "#8e44ad",
+      "marker": "D",
+      "size": 220,
+      "rtf": 0.0798,
+      "wer_pct": 5.2,
+      "n_samples": 4
+    }
+  ]
+}

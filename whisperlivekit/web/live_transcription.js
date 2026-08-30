@@ -328,6 +328,15 @@ function setupWebSocket() {
       }
 
       lastReceivedData = data;
+      let translationStatus = document.getElementById("translationStatus");
+      if (!translationStatus) {
+        translationStatus = document.createElement("p");
+        translationStatus.id = "translationStatus";
+        translationStatus.setAttribute("role", "status");
+        statusText.insertAdjacentElement("afterend", translationStatus);
+      }
+      translationStatus.textContent = data.translation_error || "";
+      translationStatus.hidden = !data.translation_error;
 
       const {
         lines = [],
@@ -409,6 +418,12 @@ function scheduleReconnect() {
   }, delay);
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[char]);
+}
+
 function renderLinesWithBuffer(
   lines,
   buffer_diarization,
@@ -434,7 +449,7 @@ function renderLinesWithBuffer(
   const showPolicyLag = !isFinalizing && policyLag > LAG_DISPLAY_THRESHOLD;
   const showDiaLag = !isFinalizing && !!buffer_diarization && remaining_time_diarization > 0;
   const signature = JSON.stringify({
-    lines: (lines || []).map((it) => ({ speaker: it.speaker, text: it.text, start: it.start, end: it.end, detected_language: it.detected_language })),
+    lines: (lines || []).map((it) => ({ speaker: it.speaker, text: it.text, translation: it.translation, start: it.start, end: it.end, detected_language: it.detected_language })),
     buffer_transcription: buffer_transcription || "",
     buffer_diarization: buffer_diarization || "",
     buffer_translation: buffer_translation,
@@ -473,7 +488,7 @@ function renderLinesWithBuffer(
     .map((item, idx) => {
       let timeInfo = "";
       if (item.start !== undefined && item.end !== undefined) {
-        timeInfo = ` ${item.start} - ${item.end}`;
+        timeInfo = ` ${escapeHtml(item.start)} - ${escapeHtml(item.end)}`;
       }
 
       let speakerLabel = "";
@@ -484,15 +499,15 @@ function renderLinesWithBuffer(
           remaining_time_diarization
         )}</span> second(s) of audio are undergoing diarization</span></span>`;
       } else if (item.speaker !== 0) {
-        const speakerNum = `<span class="speaker-badge">${item.speaker}</span>`;
+        const speakerNum = `<span class="speaker-badge">${escapeHtml(item.speaker)}</span>`;
         speakerLabel = `<span id="speaker">${speakerIcon}${speakerNum}<span id='timeInfo'>${timeInfo}</span></span>`;
 
         if (item.detected_language) {
-          speakerLabel += `<span class="label_language">${languageIcon}<span>${item.detected_language}</span></span>`;
+          speakerLabel += `<span class="label_language">${languageIcon}<span>${escapeHtml(item.detected_language)}</span></span>`;
         }
       }
 
-      let currentLineText = item.text || "";
+      let currentLineText = escapeHtml(item.text);
 
       if (idx === visibleLines.length - 1) {
         if (!isFinalizing && item.speaker !== -2) {
@@ -518,29 +533,29 @@ function renderLinesWithBuffer(
         if (buffer_diarization) {
           if (isFinalizing) {
             currentLineText +=
-              (currentLineText.length > 0 && buffer_diarization.trim().length > 0 ? " " : "") + buffer_diarization.trim();
+              (currentLineText.length > 0 && buffer_diarization.trim().length > 0 ? " " : "") + escapeHtml(buffer_diarization.trim());
           } else {
-            currentLineText += `<span class="buffer_diarization">${buffer_diarization}</span>`;
+            currentLineText += `<span class="buffer_diarization">${escapeHtml(buffer_diarization)}</span>`;
           }
         }
         if (buffer_transcription) {
           if (isFinalizing) {
             currentLineText +=
               (currentLineText.length > 0 && buffer_transcription.trim().length > 0 ? " " : "") +
-              buffer_transcription.trim();
+              escapeHtml(buffer_transcription.trim());
           } else {
-            currentLineText += `<span class="buffer_transcription">${buffer_transcription}</span>`;
+            currentLineText += `<span class="buffer_transcription">${escapeHtml(buffer_transcription)}</span>`;
           }
         }
       }
       let translationContent = "";
       if (item.translation) {
-        translationContent += item.translation.trim();
+        translationContent += escapeHtml(item.translation.trim());
       }
       if (idx === visibleLines.length - 1 && buffer_translation) {
         const bufferPiece = isFinalizing
-          ? buffer_translation
-          : `<span class="buffer_translation">${buffer_translation}</span>`;
+          ? escapeHtml(buffer_translation)
+          : `<span class="buffer_translation">${escapeHtml(buffer_translation)}</span>`;
         translationContent += translationContent ? `${bufferPiece}` : bufferPiece;
       }
       if (translationContent.trim().length > 0) {
@@ -560,7 +575,7 @@ function renderLinesWithBuffer(
     .join("");
 
   const hiddenNotice = hiddenCount > 0
-    ? `<p class="hidden-lines-notice" title="${effectiveLines.length} lignes au total">${hiddenCount} lignes précédentes (masquées)</p>`
+    ? `<p class="hidden-lines-notice" title="${effectiveLines.length} lines in total">${hiddenCount} earlier lines hidden</p>`
     : "";
   linesTranscriptDiv.innerHTML = hiddenNotice + linesHtml;
   const transcriptContainer = document.querySelector('.transcript-container');

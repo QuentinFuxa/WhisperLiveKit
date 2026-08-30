@@ -1,13 +1,10 @@
-"""Lightweight runtime metrics for AudioProcessor sessions.
-
-Zero external dependencies. Negligible overhead when not queried —
-just integer increments and list appends during normal operation.
-"""
+"""Cumulative ASR counters and a bounded window of inference-call durations."""
 
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Deque, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +24,11 @@ class SessionMetrics:
     n_transcription_calls: int = 0
     n_tokens_produced: int = 0
     n_responses_sent: int = 0
+    backpressure_wait_s: float = 0.0
+    peak_queued_audio_s: float = 0.0
 
-    # Per-successful-call ASR latency (seconds), one entry per counted call.
-    transcription_durations: List[float] = field(default_factory=list)
+    # Keep recent calls for the p95 without retaining an entire long session.
+    transcription_durations: Deque[float] = field(default_factory=lambda: deque(maxlen=4096))
 
     # Silence
     n_silence_events: int = 0
@@ -47,13 +46,13 @@ class SessionMetrics:
     @property
     def avg_latency_ms(self) -> float:
         """Average per-call ASR latency in milliseconds."""
-        if not self.transcription_durations:
+        if not self.n_transcription_calls:
             return 0.0
-        return (sum(self.transcription_durations) / len(self.transcription_durations)) * 1000
+        return self.total_processing_time_s / self.n_transcription_calls * 1000
 
     @property
     def p95_latency_ms(self) -> float:
-        """95th percentile per-call ASR latency in milliseconds."""
+        """95th percentile of the last 4096 ASR calls, in milliseconds."""
         if not self.transcription_durations:
             return 0.0
         sorted_d = sorted(self.transcription_durations)
@@ -72,8 +71,11 @@ class SessionMetrics:
             "n_transcription_calls": self.n_transcription_calls,
             "n_tokens_produced": self.n_tokens_produced,
             "n_responses_sent": self.n_responses_sent,
+            "backpressure_wait_s": round(self.backpressure_wait_s, 3),
+            "peak_queued_audio_s": round(self.peak_queued_audio_s, 3),
             "avg_latency_ms": round(self.avg_latency_ms, 2),
             "p95_latency_ms": round(self.p95_latency_ms, 2),
+            "duration_window_calls": len(self.transcription_durations),
             "n_silence_events": self.n_silence_events,
             "total_silence_duration_s": round(self.total_silence_duration_s, 3),
         }

@@ -42,7 +42,9 @@ test = [
     "pytest-asyncio>=0.21",
     "datasets>=2.14",
     "librosa",
-    "deepgram-sdk==7.7.0",
+    "deepgram-sdk==7.8.1",
+    "psutil>=5.9",
+    "matplotlib>=3.8",
 ]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
@@ -57,12 +59,12 @@ voxtral-mlx = [
     "mistral-common[audio]",
 ]
 # In-process MLX translation backend via mlx-lm (Hunyuan-MT as first config;
-# TranslateGemma etc. via the config registry). Requires mlx-lm>=0.31.1 which
+# TranslateGemma etc. via the config registry). Requires mlx-lm>=0.31.3 which
 # pulls transformers>=5; conflicts with qwen3-asr-causal[streaming] which pins
 # transformers==4.57.6. Declare the conflict below; install only one.
 mlx-llm-mt = [
-    'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
-    'mlx-lm>=0.31.1; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx>=0.31.2,<0.32; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx-lm>=0.31.3,<0.32; sys_platform == "darwin" and platform_machine == "arm64"',
 ]
 mlx-qwen3-asr = [
     'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
@@ -114,6 +116,12 @@ diarization-diart = [
 dev = ["rich>=14.3.3", "ruff==0.16.*"]
 
 [tool.uv]
+# Resolve Diart's Python <3.13 dependency graph separately from Python 3.13.
+environments = ["python_version < '3.13'", "python_version >= '3.13'"]
+# Override the retired nightly URL inherited from qwen3-asr-causal.
+override-dependencies = [
+    "vllm-metal[stt] @ https://github.com/vllm-project/vllm-metal/releases/download/v0.2.0/vllm_metal-0.2.0-cp312-cp312-macosx_11_0_arm64.whl ; python_version == '3.12' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 conflicts = [
     [
         { extra = "cpu" },
@@ -216,7 +224,6 @@ conflicts = [
 
 [tool.uv.sources]
 qwen3-asr-causal = { path = "third_party/qwen3-asr-causal", editable = true }
-vllm-metal = { url = "https://github.com/vllm-project/vllm-metal/releases/download/v0.2.0-20260519-054638/vllm_metal-0.2.0-cp312-cp312-macosx_11_0_arm64.whl" }
 torch = [
     { index = "pytorch-cpu", extra = "cpu", marker = "platform_system != 'Darwin'" },
     { index = "pytorch-cpu", extra = "diarization-diart", marker = "platform_system != 'Darwin'" },
@@ -277,7 +284,7 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-whisperlivekit = ["web/*.html", "web/*.css", "web/*.js", "web/src/*.svg"]
+whisperlivekit = ["web/*.html", "web/*.css", "web/*.js", "web/src/*.svg", "calibrations/*.json"]
 "whisperlivekit.whisper.assets" = ["*.tiktoken", "*.npz"]
 "whisperlivekit.whisper.normalizers" = ["*.json"]
 "whisperlivekit.silero_vad_models" = ["*.jit", "*.onnx"]
