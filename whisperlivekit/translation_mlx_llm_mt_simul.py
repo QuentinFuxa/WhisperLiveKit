@@ -156,6 +156,8 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
             target_language=target_language or self._target_language,
             source_language=self._source_language,
             warmup=False,
+            commit_mode=self._commit_mode,
+            mass_threshold=self._mass_threshold,
         )
 
     # ------------------------------------------------------------------
