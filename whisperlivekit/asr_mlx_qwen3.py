@@ -13,18 +13,26 @@ from whisperlivekit.session_asr_proxy import merge_session_context
 from whisperlivekit.timed_objects import ASRToken, Transcript
 
 _MLX_LOCK = threading.RLock()
-_QWEN_LANG_ALIASES = {
-    "en": "English", "zh": "Chinese", "cmn": "Chinese", "yue": "Cantonese",
-    "ja": "Japanese", "ko": "Korean", "de": "German", "fr": "French",
-    "zh-yue": "Cantonese", "es": "Spanish", "it": "Italian", "pt": "Portuguese", "ru": "Russian",
-}
 
 
 def _resolve_language(language):
     if not language or language.strip().lower() == "auto":
         return None
-    key = language.strip().lower()
-    return _QWEN_LANG_ALIASES.get(key, _QWEN_LANG_ALIASES.get(key.split("-")[0], language.strip().title()))
+    from mlx_qwen3_asr.tokenizer import canonicalize_language, language_is_known
+
+    from whisperlivekit.whisper.tokenizer import LANGUAGES, TO_LANGUAGE_CODE
+
+    # The native alias table covers fewer languages than the Qwen model. Reuse
+    # WLK's names for the remaining ISO codes instead of sending "Cs" or "Pl".
+    if language_is_known(language):
+        return canonicalize_language(language)
+    key = language.strip().lower().replace("_", "-")
+    if key in {"fil", "filipino"}:
+        return "Filipino"
+    key = TO_LANGUAGE_CODE.get(key, key.split("-")[0])
+    if key in LANGUAGES:
+        return LANGUAGES[key].title()
+    raise ValueError(f"Unsupported Qwen3 ASR language: {language!r}")
 
 
 class MlxQwen3ASR:
@@ -76,7 +84,6 @@ class MlxQwen3AsrOnlineProcessor:
             max_context_sec=self.asr.max_context_sec,
             language=self.language, finalization_mode=self.asr.finalization_mode,
         )
-        state.forced_language = self.language
         return state
 
     def insert_audio_chunk(self, audio, audio_stream_end_time):
