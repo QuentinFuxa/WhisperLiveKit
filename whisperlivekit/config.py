@@ -57,9 +57,10 @@ class WhisperLiveKitConfig:
     alignatt_url: str = "ws://localhost:8765"
     mlx_llm_mt_model: str = "hy-mt2-1.8b-8bit"
     # Simultaneous-MT variant of mlx-llm-mt: drafts over the unstable ASR tail
-    # with the AlignAtt commit policy (calibrated zh→en Hunyuan heads).
+    # with the AlignAtt commit policy and a compatible MLX calibration.
     mlx_llm_mt_simultaneous: bool = False
-    mlx_llm_mt_simul_commit: str = "paper"  # paper | mass | argmax (paper = arXiv 2606.03967 §4.4, measured best)
+    mlx_llm_mt_calibration: Optional[str] = None
+    mlx_llm_mt_simul_commit: str = "paper"  # paper | mass | argmax
     mlx_llm_mt_simul_mass_threshold: float = 0.5
     mlx_llm_mt_simul_soft_max_s: float = 4.0
     mlx_llm_mt_simul_hard_max_s: float = 20.0
@@ -102,6 +103,8 @@ class WhisperLiveKitConfig:
     retention_seconds: Optional[float] = None
     # REST /v1/audio/transcriptions budget; 0 = auto (max(120, 2.5x audio)).
     rest_timeout: float = 0.0
+    max_buffered_audio: float = 30.0
+    backpressure_timeout: float = 30.0
     model_size: str = "base"
     model_cache_dir: Optional[str] = None
     model_dir: Optional[str] = None
@@ -201,6 +204,17 @@ class WhisperLiveKitConfig:
     sortformer_max_speakers: Optional[int] = None
 
     def __post_init__(self):
+        for name in ("max_buffered_audio", "backpressure_timeout"):
+            value = float(getattr(self, name))
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and positive.")
+            setattr(self, name, value)
+        if self.punctuation_split or self.disable_punctuation_split:
+            logger.warning(
+                "--punctuation-split and --disable-punctuation-split are deprecated "
+                "and have no effect. Speaker turns and --pause-segmentation-seconds "
+                "control transcript boundaries."
+            )
         self.pause_segmentation_seconds = validate_pause_segmentation_seconds(
             self.pause_segmentation_seconds
         )

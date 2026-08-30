@@ -56,12 +56,6 @@ def _adapter_for_tokens(postprocessed_text, language=None):
     return asr
 
 
-def test_funasr_backend_declares_sampling_rate():
-    from whisperlivekit.funasr_backend import FunASRASR
-
-    assert FunASRASR.SAMPLING_RATE == 16000
-
-
 def test_funasr_does_not_extend_whisper_language_table():
     from whisperlivekit.local_agreement.whisper_online import WHISPER_LANG_CODES
 

@@ -1437,7 +1437,7 @@ async def test_transcription_ready_event_waits_for_matching_snapshot():
     processor = object.__new__(AudioProcessor)
     processor.stream_event_queue = asyncio.Queue()
     processor._stream_events_after_snapshot = asyncio.Queue()
-    processor._ffmpeg_error = None
+    processor.audio_input = SimpleNamespace(error=None)
     processor.tokens_alignment = SimpleNamespace(
         update=lambda: None,
         get_lines=lambda **kwargs: ([], "", ""),

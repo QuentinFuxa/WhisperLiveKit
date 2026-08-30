@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "Cite WhisperLiveKit when using this software. If you use its AlignAtt4LLM translation backend, also cite the paper listed in references."
+type: software
+title: WhisperLiveKit
+authors:
+  - family-names: Fuxa
+    given-names: Quentin
+repository-code: "https://github.com/QuentinFuxa/WhisperLiveKit"
+license: Apache-2.0
+references:
+  - type: article
+    title: "AlignAtt4LLM: Fast AlignAtt for Decoder-Only LLMs at IWSLT 2026 Simultaneous Speech Translation Task"
+    authors:
+      - family-names: Fuxa
+        given-names: Quentin
+      - family-names: Macháček
+        given-names: Dominik
+    year: 2026
+    doi: 10.48550/arXiv.2606.03967
+    url: "https://arxiv.org/abs/2606.03967"

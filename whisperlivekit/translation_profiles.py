@@ -39,6 +39,7 @@ class MtModelProfile:
       ``lang_names_zh`` are unused.
     """
     repo: str
+    revision: Optional[str] = None
     prompt_template: str = ""
     eos_token: Optional[str] = None
     temp: float = 0.2

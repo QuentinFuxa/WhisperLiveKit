@@ -1,21 +1,9 @@
-"""Generic in-process MLX translation backend with a config-driven model registry.
-
-Any decoder-LLM translation model (Hunyuan-MT, TranslateGemma, Aya, Qwen-MT)
-runs via mlx-lm on Apple Silicon. The model-specific parts — prompt template,
-EOS token, and sampling params — live in a config dict
-(``MTX_MODEL_CONFIGS``). Add a model by adding a config entry, not by
-writing a subclass.
-
-Duck-typed contract (same shape as nllw.OnlineTranslation):
-  - ``insert_tokens(items)``: receive committed ASRTokens; punctuation closes a segment.
-  - ``process()`` -> ``(Translation|None, TimedText buffer)``: translate closed segments.
-  - ``validate_buffer_and_reset()`` -> ``(Translation, TimedText)``: flush at silence or speaker change.
-  - ``insert_silence(duration)``: no-op.
-"""
+"""Sentence translation on Apple Silicon, with a shared model and per-session buffers."""
 from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
@@ -105,7 +93,9 @@ class MlxLlmTranslation:
     segment buffer.
     """
 
-    _MODEL_CACHE: Dict[str, Tuple[Any, Any]] = {}  # repo → (model, tokenizer)
+    _MODEL_CACHE: Dict[tuple, Tuple[Any, Any]] = {}
+    # MLX models and tokenizers are shared, including mutable decode caches.
+    _MODEL_LOCK = threading.RLock()
 
     def __init__(
         self,
@@ -131,6 +121,8 @@ class MlxLlmTranslation:
         self._buffer_start: Optional[float] = None
         self._pending_finals: List[Tuple[str, float, float]] = []  # (text, start, end)
         self._last_buffer = TimedText()
+        self.error = ""
+        self._closed = threading.Event()
         self._eos_token = config.eos_token  # may be None → resolved at load
         # Benchmark instrumentation: cumulative wall-time spent generating MT
         # output (excludes warmup, model load, and ASR).
@@ -138,8 +130,9 @@ class MlxLlmTranslation:
         self._mt_call_count: int = 0
         if warmup:
             self._warmup()
+            self._mt_call_count = 0
 
-    def new_session(self, target_language: str = "") -> "MlxLlmTranslation":
+    def new_session(self, target_language: str = "", source_language: str | None = None) -> "MlxLlmTranslation":
         """Create a per-session translation client sharing the loaded model/cache
         but with fresh per-instance state (buffer, pending finals, metrics).
 
@@ -151,7 +144,7 @@ class MlxLlmTranslation:
         return MlxLlmTranslation(
             model_id=self._model_id,
             target_language=target_language or self._target_language,
-            source_language=self._source_language,
+            source_language=self._source_language if source_language is None else source_language,
             warmup=False,  # model already loaded in the cache
         )
 
@@ -171,21 +164,26 @@ class MlxLlmTranslation:
     def _warmup(self) -> None:
         """Run one short decode to absorb Metal kernel compilation now, so the
         first real sentence's translation doesn't stall for ~10s."""
-        try:
-            self._translate_text("warmup。")
-        except Exception as exc:  # warmup is non-fatal
-            logger.debug("mlx-llm-mt warmup failed (non-fatal): %s", exc)
+        self._translate_text("Hello.")
 
     @classmethod
     def _ensure_model(cls, config: MlxLlmMtModelConfig):
         repo = config.repo
-        if repo not in cls._MODEL_CACHE:
-            from mlx_lm import load  # lazy; mlx-lm is an extra
-            logger.info("Loading MT model %s ...", repo)
-            cls._MODEL_CACHE[repo] = load(repo)  # (model, tokenizer) tuple
-        return cls._MODEL_CACHE[repo]
+        key = (repo, config.revision)
+        with cls._MODEL_LOCK:
+            if key not in cls._MODEL_CACHE:
+                from mlx_lm import load  # lazy; mlx-lm is an extra
+                logger.info("Loading MT model %s ...", repo)
+                cls._MODEL_CACHE[key] = load(repo, revision=config.revision)
+            return cls._MODEL_CACHE[key]
 
     def _translate_text(self, text: str) -> str:
+        with self._MODEL_LOCK:
+            if self._closed.is_set():
+                raise RuntimeError("Translation session is closed")
+            return self._generate_text(text)
+
+    def _generate_text(self, text: str) -> str:
         from mlx_lm import stream_generate  # lazy import in method scope
         from mlx_lm.sample_utils import make_logits_processors, make_sampler
         self._mt_call_count += 1
@@ -230,6 +228,8 @@ class MlxLlmTranslation:
             sampler=sampler,
             logits_processors=processors,
         ):
+            if self._closed.is_set():
+                raise RuntimeError("Translation session closed during generation")
             out += chunk.text if hasattr(chunk, "text") else str(chunk)
             if eos and out.endswith(eos):
                 break
@@ -252,60 +252,61 @@ class MlxLlmTranslation:
             self._buffer_tokens.append(item)
             # Punctuation closes the segment.
             if item.has_punctuation():
-                text = "".join(t.text for t in self._buffer_tokens).strip()
+                text = self._source_text()
                 self._pending_finals.append((text, self._buffer_start, item.end))
                 self._buffer_tokens = []
                 self._buffer_start = None
 
+    def _source_text(self) -> str:
+        separator = "" if self._source_language.startswith(("zh", "ja", "cmn", "yue")) else " "
+        return separator.join(t.text.strip() for t in self._buffer_tokens).strip()
+
     def process(self) -> Tuple[Optional[Translation], TimedText]:
-        # Translate any closed (punctuated) segments; emit the first.
-        if self._pending_finals:
-            text, start, end = self._pending_finals.pop(0)
+        """Drain completed sentences without discarding a failed generation."""
+        completed = []
+        while self._pending_finals:
+            text, start, end = self._pending_finals[0]
             _t0 = time.perf_counter()
             try:
                 mt = self._translate_text(text)
+                if not mt.strip():
+                    raise RuntimeError("The translation model returned empty text")
             except Exception as exc:
-                logger.warning("mlx-llm-mt translate failed: %s", exc)
-                return None, self._last_buffer
+                self.error = f"MLX translation incomplete: {exc}"
+                logger.warning("%s", self.error)
+                break
             finally:
                 self._mt_total_time_s += time.perf_counter() - _t0
-            tr = Translation(start=start, end=end, text=mt)
-            self._last_buffer = TimedText(start=start, end=end, text=mt)
-            return tr, self._last_buffer
-        # No closed segment: emit the running partial as the buffer (untranslated).
-        if self._buffer_tokens:
-            text = "".join(t.text for t in self._buffer_tokens).strip()
-            start = self._buffer_start or 0.0
-            end = self._buffer_tokens[-1].end
-            self._last_buffer = TimedText(start=start, end=end, text=text)
-        return None, self._last_buffer
+            self._pending_finals.pop(0)
+            completed.append(Translation(start=start, end=end, text=mt))
+            self.error = ""
+        # The segment backend exposes only translated text. Source words must
+        # not appear in the target-language buffer while awaiting a boundary.
+        self._last_buffer = TimedText()
+        if not completed:
+            return None, self._last_buffer
+        return Translation(
+            start=completed[0].start,
+            end=completed[-1].end,
+            text=" ".join(part.text for part in completed),
+        ), self._last_buffer
 
-    def validate_buffer_and_reset(self) -> Tuple[Translation, TimedText]:
+    def validate_buffer_and_reset(self) -> Tuple[Optional[Translation], TimedText]:
         """Silence / speaker-change boundary: flush the open segment now."""
         if self._buffer_tokens:
-            text = "".join(t.text for t in self._buffer_tokens).strip()
+            text = self._source_text()
             start = self._buffer_start or 0.0
             end = self._buffer_tokens[-1].end
             self._pending_finals.append((text, start, end))
             self._buffer_tokens = []
             self._buffer_start = None
-        # The open utterance is closed.
-        if self._pending_finals:
-            text, start, end = self._pending_finals.pop(0)
-            _t0 = time.perf_counter()
-            try:
-                mt = self._translate_text(text)
-            except Exception as exc:
-                logger.warning("mlx-llm-mt validate translate failed: %s", exc)
-                mt = ""
-            finally:
-                self._mt_total_time_s += time.perf_counter() - _t0
-            tr = Translation(start=start, end=end, text=mt)
-            self._last_buffer = TimedText(start=start, end=end, text=mt)
-            return tr, self._last_buffer
-        # Nothing to flush: return empty. Do not return the stale
-        # _last_buffer; that would duplicate the previous translation.
-        return TimedText(), TimedText()
+        return self.process()
+
+    def finish(self) -> Tuple[Optional[Translation], TimedText]:
+        return self.validate_buffer_and_reset()
+
+    def close(self) -> None:
+        self._closed.set()
 
     def insert_silence(self, duration: float = None) -> None:
         pass

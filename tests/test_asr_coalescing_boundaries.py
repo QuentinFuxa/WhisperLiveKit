@@ -121,6 +121,9 @@ def _assert_asr_metrics(processor, *, calls, tokens):
     """Every successful backend invocation has one latency and unique tokens."""
     assert processor.metrics.n_transcription_calls == calls
     assert len(processor.metrics.transcription_durations) == calls
+    assert processor.metrics.total_processing_time_s == pytest.approx(
+        sum(processor.metrics.transcription_durations)
+    )
     assert all(duration >= 0.0 for duration in processor.metrics.transcription_durations)
     assert processor.metrics.n_tokens_produced == tokens
 

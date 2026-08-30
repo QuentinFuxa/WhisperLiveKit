@@ -110,6 +110,7 @@ def reconstruct_state(msg: dict, lines: List[dict]) -> dict:
         "buffer_transcription": msg.get("buffer_transcription", ""),
         "buffer_diarization": msg.get("buffer_diarization", ""),
         "buffer_translation": msg.get("buffer_translation", ""),
+        "translation_error": msg.get("translation_error", ""),
         "remaining_time_transcription": msg.get("remaining_time_transcription", 0),
         "remaining_time_transcription_processing": msg.get("remaining_time_transcription_processing", 0),
         "remaining_time_transcription_policy": msg.get("remaining_time_transcription_policy", 0),

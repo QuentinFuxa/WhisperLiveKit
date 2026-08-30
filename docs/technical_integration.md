@@ -1,43 +1,79 @@
-# Technical Integration Guide
+# Python integration
 
-This document introduce how to reuse the core components when you do **not** want to ship the bundled frontend, FastAPI server, or even the provided CLI.
+Create a `TranscriptionEngine` once at startup, then an `AudioProcessor` per audio stream. `process_audio()` accepts incoming bytes; `create_tasks()` returns an async generator of `FrontData` objects. Serialize each update with `to_dict()`.
 
----
+| Component | Responsibility |
+|---|---|
+| `TranscriptionEngine` | Shared ASR, VAD, diarization, and translation models |
+| `AudioProcessor` | Per-session queues, buffers, processing tasks, and transcript state |
+| `FrontData` | Output data; its `to_dict()` method defines the native JSON format |
 
-## 1. Runtime Components
+## Minimal WebSocket server
 
-| Layer | File(s) | Purpose |
-|-------|---------|---------|
-| Transport | `whisperlivekit/basic_server.py`, any ASGI/WebSocket server | Accepts audio over WebSocket (MediaRecorder WebM or raw PCM chunks) and streams JSON updates back |
-| Audio processing | `whisperlivekit/audio_processor.py` | Buffers audio, orchestrates transcription, diarization, translation, handles FFmpeg/PCM input |
-| Engines | `whisperlivekit/core.py`, `whisperlivekit/simul_whisper/*`, `whisperlivekit/local_agreement/*` | Load models once (SimulStreaming or LocalAgreement), expose `TranscriptionEngine` and helpers |
-| Frontends | `whisperlivekit/web/*`, `chrome-extension/*` | Optional UI layers feeding the WebSocket endpoint |
+Save this as `app.py` and run `uvicorn app:app`. This example accepts PCM s16le, mono, 16 kHz audio. An empty binary frame signals end of input; the connection stays open while the pipeline drains.
 
-**Key idea:** The server boundary is just `AudioProcessor.process_audio()` for incoming bytes and the async generator returned by `AudioProcessor.create_tasks()` for outgoing updates (`FrontData`). Everything else is optional.
+```python
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
----
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
-## 2. Running Without the Bundled Frontend
-
-1. Start the server/engine however you like:
-   ```bash
-   wlk --model small --language en --host 0.0.0.0 --port 9000
-   # or launch your own app that instantiates TranscriptionEngine(...)
-   ```
-2. Build your own client (browser, mobile, desktop) that:
-   - Opens `ws(s)://<host>:<port>/asr`
-   - Sends either MediaRecorder/Opus WebM blobs **or** raw PCM (`--pcm-input` on the server tells the client to use the AudioWorklet).
-   - Consumes the JSON payload defined in `docs/API.md`.
-
----
-
-## 3. Running Without FastAPI
-
-`whisperlivekit/basic_server.py` is just an example. Any async framework works, as long as you:
-
-1. Create a global `TranscriptionEngine` (expensive to initialize; reuse it).
-2. Instantiate `AudioProcessor(transcription_engine=engine)` for each connection.
-3. Call `create_tasks()` to get the async generator, `process_audio()` with incoming bytes, and ensure `cleanup()` runs when the client disconnects.
+from whisperlivekit import AudioProcessor, TranscriptionEngine
 
 
-If you prefer to send compressed audio, instantiate `AudioProcessor(pcm_input=False)` and pipe encoded chunks through `FFmpegManager` transparently. Just ensure `ffmpeg` is available.
+@asynccontextmanager
+async def lifespan(app):
+    app.state.engine = TranscriptionEngine(
+        model_size="base", lan="en", pcm_input=True
+    )
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+async def send_results(websocket, results):
+    async for response in results:
+        await websocket.send_json(response.to_dict())
+        if response.status == "error":
+            await websocket.close(code=1011, reason="transcription failed")
+            return
+    await websocket.send_json({"type": "ready_to_stop"})
+
+
+@app.websocket("/asr")
+async def transcribe(websocket: WebSocket):
+    await websocket.accept()
+    processor = AudioProcessor(transcription_engine=app.state.engine)
+    sender = None
+    try:
+        await websocket.send_json({"type": "config", "useAudioWorklet": True})
+        results = await processor.create_tasks()
+        sender = asyncio.create_task(send_results(websocket, results))
+        while True:
+            chunk = await websocket.receive_bytes()
+            await processor.process_audio(chunk)
+            if not chunk:
+                await sender
+                break
+    except WebSocketDisconnect:
+        pass
+    finally:
+        try:
+            if sender is not None:
+                sender.cancel()
+                with suppress(asyncio.CancelledError, WebSocketDisconnect):
+                    await sender
+        finally:
+            await processor.cleanup()
+```
+
+For compressed audio, configure the engine with `pcm_input=False`, install FFmpeg, and send a continuous encoded audio stream. Do not change the format halfway through a session.
+
+The bundled [server](../whisperlivekit/basic_server.py) adds authentication, per-session options, REST transcription, and Deepgram compatibility. This example only demonstrates the native pipeline lifecycle. For the message schema and session parameters, see [API.md](API.md).
+
+## Other async frameworks
+
+The same lifecycle works without FastAPI: create the processor, start consuming its result generator, feed bytes, send an empty chunk at EOF, drain results, and always call `cleanup()` in a `finally` block. Avoid changing a shared backend's language directly; pass session overrides to `AudioProcessor`.
+
+`TranscriptionEngine` is a process-wide singleton. Construct it during startup before accepting sessions. `reset()` is intended for tests and backend comparisons, not for switching models while users are connected.

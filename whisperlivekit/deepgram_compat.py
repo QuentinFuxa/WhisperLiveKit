@@ -1121,7 +1121,9 @@ async def handle_deepgram_websocket(
         logger.exception("Deepgram-compatible WebSocket failed")
         if not server_closed and not client_disconnected:
             with suppress(Exception):
-                await adapter.send_error("Internal transcription error.")
+                await adapter.send_error(
+                    getattr(audio_processor, "overload_error", None) or "Internal transcription error."
+                )
             with suppress(Exception):
                 await websocket.close(code=1011, reason="internal error")
             server_closed = True

@@ -1,616 +1,214 @@
-"""Simultaneous-MT variant of the mlx-llm-mt translation backend.
-
-A ``MlxLlmTranslationSimul`` subclass of ``MlxLlmTranslation``
-that drafts translation over the unstable ASR tail (``HypothesisTail``)
-and applies the AlignAtt commit policy: commit only target tokens whose
-attention argmax (top calibrated zh→en head) lands on a source token the
-ASR has committed; hold the rest. When the ASR later commits the tail,
-held tokens release from the cached attention WITHOUT a new MT call —
-that is the latency win.
-
-The base ``MlxLlmTranslation`` is unchanged; this variant only
-adds the simultaneous behaviour. The base's ``self._tail`` seam
-(``HypothesisTail`` storage) is the opt-in point.
-
-Duck-typed contract (same shape as ``MlxLlmTranslation``):
-  - ``insert_tokens(items)``: committed ASRTokens + ``HypothesisTail``.
-  - ``process()`` -> ``(Translation|None, TimedText)``: provisional EN
-    during speech (buffer), validated Translation at segment close.
-  - ``validate_buffer_and_reset()``: flush at silence / speaker change.
-  - ``insert_silence(duration)``: no-op.
-"""
+"""MLX translation drafts gated by calibrated AlignAtt attention heads."""
 from __future__ import annotations
 
-import logging
+import json
+import math
 import time
-from typing import Any, List, Optional, Tuple
+from dataclasses import replace
+from pathlib import Path
 
+from whisperlivekit.simul_mt_calibration import load_calibration
 from whisperlivekit.simul_mt_capture import (
     apply_commit_policy,
+    capture_attention,
     committed_src_end_from_text,
-    install_capture,
-    lookup_calibration,
+    snapshot_capture,
     source_span,
 )
-from whisperlivekit.timed_objects import ASRToken, HypothesisTail, TimedText, Translation
+from whisperlivekit.timed_objects import ASRToken, HypothesisTail, TimedText
 from whisperlivekit.translation_mlx_llm_mt import (
-    _HY_PLACEHOLDER_TEXT,
     MlxLlmTranslation,
     _placeholder_stop_check,
     _strip_hy_placeholder,
 )
 
-logger = logging.getLogger(__name__)
-
-
-def _placeholder_ids(tokenizer) -> list:
-    """Id sequence of the Hunyuan placeholder for this tokenizer (may be empty).
-
-    Mirrors the id-resolution inside ``_placeholder_stop_check``; the simul
-    paths use it to truncate the token stream itself (not just the decoded
-    string) so the stashed draft the release path reads is placeholder-free.
-    """
-    try:
-        try:
-            ids = tokenizer.encode(_HY_PLACEHOLDER_TEXT, add_special_tokens=False)
-        except TypeError:
-            ids = tokenizer.encode(_HY_PLACEHOLDER_TEXT)
-    except Exception:
-        return []
-    return list(ids) if 0 < len(ids) <= 16 else []
-
 
 class MlxLlmTranslationSimul(MlxLlmTranslation):
-    """In-process simultaneous-MT backend: AlignAtt commit policy over the
-    unstable ASR tail, with calibrated zh→en Hunyuan alignment heads.
+    wants_hypothesis_tail = True
 
-    Sets ``wants_hypothesis_tail = True`` so the audio processor forwards
-    the unstable ASR tail; drafts translation over (committed + tail) and
-    commits only the target prefix aligning to committed source.
-    """
+    def __init__(self, model_id="hy-mt2-1.8b-8bit", target_language="en",
+                 source_language="", warmup=True, commit_mode="paper",
+                 mass_threshold=0.5, simul_soft_max_s=4.0, simul_hard_max_s=20.0,
+                 calibration_file=None):
+        super().__init__(model_id, target_language, source_language, warmup=False)
+        self._calibration_file = calibration_file
+        self._calibration = load_calibration(calibration_file, self._config.repo, source_language, target_language)
+        if self._calibration.prompt != self._prompt:
+            raise ValueError("Calibration prompt differs from the translation model profile")
+        self._config = replace(self._config, revision=self._calibration.revision)
+        if commit_mode not in {"paper", "argmax", "mass"}:
+            raise ValueError(f"Unknown alignment policy: {commit_mode}")
+        if not all(math.isfinite(v) for v in (mass_threshold, simul_soft_max_s, simul_hard_max_s)):
+            raise ValueError("Simultaneous translation limits must be finite")
+        if not 0 < mass_threshold <= 1 or not 0 < simul_soft_max_s <= simul_hard_max_s:
+            raise ValueError("Require 0 < mass threshold <= 1 and 0 < soft duration <= hard duration")
+        self._commit_mode, self._mass_threshold = commit_mode, mass_threshold
+        self._simul_soft_max_s, self._simul_hard_max_s = simul_soft_max_s, simul_hard_max_s
+        self._committed_simul = []
+        self._tail = None
+        self._last_draft = None
+        self._emitted_partial = ""
+        self._verified_model = False
+        if warmup:
+            with self._MODEL_LOCK:
+                self._ensure_simul_model()
+            self._warmup()
+            self._mt_call_count = 0
 
-    def __init__(
-        self,
-        model_id: str = "hy-mt2-1.8b-8bit",
-        target_language: str = "en",
-        source_language: str = "",
-        warmup: bool = True,
-        commit_mode: str = "paper",
-        mass_threshold: float = 0.5,
-        simul_soft_max_s: float = 4.0,
-        simul_hard_max_s: float = 20.0,
-    ):
-        super().__init__(
-            model_id=model_id,
-            target_language=target_language,
-            source_language=source_language,
-            warmup=warmup,
-        )
-        self._commit_mode = commit_mode
-        self._mass_threshold = mass_threshold
-        self._simul_soft_max_s = simul_soft_max_s
-        self._simul_hard_max_s = simul_hard_max_s
-        # Per-instance simultaneous state.
-        self._tail: Optional[HypothesisTail] = None
-        self._committed_simul: List[ASRToken] = []  # committed tokens (open utterance)
-        self._committed_start: Optional[float] = None
-        # Cached draft from the last MT call (for the release-without-call path).
-        self._last_source_text: str = ""
-        self._last_draft: Optional[dict] = None  # {tokens, src_start, src_end, src_token_count}
-        # Rolling chars-per-token ratio (from the last draft) used to estimate
-        # source-token growth without re-tokenizing on the hysteresis check.
-        # Seeded with the language-typical ratio (CJK ≈ 2.0, Latin ≈ 4.0) and
-        # corrected after the first real draft. This is the model-suggested
-        # unit: the threshold is in source BPE tokens (the MT's own unit),
-        # not chars — so CJK and Latin converge to the same token budget.
-        self._chars_per_token: float = 2.0 if (self._source_language or "").startswith(("zh", "ja")) else 4.0
-        # Minimum source TOKEN growth to warrant a fresh draft. Below this,
-        # the release path re-applies the commit policy on the cached
-        # attention (no MT call). 15 source tokens ≈ one short sentence for
-        # both CJK (≈30 chars) and Latin (≈60 chars). Tuned per direction from
-        # the calibration TS (higher TS → model commits more decisively →
-        # smaller threshold is safe); for now a fixed 15.
-        self._MIN_SOURCE_TOKENS: int = 15
-        # Stable, append-only provisional target emitted so far this utterance.
-        self._emitted_partial: str = ""
-        self._capture: Optional[dict] = None
-        self._capture_installed = False
-
-        # Resolve calibration for this (model_repo, source, target) tuple.
-        # Found → activate simultaneous mode (install capture with calibrated
-        # heads). Not found → silently deactivate: behave as the base class
-        # (translate-on-close, no provisional, no capture). This is the
-        # graceful-degrade path — the user gets correct translation, just not
-        # simultaneous. AlignAtt4LLM hard-fails (RuntimeError) on missing
-        # heads; WLK degrades gracefully instead.
-        cal = lookup_calibration(self._config.repo, source_language, target_language)
-        # env override for A/B testing head choices (LC_SIMUL_HEAD="9,8"):
-        # the shipped calibration was scored on the PyTorch path; the mlx
-        # capture's head ordering differs (verified: (9,5) mass 0.044 vs
-        # (9,8) 0.408). This override lets a production-measured head be
-        # tested without editing the calibration files.
-        _head_env = __import__("os").environ.get("LC_SIMUL_HEAD")
-        if _head_env:
-            import types as _types
-            _l, _h = (int(x) for x in _head_env.split(","))
-            cal = _types.SimpleNamespace(heads=[(_l, _h)], top_head=(_l, _h))
-            print(f"[simul] LC_SIMUL_HEAD override: using head ({_l},{_h})", flush=True)
-        if cal is not None:
-            self._simul_active = True
-            self._simul_heads = cal.heads
-            self._simul_top_head = cal.top_head
-            self.wants_hypothesis_tail = True
-            logger.info(
-                "MlxLlmTranslationSimul: calibration found for "
-                "(model=%s, src=%s, tgt=%s) — heads=%s top=%s",
-                self._config.repo, source_language, target_language,
-                cal.heads, cal.top_head,
-            )
-        else:
-            self._simul_active = False
-            self._simul_heads = []
-            self._simul_top_head = (0, 0)
-            self.wants_hypothesis_tail = False
-            logger.warning(
-                "MlxLlmTranslationSimul: no calibration for "
-                "(model=%s, src=%s, tgt=%s) — deactivating simultaneous mode "
-                "(translation works via base; no provisional)",
-                self._config.repo, source_language, target_language,
-            )
-        if warmup and self._simul_active:
-            # Warm the SIMUL draft path as well: the base warmup only covers
-            # _translate_text; the first simul draft otherwise pays the Metal
-            # kernel compile + capture install inside the translation loop,
-            # blocking every draft for the first sentence (CL: the first
-            # sentence had no translation draft for ~9s).
-            try:
-                self._translate_simul("预热预热，测试。", "预热")
-                self._reset_simul_draft()
-                self._emitted_partial = ""
-            except Exception as exc:  # warmup is non-fatal
-                logger.debug("mlx-llm-mt-simul warmup draft failed (non-fatal): %s", exc)
-
-    def new_session(self, target_language: str = "") -> "MlxLlmTranslationSimul":
-        """Create a per-session simul client sharing the loaded model/cache
-        but with fresh simultaneous state (tail, committed tokens, draft).
-
-        Overrides the base ``new_session`` so the per-session client is a
-        ``MlxLlmTranslationSimul`` (not the base class), preserving the
-        simultaneous-MT behaviour across session boundaries.
-        """
+    def new_session(self, target_language="", source_language=None):
         return MlxLlmTranslationSimul(
-            model_id=self._model_id,
-            target_language=target_language or self._target_language,
-            source_language=self._source_language,
-            warmup=False,
-            commit_mode=self._commit_mode,
-            mass_threshold=self._mass_threshold,
+            model_id=self._model_id, target_language=target_language or self._target_language,
+            source_language=self._source_language if source_language is None else source_language,
+            warmup=False, commit_mode=self._commit_mode, mass_threshold=self._mass_threshold,
+            simul_soft_max_s=self._simul_soft_max_s, simul_hard_max_s=self._simul_hard_max_s,
+            calibration_file=self._calibration_file,
         )
-
-    # ------------------------------------------------------------------
-    # Model load + capture installation
-    # ------------------------------------------------------------------
 
     def _ensure_simul_model(self):
-        """Ensure the model is loaded and the Q/K capture is installed.
-
-        The capture is installed on the shared cached model (idempotent via
-        ``install_capture``). The capture dict is shared across simul
-        instances that use the same repo; it is cleared before each
-        generate and read after.
-        """
         model, tokenizer = self._ensure_model(self._config)
-        if not self._capture_installed:
-            self._capture = install_capture(model, self._simul_heads)
-            self._capture_installed = True
+        if not self._verified_model:
+            from huggingface_hub import hf_hub_download
+
+            path = hf_hub_download(self._config.repo, "config.json", revision=self._config.revision, local_files_only=True)
+            config = json.loads(Path(path).read_text())
+            quantization = config.get("quantization", config.get("quantization_config", {}))
+            if quantization != self._calibration.quantization:
+                raise ValueError("Model quantization differs from the MLX calibration")
+            layers = model.model.layers
+            if len(layers) != self._calibration.num_layers or any(
+                layer.self_attn.n_heads != self._calibration.num_heads for layer in layers
+            ):
+                raise ValueError("Model dimensions differ from the MLX calibration")
+            self._verified_model = True
         return model, tokenizer
 
-    # ------------------------------------------------------------------
-    # Simul MT generation + commit policy
-    # ------------------------------------------------------------------
-
-    def _build_prompt_content(self, text: str):
-        """Build the chat-message content for the MT prompt, reusing the
-        base class's resolved prompt (``self._prompt``).
-
-        Branches on ``kind`` exactly like ``MlxLlmTranslation._translate_text``.
-        Returns the content value (string or structured list) for the
-        ``user`` message.
-        """
+    def _prompt_content(self, text):
         if self._prompt["kind"] == "structured_chat":
-            return [{
-                "type": "text",
-                "source_lang_code": self._prompt["src"],
-                "target_lang_code": self._prompt["tgt"],
-                "text": text,
-            }]
-        return self._prompt["template"].format(
-            target_lang=self._prompt["target_name"], text=text
-        )
+            return [{"type": "text", "source_lang_code": self._prompt["src"],
+                     "target_lang_code": self._prompt["tgt"], "text": text}]
+        return self._prompt["template"].format(target_lang=self._prompt["target_name"], text=text)
 
-    def _translate_simul(self, source_text: str, committed_text: str) -> str:
-        """Generate a translation draft over the full source (committed +
-        tail) with Q/K capture, apply the commit policy, and return the
-        committed target prefix. Stashes the draft for the
-        release-without-call path.
+    def _translate_simul(self, source, committed):
+        from mlx_lm import stream_generate
+        from mlx_lm.sample_utils import make_logits_processors, make_sampler
 
-        ``source_text`` is the full source the MT conditions on (committed
-        prefix + unstable tail). ``committed_text`` is the stable prefix
-        whose source tokens count as committed for the policy.
-        """
-        from mlx_lm import stream_generate  # lazy
+        with self._MODEL_LOCK:
+            if self._closed.is_set():
+                raise RuntimeError("Translation session is closed")
+            model, tokenizer = self._ensure_simul_model()
+            prompt = tokenizer.apply_chat_template(
+                [{"role": "user", "content": self._prompt_content(source)}],
+                add_generation_prompt=True, tokenize=False,
+            )
+            prompt_ids = tokenizer.encode(prompt, add_special_tokens=False)
+            start, end = source_span(tokenizer, prompt, source)
+            stop = _placeholder_stop_check(tokenizer)
+            tokens = []
+            with capture_attention(model, self._calibration.heads, target_start=len(prompt_ids)) as capture:
+                for chunk in stream_generate(
+                    model, tokenizer, prompt=prompt_ids, max_tokens=self._config.max_tokens,
+                    sampler=make_sampler(temp=self._config.temp, top_p=self._config.top_p, top_k=self._config.top_k),
+                    logits_processors=make_logits_processors(repetition_penalty=self._config.repetition_penalty),
+                ):
+                    if self._closed.is_set():
+                        raise RuntimeError("Translation session closed during generation")
+                    tokens.append(chunk.token)
+                    if stop is not None and stop(chunk):
+                        break
+                attention = snapshot_capture(capture)
+            draft = dict(source=source, tokens=tuple(tokens), prompt_length=len(prompt_ids),
+                         source_ids=tuple(prompt_ids[start:end]), src_start=start, src_end=end,
+                         attention=attention)
+            accepted = self._apply_draft(tokenizer, draft, committed)
+            self._last_draft = draft
+            return accepted
 
-        model, tokenizer = self._ensure_simul_model()
-        if self._eos_token is None:
-            self._eos_token = getattr(tokenizer, "eos_token", "") or ""
-        content = self._build_prompt_content(source_text)
-        messages = [{"role": "user", "content": content}]
-        prompt_str = tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=False
-        )
-        prompt_ids = tokenizer.encode(prompt_str, add_special_tokens=False)
-        src_start, src_end = source_span(tokenizer, prompt_str, source_text)
-        src_ids = prompt_ids[src_start:src_end]
-        cend = committed_src_end_from_text(tokenizer, src_ids, committed_text)
-
-        assert self._capture is not None
-        self._capture.clear()
-        gen = stream_generate(
-            model,
-            tokenizer,
-            prompt=prompt_ids,
-            max_tokens=self._config.max_tokens,
-            sampler=self._make_sampler(),
-            logits_processors=self._make_logits_processors(),
-        )
-        tokens: List[int] = []
-        eos = self._eos_token
-        # In-loop early stop: end decode the moment the placeholder is emitted
-        # instead of paying for the hallucinated tail and cutting it afterwards
-        # (same predicate the base engine uses in _translate_text).
-        stop_at_placeholder = _placeholder_stop_check(tokenizer)
-        for chunk in gen:
-            tokens.append(chunk.token)
-            # Stop at EOS for efficiency; the policy commits a prefix anyway.
-            if eos:
-                det = tokenizer.decode([chunk.token])
-                if eos in det:
-                    tokens.pop()
-                    break
-            if stop_at_placeholder is not None and stop_at_placeholder(chunk):
-                break
-        # Cut the token stream itself at the first placeholder occurrence so
-        # the commit policy, the committed text, and the stashed draft the
-        # release path reads never contain placeholder tokens.
-        ph_ids = _placeholder_ids(tokenizer)
-        if ph_ids:
-            for i in range(len(tokens) - len(ph_ids) + 1):
-                if tuple(tokens[i:i + len(ph_ids)]) == tuple(ph_ids):
-                    del tokens[i:]
-                    break
-        committed_len = min(
-            apply_commit_policy(
-                self._capture, self._simul_top_head, len(tokens), src_start, src_end, cend,
-                mode=self._commit_mode, mass_threshold=self._mass_threshold,
-                heads=self._simul_heads or None,
-            ),
-            len(tokens),
-        )
-        committed_tokens = tokens[:committed_len]
-        committed_text_out = _strip_hy_placeholder(tokenizer.decode(committed_tokens))
-        # Stash the draft for the release path (same source, bigger boundary).
-        src_token_count = src_end - src_start
-        self._last_draft = {
-            "tokens": tokens,
-            "src_start": src_start,
-            "src_end": src_end,
-            "src_token_count": src_token_count,
-        }
-        # Refresh the rolling chars-per-token ratio from this draft so the
-        # hysteresis check can estimate source-token growth without
-        # re-tokenizing. Guards against div-by-zero on empty source.
-        if source_text:
-            self._chars_per_token = max(1.0, len(source_text) / max(1, src_token_count))
-        return committed_text_out
-
-    def _release_held(self, committed_text: str) -> str:
-        """Re-apply the commit policy to the CACHED attention from the last MT
-        call with a larger committed-source boundary (the ASR committed more
-        of the tail). Releases held target tokens WITHOUT a new MT call.
-
-        Only valid when the total source text is unchanged from the last
-        call (caller guarantees this by comparing ``_last_source_text``).
-        """
-        if self._last_draft is None or self._capture is None:
-            return self._emitted_partial
-        model, tokenizer = self._ensure_simul_model()
-        # Re-derive the committed boundary from the stashed source span. The
-        # source text is unchanged, so the prompt/source span is the same;
-        # recompute cend from committed_text against the stashed span.
-        draft = self._last_draft
-        src_start, src_end = draft["src_start"], draft["src_end"]
-        # Rebuild the prompt to get src_ids (source unchanged → same ids).
-        content = self._build_prompt_content(self._last_source_text)
-        prompt_str = tokenizer.apply_chat_template(
-            [{"role": "user", "content": content}], add_generation_prompt=True,
-            tokenize=False,
-        )
-        prompt_ids = tokenizer.encode(prompt_str, add_special_tokens=False)
-        src_ids = prompt_ids[src_start:src_end]
-        cend = committed_src_end_from_text(tokenizer, src_ids, committed_text)
-        # The capture still holds the last call's attentions (not cleared).
-        committed_len = apply_commit_policy(
-            self._capture, self._simul_top_head, len(draft["tokens"]), src_start, src_end, cend,
+    def _apply_draft(self, tokenizer, draft, committed):
+        frontier = committed_src_end_from_text(tokenizer, list(draft["source_ids"]), committed)
+        count = apply_commit_policy(
+            draft["attention"], self._calibration.heads, len(draft["tokens"]),
+            draft["prompt_length"], draft["src_start"], draft["src_end"], frontier,
             mode=self._commit_mode, mass_threshold=self._mass_threshold,
-            heads=self._simul_heads,
         )
-        committed_tokens = draft["tokens"][:committed_len]
-        return _strip_hy_placeholder(tokenizer.decode(committed_tokens))
+        # An incomplete byte token must remain held, never display U+FFFD.
+        while count and tokenizer.decode(list(draft["tokens"][:count])).endswith("\ufffd"):
+            count -= 1
+        return _strip_hy_placeholder(tokenizer.decode(list(draft["tokens"][:count])))
 
-    def _make_sampler(self):
-        from mlx_lm.sample_utils import make_sampler
+    def _release_held(self, committed):
+        with self._MODEL_LOCK:
+            _, tokenizer = self._ensure_simul_model()
+            return self._apply_draft(tokenizer, self._last_draft, committed)
 
-        return make_sampler(
-            temp=self._config.temp,
-            top_p=self._config.top_p,
-            top_k=self._config.top_k,
-        )
+    def _committed_text(self):
+        separator = "" if self._source_language.startswith(("zh", "ja", "cmn", "yue")) else " "
+        return separator.join(t.text.strip() for t in self._committed_simul)
 
-    def _make_logits_processors(self):
-        from mlx_lm.sample_utils import make_logits_processors
-
-        return make_logits_processors(
-            repetition_penalty=self._config.repetition_penalty
-        )
-
-    # ------------------------------------------------------------------
-    # Source construction helpers
-    # ------------------------------------------------------------------
-
-    def _committed_text(self) -> str:
-        return "".join(t.text for t in self._committed_simul).strip()
-
-    def _source_text(self) -> str:
-        """Full source the MT conditions on: committed prefix + unstable tail.
-
-        Concatenated WITHOUT a separator so the source is invariant to the
-        committed/tail split (the release mechanism relies on this: when the
-        ASR commits part of the tail, the total source text is unchanged, so
-        the cached attention is still valid). For CJK (the zh→en use case) the
-        ``""`` join is natural; the base class joins tokens the same way.
-        """
+    def _source_text(self):
         committed = self._committed_text()
-        tail = (self._tail.text or "").strip() if self._tail else ""
-        if tail and committed:
-            # stale tail: text already inside the committed prefix, or the
-            # hypothesis's audio range predates the commit boundary (the
-            # hypothesis never advanced past the committed words — variant
-            # spellings defeat exact containment)
-            in_prefix = tail in committed
-            predates = bool(self._committed_simul) and \
-                (self._tail.end or 0) <= (self._committed_simul[-1].end or 0)
-            if in_prefix or predates:
-                tail = ""
-        return committed + tail
+        tail = self._tail.text.strip() if self._tail else ""
+        if tail and self._committed_simul and self._tail.end <= self._committed_simul[-1].end:
+            tail = ""
+        separator = "" if self._source_language.startswith(("zh", "ja", "cmn", "yue")) else " "
+        return separator.join(part for part in (committed, tail) if part)
 
-    def _utterance_start(self) -> Optional[float]:
-        if self._committed_start is not None:
-            return self._committed_start
+    def _queue_final(self):
         if self._committed_simul:
-            return self._committed_simul[0].start
-        if self._tail is not None:
-            return self._tail.start
-        return None
+            self._pending_finals.append((self._committed_text(), self._committed_simul[0].start,
+                                         self._committed_simul[-1].end))
+            self._committed_simul = []
+        self._last_draft = None
+        self._emitted_partial = ""
+        self._tail = None
 
-    def _utterance_end(self) -> Optional[float]:
-        if self._committed_simul:
-            return self._committed_simul[-1].end
-        if self._tail is not None:
-            return self._tail.end
-        return None
-
-    def _segment_start(self, fallback: Optional[float]) -> float:
-        return fallback if fallback is not None else 0.0
-
-    # ------------------------------------------------------------------
-    # WLK contract
-    # ------------------------------------------------------------------
-
-    # Endpointing (rule2-softmax / rule3, validated by scripts/spike_endpointing.py):
-    # punctuation alone no longer closes a segment — that produced fragment
-    # finals (12 vs 6 sentence finals on zh_long, every clause its own final).
-    # A segment closes on punctuation only once it has run soft_max seconds;
-    # hard_max force-cuts a run-on utterance regardless of punctuation.
-
-    def insert_tokens(self, items: List[Any]) -> None:
-        if not self._simul_active:
-            super().insert_tokens(items)
-            return
+    def insert_tokens(self, items):
         for item in items:
             if isinstance(item, HypothesisTail):
                 self._tail = item
-                continue
-            if not isinstance(item, ASRToken):
-                continue
-            if not item.text or not item.text.strip():
-                continue
-            if self._committed_start is None:
-                self._committed_start = item.start
-            self._committed_simul.append(item)
-            # Endpointing owns segment closure now (the spike's rule2-softmax
-            # / rule3): punctuation closes only a segment that has run
-            # SOFT_MAX seconds; HARD_MAX force-cuts a run-on regardless.
-            seg_dur = (item.end or 0) - (self._committed_start or 0)
-            force = seg_dur >= self._simul_hard_max_s
-            soft = item.has_punctuation() and seg_dur >= self._simul_soft_max_s
-            if force or soft:
-                text = self._committed_text()
-                self._pending_finals.append(
-                    (text, self._committed_start, item.end)
-                )
-                self._committed_simul = []
-                self._committed_start = None
-                self._tail = None
-                # The closed segment's draft is superseded by its quality-pass
-                # final. Without this reset the next process() ran the release
-                # path against the STALE cached draft with a SHORTER new source
-                # and re-emitted the pre-final translation — the display
-                # regressed (CL: 'hyperopia flashed into provisional').
-                self._reset_simul_draft()
-                self._emitted_partial = ""
+            elif isinstance(item, ASRToken) and item.text.strip():
+                self._committed_simul.append(item)
+                duration = item.end - self._committed_simul[0].start
+                if duration >= self._simul_hard_max_s or (item.has_punctuation() and duration >= self._simul_soft_max_s):
+                    self._queue_final()
 
-    def process(self) -> Tuple[Optional[Translation], TimedText]:
-        if not self._simul_active:
-            return super().process()
-        # 1. Finals first (punctuation-closed segments): full base-class translation.
+    def _buffer(self):
+        if self._emitted_partial and self._committed_simul:
+            return TimedText(start=self._committed_simul[0].start, end=self._committed_simul[-1].end,
+                             text=self._emitted_partial)
+        return self._last_buffer
+
+    def _drain_finals(self):
+        previous = self._buffer()
+        result, buffer = super().process()
+        if self.error:
+            self._last_buffer = previous
+            buffer = previous
+        return result, buffer
+
+    def process(self):
         if self._pending_finals:
-            text, start, end = self._pending_finals.pop(0)
-            _t0 = time.perf_counter()
-            try:
-                mt = self._translate_text(text)
-            except Exception as exc:
-                logger.warning("mlx-llm-mt-simul translate failed: %s", exc)
-                return None, self._buffer()
-            finally:
-                self._mt_total_time_s += time.perf_counter() - _t0
-            self._reset_simul_draft()
-            tr = Translation(start=start, end=end, text=mt)
-            self._last_buffer = TimedText(start=start, end=end, text=mt)
-            return tr, self._last_buffer
-
-        # 2. Open utterance: simultaneous provisional over committed + tail.
-        source = self._source_text()
-        committed = self._committed_text()
-        has_content = bool(committed) or bool(
-            self._tail and (self._tail.text or "").strip()
-        )
-        if not has_content:
+            return self._drain_finals()
+        source, committed = self._source_text(), self._committed_text()
+        if not source or not committed:
             return None, self._buffer()
-
-        # Decide new MT call vs release (no call).
-        # A new draft is warranted only when the total source (committed +
-        # tail) grew by >= MIN_SOURCE_TOKENS source BPE tokens since the last
-        # draft, or no draft exists yet. Below that, the release path
-        # re-applies the commit policy on the cached attention (no MT call) —
-        # the committed prefix is still valid in the cached draft.
-        #
-        # The threshold is in source TOKENS (the MT's own unit), not chars,
-        # so CJK and Latin converge to the same token budget. Char growth is
-        # converted to an estimate via the rolling chars-per-token ratio
-        # updated on each draft (no re-tokenize on the check path).
-        #
-        # _last_source_text is only updated when a new draft is made, so the
-        # hysteresis accumulates across releases within one utterance.
-        if self._last_draft is not None:
-            char_delta = len(source) - len(self._last_source_text)
-            token_delta = char_delta / self._chars_per_token
-            # The release maps the committed text against the CACHED source
-            # span — it only works while the committed text is a prefix of
-            # it (source invariant under the committed/tail split). When the
-            # ASR committed words BEYOND the cached draft's span (new source
-            # words), the boundary mapping fails and the release emits
-            # nothing — the display starves until a fresh call. Require the
-            # fresh draft in that case too.
-            release_ok = committed and self._last_source_text.startswith(committed)
-            if token_delta < self._MIN_SOURCE_TOKENS and release_ok:
-                # Source unchanged or grew but not enough: release held
-                # tokens from the cached draft without a new MT call.
-                if committed:
-                    released = self._release_held(committed)
-                    if released and len(released) > len(self._emitted_partial):
-                        self._emitted_partial = released
+        started = time.perf_counter()
+        try:
+            if self._last_draft is not None and source == self._last_draft["source"]:
+                accepted = self._release_held(committed)
             else:
-                # Source grew enough: fresh MT call with capture.
                 self._mt_call_count += 1
-                _t0 = time.perf_counter()
-                try:
-                    committed_out = self._translate_simul(source, committed)
-                except Exception as exc:
-                    logger.warning("mlx-llm-mt-simul simul draft failed: %s", exc)
-                    return None, self._buffer()
-                finally:
-                    self._mt_total_time_s += time.perf_counter() - _t0
-                self._last_source_text = source
-                self._emitted_partial = committed_out
-        else:
-            # No draft yet: must make a new call.
-            self._mt_call_count += 1
-            _t0 = time.perf_counter()
-            try:
-                committed_out = self._translate_simul(source, committed)
-            except Exception as exc:
-                logger.warning("mlx-llm-mt-simul simul draft failed: %s", exc)
-                return None, self._buffer()
-            finally:
-                self._mt_total_time_s += time.perf_counter() - _t0
-            self._last_source_text = source
-            self._emitted_partial = committed_out
-        return None, self._buffer()
+                accepted = self._translate_simul(source, committed)
+            if accepted.startswith(self._emitted_partial):
+                self._emitted_partial = accepted
+            self.error = ""
+        except Exception as exc:
+            self.error = f"MLX simultaneous translation incomplete: {exc}"
+        finally:
+            self._mt_total_time_s += time.perf_counter() - started
+        self._last_buffer = self._buffer()
+        return None, self._last_buffer
 
-    def validate_buffer_and_reset(self) -> Tuple[Optional[Translation], TimedText]:
-        """Silence / speaker-change boundary: flush the open utterance.
-
-        The provisional (if any) is kept as the buffer — it is NOT committed
-        as a validated Translation. The open utterance is queued as a final
-        so the next ``process()`` produces the quality pass (full base-class
-        translation). This avoids duplication: the only committed Translation
-        for each utterance is the final quality pass.
-        """
-        if not self._simul_active:
-            return super().validate_buffer_and_reset()
-        start = self._segment_start(self._utterance_start())
-        end = self._utterance_end() or self._segment_start(None)
-        if self._committed_simul:
-            text = self._committed_text()
-            self._pending_finals.append(
-                (text, self._committed_start, self._committed_simul[-1].end)
-            )
-            self._committed_simul = []
-            self._committed_start = None
-        self._tail = None
-        self._reset_simul_draft()
-        emitted = self._emitted_partial
-        self._emitted_partial = ""
-        if emitted:
-            self._last_buffer = TimedText(
-                start=start, end=end, text=emitted
-            )
-            # Keep the provisional as the buffer (shown on screen) but do
-            # NOT commit it as a Translation — the pending final (quality
-            # pass) will be the only committed Translation for this utterance.
-            return None, self._last_buffer
-        # Nothing was emitted; fall back to a base-class flush of any buffered
-        # tokens (mirrors the base class behaviour for a non-simul flush).
-        if self._pending_finals:
-            text, start, end = self._pending_finals.pop(0)
-            try:
-                mt = self._translate_text(text)
-            except Exception as exc:
-                logger.warning("mlx-llm-mt-simul validate translate failed: %s", exc)
-                mt = ""
-            tr = Translation(start=start, end=end, text=mt)
-            self._last_buffer = TimedText(start=start, end=end, text=mt)
-            return tr, self._last_buffer
-        return TimedText(), TimedText()
-
-    def insert_silence(self, duration: float = None) -> None:
-        pass
-
-    # ------------------------------------------------------------------
-    # internals
-    # ------------------------------------------------------------------
-
-    def _buffer(self) -> TimedText:
-        if not self._emitted_partial:
-            return self._last_buffer if self._last_buffer.text else TimedText()
-        return TimedText(
-            start=self._segment_start(self._utterance_start()),
-            end=self._utterance_end(),
-            text=self._emitted_partial,
-        )
-
-    def _reset_simul_draft(self) -> None:
-        self._last_source_text = ""
-        self._last_draft = None
-        if self._capture is not None:
-            self._capture.clear()
+    def validate_buffer_and_reset(self):
+        self._last_buffer = self._buffer()
+        self._queue_final()
+        return self._drain_finals()
