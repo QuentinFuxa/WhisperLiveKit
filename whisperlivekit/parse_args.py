@@ -917,10 +917,10 @@ def build_parser():
     nemotron_group.add_argument(
         "--nemotron-mlx-asr-model",
         type=str,
-        default="nvidia/nemotron-3.5-asr-streaming-0.6b",
+        default="mlx-community/nemotron-3.5-asr-streaming-0.6b",
         dest="nemotron_mlx_asr_model",
         help="Nemotron ASR model id (HuggingFace or local path). "
-             "Default nvidia/nemotron-3.5-asr-streaming-0.6b.",
+             "Default mlx-community/nemotron-3.5-asr-streaming-0.6b.",
     )
     nemotron_group.add_argument(
         "--nemotron-mlx-asr-att-context",
@@ -931,15 +931,6 @@ def build_parser():
         help="Encoder attention context [left, right] in subsampled frames. "
              "Default 56 6 (left cache, right+1 feed chunk).",
     )
-    nemotron_group.add_argument(
-        "--nemotron-mlx-asr-two-pass",
-        action="store_true",
-        default=False,
-        dest="nemotron_mlx_asr_two_pass",
-        help="Re-decode the full utterance at finalization for accuracy "
-             '(uses the model\'s max look-ahead; default off for latency).',
-    )
-
     translation_group = parser.add_argument_group("Translation backend")
     translation_group.add_argument(
         "--translation-backend",

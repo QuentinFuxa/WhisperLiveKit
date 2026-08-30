@@ -194,3 +194,27 @@ Timestamps describe decode chunk bounds, not aligned words. This backend is
 still under evaluation on the fixed [benchmark corpus](../benchmarks/README.md);
 passing the adapter regression scenarios alone does not establish a latency or
 accuracy advantage over the existing backends.
+
+## Nemotron through MLX (candidate)
+
+```bash
+pip install 'whisperlivekit[nemotron-mlx-asr]'
+wlk --backend nemotron-mlx-asr --language fr
+```
+
+This adapter requires `mlx-audio>=0.5.1,<0.6` and an MLX conversion such as
+[`mlx-community/nemotron-3.5-asr-streaming-0.6b`](https://huggingface.co/mlx-community/nemotron-3.5-asr-streaming-0.6b).
+The NVIDIA repository's Transformers checkpoint has a different configuration
+and weight layout; passing that repository directly to the MLX loader fails.
+
+WLK feeds mlx-audio's incremental mel frontend and cached Conformer encoder.
+A small RNNT loop retains decoder state between pushes. Pauses, speaker changes
+and EOF flush the final mel/encoder frames; there is no separate VAD or full
+utterance re-decode. Sessions have separate caches and language prompts, while
+the shared model is serialized. Session terminology context is unsupported and
+rejected explicitly.
+
+`--nemotron-mlx-asr-att-context 56 6` is the default left/right encoder context.
+Emitted token timestamps follow encoder frames and are clipped to received
+audio bounds; they are not forced word alignments. Performance and recognition
+quality remain subject to the fixed corpus and continuous-stream evaluation.

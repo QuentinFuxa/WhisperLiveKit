@@ -201,7 +201,6 @@ class TranscriptionEngine:
                 nemotron_mlx_params = {
                     "nemotron_mlx_asr_model": config.nemotron_mlx_asr_model,
                     "nemotron_mlx_asr_att_context": config.nemotron_mlx_asr_att_context,
-                    "nemotron_mlx_asr_two_pass": config.nemotron_mlx_asr_two_pass,
                     "lan": config.lan,
                 }
                 self.asr = NemotronMLXASR(**nemotron_mlx_params)
@@ -474,7 +473,7 @@ def online_factory(args, asr, language=None, context=None):
             context=context,
             simulstreaming=(
                 getattr(args, "backend_policy", None) == "simulstreaming"
-                and backend != "mlx-qwen3-asr"
+                and backend not in {"mlx-qwen3-asr", "nemotron-mlx-asr"}
             ),
         )
 
