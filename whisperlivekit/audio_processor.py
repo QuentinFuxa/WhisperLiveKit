@@ -869,6 +869,10 @@ class AudioProcessor:
                     yield FrontData(status="error", error=f"FFmpeg error: {self.audio_input.error}")
                     return
 
+                # Completion can happen while a consumer sends the yielded
+                # response. Only end after a snapshot taken with all producers
+                # already done; otherwise their final updates need another pass.
+                upstream_done = self.is_stopping and self._processing_tasks_done()
                 self.tokens_alignment.update()
                 audio_time = (
                     self.total_pcm_samples / self.sample_rate
@@ -921,7 +925,7 @@ class AudioProcessor:
                         acknowledged.set_result(None)
                     pending_queue.task_done()
 
-                if self.is_stopping and self._processing_tasks_done():
+                if upstream_done:
                     if getattr(self, "transcription_error", None):
                         continue
                     logger.info("Results formatter: All upstream processors are done and in stopping state. Terminating.")

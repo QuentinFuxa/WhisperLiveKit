@@ -479,6 +479,9 @@ Sent repeatedly as audio is processed. This message has **no `type` field**.
 | `remaining_time_diarization`   | float  | Seconds of audio waiting for speaker diarization. |
 | `error`                        | string | Only present when an error occurred (e.g. FFmpeg failure). |
 
+The server drains final updates before closing, including when decoding finishes
+while a previous WebSocket response is being sent.
+
 An ASR exception during decoding or EOF terminates the session with
 `status: "error"`. Keep the text already confirmed before that error; the session
 did not complete successfully. `wlk bench` retains such a sample as failed and
