@@ -235,7 +235,7 @@ def get_system_info() -> Dict[str, Any]:
     versions = {}
     for name in ("faster-whisper", "openai-whisper", "mlx-whisper", "transformers",
                  "torch", "mlx", "mlx-lm", "mlx-metal", "mlx-audio", "mlx-qwen3-asr",
-                 "vllm-metal", "qwen3-asr-causal", "numpy", "psutil"):
+                 "vllm", "vllm-metal", "qwen3-asr-causal", "numpy", "psutil"):
         try:
             versions[name] = version(name)
         except PackageNotFoundError:
