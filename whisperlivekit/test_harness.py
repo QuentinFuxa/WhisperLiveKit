@@ -4,10 +4,6 @@ Wraps AudioProcessor to provide a controllable, observable interface
 for testing transcription, diarization, silence detection, and timing
 without needing a running server or WebSocket connection.
 
-Designed for use by AI agents: feed audio with timeline control,
-inspect state at any point, pause/resume to test silence detection,
-cut to test abrupt termination.
-
 Usage::
 
     import asyncio
