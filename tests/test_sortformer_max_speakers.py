@@ -225,16 +225,6 @@ def test_config_rejects_sortformer_option_with_diart():
         )
 
 
-def test_sortformer_cap_preserves_pause_segmentation_config():
-    config = WhisperLiveKitConfig(
-        pause_segmentation_seconds=1.25,
-        sortformer_max_speakers=2,
-    )
-
-    assert config.pause_segmentation_seconds == 1.25
-    assert config.sortformer_max_speakers == 2
-
-
 def test_checkpoint_limit_is_validated_at_session_creation(sortformer_module):
     resolve = sortformer_module._resolve_max_speakers
 

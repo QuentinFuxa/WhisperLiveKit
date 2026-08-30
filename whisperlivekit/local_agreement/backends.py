@@ -240,14 +240,23 @@ class OpenaiApiASR(ASRBase):
         """
         Converts OpenAI API response words into ASRToken objects while
         optionally skipping words that fall into no-speech segments.
+        Translation responses have no word-level timestamps, so we fall
+        back to segment-level tokens in that case.
         """
         no_speech_segments = []
         if self.use_vad_opt:
             for segment in segments.segments:
                 if segment.no_speech_prob > 0.8:
                     no_speech_segments.append((segment.start, segment.end))
+        words = getattr(segments, "words", None)
+        if words is None:
+            return [
+                ASRToken(segment.start, segment.end, segment.text)
+                for segment in segments.segments
+                if not self.use_vad_opt or segment.no_speech_prob <= 0.8
+            ]
         tokens = []
-        for word in segments.words:
+        for word in words:
             start = word.start
             end = word.end
             if any(s[0] <= start <= s[1] for s in no_speech_segments):
@@ -256,7 +265,10 @@ class OpenaiApiASR(ASRBase):
         return tokens
 
     def segments_end_ts(self, res) -> List[float]:
-        return [s.end for s in res.words]
+        words = getattr(res, "words", None)
+        if words is None:
+            return [s.end for s in res.segments]
+        return [s.end for s in words]
 
     def transcribe(self, audio_data, prompt=None, *args, **kwargs):
         prompt = prompt or kwargs.get("init_prompt")
@@ -265,18 +277,19 @@ class OpenaiApiASR(ASRBase):
         sf.write(buffer, audio_data, samplerate=16000, format="WAV", subtype="PCM_16")
         buffer.seek(0)
         self.transcribed_seconds += math.ceil(len(audio_data) / 16000)
+        task = self.transcribe_kargs.get("task", self.task)
         params = {
             "model": self.modelname,
             "file": buffer,
             "response_format": self.response_format,
             "temperature": self.temperature,
-            "timestamp_granularities": ["word", "segment"],
         }
-        if not self.direct_english_translation and self.original_language:
-            params["language"] = self.original_language
+        if task != "translate":
+            params["timestamp_granularities"] = ["word", "segment"]
+            if not self.direct_english_translation and self.original_language:
+                params["language"] = self.original_language
         if prompt:
             params["prompt"] = prompt
-        task = self.transcribe_kargs.get("task", self.task)
         proc = self.client.audio.translations if task == "translate" else self.client.audio.transcriptions
         transcript = proc.create(**params)
         logger.debug(f"OpenAI API processed accumulated {self.transcribed_seconds} seconds")

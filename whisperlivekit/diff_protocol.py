@@ -60,6 +60,7 @@ class DiffTracker:
             "buffer_transcription": full["buffer_transcription"],
             "buffer_diarization": full["buffer_diarization"],
             "buffer_translation": full["buffer_translation"],
+            "translation_error": full["translation_error"],
             "remaining_time_transcription": full["remaining_time_transcription"],
             "remaining_time_transcription_processing": full["remaining_time_transcription_processing"],
             "remaining_time_transcription_policy": full["remaining_time_transcription_policy"],

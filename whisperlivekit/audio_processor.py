@@ -30,9 +30,7 @@ from whisperlivekit.timed_objects import (
 )
 from whisperlivekit.tokens_alignment import TokensAlignment, resolve_retention_seconds
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 SENTINEL = object() # unique sentinel object for end of stream marker
 MIN_DURATION_REAL_SILENCE = 5
@@ -210,10 +208,12 @@ class AudioProcessor:
         if self.args.diarization:
             self.diarization = online_diarization_factory(self.args, models.diarization_model)
         if models.translation_model:
-            if session_target_language and session_target_language != self.args.target_language:
+            if session_language or session_target_language:
                 from whisperlivekit.translation import session_translation_factory
                 self.translation = session_translation_factory(
-                    self.args, models.translation_model, session_target_language
+                    self.args, models.translation_model,
+                    session_target_language or self.args.target_language,
+                    source_language=session_language,
                 )
             else:
                 self.translation = online_translation_factory(self.args, models.translation_model)
@@ -550,7 +550,9 @@ class AudioProcessor:
         """Run one ASR call and record its duration, call count, and tokens."""
         _t0 = perf_counter()
         tokens, processed_upto = await asyncio.to_thread(method, *args)
-        self.metrics.transcription_durations.append(perf_counter() - _t0)
+        duration = perf_counter() - _t0
+        self.metrics.transcription_durations.append(duration)
+        self.metrics.total_processing_time_s += duration
         self.metrics.n_transcription_calls += 1
         tokens = tokens or []
         self.metrics.n_tokens_produced += len(tokens)
@@ -891,38 +893,45 @@ class AudioProcessor:
         logger.info("Diarization processor task finished.")
 
     async def translation_processor(self) -> None:
-        # the idea is to ignore diarization for the moment. We use only transcription tokens.
-        # And the speaker is attributed given the segments used for the translation
-        # in the future we want to have different languages for each speaker etc, so it will be more complex.
         while True:
+            item = None
             try:
                 item = await get_all_from_queue(self.translation_queue)
-                if item is SENTINEL:
-                    logger.debug("Translation processor received sentinel. Finishing.")
-                    break
-
                 new_translation = None
                 new_translation_buffer = None
 
-                if isinstance(item, Silence):
+                if item is SENTINEL:
+                    finalize = getattr(self.translation, "finish", self.translation.validate_buffer_and_reset)
+                    new_translation, new_translation_buffer = await asyncio.to_thread(finalize)
+                elif isinstance(item, Silence):
                     if item.is_starting:
-                        new_translation, new_translation_buffer = self.translation.validate_buffer_and_reset()
+                        new_translation, new_translation_buffer = await asyncio.to_thread(
+                            self.translation.validate_buffer_and_reset
+                        )
                     if item.has_ended:
                         self.translation.insert_silence(item.duration)
                         continue
                 elif isinstance(item, ChangeSpeaker):
-                    new_translation, new_translation_buffer = self.translation.validate_buffer_and_reset()
+                    new_translation, new_translation_buffer = await asyncio.to_thread(
+                        self.translation.validate_buffer_and_reset
+                    )
                 else:
                     self.translation.insert_tokens(item)
                     new_translation, new_translation_buffer = await asyncio.to_thread(self.translation.process)
 
-                if new_translation is not None:
+                if new_translation is not None or new_translation_buffer is not None:
                     async with self.lock:
-                        self.state.new_translation.append(new_translation)
-                        self.state.new_translation_buffer = new_translation_buffer
+                        if new_translation is not None:
+                            self.state.new_translation.append(new_translation)
+                        if new_translation_buffer is not None:
+                            self.state.new_translation_buffer = new_translation_buffer
+                if item is SENTINEL:
+                    break
             except Exception as e:
                 logger.warning(f"Exception in translation_processor: {e}")
                 logger.warning(f"Traceback: {traceback.format_exc()}")
+                if item is SENTINEL:
+                    break
         logger.info("Translation processor task finished.")
 
     async def results_formatter(self) -> AsyncGenerator[FrontData, None]:
@@ -931,9 +940,7 @@ class AudioProcessor:
             try:
                 if self._ffmpeg_error:
                     yield FrontData(status="error", error=f"FFmpeg error: {self._ffmpeg_error}")
-                    self._ffmpeg_error = None
-                    await asyncio.sleep(1)
-                    continue
+                    return
 
                 self.tokens_alignment.update()
                 audio_time = (
@@ -963,7 +970,8 @@ class AudioProcessor:
                     remaining_time_transcription=state.remaining_time_transcription,
                     remaining_time_transcription_processing=state.remaining_time_transcription_processing,
                     remaining_time_transcription_policy=state.remaining_time_transcription_policy,
-                    remaining_time_diarization=state.remaining_time_diarization if self.args.diarization else 0
+                    remaining_time_diarization=state.remaining_time_diarization if self.args.diarization else 0,
+                    translation_error=getattr(self.translation, "error", "")
                 )
 
                 deferred_events = []
@@ -994,7 +1002,8 @@ class AudioProcessor:
 
             except Exception:
                 logger.warning(f"Exception in results_formatter. Traceback: {traceback.format_exc()}")
-                await asyncio.sleep(0.5)
+                yield FrontData(status="error", error="Unable to format transcription results.")
+                return
 
     async def create_tasks(self) -> AsyncGenerator[FrontData, None]:
         """Create and start processing tasks."""
@@ -1068,6 +1077,12 @@ class AudioProcessor:
         """Clean up resources when processing is complete."""
         logger.info("Starting cleanup of AudioProcessor resources.")
         self.is_stopping = True
+        close_translation = getattr(self.translation, "close", None)
+        if close_translation is not None:
+            try:
+                await asyncio.to_thread(close_translation)
+            except Exception:
+                logger.exception("Failed to close translation connection")
         for task in self.all_tasks_for_cleanup:
             if task and not task.done():
                 task.cancel()

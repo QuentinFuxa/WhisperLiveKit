@@ -61,21 +61,13 @@ class TranscriptionEngine:
             cls._initialized = False
 
     def __init__(self, config=None, **kwargs):
-        # Thread-safe initialization check
+        # Constructors of the shared instance wait for initialization to finish.
+        # Keep the same instance after failure: a waiting constructor may already
+        # hold it, and replacing it would allow two live engines on retry.
         with TranscriptionEngine._lock:
             if TranscriptionEngine._initialized:
                 return
-
-        try:
             self._do_init(config, **kwargs)
-        except Exception:
-            # Reset singleton so a retry is possible
-            with TranscriptionEngine._lock:
-                TranscriptionEngine._instance = None
-                TranscriptionEngine._initialized = False
-            raise
-
-        with TranscriptionEngine._lock:
             TranscriptionEngine._initialized = True
 
     def _do_init(self, config=None, **kwargs):

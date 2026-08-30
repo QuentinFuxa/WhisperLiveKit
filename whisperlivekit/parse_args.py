@@ -2,7 +2,7 @@
 from argparse import ArgumentParser, BooleanOptionalAction
 
 
-def parse_args():
+def build_parser():
     parser = ArgumentParser(description="Whisper FastAPI Online Server")
     parser.add_argument(
         "--host",
@@ -90,7 +90,7 @@ def parse_args():
         "--punctuation-split",
         action="store_true",
         default=False,
-        help="Use punctuation marks from transcription to improve speaker boundary detection. Requires both transcription and diarization to be enabled.",
+        help="Deprecated compatibility option; has no effect. Speaker turns are detected automatically with diarization.",
     )
 
     parser.add_argument(
@@ -124,7 +124,7 @@ def parse_args():
     parser.add_argument(
         "--disable-punctuation-split",
         action="store_true",
-        help="Disable the split parameter.",
+        help="Deprecated compatibility option; has no effect. See --pause-segmentation-seconds.",
     )
 
     parser.add_argument(
@@ -899,7 +899,12 @@ def parse_args():
         "the MT prompt for every session.",
     )
 
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv=None):
+    """Parse server options; an explicit argv keeps embedding independent of CLI state."""
+    args = build_parser().parse_args(argv)
     args.transcription = not args.no_transcription
     args.vad = not args.no_vad
     args.vac = not args.no_vac

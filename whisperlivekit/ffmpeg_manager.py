@@ -5,7 +5,6 @@ from enum import Enum
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 ERROR_INSTALL_INSTRUCTIONS = f"""
 {'='*50}
