@@ -38,6 +38,11 @@ def native(monkeypatch):
     module.finish_streaming = finish_streaming
     monkeypatch.setitem(sys.modules, 'mlx_qwen3_asr', ModuleType('mlx_qwen3_asr'))
     monkeypatch.setitem(sys.modules, 'mlx_qwen3_asr.streaming', module)
+    tokenizer = ModuleType('mlx_qwen3_asr.tokenizer')
+    languages = {'fr': 'French', 'en': 'English', 'zh': 'Chinese'}
+    tokenizer.canonicalize_language = lambda value: languages.get(value, value)
+    tokenizer.language_is_known = lambda value: value in languages or value in languages.values()
+    monkeypatch.setitem(sys.modules, tokenizer.__name__, tokenizer)
     return module
 
 

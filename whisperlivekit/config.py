@@ -71,7 +71,6 @@ class WhisperLiveKitConfig:
     mlx_qwen3_asr_chunk_sec: float = 2.0
     mlx_qwen3_asr_max_context_sec: float = 30.0
     mlx_qwen3_asr_finalization_mode: str = "accuracy"
-    # Stable-commit wrapper parameters (Job 1: hold-back and iteration count)
     alignatt_preset: Optional[str] = None
     # quality | balanced | low; see docs/translation-alignatt.md
     alignatt_latency: str = "balanced"
