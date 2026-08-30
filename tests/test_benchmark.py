@@ -99,3 +99,60 @@ def test_float_wav_preserves_audio_amplitude(tmp_path):
     values = np.array([0, .5, -.5, 1, -1], dtype=np.float32)
     sf.write(path, values, 16000, subtype="FLOAT")
     np.testing.assert_array_equal(np.frombuffer(load_audio_pcm(path), dtype="<i2"), [0, 16384, -16384, 32767, -32768])
+
+
+@pytest.mark.asyncio
+async def test_pcm_pacing_uses_chunk_end_deadlines_without_an_eof_delay(monkeypatch):
+    from types import SimpleNamespace
+
+    import whisperlivekit.test_harness as testing
+
+    class Clock:
+        now = 0.0
+
+        def time(self):
+            return self.now
+
+        async def sleep(self, delay):
+            assert delay > 0
+            self.now += delay
+
+    # Include a short final packet, temporary backpressure and a slow last
+    # write. Processing time must not be added to every subsequent deadline.
+    for costs, expected_calls, expected_end in [
+        ([0, 0, 0], [.5, 1, 1.25], 1.25),
+        ([.7, 0, 0], [.5, 1.2, 1.25], 1.25),
+        ([0, 0, .8], [.5, 1, 1.25], 2.05),
+    ]:
+        clock = Clock()
+        calls, chunks = [], []
+
+        async def receive(pcm):
+            calls.append(clock.now)
+            chunks.append(pcm)
+            clock.now += costs[len(calls) - 1]
+
+        monkeypatch.setattr(testing, "asyncio", SimpleNamespace(
+            get_running_loop=lambda: clock, sleep=clock.sleep,
+        ))
+        harness = object.__new__(testing.TestHarness)
+        harness._processor = SimpleNamespace(process_audio=receive)
+        harness._audio_position = 0.0
+        audio = bytes(40000)  # 1.25 s at 16 kHz, including a 0.25 s last packet.
+        await harness.feed_pcm(audio)
+        assert calls == pytest.approx(expected_calls)
+        assert clock.now == pytest.approx(expected_end)
+        assert [len(chunk) for chunk in chunks] == [16000, 16000, 8000]
+        assert b"".join(chunks) == audio
+        assert harness._audio_position == 1.25
+
+    calls.clear()
+    chunks.clear()
+    costs = [0, 0, 0]
+    clock.now = 0
+    await harness.feed_pcm(audio, speed=0)
+    assert calls == [0, 0, 0]
+    for options in ({"speed": -1}, {"speed": float("nan")},
+                    {"chunk_duration": 0}, {"chunk_duration": -1}):
+        with pytest.raises(ValueError):
+            await harness.feed_pcm(audio, **options)
