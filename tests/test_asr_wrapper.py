@@ -45,10 +45,15 @@ class TestSplitJoinUnits:
         assert split_text_units("") == []
 
     def test_split_cjk(self):
-        # CJK characters have no spaces between them
+        # CJK has no whitespace; split into character units so the commit
+        # transform's stable prefix advances char-by-char (one unit = one
+        # CJK char ≈ one BPE token) instead of collapsing the whole text
+        # into one unit.
         units = split_text_units("你好世界")
-        assert len(units) == 1
-        assert units[0].strip() == "你好世界"
+        assert units == ["你", "好", "世", "界"]
+        # Mixed CJK + Latin: CJK chars split individually, Latin on whitespace
+        mixed = split_text_units("你好 Hello 世界")
+        assert mixed == ["你", "好", " ", "Hello ", "世", "界"]
 
     def test_join_roundtrip(self):
         text = "hello world foo"

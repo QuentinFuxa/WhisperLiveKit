@@ -123,10 +123,40 @@ def update_stable_prefix_commit(
 
 _TEXT_UNIT_RE = re.compile(r"\S+\s*")
 _TEXT_UNIT_EDGE_PUNCT_RE = re.compile(r"^[^\w']+|[^\w']+$")
+# CJK has no whitespace between words/sentences, so \S+\s* collapses an
+# entire transcript into one unit and the LCP-based commit never fires.
+# Split CJK runs into CHARACTER units so the stable prefix advances
+# char-by-char as the decode stabilizes (hold_back then means N chars,
+# not N sentences). Latin runs keep the whitespace \S+\s* split.
+# Rationale: the commit transform's LCP is computed at the unit level; a
+# growing CJK sentence (one unit) has LCP=0 until the sentence ends, so
+# sentence-level units don't stream. Character units do.
+_CJK_CHAR_RE = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 
 
 def split_text_units(text: str) -> list[str]:
-    return [match.group(0) for match in _TEXT_UNIT_RE.finditer(text or "")]
+    text = text or ""
+    if not text:
+        return []
+    # Walk the text; split CJK runs into single chars, Latin runs on
+    # whitespace. This keeps Latin word-units intact while giving CJK
+    # character-level units that advance the stable prefix mid-sentence.
+    units: list[str] = []
+    i = 0
+    while i < len(text):
+        if _CJK_CHAR_RE.match(text[i]):
+            units.append(text[i])
+            i += 1
+        else:
+            # consume a Latin/whitespace run via the existing regex
+            m = _TEXT_UNIT_RE.match(text, i)
+            if m:
+                units.append(m.group(0))
+                i = m.end()
+            else:
+                units.append(text[i])
+                i += 1
+    return units
 
 
 def join_text_units(units: Sequence[str]) -> str:
@@ -321,27 +351,70 @@ class StableCommitTransform:
         self,
         hold_back_units: int = 6,
         stable_iterations: int = 2,
+        *,
+        prefer_native_stable: bool = True,
+        tokenize_fn=None,
     ):
         self._hold_back = hold_back_units
         self._stable_iterations = stable_iterations
+        self._prefer_native = prefer_native_stable
+        self._tokenize_fn = tokenize_fn
         self._state = StableTextCommitState()
 
     def __call__(self, result, inner):
         from whisperlivekit.timed_objects import ASRToken
 
         _, end_time = result
-        # Read the FULL rolling hypothesis (stable prefix + unstable tail).
-        # get_buffer() returns only the unstable tail (WLK contract); using it
-        # here would omit the committed prefix and emit garbage deltas.
+
+        # Preferred path: use the backend's NATIVE stable prefix when it
+        # exposes one (e.g. mlx-qwen3-asr's ``_stable_text``). The model
+        # already guarantees this prefix is monotonically non-decreasing
+        # (stable by construction), so there is no need to re-derive
+        # stability via LCP — and the LCP re-derivation is broken for CJK
+        # (whitespace/char splits collapse a whole transcript into one or
+        # few units). This mirrors livecaption's working design.
+        if self._prefer_native and hasattr(inner, "_stable_text"):
+            stable = (inner._stable_text or "")
+            emitted = (inner._emitted_stable or "")
+            if stable:
+                if stable.startswith(emitted):
+                    delta = stable[len(emitted):]
+                    inner._emitted_stable = stable
+                    if delta:
+                        return [ASRToken(
+                            start=end_time, end=end_time,
+                            text=delta, speaker=-1,
+                        )], end_time
+                    return [], end_time
+                # stable_text revised (shouldn't happen for a monotonic field,
+                # but handle defensively): re-anchor to the new stable prefix.
+                inner._emitted_stable = stable
+                return [ASRToken(
+                    start=end_time, end=end_time,
+                    text=stable, speaker=-1,
+                )], end_time
+            # stable_text empty (cold start / backend has none): fall through
+            # to the LCP re-derivation path below.
+
+        # Fallback path: re-derive stability from the rolling hypothesis via
+        # LCP. Read the FULL rolling hypothesis (stable prefix + unstable
+        # tail); get_buffer() returns only the unstable tail (WLK contract).
         buffer = inner.get_hypothesis()
         hypothesis = getattr(buffer, "text", "") or ""
 
-        update = update_stable_text_commit(
-            self._state,
-            hypothesis,
-            hold_back_units=self._hold_back,
-            stable_iterations=self._stable_iterations,
-        )
+        # Token-based LCP variant: if a tokenize_fn is provided, compute the
+        # commit on token units (the model's own unit) instead of text units.
+        # This normalizes CJK (1 char ≈ 1 token) and Latin (subword tokens) to
+        # the same token budget — the same principle as the MT hysteresis.
+        if self._tokenize_fn is not None:
+            update = self._update_token_lcp(hypothesis)
+        else:
+            update = update_stable_text_commit(
+                self._state,
+                hypothesis,
+                hold_back_units=self._hold_back,
+                stable_iterations=self._stable_iterations,
+            )
 
         # Track the cumulative committed text on the inner processor so it can
         # deduplicate at finalization (emit only the uncommitted delta, not the
@@ -359,6 +432,47 @@ class StableCommitTransform:
             )
             return [tok], end_time
         return [], end_time
+
+    def _update_token_lcp(self, hypothesis: str):
+        """Token-based LCP commit: split the hypothesis into token STRINGS via
+        ``tokenize_fn`` and commit the longest common token prefix minus
+        ``hold_back_units`` tokens, gated by ``stable_iterations``.
+
+        ``tokenize_fn`` must return a list of token STRINGS (decoded pieces,
+        not IDs) so delta/committed text round-trips via str.join. The caller
+        is responsible for decoding IDs to strings.
+        """
+        tokens = self._tokenize_fn(hypothesis)
+        prev = self._state.previous_hypothesis_units
+        committed_len = len(self._state.committed_units)
+        # LCP on token lists.
+        lcp = 0
+        for a, b in zip(prev, tokens):
+            if a == b:
+                lcp += 1
+            else:
+                break
+        candidate_len = max(committed_len, lcp - self._hold_back)
+        candidate = tokens[:candidate_len]
+        if candidate == self._state.stable_candidate_units:
+            self._state.stable_candidate_count += 1
+        else:
+            self._state.stable_candidate_units = list(candidate)
+            self._state.stable_candidate_count = 1
+        if self._state.stable_candidate_count >= self._stable_iterations:
+            commit_len = candidate_len
+        else:
+            commit_len = committed_len
+        delta = tokens[committed_len:commit_len]
+        self._state.committed_units = tokens[:commit_len]
+        self._state.previous_hypothesis_units = tokens
+        return StableTextCommitUpdate(
+            delta_text="".join(delta),
+            committed_text="".join(self._state.committed_units),
+            display_text="", unstable_text="", candidate_text="",
+            committed_unit_count=len(self._state.committed_units),
+            hypothesis_unit_count=len(tokens),
+        )
 
     def reset(self):
         self._state = StableTextCommitState()
