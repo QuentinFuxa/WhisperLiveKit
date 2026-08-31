@@ -42,7 +42,7 @@ test = [
     "pytest-asyncio>=0.21",
     "datasets>=2.14",
     "librosa",
-    "deepgram-sdk==7.7.0",
+    "deepgram-sdk==7.7.1",
 ]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
