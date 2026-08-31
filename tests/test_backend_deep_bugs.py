@@ -623,6 +623,36 @@ def test_openai_api_asr_initializes_transcribe_kwargs_and_routes_tasks(monkeypat
     assert len(translations.calls) == 1
     assert translations.calls[0]["prompt"] == "previous context"
 
+    # translations.create() rejects unrecognized keyword arguments, so the
+    # transcription-only params must not be forwarded to it.
+    assert "timestamp_granularities" not in translations.calls[0]
+    assert "language" not in translations.calls[0]
+    assert transcriptions.calls[0]["timestamp_granularities"] == ["word", "segment"]
+    assert transcriptions.calls[0]["language"] == "en"
+
+
+def test_openai_api_asr_ts_words_and_segments_end_ts_handle_translation_responses():
+    from whisperlivekit.local_agreement.backends import OpenaiApiASR
+
+    asr = OpenaiApiASR.__new__(OpenaiApiASR)
+    asr.use_vad_opt = False
+
+    # Translation responses (openai `audio.translations.create`) carry
+    # segments but no word-level timestamps.
+    translation_response = SimpleNamespace(
+        segments=[
+            SimpleNamespace(start=0.0, end=1.2, text="hello", no_speech_prob=0.1),
+            SimpleNamespace(start=1.2, end=2.5, text="world", no_speech_prob=0.1),
+        ]
+    )
+
+    tokens = asr.ts_words(translation_response)
+    assert [t.text for t in tokens] == ["hello", "world"]
+    assert [t.start for t in tokens] == [0.0, 1.2]
+    assert [t.end for t in tokens] == [1.2, 2.5]
+
+    assert asr.segments_end_ts(translation_response) == [1.2, 2.5]
+
 
 def test_tokens_alignment_prunes_long_running_history():
     from whisperlivekit.timed_objects import ASRToken, Segment, SpeakerSegment, State, TimedText
