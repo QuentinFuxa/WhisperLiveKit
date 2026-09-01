@@ -324,6 +324,8 @@ class TranscriptionEngine:
                         source_language=config.lan,
                         commit_mode=getattr(config, "mlx_llm_mt_simul_commit", "argmax"),
                         mass_threshold=getattr(config, "mlx_llm_mt_simul_mass_threshold", 0.5),
+                        simul_soft_max_s=getattr(config, "mlx_llm_mt_simul_soft_max_s", 4.0),
+                        simul_hard_max_s=getattr(config, "mlx_llm_mt_simul_hard_max_s", 20.0),
                     )
                 else:
                     self.translation_model = MlxLlmTranslation(

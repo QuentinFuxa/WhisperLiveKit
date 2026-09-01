@@ -77,6 +77,8 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         warmup: bool = True,
         commit_mode: str = "argmax",
         mass_threshold: float = 0.5,
+        simul_soft_max_s: float = 4.0,
+        simul_hard_max_s: float = 20.0,
     ):
         super().__init__(
             model_id=model_id,
@@ -86,6 +88,8 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         )
         self._commit_mode = commit_mode
         self._mass_threshold = mass_threshold
+        self._simul_soft_max_s = simul_soft_max_s
+        self._simul_hard_max_s = simul_hard_max_s
         # Per-instance simultaneous state.
         self._tail: Optional[HypothesisTail] = None
         self._committed_simul: List[ASRToken] = []  # committed tokens (open utterance)
@@ -377,6 +381,12 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
     # WLK contract
     # ------------------------------------------------------------------
 
+    # Endpointing (rule2-softmax / rule3, validated by scripts/spike_endpointing.py):
+    # punctuation alone no longer closes a segment — that produced fragment
+    # finals (12 vs 6 sentence finals on zh_long, every clause its own final).
+    # A segment closes on punctuation only once it has run soft_max seconds;
+    # hard_max force-cuts a run-on utterance regardless of punctuation.
+
     def insert_tokens(self, items: List[Any]) -> None:
         if not self._simul_active:
             super().insert_tokens(items)
@@ -392,8 +402,13 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
             if self._committed_start is None:
                 self._committed_start = item.start
             self._committed_simul.append(item)
-            # Punctuation closes the segment → queue a final.
-            if item.has_punctuation():
+            # Endpointing owns segment closure now (the spike's rule2-softmax
+            # / rule3): punctuation closes only a segment that has run
+            # SOFT_MAX seconds; HARD_MAX force-cuts a run-on regardless.
+            seg_dur = (item.end or 0) - (self._committed_start or 0)
+            force = seg_dur >= self._simul_hard_max_s
+            soft = item.has_punctuation() and seg_dur >= self._simul_soft_max_s
+            if force or soft:
                 text = self._committed_text()
                 self._pending_finals.append(
                     (text, self._committed_start, item.end)

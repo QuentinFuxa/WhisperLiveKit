@@ -123,11 +123,17 @@ def test_provisional_before_final_timestamp_order():
     assert tr_partial is None
     assert buf_partial.text == "Hello world"
     provisional_text = buf_partial.text
-    # Close with punctuation: final translation.
-    b.insert_tokens([_token("。", 1.0, 1.1)])
-    tr_final, buf_final = b.process()
+    # Close via a boundary-crossing pause (validate) — the endpointing rule
+    # owns closure now; punctuation alone no longer closes a short segment.
+    b.validate_buffer_and_reset()
+    tr_final, buf_final = None, None
+    for _ in range(3):
+        tr_final, buf_final = b.process()
+        if isinstance(tr_final, Translation):
+            break
     assert isinstance(tr_final, Translation)
-    assert tr_final.text == "[EN:你好。]"
+    # the final translates the COMMITTED text (the tail was the open draft)
+    assert tr_final.text == "[EN:你好]"
     # The provisional was visible before the final existed.
     assert provisional_text != tr_final.text
 
@@ -302,15 +308,48 @@ def test_committed_src_end_from_text_rounds_down():
 # finals / validate behaviour (parity with the base on close)
 # ---------------------------------------------------------------------------
 
-def test_final_translation_at_punctuation():
-    """At punctuation close, the simul variant produces a validated Translation
-    via the base-class path (full translation of the committed sentence)."""
+def test_punctuation_below_soft_max_does_not_close():
+    """Endpointing owns segment closure (rule2-softmax): punctuation on a
+    segment younger than soft_max_s does NOT queue a final — the utterance
+    stays open (fragment finals were every clause)."""
     b = _make_simul()
     b._translate_simul = lambda source, committed: "Hello"
     b.insert_tokens([_token("你好", 0.0, 0.5), _token("。", 0.5, 0.6)])
     tr, buf = b.process()
+    assert tr is None, "punctuation before soft_max must not close a segment"
+    assert (buf.text or "") == "Hello", "the segment stays open (draft only)"
+
+
+def test_final_translation_at_punctuation_after_soft_max():
+    """A segment that has run soft_max seconds closes at the next punctuation:
+    the simul variant produces a validated Translation via the base-class path
+    (full translation of the committed segment)."""
+    b = MlxLlmTranslationSimul(
+        model_id="hy-mt2-1.8b-8bit", target_language="en",
+        source_language="zh", warmup=False, simul_soft_max_s=1.0,
+    )
+    b._translate_text = lambda text: f"[EN:{text}]"
+    b._ensure_simul_model = lambda: (None, None)  # type: ignore[assignment]
+    b._translate_simul = lambda source, committed: "Hello"
+    b.insert_tokens([_token("你好", 0.0, 0.5), _token("。", 1.2, 1.3)])
+    tr, buf = b.process()
     assert isinstance(tr, Translation)
     assert tr.text == "[EN:你好。]"
+
+
+def test_hard_max_force_cuts_without_punctuation():
+    """rule3: a run-on segment is force-cut at hard_max seconds even with no
+    punctuation at all."""
+    b = MlxLlmTranslationSimul(
+        model_id="hy-mt2-1.8b-8bit", target_language="en",
+        source_language="zh", warmup=False, simul_hard_max_s=1.0,
+    )
+    b._translate_text = lambda text: f"[EN:{text}]"
+    b._ensure_simul_model = lambda: (None, None)  # type: ignore[assignment]
+    b.insert_tokens([_token("你好世界", 0.0, 0.5), _token("再见", 1.5, 2.0)])
+    tr, buf = b.process()
+    assert isinstance(tr, Translation)
+    assert tr.text == "[EN:你好世界再见]"
 
 
 def test_validate_returns_provisional_then_final():

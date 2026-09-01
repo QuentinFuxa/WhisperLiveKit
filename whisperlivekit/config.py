@@ -61,6 +61,8 @@ class WhisperLiveKitConfig:
     mlx_llm_mt_simultaneous: bool = False
     mlx_llm_mt_simul_commit: str = "argmax"  # argmax | mass
     mlx_llm_mt_simul_mass_threshold: float = 0.5
+    mlx_llm_mt_simul_soft_max_s: float = 4.0
+    mlx_llm_mt_simul_hard_max_s: float = 20.0
     alignatt_preset: Optional[str] = None
     # quality | balanced | low; see docs/translation-alignatt.md
     alignatt_latency: str = "balanced"
