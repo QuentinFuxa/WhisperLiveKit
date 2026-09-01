@@ -356,6 +356,16 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         """
         committed = self._committed_text()
         tail = (self._tail.text or "").strip() if self._tail else ""
+        if tail and committed:
+            # stale tail: text already inside the committed prefix, or the
+            # hypothesis's audio range predates the commit boundary (the
+            # hypothesis never advanced past the committed words — variant
+            # spellings defeat exact containment)
+            in_prefix = tail in committed
+            predates = bool(self._committed_simul) and \
+                (self._tail.end or 0) <= (self._committed_simul[-1].end or 0)
+            if in_prefix or predates:
+                tail = ""
         return committed + tail
 
     def _utterance_start(self) -> Optional[float]:
@@ -416,6 +426,13 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
                 self._committed_simul = []
                 self._committed_start = None
                 self._tail = None
+                # The closed segment's draft is superseded by its quality-pass
+                # final. Without this reset the next process() ran the release
+                # path against the STALE cached draft with a SHORTER new source
+                # and re-emitted the pre-final translation — the display
+                # regressed (CL: 'hyperopia flashed into provisional').
+                self._reset_simul_draft()
+                self._emitted_partial = ""
 
     def process(self) -> Tuple[Optional[Translation], TimedText]:
         if not self._simul_active:

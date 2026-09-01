@@ -776,3 +776,49 @@ def test_simul_release_held_from_clean_stash(monkeypatch):
     assert 120020 not in b._last_draft["tokens"]
     assert _HY_PLACEHOLDER not in (b._emitted_partial or "")
     assert len(consumed) == 2  # release must not re-run the stream
+
+
+def test_segment_close_resets_draft_cache():
+    """After the soft_max close, the closed segment's draft is superseded by
+    its quality-pass final. Without the reset, the next process() ran the
+    release path against the STALE cached draft with a shorter new source and
+    re-emitted the pre-final translation — the display regressed (the final
+    showed the complete sentence, the next draft reverted to it minus the
+    last clause: CL's 'hyperopia flashed into provisional')."""
+    b = MlxLlmTranslationSimul(
+        model_id="hy-mt2-1.8b-8bit", target_language="en",
+        source_language="zh", warmup=False, simul_soft_max_s=0.5,
+    )
+    b._translate_text = lambda text: f"[EN:{text}]"
+    b._ensure_simul_model = lambda: (None, None)  # type: ignore[assignment]
+    calls = {"n": 0}
+    def fake_simul(source, committed):
+        calls["n"] += 1
+        return f"DRAFT-{calls['n']}"
+    b._translate_simul = fake_simul
+    b.insert_tokens([_token("第一句", 0.0, 0.5)])
+    b.process()  # draft DRAFT-1 over segment 1
+    b.insert_tokens([_token("。", 4.8, 5.0)])  # soft_max close
+    b.process()  # the quality-pass final
+    b.insert_tokens([_token("下一句", 5.5, 6.0)])
+    tr, buf = b.process()
+    # the stale pre-final draft must not be re-emitted: the new segment's
+    # draft is a FRESH call (DRAFT-2), not the cached DRAFT-1
+    assert calls["n"] >= 2, "the fresh draft did not fire after the close"
+    assert (buf.text or "") == "DRAFT-2", buf.text
+
+
+def test_stale_tail_dropped_from_source():
+    """A tail whose text is already committed (exact match, or the
+    hypothesis's audio range predating the commit boundary — variant
+    spellings defeat exact containment) is dropped, not doubled into the
+    MT source."""
+    b = _make_simul()
+    b.insert_tokens([_token("未来的应用将更加广泛。", 0.0, 1.0)])
+    from whisperlivekit.timed_objects import HypothesisTail
+    # exact-substring staleness
+    b._tail = HypothesisTail(start=0.2, end=0.8, text="未来的应用将更加广泛。")
+    assert b._source_text() == "未来的应用将更加广泛。"
+    # variant spelling predating the commit boundary — stale by time
+    b._tail = HypothesisTail(start=0.1, end=0.9, text="未來的應用將更加廣泛。")
+    assert b._source_text() == "未来的应用将更加广泛。"
