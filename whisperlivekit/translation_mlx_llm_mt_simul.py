@@ -146,6 +146,18 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
                 "(translation works via base; no provisional)",
                 self._config.repo, source_language, target_language,
             )
+        if warmup and self._simul_active:
+            # Warm the SIMUL draft path as well: the base warmup only covers
+            # _translate_text; the first simul draft otherwise pays the Metal
+            # kernel compile + capture install inside the translation loop,
+            # blocking every draft for the first sentence (CL: the first
+            # sentence had no translation draft for ~9s).
+            try:
+                self._translate_simul("预热预热，测试。", "预热")
+                self._reset_simul_draft()
+                self._emitted_partial = ""
+            except Exception as exc:  # warmup is non-fatal
+                logger.debug("mlx-llm-mt-simul warmup draft failed (non-fatal): %s", exc)
 
     def new_session(self, target_language: str = "") -> "MlxLlmTranslationSimul":
         """Create a per-session simul client sharing the loaded model/cache
@@ -479,7 +491,15 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         if self._last_draft is not None:
             char_delta = len(source) - len(self._last_source_text)
             token_delta = char_delta / self._chars_per_token
-            if token_delta < self._MIN_SOURCE_TOKENS:
+            # The release maps the committed text against the CACHED source
+            # span — it only works while the committed text is a prefix of
+            # it (source invariant under the committed/tail split). When the
+            # ASR committed words BEYOND the cached draft's span (new source
+            # words), the boundary mapping fails and the release emits
+            # nothing — the display starves until a fresh call. Require the
+            # fresh draft in that case too.
+            release_ok = committed and self._last_source_text.startswith(committed)
+            if token_delta < self._MIN_SOURCE_TOKENS and release_ok:
                 # Source unchanged or grew but not enough: release held
                 # tokens from the cached draft without a new MT call.
                 if committed:

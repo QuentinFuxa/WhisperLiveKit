@@ -822,3 +822,31 @@ def test_stale_tail_dropped_from_source():
     # variant spelling predating the commit boundary — stale by time
     b._tail = HypothesisTail(start=0.1, end=0.9, text="未來的應用將更加廣泛。")
     assert b._source_text() == "未来的应用将更加广泛。"
+
+
+def test_release_requires_committed_within_cached_span():
+    """The release maps the committed text against the CACHED source span —
+    only valid while the committed text is a prefix of it. When the ASR
+    committed words beyond the cached draft's span (the tail grew), the
+    boundary mapping fails and the release emits nothing: the display
+    starves until a fresh call (CL: the first sentence had no translation
+    draft). A fresh draft is required in that case."""
+    b = MlxLlmTranslationSimul(
+        model_id="hy-mt2-1.8b-8bit", target_language="en",
+        source_language="zh", warmup=False,
+    )
+    b._translate_text = lambda text: f"[EN:{text}]"
+    b._ensure_simul_model = lambda: (None, None)  # type: ignore[assignment]
+    calls = {"n": 0}
+    def fake_simul(source, committed):
+        calls["n"] += 1
+        return f"DRAFT-{calls['n']}:{source}"
+    b._translate_simul = fake_simul
+    b.insert_tokens([_token("我们今天来讨论镭射。", 0.0, 1.0)])
+    b.process()  # draft over the cached span
+    # the ASR commits MORE words than the cached draft's span (the tail grew)
+    b.insert_tokens([_token("在医学上的应用。", 1.2, 1.8), _tail("镭射技术", 2.0, 3.0)])
+    tr, buf = b.process()
+    # the release cannot map the longer committed text — a fresh draft fires
+    assert calls["n"] >= 2, "the fresh draft did not fire when the committed outgrew the cache"
+    assert "DRAFT-2" in (buf.text or ""), (buf.text or "")
