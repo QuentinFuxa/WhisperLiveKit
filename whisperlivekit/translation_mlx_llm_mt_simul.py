@@ -75,7 +75,7 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         target_language: str = "en",
         source_language: str = "",
         warmup: bool = True,
-        commit_mode: str = "argmax",
+        commit_mode: str = "paper",
         mass_threshold: float = 0.5,
         simul_soft_max_s: float = 4.0,
         simul_hard_max_s: float = 20.0,
