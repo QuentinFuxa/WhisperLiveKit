@@ -137,14 +137,16 @@ def score() -> dict:
     return out
 
 
-async def run(audio: str, event_log: str | None) -> None:
+async def run(audio: str, event_log: str | None, language: str = "zh",
+              target_language: str = "en") -> None:
     sys.path.insert(0, "scripts")
     install_hooks()
     from lc_terminal import run_file, _make_engine_kwargs
     import lc_terminal as lct
 
     ns = argparse.Namespace(
-        audio=audio, language="zh", target_language="en", backend="mlx-qwen3-asr",
+        audio=audio, language=language, target_language=target_language,
+        backend="mlx-qwen3-asr",
         mlx_qwen3_asr_model="mlx-community/Qwen3-ASR-0.6B-8bit", mlx_llm_mt_model="hy-mt2-1.8b-8bit",
         source="file", simultaneous=True, simul_commit=None, second_pass=False,
         diarize=False, hotwords=None, vad_threshold=None, vad_min_silence_ms=None,
@@ -172,9 +174,11 @@ def main() -> None:
     ap.add_argument("--audio", default="/Users/clkao/git/asr/_work/zh_long.wav")
     ap.add_argument("--out", default="/tmp/head_explore.json")
     ap.add_argument("--event-log", default=None)
+    ap.add_argument("--language", default="zh")
+    ap.add_argument("--target-language", default="en")
     args = ap.parse_args()
 
-    asyncio.run(run(args.audio, args.event_log))
+    asyncio.run(run(args.audio, args.event_log, args.language, args.target_language))
 
     scores = score()
     dump_calls()
