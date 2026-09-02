@@ -905,9 +905,16 @@ class AudioProcessor:
                 new_translation_buffer = None
 
                 if isinstance(item, Silence):
-                    if item.is_starting:
-                        new_translation, new_translation_buffer = self.translation.validate_buffer_and_reset()
+                    # Endpointing: only a pause that crosses the segmentation
+                    # threshold closes the utterance (sentence boundaries).
+                    # Every short clause pause used to flush a final here,
+                    # producing fragment finals (12 vs 6 sentence finals on
+                    # zh_long). The flush happens at the pause's END, when the
+                    # duration is known; the simul MT's SOFT_MAX/HARD_MAX rules
+                    # cover run-on utterances without a crossing pause.
                     if item.has_ended:
+                        if self._is_pause_segmentation_boundary(item):
+                            new_translation, new_translation_buffer = self.translation.validate_buffer_and_reset()
                         self.translation.insert_silence(item.duration)
                         continue
                 elif isinstance(item, ChangeSpeaker):
@@ -919,6 +926,12 @@ class AudioProcessor:
                 if new_translation is not None:
                     async with self.lock:
                         self.state.new_translation.append(new_translation)
+                        self.state.new_translation_buffer = new_translation_buffer
+                elif new_translation_buffer is not None:
+                    # A backend can return a provisional buffer with no finalized
+                    # translation (None). Forward the buffer so the display shows
+                    # the provisional draft before the final arrives.
+                    async with self.lock:
                         self.state.new_translation_buffer = new_translation_buffer
             except Exception as e:
                 logger.warning(f"Exception in translation_processor: {e}")
