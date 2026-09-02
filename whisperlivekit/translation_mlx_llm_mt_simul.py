@@ -124,6 +124,17 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         # simultaneous. AlignAtt4LLM hard-fails (RuntimeError) on missing
         # heads; WLK degrades gracefully instead.
         cal = lookup_calibration(self._config.repo, source_language, target_language)
+        # env override for A/B testing head choices (LC_SIMUL_HEAD="9,8"):
+        # the shipped calibration was scored on the PyTorch path; the mlx
+        # capture's head ordering differs (verified: (9,5) mass 0.044 vs
+        # (9,8) 0.408). This override lets a production-measured head be
+        # tested without editing the calibration files.
+        _head_env = __import__("os").environ.get("LC_SIMUL_HEAD")
+        if _head_env:
+            import types as _types
+            _l, _h = (int(x) for x in _head_env.split(","))
+            cal = _types.SimpleNamespace(heads=[(_l, _h)], top_head=(_l, _h))
+            print(f"[simul] LC_SIMUL_HEAD override: using head ({_l},{_h})", flush=True)
         if cal is not None:
             self._simul_active = True
             self._simul_heads = cal.heads
