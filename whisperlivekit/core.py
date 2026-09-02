@@ -7,7 +7,6 @@ from whisperlivekit.config import WhisperLiveKitConfig
 from whisperlivekit.local_agreement.online_asr import OnlineASRProcessor
 from whisperlivekit.local_agreement.whisper_online import backend_factory
 from whisperlivekit.simul_whisper import SimulStreamingASR
-from whisperlivekit.timed_objects import ASRToken, TimedText
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +175,21 @@ class TranscriptionEngine:
                     **transcription_common_params, **qwen3_streaming_params
                 )
                 logger.info("Using Qwen3-ASR streaming (HF Transformers) backend")
+            elif config.backend == "mlx-qwen3-asr":
+                import argparse
+
+                from whisperlivekit.asr_mlx_qwen3 import _resolve_language
+                self.tokenizer = None
+                self.asr = argparse.Namespace(
+                    model_id=config.mlx_qwen3_asr_model,
+                    language=_resolve_language(config.lan),
+                    hotwords=config.mlx_qwen3_asr_context,
+                    chunk_size_sec=config.mlx_qwen3_asr_chunk_sec,
+                    max_context_sec=config.mlx_qwen3_asr_max_context_sec,
+                    finalization_mode=config.mlx_qwen3_asr_finalization_mode,
+                    sep="",  # CJK: no space between tokens (mirrors qwen3-asr-causal)
+                )
+                logger.info("Using mlx-qwen3-asr (pure MLX) backend")
             elif config.backend == "qwen3-vllm":
                 from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMASR
                 self.tokenizer = None
@@ -199,6 +213,17 @@ class TranscriptionEngine:
                 self.tokenizer = None
                 self.asr = VoxtralMLXASR(**transcription_common_params)
                 logger.info("Using Voxtral MLX native backend")
+            elif config.backend == "nemotron-mlx-asr":
+                from whisperlivekit.asr_nemotron_mlx import NemotronMLXASR
+                self.tokenizer = None
+                nemotron_mlx_params = {
+                    "nemotron_mlx_asr_model": config.nemotron_mlx_asr_model,
+                    "nemotron_mlx_asr_att_context": config.nemotron_mlx_asr_att_context,
+                    "nemotron_mlx_asr_two_pass": config.nemotron_mlx_asr_two_pass,
+                    "lan": config.lan,
+                }
+                self.asr = NemotronMLXASR(**nemotron_mlx_params)
+                logger.info("Using Nemotron MLX ASR transducer backend")
             elif config.backend == "voxtral":
                 from whisperlivekit.voxtral_hf_streaming import VoxtralHFStreamingASR
                 self.tokenizer = None
@@ -311,6 +336,28 @@ class TranscriptionEngine:
                     latency=config.alignatt_latency,
                     context_text=config.alignatt_context,
                 )
+            elif getattr(config, "translation_backend", "nllb") in ("mlx-llm-mt", "hunyuan-mlx"):
+                from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
+                model_id = getattr(config, "mlx_llm_mt_model", "hy-mt2-1.8b-8bit")
+                if getattr(config, "mlx_llm_mt_simultaneous", False):
+                    from whisperlivekit.translation_mlx_llm_mt_simul import (
+                        MlxLlmTranslationSimul,
+                    )
+                    self.translation_model = MlxLlmTranslationSimul(
+                        model_id=model_id,
+                        target_language=config.target_language,
+                        source_language=config.lan,
+                        commit_mode=getattr(config, "mlx_llm_mt_simul_commit", "paper"),
+                        mass_threshold=getattr(config, "mlx_llm_mt_simul_mass_threshold", 0.5),
+                        simul_soft_max_s=getattr(config, "mlx_llm_mt_simul_soft_max_s", 4.0),
+                        simul_hard_max_s=getattr(config, "mlx_llm_mt_simul_hard_max_s", 20.0),
+                    )
+                else:
+                    self.translation_model = MlxLlmTranslation(
+                        model_id=model_id,
+                        target_language=config.target_language,
+                        source_language=config.lan,
+                    )
             else:
                 if config.backend in {"qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"}:
                     raise ValueError(
@@ -328,69 +375,15 @@ class TranscriptionEngine:
                     nllb_size=config.nllb_size,
                 )
 
-def _to_wlk_token(tok):
-    """Convert a qwen3_asr_causal token into WhisperLiveKit's ASRToken.
+# The token-normalize wrapper and _to_wlk_token are now provided by the
+# generalized wrapper layer (asr_wrapper.py).  Re-export for any code that
+# imports them from core.
+from whisperlivekit.asr_wrapper import (  # noqa: E402,F401
+    AsrWrapper,
+    _ASRTokenNormalizer,
+    _to_wlk_token,
+)
 
-    qwen3's ASRToken is a separate class that doesn't derive from TimedText, so
-    it lacks helpers (has_punctuation) the diarization alignment needs.
-    """
-    if isinstance(tok, TimedText):
-        return tok
-    is_silence = getattr(tok, "is_silence", None)
-    if callable(is_silence) and is_silence():
-        return tok
-    # start/end/text accessed directly on purpose: a token missing them is a real
-    # incompatibility that should raise here, not be masked with defaults.
-    return ASRToken(
-        start=tok.start,
-        end=tok.end,
-        text=tok.text or "",
-        speaker=getattr(tok, "speaker", -1),
-        detected_language=getattr(tok, "detected_language", None),
-        probability=getattr(tok, "probability", None),
-    )
-
-
-class _ASRTokenNormalizer:
-    """Wraps a qwen3 online processor, converting emitted tokens to WhisperLiveKit
-    ASRTokens. finish is wrapped via __getattr__ (not an explicit method) so that
-    hasattr(proc, "finish") stays honest for the loop's fallback probe.
-    """
-
-    _WRAP = {"finish"}
-
-    def __init__(self, inner):
-        object.__setattr__(self, "_inner", inner)
-
-    @staticmethod
-    def _convert(result):
-        tokens, *rest = result # (tokens, end_time)
-        converted = [_to_wlk_token(t) for t in (tokens or [])]
-        return (converted, *rest)
-
-    def process_iter(self, *args, **kwargs):
-        return self._convert(self._inner.process_iter(*args, **kwargs))
-
-    def start_silence(self, *args, **kwargs):
-        return self._convert(self._inner.start_silence(*args, **kwargs))
-
-    def new_speaker(self, *args, **kwargs):
-        """Preserve Qwen boundary tokens discarded by its compatibility API.
-
-        The current qwen3 processors implement new_speaker() as a bare call to
-        start_silence() and drop its return value. Calling start_silence()
-        directly keeps the identical reset behavior while exposing the tokens
-        and processed position required by AudioProcessor.
-        """
-        return self.start_silence()
-
-    def __getattr__(self, name):
-        attr = getattr(self._inner, name)
-        if name in self._WRAP and callable(attr):
-            def wrapped(*args, **kwargs):
-                return self._convert(attr(*args, **kwargs))
-            return wrapped
-        return attr
 
 def online_factory(args, asr, language=None, context=None):
     """Create an online ASR processor for a session.
@@ -450,6 +443,21 @@ def online_factory(args, asr, language=None, context=None):
     if backend == "qwen3-streaming":
         from whisperlivekit.qwen3_streaming import Qwen3StreamingOnlineProcessor
         return _ASRTokenNormalizer(Qwen3StreamingOnlineProcessor(asr))
+    if backend == "mlx-qwen3-asr":
+        from whisperlivekit.asr_commit import StableCommitTransform
+        from whisperlivekit.asr_mlx_qwen3 import MlxQwen3AsrOnlineProcessor
+        # Job 1: stable_commit wrapper commits only the stable prefix
+        # from the rolling decode; the backend's two-pass re-decode at
+        # start_silence/finish provides the clean per-utterance text.
+        hold_back = getattr(args, "mlx_qwen3_asr_hold_back_units", 6)
+        stable_iter = getattr(args, "mlx_qwen3_asr_stable_iterations", 2)
+        return AsrWrapper(
+            MlxQwen3AsrOnlineProcessor(asr),
+            transforms=[StableCommitTransform(
+                hold_back_units=hold_back,
+                stable_iterations=stable_iter,
+            )],
+        )
     if backend == "qwen3-vllm":
         from whisperlivekit.qwen3_vllm_asr import (
             Qwen3VLLMCausalOnlineProcessor,
@@ -466,6 +474,9 @@ def online_factory(args, asr, language=None, context=None):
         if getattr(asr, "audio_backend", "standard") == "causal":
             return _ASRTokenNormalizer(Qwen3VLLMMetalCausalOnlineProcessor(asr))
         return _ASRTokenNormalizer(Qwen3VLLMMetalOnlineProcessor(asr))
+    if backend == "nemotron-mlx-asr":
+        from whisperlivekit.asr_nemotron_mlx import NemotronMLXOnlineProcessor
+        return NemotronMLXOnlineProcessor(asr)
     if backend == "voxtral-mlx":
         from whisperlivekit.voxtral_mlx_asr import VoxtralMLXOnlineProcessor
         return VoxtralMLXOnlineProcessor(asr)
@@ -507,6 +518,10 @@ def online_diarization_factory(args, diarization_backend):
 def online_translation_factory(args, translation_model):
     from whisperlivekit.translation_alignatt import AlignAttRemoteEngine
     if isinstance(translation_model, AlignAttRemoteEngine):
+        return translation_model.new_session(args.target_language)
+    # mlx-llm-mt: create a per-session client (fresh state) sharing the model cache.
+    from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
+    if isinstance(translation_model, MlxLlmTranslation):
         return translation_model.new_session(args.target_language)
     #should be at speaker level in the future:
     #one shared nllb model for all speaker

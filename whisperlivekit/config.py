@@ -1,7 +1,7 @@
 """Typed configuration for the WhisperLiveKit pipeline."""
 import logging
 import math
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -51,9 +51,28 @@ class WhisperLiveKitConfig:
     punctuation_split: bool = False
     target_language: str = ""
     # "nllb" (in-process, CPU-friendly) or "alignatt" (Alignatt4LLM sidecar
-    # over WebSocket, streaming LLM translation with attention-gated commits).
+    # over WebSocket, streaming LLM translation with attention-gated commits)
+    # or "mlx-llm-mt" (in-process MLX translation via mlx-lm).
     translation_backend: str = "nllb"
     alignatt_url: str = "ws://localhost:8765"
+    mlx_llm_mt_model: str = "hy-mt2-1.8b-8bit"
+    # Simultaneous-MT variant of mlx-llm-mt: drafts over the unstable ASR tail
+    # with the AlignAtt commit policy (calibrated zh→en Hunyuan heads).
+    mlx_llm_mt_simultaneous: bool = False
+    mlx_llm_mt_simul_commit: str = "paper"  # paper | mass | argmax (paper = arXiv 2606.03967 §4.4, measured best)
+    mlx_llm_mt_simul_mass_threshold: float = 0.5
+    mlx_llm_mt_simul_soft_max_s: float = 4.0
+    mlx_llm_mt_simul_hard_max_s: float = 20.0
+
+    # mlx-qwen3-asr backend (pure-MLX qwen3-asr; coexists with mlx-lm on transformers 5.x)
+    mlx_qwen3_asr_model: str = "Qwen/Qwen3-ASR-0.6B"
+    mlx_qwen3_asr_context: str = ""  # hotword bias (space-separated terms)
+    mlx_qwen3_asr_chunk_sec: float = 2.0
+    mlx_qwen3_asr_max_context_sec: float = 30.0
+    mlx_qwen3_asr_finalization_mode: str = "accuracy"
+    # Stable-commit wrapper parameters (Job 1: hold-back and iteration count)
+    mlx_qwen3_asr_hold_back_units: int = 6
+    mlx_qwen3_asr_stable_iterations: int = 2
     alignatt_preset: Optional[str] = None
     # quality | balanced | low; see docs/translation-alignatt.md
     alignatt_latency: str = "balanced"
@@ -174,6 +193,11 @@ class WhisperLiveKitConfig:
     canary_lid_model: str = "langid_ambernet"
     canary_lid_min_sec: float = 2.0
     canary_lid_min_conf: float = 0.5
+
+    # Nemotron MLX ASR backend (FastConformer-RNNT transducer via mlx-audio)
+    nemotron_mlx_asr_model: str = "nvidia/nemotron-3.5-asr-streaming-0.6b"
+    nemotron_mlx_asr_att_context: list = field(default_factory=lambda: [56, 6])
+    nemotron_mlx_asr_two_pass: bool = False
 
     # Keep new fields at the end to preserve positional dataclass construction.
     # Pauses longer than this become stable transcript boundaries; 0 disables.
