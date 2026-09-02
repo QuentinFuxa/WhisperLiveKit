@@ -52,6 +52,10 @@ def print_report(report: BenchmarkReport, out: TextIO = sys.stderr) -> None:
     si = report.system_info
     w(f"  Backend:      {CYAN}{report.backend}{RESET}\n")
     w(f"  Model:        {report.model_size}\n")
+    if report.translation_backend:
+        variant = " (simultaneous)" if report.simultaneous else ""
+        w(f"  Translation:  {CYAN}{report.translation_backend}{variant}{RESET}"
+          f"  → {report.target_language or '?'}\n")
     w(f"  Accelerator:  {si.get('accelerator', 'unknown')}\n")
     w(f"  CPU:          {si.get('cpu', 'unknown')}\n")
     w(f"  RAM:          {si.get('ram_gb', '?')} GB\n")
@@ -69,8 +73,9 @@ def print_report(report: BenchmarkReport, out: TextIO = sys.stderr) -> None:
         lc = _lat_color(r.avg_latency_ms)
 
         name = r.sample_name[:20]
+        wer_str = f"{r.wer * 100:>6.1f}%" if r.wer_applicable else "   N/A"
         w(f"  {name:<20} {r.language:>4} {r.duration_s:>4.1f}s "
-          f"{wc}{r.wer * 100:>6.1f}%{RESET} "
+          f"{wc}{wer_str}{RESET} "
           f"{rc}{r.rtf:>5.2f}x{RESET} "
           f"{lc}{r.avg_latency_ms:>7.0f}ms{RESET} "
           f"{lc}{r.p95_latency_ms:>7.0f}ms{RESET} "
@@ -84,7 +89,35 @@ def print_report(report: BenchmarkReport, out: TextIO = sys.stderr) -> None:
 
     w(f"  {'─' * 72}\n\n")
 
-    # Summary
+    # Translation per-sample table (only when a translation backend was run)
+    if report.has_translation:
+        w(f"  {BOLD}Translation{RESET}\n")
+        w(f"  {'─' * 92}\n")
+        w(f"  {BOLD}{'Sample':<20} {'MT-RTF':>7} {'1st-tr':>8} {'Provis?':>7} "
+          f"{'MTcalls':>7} {'MT-time':>8} {'Accuracy':>9}{RESET}\n")
+        w(f"  {'─' * 92}\n")
+        for r in report.results:
+            name = r.sample_name[:20]
+            trtf = f"{r.translation_rtf:>5.2f}x" if r.translation_rtf is not None else "    -"
+            trc = _rtf_color(r.translation_rtf) if r.translation_rtf is not None else ""
+            ftt = (
+                f"{r.first_translation_time_s:>6.2f}s"
+                if r.first_translation_time_s is not None else "      -"
+            )
+            prov = "yes" if r.provisional_before_final else " no"
+            calls = f"{r.mt_call_count}" if r.mt_call_count is not None else "-"
+            mttime = (
+                f"{r.translation_time_s:>6.2f}s"
+                if r.translation_time_s is not None else "      -"
+            )
+            acc = (
+                f"{r.translation_accuracy:>7.1f}" if r.translation_accuracy is not None else "      -"
+            )
+            w(f"  {name:<20} {trc}{trtf:>7}{RESET} {ftt:>8} {prov:>7} "
+              f"{calls:>7} {mttime:>8} {acc:>9}\n")
+            if r.translation_metric_name and r.translation_accuracy is not None:
+                w(f"  {' ' * 20} {DIM}metric: {r.translation_metric_name}{RESET}\n")
+        w(f"  {'─' * 92}\n\n")
     w(f"  {BOLD}Summary{RESET} ({report.n_samples} samples, "
       f"{report.total_audio_s:.1f}s total audio)\n\n")
 
@@ -92,14 +125,33 @@ def print_report(report: BenchmarkReport, out: TextIO = sys.stderr) -> None:
     rc = _rtf_color(report.overall_rtf)
     lc = _lat_color(report.avg_latency_ms)
 
-    w(f"    Avg WER (macro):   {wc}{report.avg_wer * 100:>6.1f}%{RESET}\n")
-    w(f"    Weighted WER:      {_wer_color(report.weighted_wer)}"
-      f"{report.weighted_wer * 100:>6.1f}%{RESET}\n")
+    if report.has_wer:
+        w(f"    Avg WER (macro):   {wc}{report.avg_wer * 100:>6.1f}%{RESET}\n")
+        w(f"    Weighted WER:      {_wer_color(report.weighted_wer)}"
+          f"{report.weighted_wer * 100:>6.1f}%{RESET}\n")
+    else:
+        w("    Avg WER (macro):       N/A (no applicable reference)\n")
+        w("    Weighted WER:          N/A\n")
     w(f"    Overall RTF:       {rc}{report.overall_rtf:>6.3f}x{RESET}  "
       f"({report.total_processing_s:.1f}s for {report.total_audio_s:.1f}s audio)\n")
     w(f"    Avg latency:       {lc}{report.avg_latency_ms:>6.0f}ms{RESET}\n")
     w(f"    P95 latency:       {_lat_color(report.p95_latency_ms)}"
       f"{report.p95_latency_ms:>6.0f}ms{RESET}\n")
+
+    if report.has_translation:
+        w(f"\n  {BOLD}Translation Summary{RESET}\n")
+        w(f"    Overall MT-RTF:     {_rtf_color(report.overall_translation_rtf)}"
+          f"{report.overall_translation_rtf:>6.3f}x{RESET}  "
+          f"({report.total_translation_time_s:.1f}s for {report.total_audio_s:.1f}s audio)\n")
+        w(f"    Avg 1st-translation:"
+          f" {report.avg_first_translation_time_s:>6.2f}s{RESET}\n")
+        w(f"    Total MT calls:    {report.total_mt_calls}\n")
+        w(f"    Provisional before final: {report.n_provisional_before_final}"
+          f"/{report.n_samples}\n")
+        if report.avg_translation_accuracy is not None:
+            w(f"    Avg translation acc:"
+              f" {report.avg_translation_accuracy:>6.1f}\n")
+
 
     # Per-language breakdown
     wer_by_lang = report.wer_by_language()
@@ -152,6 +204,12 @@ def print_transcriptions(report: BenchmarkReport, out: TextIO = sys.stderr) -> N
         hyp = r.hypothesis[:120] + "..." if len(r.hypothesis) > 120 else r.hypothesis
         w(f"    {DIM}ref: {ref}{RESET}\n")
         w(f"    hyp: {hyp}\n")
+        if r.hypothesis_translation:
+            tr = r.hypothesis_translation[:120] + "..." if len(r.hypothesis_translation) > 120 else r.hypothesis_translation
+            w(f"    {DIM}mt: {tr}{RESET}\n")
+            if r.reference_translation:
+                rt = r.reference_translation[:120] + "..." if len(r.reference_translation) > 120 else r.reference_translation
+                w(f"    {DIM}ref-mt: {rt}{RESET}\n")
     w(f"\n  {'─' * 72}\n\n")
 
 

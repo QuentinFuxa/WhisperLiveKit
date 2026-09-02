@@ -311,6 +311,28 @@ class TranscriptionEngine:
                     latency=config.alignatt_latency,
                     context_text=config.alignatt_context,
                 )
+            elif getattr(config, "translation_backend", "nllb") in ("mlx-llm-mt", "hunyuan-mlx"):
+                from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
+                model_id = getattr(config, "mlx_llm_mt_model", "hy-mt2-1.8b-8bit")
+                if getattr(config, "mlx_llm_mt_simultaneous", False):
+                    from whisperlivekit.translation_mlx_llm_mt_simul import (
+                        MlxLlmTranslationSimul,
+                    )
+                    self.translation_model = MlxLlmTranslationSimul(
+                        model_id=model_id,
+                        target_language=config.target_language,
+                        source_language=config.lan,
+                        commit_mode=getattr(config, "mlx_llm_mt_simul_commit", "paper"),
+                        mass_threshold=getattr(config, "mlx_llm_mt_simul_mass_threshold", 0.5),
+                        simul_soft_max_s=getattr(config, "mlx_llm_mt_simul_soft_max_s", 4.0),
+                        simul_hard_max_s=getattr(config, "mlx_llm_mt_simul_hard_max_s", 20.0),
+                    )
+                else:
+                    self.translation_model = MlxLlmTranslation(
+                        model_id=model_id,
+                        target_language=config.target_language,
+                        source_language=config.lan,
+                    )
             else:
                 if config.backend in {"qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming"}:
                     raise ValueError(
@@ -507,6 +529,10 @@ def online_diarization_factory(args, diarization_backend):
 def online_translation_factory(args, translation_model):
     from whisperlivekit.translation_alignatt import AlignAttRemoteEngine
     if isinstance(translation_model, AlignAttRemoteEngine):
+        return translation_model.new_session(args.target_language)
+    # mlx-llm-mt: create a per-session client (fresh state) sharing the model cache.
+    from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
+    if isinstance(translation_model, MlxLlmTranslation):
         return translation_model.new_session(args.target_language)
     #should be at speaker level in the future:
     #one shared nllb model for all speaker
