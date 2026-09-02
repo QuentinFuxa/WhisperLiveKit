@@ -166,7 +166,8 @@ def _greedy(engine) -> None:
     engine._config.top_k = 0
 
 
-def replay(path: str, twice: bool = False) -> float:
+def replay(path: str, twice: bool = False, commit_mode: str | None = None,
+           min_source_tokens: int | None = None) -> float:
     import whisperlivekit.simul_mt_capture as smc
     from whisperlivekit.timed_objects import ASRToken, HypothesisTail
     from whisperlivekit.translation_mlx_llm_mt_simul import MlxLlmTranslationSimul, committed_src_end_from_text
@@ -190,6 +191,12 @@ def replay(path: str, twice: bool = False) -> float:
         # _last_buffer, _committed_start, _chars_per_token, ...)
         engine = base.new_session()
         _greedy(engine)
+        if commit_mode:
+            engine._commit_mode = commit_mode
+        if min_source_tokens is not None:
+            engine._MIN_SOURCE_TOKENS = min_source_tokens
+        if commit_mode:
+            engine._commit_mode = commit_mode
         out = []
         for r in rows:
             if r["kind"] == "tokens":
@@ -276,11 +283,15 @@ def main() -> None:
     p = sub.add_parser("replay")
     p.add_argument("fixture")
     p.add_argument("--twice", action="store_true")
+    p.add_argument("--commit-mode", default=None, help="override the commit policy mode (argmax | mass | paper)")
+    p.add_argument("--min-source-tokens", type=int, default=None,
+                   help="override the re-draft hysteresis threshold")
     args = ap.parse_args()
     if args.cmd == "record":
         record(args.audio, args.out)
     else:
-        replay(args.fixture, args.twice)
+        replay(args.fixture, args.twice, commit_mode=getattr(args, "commit_mode", None),
+               min_source_tokens=getattr(args, "min_source_tokens", None))
 
 
 if __name__ == "__main__":

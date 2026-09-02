@@ -354,17 +354,66 @@ def committed_src_end_from_text(tok, src_ids, committed_text):
     decoded text is a prefix of ``committed_text`` (rounds DOWN to the last
     complete BPE token — a partial BPE token at the boundary is held,
     conservative). Returns a source-token count (0-indexed boundary within the
-    source span)."""
+    source span).
+
+    Decode artifacts: a token that carries half a UTF-8 character decodes
+    with a trailing U+FFFD when the prefix is cut mid-character. Those are
+    stripped before the prefix test — without this the first byte-split
+    boundary froze the commit frontier for the rest of the segment
+    (measured: cend stuck at 3 of 21 tokens while the committed text grew
+    17 -> 37 chars)."""
     if not committed_text:
         return 0
     cend = 0
     for k in range(1, len(src_ids) + 1):
-        decoded = tok.decode(src_ids[:k])
-        if len(decoded) <= len(committed_text) and committed_text.startswith(decoded):
+        try:
+            decoded = tok.decode(src_ids[:k])
+        except Exception:
+            break
+        if decoded.endswith("\ufffd"):
+            decoded = decoded.rstrip("\ufffd")
+        if (decoded and len(decoded) <= len(committed_text)
+                and committed_text.startswith(decoded)):
             cend = k
         else:
             break
     return cend
+
+
+def _paper_stabilized_argmax(span_rows: "np.ndarray") -> "np.ndarray":
+    """Stabilized source argmax per draft token (paper §4.4 branch B).
+
+    ``span_rows``: (T, H, S) decode-step attention over the source span for
+    the calibrated heads. Per head, z-score each source position with
+    prefix-online (Welford) moments accumulated across the draft's decode
+    steps; average the z-scored rows over heads; apply a width-7 median
+    filter along the source axis. Returns (T, S) filtered scores; the
+    caller takes the argmax.
+    """
+    import numpy as np
+    T, H, S = span_rows.shape
+    mean = np.zeros((H, S), dtype=np.float64)
+    m2 = np.zeros((H, S), dtype=np.float64)
+    z = np.zeros((T, S), dtype=np.float64)
+    for t in range(T):
+        x = span_rows[t].astype(np.float64)          # (H, S)
+        if t:
+            std = np.sqrt(m2 / t)
+            zs = np.where(std > 1e-12, (x - mean) / np.where(std > 1e-12, std, 1.0), 0.0)
+        else:
+            zs = np.zeros((H, S), dtype=np.float64)
+        z[t] = zs.mean(axis=0)                       # average over heads
+        # Welford update AFTER scoring: prefix-online uses steps < t
+        delta = x - mean
+        mean += delta / (t + 1)
+        m2 += delta * (x - mean)
+    # width-7 median filter along the source axis (edge-clamped windows)
+    half = 3
+    zf = np.empty_like(z)
+    for s in range(S):
+        lo, hi = max(0, s - half), min(S, s + half + 1)
+        zf[:, s] = np.median(z[:, lo:hi], axis=1)
+    return zf.argmax(axis=1)
 
 
 def apply_commit_policy(
@@ -376,6 +425,7 @@ def apply_commit_policy(
     committed_src_end: int,
     mode: str = "argmax",
     mass_threshold: float = 0.5,
+    heads: Optional[List[Tuple[int, int]]] = None,
 ) -> int:
     """Apply the AlignAtt commit policy with the top alignment head.
 
@@ -392,12 +442,62 @@ def apply_commit_policy(
         source tokens exceeds ``mass_threshold`` (default 0.5). More
         tolerant — commits tokens whose majority of attention is safe,
         giving more provisional content during speech.
+      - ``"paper"``: the paper's §4.4 decision rule. Head-averaged rows over
+        ``heads`` (default: the calibrated set), per-head prefix-online
+        Welford z-normalization, width-7 median filter along the source
+        axis, stabilized argmax vs the accessible frontier (gate: argmax <
+        committed_src_end + b, b=1). The mass gates are off (tau=0), as in
+        the paper's official operating points. First-failure scan emits the
+        longest accepting prefix.
 
     Returns the number of committed target tokens (a contiguous prefix
     length). If no attention was captured for the top head's layer, all
     tokens are committed (degenerates to no-hold).
     """
     import numpy as np
+
+    layer, head = top_head
+    if mode == "paper":
+        heads = list(heads or ALIGNMENT_HEADS)
+        by_layer: Dict[int, list] = {}
+        for (l, h) in heads:
+            if l in capture:
+                by_layer.setdefault(l, [])
+        if not by_layer:
+            return n_tokens
+        T = None
+        span_mats = []
+        for l, layer_steps in by_layer.items():
+            steps = [np.array(s) for s in capture[l]
+                     if np.array(s).ndim == 4 and np.array(s).shape[2] == 1][:n_tokens]
+            if T is None:
+                T = len(steps)
+            T = min(T, len(steps))
+            hidx = [h for (ll, h) in heads if ll == l]
+            spans = [s[0, hidx, 0, src_start:src_end] for s in steps]  # each (H_l, S)
+            span_mats.append((hidx, spans))
+        if not T:
+            return n_tokens
+        # assemble (T, H_total, S): heads ordered as in ``heads``
+        H_total = len(heads)
+        S = src_end - src_start
+        rows = np.zeros((T, H_total, S), dtype=np.float64)
+        layer_heads = {}
+        for (l, h) in heads:
+            layer_heads.setdefault(l, []).append(h)
+        for l, hs in layer_heads.items():
+            steps = [np.array(s) for s in capture[l]
+                     if np.array(s).ndim == 4 and np.array(s).shape[2] == 1][:T]
+            for t, s in enumerate(steps):
+                rows[t, [heads.index((l, hh)) for hh in hs], :] = s[0, hs, 0, src_start:src_end]
+        argmax_pos = _paper_stabilized_argmax(rows)
+        committed_len = 0
+        for t in range(T):
+            if int(argmax_pos[t]) < committed_src_end + 1:  # b=1
+                committed_len = t + 1
+            else:
+                break
+        return committed_len
 
     layer, head = top_head
     if layer not in capture:

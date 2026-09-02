@@ -292,6 +292,7 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
             apply_commit_policy(
                 self._capture, self._simul_top_head, len(tokens), src_start, src_end, cend,
                 mode=self._commit_mode, mass_threshold=self._mass_threshold,
+                heads=self._simul_heads or None,
             ),
             len(tokens),
         )
@@ -341,6 +342,7 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         committed_len = apply_commit_policy(
             self._capture, self._simul_top_head, len(draft["tokens"]), src_start, src_end, cend,
             mode=self._commit_mode, mass_threshold=self._mass_threshold,
+            heads=self._simul_heads,
         )
         committed_tokens = draft["tokens"][:committed_len]
         return _strip_hy_placeholder(tokenizer.decode(committed_tokens))

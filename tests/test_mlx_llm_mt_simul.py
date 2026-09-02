@@ -703,7 +703,7 @@ def _simul_backend_with_tokenizer(monkeypatch, tokenizer, chunks):
     b._ensure_simul_model = lambda: (object(), tokenizer)
     b._capture = type("C", (), {"clear": lambda self: None})()
     monkeypatch.setattr(sms, "source_span", lambda tok, prompt_str, text: (0, 1))
-    monkeypatch.setattr(sms, "committed_src_end_from_text", lambda tok, ids, text: 0)
+    monkeypatch.setattr(sms, "committed_src_end_from_text", lambda tok, ids, text, source_text=None: 0)
     # Commit policy asks for everything; the truncation + clamp must keep the
     # output placeholder-free regardless of what the policy requests.
     monkeypatch.setattr(sms, "apply_commit_policy", lambda *a, **k: 10**6)
