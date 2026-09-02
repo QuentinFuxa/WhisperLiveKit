@@ -59,7 +59,7 @@ class WhisperLiveKitConfig:
     # Simultaneous-MT variant of mlx-llm-mt: drafts over the unstable ASR tail
     # with the AlignAtt commit policy (calibrated zh→en Hunyuan heads).
     mlx_llm_mt_simultaneous: bool = False
-    mlx_llm_mt_simul_commit: str = "argmax"  # argmax | mass
+    mlx_llm_mt_simul_commit: str = "argmax"  # argmax | mass | paper
     mlx_llm_mt_simul_mass_threshold: float = 0.5
     mlx_llm_mt_simul_soft_max_s: float = 4.0
     mlx_llm_mt_simul_hard_max_s: float = 20.0
