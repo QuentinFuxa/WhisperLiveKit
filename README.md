@@ -1,147 +1,577 @@
 <p align="center">
-  <img width="330" alt="WhisperLiveKit" src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/wlk.png" />
+  <img width="330" alt="wlk" src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/wlk.png" />
 </p>
-<p align="center"><b>Self-hosted transcription and simultaneous translation</b></p>
+<p align="center"><b>WLK: Ultra-low-latency, self-hosted speech-to-text pipeline</b></p>
+
 
 <p align="center">
-  <a href="https://pypi.org/project/whisperlivekit/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/whisperlivekit"></a>
-  <img alt="Python 3.11–3.13" src="https://img.shields.io/badge/python-3.11--3.13-blue">
-  <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
-  <a href="https://arxiv.org/abs/2606.03967"><img alt="AlignAtt4LLM paper, IWSLT 2026" src="https://img.shields.io/badge/AlignAtt4LLM-IWSLT%202026-blue"></a>
+<img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/demo.png" alt="WhisperLiveKit Demo" width="730">
 </p>
 
-WhisperLiveKit transcribes audio as it arrives, with optional speaker diarization and translation. It includes a browser interface, a command-line client, a Python API, and a server with native WebSocket, OpenAI-compatible REST, and Deepgram-compatible WebSocket endpoints.
-
-Whisper models use SimulStreaming or LocalAgreement to decide when words are stable enough to emit. Other backends supply their own streaming processors. Models are shared within a server process; each connection has its own audio buffers and transcript state.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/demo.png" alt="Live transcript with speaker labels in the browser" width="730">
+<a href="https://pypi.org/project/whisperlivekit/"><img alt="PyPI Version" src="https://img.shields.io/pypi/v/whisperlivekit?color=g"></a>
+<a href="https://pepy.tech/project/whisperlivekit"><img alt="PyPI Downloads" src="https://static.pepy.tech/personalized-badge/whisperlivekit?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=installations"></a>
+<a href="https://pypi.org/project/whisperlivekit/"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.11--3.13-dark_green"></a>
+<a href="https://huggingface.co/qfuxa/qwen3-asr-0.6b-streaming">
+  <img alt="Hugging Face models" src="https://img.shields.io/badge/🤗-Hugging%20Face%20Weights-yellow" />
+</a>
+<a href="https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache 2.0-dark_green"></a>
 </p>
 
-## Get started
 
-Use Python 3.11–3.13 and install FFmpeg for compressed audio input:
+<p align="center">
+<a href="https://trendshift.io/repositories/14685?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-14685" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/14685" alt="QuentinFuxa%2FWhisperLiveKit | Trendshift" width="250" height="55"/></a>
+</p>
+
+### Powered by Leading Research:
+
+- Simul-[Whisper](https://arxiv.org/pdf/2406.10052)/[Streaming](https://arxiv.org/abs/2506.17077) (SOTA 2025) - Ultra-low latency transcription using [AlignAtt policy](https://arxiv.org/pdf/2305.11408). 
+- [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting) (2025), based on [distilled](https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2) [NLLB](https://arxiv.org/abs/2207.04672) (2022, 2024) - Simulatenous translation from & to 200 languages.
+- [WhisperStreaming](https://github.com/ufal/whisper_streaming) (SOTA 2023) - Low latency transcription using [LocalAgreement policy](https://www.isca-archive.org/interspeech_2020/liu20s_interspeech.pdf)
+- [Streaming Sortformer](https://arxiv.org/abs/2507.18446) (SOTA 2025) - Advanced real-time speaker diarization
+- [Qwen3-ASR-causal](https://github.com/QuentinFuxa/Qwen3-ASR-causal) (2026) - Causal streaming audio encoder for Qwen3-ASR: each audio block is encoded exactly once, constant compute per audio second, append-only transcripts.
+- [AlignAtt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM) ([IWSLT 2026](https://arxiv.org/abs/2606.03967)) - Simultaneous translation with decoder-only LLMs: attention-gated commits, append-only output.
+
+
+> **Why not just run a simple Whisper model on every audio batch?** Whisper is designed for complete utterances, not real-time chunks. Processing small segments loses context, cuts off words mid-syllable, and produces poor transcription. WhisperLiveKit uses state-of-the-art simultaneous speech research for intelligent buffering and incremental processing.
+
+
+### Architecture
+
+<img alt="Architecture" src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/architecture.png" />
+
+*The backend supports multiple concurrent users. Voice Activity Detection reduces overhead when no voice is detected.*
+
+### Installation & Quick Start
 
 ```bash
 pip install whisperlivekit
+```
+
+#### Quick Start
+
+```bash
+
+# Start the server — open http://localhost:8000 and start talking
 wlk --model base --language en
+
+
+# Auto-pull model and start server
+wlk run whisper:tiny
+
+# Transcribe a file (no server needed)
+wlk transcribe meeting.wav
+
+# Generate subtitles
+wlk transcribe --format srt podcast.mp3 -o podcast.srt
+
+# Manage models
+wlk models                             # See what's installed
+wlk pull large-v3                      # Download a model
+wlk rm large-v3                        # Delete a model
+
+# Benchmark speed and accuracy
+wlk bench
 ```
 
-Open [localhost:8000](http://localhost:8000) and allow microphone access. The first launch downloads the model. Add `--pcm-input` to use uncompressed microphone audio without FFmpeg; REST file transcription still requires FFmpeg.
+#### API Compatibility
 
-On Apple Silicon, install the MLX Whisper extra:
+WhisperLiveKit exposes compatibility-oriented subsets of popular APIs:
 
 ```bash
-pip install "whisperlivekit[mlx-whisper]"
-```
-
-For Docker, GPU dependencies, and remote access, see [deployment](docs/deployment.md). For development installs, see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Command line
-
-```bash
-wlk run whisper:tiny                         # Download a model and start the server
-wlk transcribe meeting.wav                  # Transcribe a file locally
-wlk transcribe podcast.mp3 --format srt -o podcast.srt
-wlk listen                                  # Microphone input; requires the listen extra
-wlk models                                  # Show backends and cached models
-wlk pull large-v3                            # Download model weights
-wlk check                                   # Check local dependencies
-```
-
-Run `wlk --help` for commands and `wlk serve --help` for server options. The default model is `base`, the default language is `auto`, and diarization and translation are off until requested.
-
-## Backends
-
-| Family | WLK backends | Installation extras |
-|---|---|---|
-| Whisper | `auto`, `whisper`, `faster-whisper`, `mlx-whisper` | Base installation; `mlx-whisper` for Apple Silicon |
-| Qwen3-ASR | `qwen3-streaming`, `qwen3-vllm`, `qwen3-vllm-metal` | Extra with the corresponding backend name |
-| Voxtral | `voxtral`, `voxtral-mlx` | `voxtral-hf` or `voxtral-mlx` |
-| SenseVoiceSmall | `funasr` | `funasr` |
-| Canary | `canary` | `canary` |
-| Speaker diarization | `sortformer`, `diart` | `diarization-sortformer` or `diarization-diart` |
-
-Install an extra with `pip install "whisperlivekit[extra-name]"`. Several GPU stacks require separate environments; see [backend setup and constraints](docs/backends.md) and the conflicts declared in [pyproject.toml](pyproject.toml). Diart is limited to Python 3.11–3.12.
-
-## Simultaneous translation with AlignAtt4LLM
-
-[AlignAtt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM) is the companion research project by Quentin Fuxa and Dominik Macháček, described in the [IWSLT 2026 paper](https://arxiv.org/abs/2606.03967). It adapts the AlignAtt translation policy to decoder-only LLMs: selected attention heads determine which part of a translation can be emitted from the source words received so far.
-
-WhisperLiveKit supplies the live transcript. An `alignatt-mt-server` process handles translation and can run on a separate CUDA machine. WLK can also send the unstable transcript tail so the translator can draft ahead while waiting for source words to be committed.
-
-```mermaid
-flowchart LR
-    Audio --> WLK[WhisperLiveKit: audio and ASR]
-    WLK -->|Committed words and optional draft tail| MT[AlignAtt4LLM: translation]
-    WLK -->|Transcript| UI[Browser or API client]
-    MT -->|Translation| WLK
-```
-
-After [setting up the translation server](docs/translation-alignatt.md):
-
-```bash
-# In the AlignAtt4LLM inference environment
-alignatt-mt-server --preset gemma_low_latency --port 8765
-
-# In the WhisperLiveKit environment
-wlk --model base --language en --target-language de \
-    --translation-backend alignatt --alignatt-url ws://localhost:8765
-```
-
-The [integration guide](docs/translation-alignatt.md) covers language directions, latency controls, and current limitations. The paper evaluates its own ASR–MT cascade; its quality and latency results are not measurements of every WLK backend combination.
-
-For in-process NLLB translation, install `whisperlivekit[translation]` and use `--target-language de` without `--translation-backend alignatt`.
-
-## APIs and clients
-
-```bash
-# OpenAI-compatible file transcription
+# OpenAI-compatible REST API
 curl http://localhost:8000/v1/audio/transcriptions -F file=@audio.wav
+
+# Works with the OpenAI Python SDK
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="unused")
+
+# Deepgram-compatible WebSocket
+# See docs/API.md for supported options and current SDK setup
+
+# Native WebSocket for real-time streaming
+ws://localhost:8000/asr
 ```
 
-| Interface | Endpoint or entry point |
-|---|---|
-| Native streaming WebSocket | `/asr` |
-| Deepgram-compatible WebSocket | `/v1/listen` |
-| OpenAI-compatible REST | `/v1/audio/transcriptions` |
-| Python pipeline | `TranscriptionEngine` and `AudioProcessor` |
-| Browser tab capture | [Chrome extension](chrome-extension/README.md) |
-| Native desktop client | [macOS app](macos/WhisperLiveKitMac/README.md) |
+Per-session WebSocket query parameters:
 
-API compatibility covers the subsets listed in [the API reference](docs/API.md). Native sessions can override `language`, `target_language`, and supported decoder `context` through query parameters. See [technical integration](docs/technical_integration.md) for a complete Python lifecycle example.
+| param | example | effect |
+|---|---|---|
+| `language` | `?language=fr` | transcription language for this session (one shared engine serves mixed-language sessions) |
+| `target_language` | `?target_language=de` | translation target for this session (server must run with `--target-language`) |
+| `context` | `?context=WhisperLiveKit%2C+Qwen3-ASR` | terminology, names, or phrase-list text used to condition this session; supported by Whisper-family and SimulStreaming backends |
+| `mode` | `?mode=diff` | incremental snapshot/diff protocol instead of resending the full state (experimental, for integrators building their own client, see `diff_protocol.py`); the bundled web UI uses `full` |
+| `token` | `?token=...` | API token when the server runs with `--api-token` (also accepted as an `Authorization: Bearer` header) |
 
-## Benchmarks and testing
+See [docs/API.md](docs/API.md) for the complete API reference.
+For a native SwiftUI macOS client, see [macos/WhisperLiveKitMac](macos/WhisperLiveKitMac).
 
-Use `wlk bench --json results.json` to evaluate the configured backend on your hardware. Read [the benchmark notes](benchmarks/README.md) before interpreting the results: inference time, streaming delay, and translation latency measure different things.
+> - See [here](whisperlivekit/whisper/tokenizer.py) for the list of all available languages.
+> - Check the [troubleshooting guide](docs/troubleshooting.md) for step-by-step fixes collected from recent GPU setup/env issues.
+> - For HTTPS requirements, see the **Parameters** section for SSL configuration options.
 
-Historical H100 and M5 results are kept in [benchmarks/archive](benchmarks/archive/README.md). They are not presented as a current backend ranking. The July scatter plots lack the per-sample records needed to recompute their WER and establish a reproducible comparison.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the regression suite and real-audio streaming checks. Tests should protect observable behavior: transcript continuity, timestamps, speaker boundaries, API semantics, and session isolation.
 
-## Documentation
 
-- [Server configuration](docs/configuration.md)
-- [Models and custom checkpoints](docs/default_and_custom_models.md)
-- [Backend setup](docs/backends.md)
-- [Deployment and Docker](docs/deployment.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [API reference](docs/API.md) and [Python integration](docs/technical_integration.md)
+#### Optional Dependencies
 
-## Research and citation
+| Feature | `uv sync` | `pip install -e` |
+|-----------|-------------|-------------|
+| **Apple Silicon MLX Whisper backend** | `uv sync --extra mlx-whisper` | `pip install -e ".[mlx-whisper]"` |
+| **FunASR SenseVoiceSmall** | `uv sync --extra funasr` | `pip install -e ".[funasr]"` |
+| **Voxtral (MLX backend, Apple Silicon)** | `uv sync --extra voxtral-mlx` | `pip install -e ".[voxtral-mlx]"` |
+| **CPU PyTorch stack** | `uv sync --extra cpu` | `pip install -e ".[cpu]"` |
+| **CUDA 12.9 PyTorch stack** | `uv sync --extra cu129` | `pip install -e ".[cu129]"` |
+| **Translation** | `uv sync --extra translation` | `pip install -e ".[translation]"` |
+| **Sentence tokenizer** | `uv sync --extra sentence_tokenizer` | `pip install -e ".[sentence_tokenizer]"` |
+| **Voxtral (HF backend)** | `uv sync --extra voxtral-hf` | `pip install -e ".[voxtral-hf]"` |
+| **Qwen3-ASR vLLM (CUDA)** | `uv sync --extra qwen3-vllm` | `pip install -e ".[qwen3-vllm]"` |
+| **Qwen3-ASR streaming (HF, CUDA/MPS/CPU)** | `uv sync --extra qwen3-streaming` | `pip install -e ".[qwen3-streaming]"` |
+| **Qwen3-ASR vLLM Metal (Apple Silicon)** | Install vLLM with the official vllm-metal script first, then `uv sync --extra qwen3-vllm-metal` | Install vLLM with the official vllm-metal script first, then `pip install -e ".[qwen3-vllm-metal]"` |
+| **Speaker diarization (Sortformer / NeMo 3)** | `uv sync --extra diarization-sortformer` | `pip install -e ".[diarization-sortformer]"` |
+| *[Not recommended]* Speaker diarization with Diart (Python 3.11 or 3.12) | `uv sync --extra diarization-diart` | `pip install -e ".[diarization-diart]"` |
+| **Canary-1b-v2 (NeMo, CUDA/CPU)** | `uv sync --extra canary` | `pip install -e ".[canary]"` |
 
-WLK builds on [SimulWhisper](https://arxiv.org/abs/2406.10052), [SimulStreaming](https://arxiv.org/abs/2506.17077), [WhisperStreaming](https://github.com/ufal/whisper_streaming), [Streaming Sortformer](https://arxiv.org/abs/2507.18446), [Qwen3-ASR-causal](https://github.com/QuentinFuxa/Qwen3-ASR-causal), and [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting).
+The Diart profile is limited to Python 3.11 and 3.12 because Diart 0.9.2 requires NumPy below 2. Use Sortformer for diarization on Python 3.13.
 
-If you use the AlignAtt4LLM translation backend in research, cite its paper:
+Supported GPU profiles:
 
-```bibtex
-@article{fuxa2026alignatt4llm,
-  title = {AlignAtt4LLM: Fast AlignAtt for Decoder-Only LLMs at IWSLT 2026 Simultaneous Speech Translation Task},
-  author = {Fuxa, Quentin and Macháček, Dominik},
-  year = {2026},
-  doi = {10.48550/arXiv.2606.03967},
-  url = {https://arxiv.org/abs/2606.03967}
-}
+```bash
+# Profile A: Sortformer diarization
+uv sync --extra cu129 --extra diarization-sortformer
+
+# Profile B: Voxtral HF + translation
+uv sync --extra cu129 --extra voxtral-hf --extra translation
+
+# Profile C: Qwen3-ASR vLLM
+uv sync --extra qwen3-vllm
 ```
 
-WhisperLiveKit is licensed under [Apache 2.0](LICENSE). Model weights and optional projects have their own licenses.
+`qwen3-vllm` uses vLLM's CUDA wheel stack and must be installed in a separate environment from `cu129`. Several heavy extras (`voxtral-hf`, `qwen3-vllm-metal`, and the vLLM stacks) intentionally conflict with one another and must be installed in separate environments; the authoritative list is `[tool.uv].conflicts` in `pyproject.toml`. The `canary` extra conflicts with `voxtral-hf` and `qwen3-vllm-metal`, but is compatible with `diarization-sortformer` (both pull `nemo-toolkit[asr]`).
+
+See **Parameters & Configuration** below on how to use them.
+
+<p align="center">
+<img src="benchmark_scatter_en_aware.png" alt="Speed vs Accuracy — English" width="700">
+</p>
+<p align="center">
+<img src="benchmark_scatter_fr_aware.png" alt="Speed vs Accuracy — French" width="700">
+</p>
+
+Benchmarks use 6 minutes of public [LibriVox](https://librivox.org/) audiobook recordings per language (30s + 60s + 120s + 180s), with ground truth from [Project Gutenberg](https://www.gutenberg.org/). The figures above were measured on an NVIDIA H100 (CUDA); the qwen3 causal tower is English-only, so it only appears on the English chart. Fully reproducible with `python scripts/run_scatter_benchmark.py` (the script picks a matching combo set on Apple Silicon: mlx-whisper and voxtral-mlx instead of the CUDA-only backends). Raw results: [benchmarks/h100_scatter/](benchmarks/h100_scatter/).
+We are actively looking for benchmark results on other hardware (different NVIDIA GPUs, Apple Silicon chips, cloud instances). If you run the benchmarks on your machine, please share your results via an issue or PR!
+
+
+#### Use it to capture audio from web pages.
+
+Go to `chrome-extension` for instructions.
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/chrome-extension/demo-extension.png" alt="WhisperLiveKit Demo" width="600">
+</p>
+
+
+### Voxtral Backend
+
+WhisperLiveKit supports [Voxtral Mini](https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602),
+a 4B-parameter speech model from Mistral AI that natively handles 100+ languages with automatic
+language detection. Whisper also supports auto-detection (`--language auto`), but Voxtral's per-chunk
+detection is more reliable and does not bias towards English.
+
+```bash
+# Apple Silicon (native MLX, recommended)
+pip install -e ".[voxtral-mlx]"
+wlk --backend voxtral-mlx
+
+# Linux/GPU (HuggingFace transformers)
+pip install transformers torch
+wlk --backend voxtral
+```
+
+Voxtral uses its own streaming policy and does not use LocalAgreement or SimulStreaming.
+See [BENCHMARK.md](BENCHMARK.md) for performance numbers.
+
+### FunASR / SenseVoiceSmall
+
+Install the optional backend and run
+[SenseVoiceSmall](https://huggingface.co/FunAudioLLM/SenseVoiceSmall) through
+WLK's existing LocalAgreement and VAC/VAD pipeline:
+
+```bash
+pip install "whisperlivekit[funasr]"
+wlk --backend funasr --language auto
+```
+
+Use a verified local model snapshot without executing remote model code:
+
+```bash
+wlk --backend funasr --model_dir /path/to/SenseVoiceSmall --language yue
+```
+
+The initial integration supports SenseVoiceSmall transcription in Mandarin
+(`zh`), Cantonese (`yue`), English (`en`), Japanese (`ja`), Korean (`ko`), and
+automatic detection. FunASR uses LocalAgreement only; selecting it with the
+default policy switches that policy automatically. It does not support
+`--direct-english-translation`, and WLK remains responsible for voice activity
+control rather than enabling FunASR's internal VAD. This compatibility contract
+does not cover arbitrary FunASR models. SenseVoiceSmall is distributed under
+its [model license](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE).
+
+### Qwen3-ASR streaming (HF Transformers)
+
+`qwen3-streaming` runs Qwen3-ASR through plain HF Transformers with a
+bounded-recompute audio cache: the pretrained audio tower only re-encodes a
+local window (default 12 s) per update, cached audio embeddings are
+append-only, and text is committed with a stable-prefix rule. Works on CUDA,
+Apple Silicon (MPS) and CPU, no vLLM required.
+
+```bash
+pip install -e ".[qwen3-streaming]"
+wlk --backend qwen3-streaming --language en
+```
+
+Notes:
+- An explicit `--language` is required (automatic detection switches language
+  mid-stream on accented audio).
+- Word timestamps are interpolated estimates (~1 s precision): good enough
+  for lines and diarization alignment. Use `--backend qwen3-vllm`
+  (ForcedAligner) when exact word timing matters.
+- Decode pacing self-adjusts to the hardware; on GPUs slower than real time
+  the update cadence grows instead of lagging. Plan one realtime session per
+  GPU.
+- Defaults encode the validated operating point (12 s left context, ~15 s
+  segments); see `--help` for the `--qwen3-streaming-*` knobs.
+
+**Causal mode (minimum compute per chunk).** The windowed default re-encodes
+up to 12 s of audio on every update. The causal mode runs an append-only
+causal-KV encoder instead: each ~2 s audio block is encoded exactly once,
+memory is bounded (15 s window + sentence-boundary segment resets), and
+per-chunk compute is constant in stream length:
+
+```bash
+wlk --backend qwen3-streaming --language en \
+    --qwen3-streaming-audio-backend causal \
+    --qwen3-streaming-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+The fine-tuned tower ([qfuxa/qwen3-asr-0.6b-streaming](https://huggingface.co/qfuxa/qwen3-asr-0.6b-streaming))
+downloads automatically. The Qwen runtime, tests, experiments, benchmarks and
+figures now live in [Qwen3-ASR-causal](https://github.com/QuentinFuxa/Qwen3-ASR-causal),
+which is consumed here through `third_party/qwen3-asr-causal`. WhisperLiveKit
+keeps only the backend wiring and CLI flags.
+
+Use causal mode for many concurrent streams, energy-constrained serving or
+unbounded session lengths; keep the windowed default for best accuracy. English
+only for now. Detailed WER/RTF results are in the Qwen3-ASR-causal repository.
+
+**Experimental vLLM Metal causal mode.** On Apple Silicon, `qwen3-vllm-metal`
+can also load the same causal tower and keep a rolling MLX decoder KV over the
+`[prompt + audio]` prefix. New audio blocks are encoded once, and the decoder
+replays only the new audio embeddings, prompt tail, and previous-hypothesis
+draft:
+
+```bash
+wlk --backend qwen3-vllm-metal --language en \
+    --qwen3-vllm-metal-audio-backend causal \
+    --qwen3-vllm-metal-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+This path has passed local short-form smoke tests and is useful for comparing
+the Metal decoder path against the HF/MPS causal backend. It is still
+experimental; use `qwen3-streaming` causal for the validated production stack.
+
+**Experimental vLLM CUDA causal mode.** On NVIDIA GPUs, `qwen3-vllm` can load
+the same causal tower, use vLLM for the text decoder, and keep vLLM
+ForcedAligner timestamps:
+
+```bash
+WLK_QWEN3_VLLM_LIVE_MULTIPROCESSING=1 \
+wlk --backend qwen3-vllm --language en \
+    --qwen3-vllm-audio-backend causal \
+    --qwen3-vllm-causal-decoder-backend vllm-live \
+    --qwen3-vllm-tower-checkpoint qfuxa/qwen3-asr-0.6b-streaming
+```
+
+The `vllm-text` backend is the conservative fallback when you do not want the
+live request-local append path; it still uses vLLM prefix caching but starts one
+text-decoder request per chunk. The `append-kv` and `rolling` names remain as
+compatibility aliases for the HF decoder path. Keep standard `qwen3-vllm` for
+best current accuracy until the causal quality gate is fixed.
+
+### Canary Backend
+
+WhisperLiveKit supports [NVIDIA Canary-1b-v2](https://huggingface.co/nvidia/canary-1b-v2)
+via [NeMo](https://github.com/NVIDIA/NeMo), a 1B-parameter model covering 25 European
+languages with native word-level timestamps. Automatic language detection uses NeMo's
+AmberNet language-ID model when `--language auto` is set; the detected language is locked
+in once enough audio has accumulated. Canary streams through the LocalAgreement policy.
+
+```bash
+pip install -e ".[canary]"
+wlk --backend canary --language auto
+```
+
+Notes:
+- Runs on CUDA and CPU. A GPU is strongly recommended: CPU works (see
+  `scripts/smoke_canary.py`) but is slow for a 1B-parameter model. On Apple
+  Silicon, NeMo's current restore path uses CPU; this backend does not enable
+  MPS device placement. NeMo is a heavy dependency (torch, Lightning, and
+  friends).
+- Supports WhisperLiveKit's Python range, 3.11 through 3.13. The `canary` extra
+  intentionally selects `nemo-toolkit[asr]>=3.0,<4`, the NeMo line validated
+  with Canary timestamps and Python 3.13.
+- Explicit `--language <code>` skips language detection entirely. Tune detection
+  with `--canary-lid-min-sec` (minimum audio before detecting) and
+  `--canary-lid-min-conf` (confidence threshold to lock in the detected language).
+- Canary-1b-v2 is distributed under CC-BY-4.0. The separate
+  [AmberNet language-ID model](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/nemo/models/langid_ambernet)
+  is downloaded from NVIDIA NGC; review its model-card terms for your deployment.
+
+### Usage Examples
+
+**Command-line Interface**: Start the transcription server with various options:
+
+```bash
+# Large model and translate from french to danish
+wlk --model large-v3 --language fr --target-language da
+
+# Diarization and server listening on */80
+wlk --host 0.0.0.0 --port 80 --model medium --diarization --language fr
+
+# Voxtral multilingual (auto-detects language)
+wlk --backend voxtral-mlx
+```
+
+
+**Python API Integration**: Check [basic_server](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/basic_server.py) for a more complete example of how to use the functions and classes.
+
+```python
+import asyncio
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+
+from whisperlivekit import AudioProcessor, TranscriptionEngine, parse_args
+
+transcription_engine = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global transcription_engine
+    transcription_engine = TranscriptionEngine(model_size="medium", diarization=True, lan="en")
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+async def handle_websocket_results(websocket: WebSocket, results_generator):
+    async for response in results_generator:
+        await websocket.send_json(response)
+    await websocket.send_json({"type": "ready_to_stop"})
+
+@app.websocket("/asr")
+async def websocket_endpoint(websocket: WebSocket):
+    global transcription_engine
+
+    # Create a new AudioProcessor for each connection, passing the shared engine
+    audio_processor = AudioProcessor(transcription_engine=transcription_engine)    
+    results_generator = await audio_processor.create_tasks()
+    results_task = asyncio.create_task(handle_websocket_results(websocket, results_generator))
+    await websocket.accept()
+    while True:
+        message = await websocket.receive_bytes()
+        await audio_processor.process_audio(message)        
+```
+
+**Frontend Implementation**: The package includes an HTML/JavaScript implementation [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/web/live_transcription.html). You can also import it using `from whisperlivekit import get_inline_ui_html` & `page = get_inline_ui_html()`
+
+
+## Parameters & Configuration
+
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `--model` | Whisper model size. List and recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/default_and_custom_models.md) | `small` |
+| `--model-path` | Local .pt file/directory **or** Hugging Face repo ID containing the Whisper model. Overrides `--model`. Recommandations [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/docs/default_and_custom_models.md) | `None` |
+| `--language` | List [here](docs/supported_languages.md). If you use `auto`, the model attempts to detect the language automatically, but it tends to bias towards English. | `auto` |
+| `--target-language` | If sets, translates using [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting). [200 languages available](docs/supported_languages.md). If you want to translate to english, you can also use `--direct-english-translation`. The STT model will try to directly output the translation. | `None` |
+| `--translation-backend` | `nllb` (in-process, CPU-friendly) or `alignatt`: streaming LLM translation through an [Alignatt4LLM](https://github.com/QuentinFuxa/Alignatt4LLM) sidecar, with attention-gated append-only commits. See [docs/translation-alignatt.md](docs/translation-alignatt.md). | `nllb` |
+| `--diarization` | Enable speaker identification | `False` |
+| `--backend-policy` | Streaming strategy: `1`/`simulstreaming` uses AlignAtt SimulStreaming, `2`/`localagreement` uses the LocalAgreement policy | `simulstreaming` |
+| `--backend` | ASR backend selector. `auto` picks MLX on macOS (if installed), otherwise Faster-Whisper, otherwise vanilla Whisper. Options: `mlx-whisper`, `faster-whisper`, `whisper`, `openai-api` (LocalAgreement only), `funasr` (SenseVoiceSmall, LocalAgreement only), `voxtral-mlx` (Apple Silicon), `voxtral` (HuggingFace), `qwen3-vllm`, `qwen3-vllm-metal` (Apple Silicon), `qwen3-streaming` (HuggingFace, CUDA/MPS/CPU), `canary` (NeMo, CUDA/CPU, LocalAgreement only) | `auto` |
+| `--pause-segmentation-seconds` | Create a stable transcript boundary when a VAD pause is longer than this many seconds. Use `0` to disable pause-based segmentation. | `5.0` |
+| `--asr-coalesce-min-s` | Defer an ASR call until this much new audio has accrued. Trades update cadence for fewer encoder passes; use `0` to disable. | `0` |
+| `--no-vac` | Disable Voice Activity Controller. NOT ADVISED | `False` |
+| `--no-vad` | Disable Voice Activity Detection. NOT ADVISED | `False` |
+| `--warmup-file` | Audio file path for model warmup | `jfk.wav` |
+| `--host` | Server host address | `localhost` |
+| `--port` | Server port | `8000` |
+| `--ssl-certfile` | Path to the SSL certificate file (for HTTPS support) | `None` |
+| `--ssl-keyfile` | Path to the SSL private key file (for HTTPS support) | `None` |
+| `--forwarded-allow-ips` | Ip or Ips allowed to reverse proxy the whisperlivekit-server. Supported types are  IP Addresses (e.g. 127.0.0.1), IP Networks (e.g. 10.100.0.0/16), or Literals (e.g. /path/to/socket.sock) | `None` |
+| `--cors-origins` | Comma-separated list of allowed CORS origins. Empty disables CORS; use `*` to allow all origins. | empty |
+| `--pcm-input` | raw PCM (s16le) data is expected as input and FFmpeg will be bypassed. Frontend will use AudioWorklet instead of MediaRecorder | `False` |
+| `--lora-path` | Path or Hugging Face repo ID for LoRA adapter weights (e.g., `qfuxa/whisper-base-french-lora`). Only works with native Whisper backend (`--backend whisper`) | `None` |
+
+| Translation options | Description | Default |
+|-----------|-------------|---------|
+| `--nllb-backend` | `transformers` or `ctranslate2` | `transformers` |
+| `--nllb-size` | `600M` or `1.3B` | `600M` |
+
+| Diarization options | Description | Default |
+|-----------|-------------|---------|
+| `--diarization-backend` |  `diart` or `sortformer` | `sortformer` |
+| `--sortformer-model-path` | Path to a local Sortformer `.nemo` file, a directory containing exactly one `.nemo` file, or a NeMo/Hugging Face model ID. | `None` |
+| `--sortformer-max-speakers` | Declare a known upper bound from 1 to 4 for a Sortformer session. The first N speaker channels are retained in arrival order. | all checkpoint channels (4 for the default model) |
+| `--disable-punctuation-split` | [NOT FUNCTIONAL IN 0.2.15 / 0.2.16] Disable punctuation based splits. See #214 | `False` |
+| `--segmentation-model` | Hugging Face model ID for Diart segmentation model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/segmentation-3.0` |
+| `--embedding-model` | Hugging Face model ID for Diart embedding model. [Available models](https://github.com/juanmc2005/diart/tree/main?tab=readme-ov-file#pre-trained-models) | `pyannote/embedding` |
+
+`--sortformer-max-speakers` is an assertion about the audio, not speaker-count
+estimation. Use it only when the session is known to contain at most N speakers.
+If more speakers are present, later arrival-ordered channels are excluded and
+those speakers can be attributed to a retained label. The default preserves the
+full checkpoint output. Sortformer produces independent activity probabilities,
+including overlapping activity, but WhisperLiveKit currently resolves each
+diarization frame and ASR token to one speaker. This option does not add
+simultaneous-speaker output.
+
+| Canary backend options (only used with `--backend canary`) | Description | Default |
+|-----------|-------------|---------|
+| `--canary-model` | HuggingFace/NGC model id or local `.nemo` path | `nvidia/canary-1b-v2` |
+| `--canary-default-lang` | Fallback language used until auto-detection locks in. An explicit `--language` bypasses it. | `en` |
+| `--canary-lid-model` | NeMo language-ID model used for `--language auto` | `langid_ambernet` |
+| `--canary-lid-min-sec` | Non-negative minimum seconds of audio before attempting language detection | `2.0` |
+| `--canary-lid-min-conf` | Confidence threshold in `[0, 1]` to lock in the detected language | `0.5` |
+
+| SimulStreaming backend options | Description | Default |
+|-----------|-------------|---------|
+| `--disable-fast-encoder` | Disable Faster Whisper or MLX Whisper backends for the encoder (if installed). Inference can be slower but helpful when GPU memory is limited | `False` |
+| `--custom-alignment-heads` | Use your own alignment heads, useful when `--model-dir` is used. Use `scripts/determine_alignment_heads.py` to extract them.
+ | `None` |
+| `--frame-threshold` | AlignAtt frame threshold (lower = faster, higher = more accurate) | `25` |
+| `--beams` | Number of beams for beam search (1 = greedy decoding) | `1` |
+| `--decoder` | Force decoder type (`beam` or `greedy`) | `auto` |
+| `--audio-max-len` | Maximum audio buffer length (seconds) | `30.0` |
+| `--audio-min-len` | Minimum audio length to process (seconds) | `0.0` |
+| `--cif-ckpt-path` | Path to CIF model for word boundary detection | `None` |
+| `--never-fire` | Never truncate incomplete words | `False` |
+| `--init-prompt` | Initial prompt for the model | `None` |
+| `--static-init-prompt` | Static prompt that doesn't scroll | `None` |
+| `--max-context-tokens` | Maximum context tokens | Depends on model used, but usually 448. |
+
+
+
+| WhisperStreaming backend options | Description | Default |
+|-----------|-------------|---------|
+| `--confidence-validation` | Use confidence scores for faster validation | `False` |
+| `--buffer_trimming` | Buffer trimming strategy (`sentence` or `segment`) | `segment` |
+
+
+
+
+> For diarization using Diart, you need to accept user conditions [here](https://huggingface.co/pyannote/segmentation) for the `pyannote/segmentation` model, [here](https://huggingface.co/pyannote/segmentation-3.0) for the `pyannote/segmentation-3.0` model and [here](https://huggingface.co/pyannote/embedding) for the `pyannote/embedding` model. **Then**, login to HuggingFace: `huggingface-cli login`
+
+### 🚀 Deployment Guide
+
+To deploy WhisperLiveKit in production:
+ 
+1. **Server Setup**: Install production ASGI server & launch with multiple workers
+   ```bash
+   pip install uvicorn gunicorn
+   gunicorn -k uvicorn.workers.UvicornWorker -w 4 your_app:app
+   ```
+
+2. **Frontend**: Host your customized version of the `html` example & ensure WebSocket connection points correctly
+
+3. **Nginx Configuration** (recommended for production):
+    ```nginx    
+   server {
+       listen 80;
+       server_name your-domain.com;
+        location / {
+            proxy_pass http://localhost:8000;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+    }}
+    ```
+
+4. **HTTPS Support**: For secure deployments, use "wss://" instead of "ws://" in WebSocket URL
+
+## 🐋 Docker
+
+Deploy the application easily using Docker with GPU or CPU support.
+
+### Prerequisites
+- Docker installed on your system
+- For GPU support: NVIDIA Docker runtime installed
+
+### Quick Start
+
+**With GPU acceleration (recommended):**
+```bash
+docker build -t wlk .
+docker run --gpus all -p 8000:8000 --name wlk wlk
+```
+
+**CPU only:**
+```bash
+docker build -f Dockerfile.cpu -t wlk --build-arg EXTRAS="cpu" .
+docker run -p 8000:8000 --name wlk wlk
+```
+
+### Advanced Usage
+
+**Custom configuration:**
+```bash
+# Example with custom model and language
+docker run --gpus all -p 8000:8000 --name wlk wlk --model large-v3 --language fr
+```
+
+**Compose (recommended for cache + token wiring):**
+```bash
+# GPU Sortformer profile
+docker compose up --build wlk-gpu-sortformer
+
+# GPU Voxtral profile
+docker compose up --build wlk-gpu-voxtral
+
+# CPU service
+docker compose up --build wlk-cpu
+```
+
+### Memory Requirements
+- **Large models**: Ensure your Docker runtime has sufficient memory allocated
+
+
+#### Customization
+
+- `--build-arg` Options:
+  - `EXTRAS="cu129,diarization-sortformer"` - GPU Sortformer profile extras.
+  - `EXTRAS="cu129,voxtral-hf,translation"` - GPU Voxtral profile extras.
+  - `EXTRAS="cpu,diarization-diart,translation"` - CPU profile extras.
+  - Hugging Face cache + token are configured in `compose.yml` using a named volume and `HF_TKN_FILE` (default: `./token`).
+
+## Testing & Benchmarks
+
+```bash
+# Quick benchmark with the CLI
+wlk bench
+wlk bench --backend faster-whisper --model large-v3
+wlk bench --languages all --json results.json
+
+# Install test dependencies for full suite
+pip install -e ".[test]"
+
+# Run unit tests (no model download required)
+pytest tests/ -v
+
+# Speed vs Accuracy scatter plot (all backends, compute-aware + unaware)
+python scripts/create_long_samples.py        # generate ~90s test samples (cached)
+python scripts/run_scatter_benchmark.py      # English (both modes)
+python scripts/run_scatter_benchmark.py --lang fr  # French
+```
+
+## Use Cases
+Capture discussions in real-time for meeting transcription, help hearing-impaired users follow conversations through accessibility tools, transcribe podcasts or videos automatically for content creation, transcribe support calls with speaker identification for customer service...
