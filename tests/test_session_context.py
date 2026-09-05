@@ -1,6 +1,7 @@
 """Per-session decoder-context regressions for issue #421."""
 
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +12,44 @@ from whisperlivekit.session_asr_proxy import (
     normalize_session_context,
     session_context_capability,
 )
+
+
+def test_engine_initialization_is_serialized_and_retryable(monkeypatch):
+    from whisperlivekit.core import TranscriptionEngine
+
+    for fail_first in (False, True):
+        TranscriptionEngine.reset()
+        calls = []
+        entered = threading.Event()
+
+        def initialize(self, config=None, **kwargs):
+            calls.append(id(self))
+            entered.wait(0.05)  # allow a second constructor to contend
+            entered.set()
+            if fail_first and len(calls) == 1:
+                raise RuntimeError("model unavailable")
+            self.ready = True
+
+        monkeypatch.setattr(TranscriptionEngine, "_do_init", initialize)
+        gate = threading.Barrier(2)
+
+        def construct():
+            gate.wait(timeout=5)
+            try:
+                return TranscriptionEngine()
+            except RuntimeError:
+                return None
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(lambda _: construct(), range(2)))
+            engine = TranscriptionEngine()
+            assert engine.ready
+            assert all(result is engine for result in results if result is not None)
+            assert len(calls) == (2 if fail_first else 1)
+            assert len(set(calls)) == 1
+        finally:
+            TranscriptionEngine.reset()
 
 
 class _RecordingASR:

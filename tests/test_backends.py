@@ -1,6 +1,6 @@
+"""Backend adapters: loading, timestamps, session state, and boundary regressions."""
+
 import asyncio
-import importlib
-import json
 import sys
 from types import SimpleNamespace
 
@@ -93,6 +93,7 @@ def test_simulstreaming_uses_explicit_ct2_encoder_path(tmp_path, monkeypatch):
     assert asr.fw_encoder.model_ref == str(ct2_dir)
     assert load_calls[0][0] == "tiny"
     assert load_calls[0][1]["decoder_only"] is True
+    assert asr.cfg.decoder_type == "greedy"
 
 
 def test_simulstreaming_uses_separate_encoder_and_decoder_paths(tmp_path, monkeypatch):
@@ -104,12 +105,18 @@ def test_simulstreaming_uses_separate_encoder_and_decoder_paths(tmp_path, monkey
         **_base_simul_kwargs(
             encoder_model_path=str(ct2_dir),
             decoder_model_path=str(pytorch_dir),
+            decoder_type="beam",
+            beams=3,
         )
     )
 
     assert asr.fw_encoder.model_ref == str(ct2_dir)
     assert load_calls[0][0] == str(pytorch_dir)
     assert load_calls[0][1]["decoder_only"] is True
+    assert asr.cfg.decoder_type == "beam"
+    assert asr.cfg.beam_size == 3
+    with pytest.raises(ValueError, match="greedy decoder requires"):
+        backend.SimulStreamingASR(**_base_simul_kwargs(decoder_type="greedy", beams=3))
 
 
 def test_simulstreaming_legacy_model_path_rejects_ct2_only_dir(tmp_path, monkeypatch):
@@ -494,7 +501,6 @@ def test_nllw_language_code_maps_whisper_chinese_aliases():
 
 
 def test_transcription_engine_uses_nllw_source_language_alias(monkeypatch):
-    import sys
 
     from whisperlivekit.config import WhisperLiveKitConfig
     from whisperlivekit.core import TranscriptionEngine
@@ -531,7 +537,6 @@ def test_transcription_engine_uses_nllw_source_language_alias(monkeypatch):
 
 
 def test_online_translation_factory_uses_nllw_language_aliases(monkeypatch):
-    import sys
 
     from whisperlivekit.core import online_translation_factory
 
@@ -622,6 +627,19 @@ def test_openai_api_asr_initializes_transcribe_kwargs_and_routes_tasks(monkeypat
     assert len(transcriptions.calls) == 1
     assert len(translations.calls) == 1
     assert translations.calls[0]["prompt"] == "previous context"
+    assert "timestamp_granularities" not in translations.calls[0]
+    assert "language" not in translations.calls[0]
+    assert transcriptions.calls[0]["timestamp_granularities"] == ["word", "segment"]
+    assert transcriptions.calls[0]["language"] == "en"
+    # The translation endpoint returns segments without a `words` field.
+    response = SimpleNamespace(segments=[
+        SimpleNamespace(start=0.0, end=1.2, text="hello", no_speech_prob=0.1),
+        SimpleNamespace(start=1.2, end=2.5, text="noise", no_speech_prob=0.9),
+    ])
+    assert [t.text for t in asr.ts_words(response)] == ["hello", "noise"]
+    assert asr.segments_end_ts(response) == [1.2, 2.5]
+    asr.use_vad_opt = True
+    assert [t.text for t in asr.ts_words(response)] == ["hello"]
 
 
 def test_tokens_alignment_prunes_long_running_history():
@@ -676,22 +694,6 @@ def test_audio_processor_prunes_persistent_state_tokens():
 
     assert processor.state.tokens[0].end >= 20.0
     assert processor.state.tokens[-1].text == " w29"
-
-def test_front_data_serializes_split_transcription_lags():
-    from whisperlivekit.timed_objects import FrontData
-
-    payload = FrontData(
-        remaining_time_transcription=1.5,
-        remaining_time_transcription_processing=0.4,
-        remaining_time_transcription_policy=1.1,
-        remaining_time_diarization=0.2,
-    ).to_dict()
-
-    assert payload["remaining_time_transcription"] == 1.5
-    assert payload["remaining_time_transcription_processing"] == 0.4
-    assert payload["remaining_time_transcription_policy"] == 1.1
-    assert payload["remaining_time_diarization"] == 0.2
-
 
 def test_diff_protocol_preserves_split_transcription_lags():
     from whisperlivekit.diff_protocol import DiffTracker
@@ -842,514 +844,6 @@ def test_verbose_json_fallback_creates_segment_when_text_has_no_lines():
     ]
 
 
-def _import_basic_server(monkeypatch):
-    monkeypatch.setattr(sys, "argv", ["whisperlivekit-server"])
-    return importlib.import_module("whisperlivekit.basic_server")
-
-
-@pytest.mark.asyncio
-async def test_native_websocket_passes_context_and_advertises_capability(monkeypatch):
-    from fastapi import WebSocketDisconnect
-
-    basic_server = _import_basic_server(monkeypatch)
-    processor_kwargs = []
-
-    class RecordingSocket:
-        query_params = {
-            "language": "fr",
-            "context": "WhisperLiveKit, Qwen3-ASR",
-        }
-        headers = {}
-
-        def __init__(self):
-            self.sent = []
-            self.accepted = False
-
-        async def accept(self):
-            self.accepted = True
-
-        async def send_json(self, message):
-            self.sent.append(message)
-
-        async def receive_bytes(self):
-            raise WebSocketDisconnect()
-
-    class EmptyProcessor:
-        def __init__(self, **kwargs):
-            processor_kwargs.append(kwargs)
-
-        async def create_tasks(self):
-            async def results():
-                if False:
-                    yield None
-
-            return results()
-
-        async def cleanup(self):
-            pass
-
-    asr = SimpleNamespace(backend_choice="faster-whisper")
-    monkeypatch.setattr(
-        basic_server,
-        "transcription_engine",
-        SimpleNamespace(
-            args=SimpleNamespace(
-                backend="faster-whisper",
-                backend_policy="localagreement",
-            ),
-            asr=asr,
-        ),
-    )
-    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
-    monkeypatch.setattr(basic_server, "AudioProcessor", EmptyProcessor)
-    websocket = RecordingSocket()
-
-    await basic_server.websocket_endpoint(websocket)
-
-    assert websocket.accepted
-    assert processor_kwargs[0]["language"] == "fr"
-    assert processor_kwargs[0]["context"] == "WhisperLiveKit, Qwen3-ASR"
-    config_message = next(m for m in websocket.sent if m["type"] == "config")
-    assert config_message["context"] == {
-        "supported": True,
-        "maxCharacters": 1000,
-        "backend": "faster-whisper",
-    }
-
-
-@pytest.mark.asyncio
-async def test_openai_rest_rejects_unsupported_context_before_expensive_work(
-    monkeypatch,
-):
-    basic_server = _import_basic_server(monkeypatch)
-    expensive_calls = []
-
-    class UnreadUpload:
-        async def read(self):
-            expensive_calls.append("read")
-            return b"encoded audio"
-
-    async def forbidden_conversion(audio_bytes):
-        expensive_calls.append("convert")
-        return audio_bytes
-
-    class ForbiddenAudioProcessor:
-        def __init__(self, **kwargs):
-            expensive_calls.append("asr")
-
-    monkeypatch.setattr(
-        basic_server,
-        "transcription_engine",
-        SimpleNamespace(
-            args=SimpleNamespace(
-                backend="qwen3-streaming",
-                backend_policy="simulstreaming",
-            ),
-            asr=SimpleNamespace(),
-        ),
-    )
-    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
-    monkeypatch.setattr(basic_server, "_convert_to_pcm", forbidden_conversion)
-    monkeypatch.setattr(basic_server, "AudioProcessor", ForbiddenAudioProcessor)
-
-    from fastapi import HTTPException
-
-    with pytest.raises(HTTPException) as exc_info:
-        await basic_server.create_transcription(
-            request=SimpleNamespace(headers={}),
-            file=UnreadUpload(),
-            model="ignored",
-            language="en",
-            prompt="must not be ignored",
-            response_format="json",
-            timestamp_granularities=None,
-        )
-
-    assert exc_info.value.status_code == 400
-    assert "not supported by backend 'qwen3-streaming'" in exc_info.value.detail
-    assert expensive_calls == []
-
-
-def test_openai_rest_diarized_json_preserves_speaker_labels(monkeypatch):
-    basic_server = _import_basic_server(monkeypatch)
-
-    front_data = SimpleNamespace(
-        to_dict=lambda: {
-            "lines": [
-                {"text": "hello", "start": "0:00:00.00", "end": "0:00:02.10", "speaker": 1},
-                {"text": "", "start": "0:00:02.10", "end": "0:00:05.10", "speaker": -2},
-                {"text": "hi", "start": "0:00:05.10", "end": "0:00:06.00", "speaker": 2},
-            ]
-        }
-    )
-
-    payload = basic_server._format_openai_response(front_data, "diarized_json", "en", 6.0)
-
-    assert payload == {
-        "task": "transcribe",
-        "duration": 6.0,
-        "text": "A: hello\nB: hi",
-        "segments": [
-            {
-                "type": "transcript.text.segment",
-                "id": "seg_001",
-                "start": 0.0,
-                "end": 2.1,
-                "text": "hello",
-                "speaker": "A",
-            },
-            {
-                "type": "transcript.text.segment",
-                "id": "seg_002",
-                "start": 5.1,
-                "end": 6.0,
-                "text": "hi",
-                "speaker": "B",
-            },
-        ],
-        "usage": {
-            "type": "duration",
-            "seconds": 6,
-        },
-    }
-
-
-def test_openai_rest_verbose_json_shape_remains_without_speaker(monkeypatch):
-    basic_server = _import_basic_server(monkeypatch)
-
-    front_data = SimpleNamespace(
-        to_dict=lambda: {
-            "lines": [
-                {"text": "hello world", "start": "0:00:00.00", "end": "0:00:02.00", "speaker": 1},
-            ]
-        }
-    )
-
-    payload = basic_server._format_openai_response(front_data, "verbose_json", "en", 2.0)
-
-    assert payload["segments"] == [
-        {
-            "id": 0,
-            "start": 0.0,
-            "end": 2.0,
-            "text": "hello world",
-        }
-    ]
-    assert "speaker" not in payload["segments"][0]
-    assert payload["usage"] == {
-        "type": "duration",
-        "seconds": 2,
-    }
-
-
-def test_openai_rest_verbose_json_uses_real_asr_token_timestamps(monkeypatch):
-    """verbose_json should emit real per-word timestamps from ASRToken, not fabricated."""
-    from whisperlivekit.timed_objects import ASRToken, FrontData, Segment
-
-    basic_server = _import_basic_server(monkeypatch)
-
-    tokens = [
-        ASRToken(start=0.0, end=0.5, text="hello"),
-        ASRToken(start=0.5, end=1.2, text="world"),
-        ASRToken(start=1.2, end=2.0, text="there"),
-    ]
-    seg = Segment(start=0.0, end=2.0, text="hello world there", speaker=1, tokens=tokens)
-    front_data = FrontData(lines=[seg])
-
-    payload = basic_server._format_openai_response(front_data, "verbose_json", "en", 2.0)
-
-    assert payload["words"] == [
-        {"word": "hello", "start": 0.0, "end": 0.5},
-        {"word": "world", "start": 0.5, "end": 1.2},
-        {"word": "there", "start": 1.2, "end": 2.0},
-    ]
-
-
-def test_openai_rest_verbose_json_falls_back_to_interpolation_without_tokens(monkeypatch):
-    """When Segment.tokens is None, verbose_json falls back to interpolated timestamps."""
-    from whisperlivekit.timed_objects import FrontData, Segment
-
-    basic_server = _import_basic_server(monkeypatch)
-
-    seg = Segment(start=0.0, end=2.0, text="hello world", speaker=1, tokens=None)
-    front_data = FrontData(lines=[seg])
-
-    payload = basic_server._format_openai_response(front_data, "verbose_json", "en", 2.0)
-
-    # Two words, evenly distributed across 2 seconds
-    assert payload["words"] == [
-        {"word": "hello", "start": 0.0, "end": 1.0},
-        {"word": "world", "start": 1.0, "end": 2.0},
-    ]
-
-
-def test_openai_rest_diarized_json_rejects_when_diarization_disabled(monkeypatch):
-    """diarized_json without diarization enabled should raise 400, not fake speaker labels."""
-    basic_server = _import_basic_server(monkeypatch)
-
-    front_data = SimpleNamespace(
-        to_dict=lambda: {
-            "lines": [
-                {"text": "hello", "start": "0:00:00.00", "end": "0:00:02.00", "speaker": 1},
-            ]
-        }
-    )
-
-    from fastapi import HTTPException
-
-    with pytest.raises(HTTPException) as exc_info:
-        basic_server._format_openai_response(
-            front_data, "diarized_json", "en", 2.0, diarization_enabled=False
-        )
-    assert exc_info.value.status_code == 400
-    assert "diarization" in exc_info.value.detail.lower()
-
-
-@pytest.mark.asyncio
-async def test_openai_rest_rejects_diarized_json_before_expensive_work(monkeypatch):
-    basic_server = _import_basic_server(monkeypatch)
-    expensive_calls = []
-
-    class UnreadUpload:
-        async def read(self):
-            expensive_calls.append("read")
-            return b"encoded audio"
-
-    async def forbidden_conversion(audio_bytes):
-        expensive_calls.append("convert")
-        return audio_bytes
-
-    class ForbiddenAudioProcessor:
-        def __init__(self, **kwargs):
-            expensive_calls.append("asr")
-
-    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
-    monkeypatch.setattr(basic_server.config, "diarization", False)
-    monkeypatch.setattr(basic_server, "_convert_to_pcm", forbidden_conversion)
-    monkeypatch.setattr(basic_server, "AudioProcessor", ForbiddenAudioProcessor)
-
-    from fastapi import HTTPException
-
-    with pytest.raises(HTTPException) as exc_info:
-        await basic_server.create_transcription(
-            request=SimpleNamespace(headers={}),
-            file=UnreadUpload(),
-            model="ignored",
-            language="en",
-            prompt="",
-            response_format="diarized_json",
-            timestamp_granularities=None,
-        )
-
-    assert exc_info.value.status_code == 400
-    assert expensive_calls == []
-
-
-@pytest.mark.asyncio
-async def test_openai_rest_rejects_unknown_response_format_before_expensive_work(monkeypatch):
-    basic_server = _import_basic_server(monkeypatch)
-    expensive_calls = []
-
-    class UnreadUpload:
-        async def read(self):
-            expensive_calls.append("read")
-            return b"encoded audio"
-
-    async def forbidden_conversion(audio_bytes):
-        expensive_calls.append("convert")
-        return audio_bytes
-
-    class ForbiddenAudioProcessor:
-        def __init__(self, **kwargs):
-            expensive_calls.append("asr")
-
-    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
-    monkeypatch.setattr(basic_server, "_convert_to_pcm", forbidden_conversion)
-    monkeypatch.setattr(basic_server, "AudioProcessor", ForbiddenAudioProcessor)
-
-    from fastapi import HTTPException
-
-    with pytest.raises(HTTPException) as exc_info:
-        await basic_server.create_transcription(
-            request=SimpleNamespace(headers={}),
-            file=UnreadUpload(),
-            model="ignored",
-            language="en",
-            prompt="",
-            response_format="xml",
-            timestamp_granularities=None,
-        )
-
-    assert exc_info.value.status_code == 400
-    assert "Unsupported response_format='xml'" in exc_info.value.detail
-    assert expensive_calls == []
-
-
-@pytest.mark.parametrize(
-    ("response_format", "expected_body"),
-    [
-        (
-            "json",
-            {
-                "text": "",
-                "usage": {"type": "duration", "seconds": 1},
-            },
-        ),
-        (
-            "verbose_json",
-            {
-                "task": "transcribe",
-                "language": "en",
-                "duration": 1.0,
-                "text": "",
-                "words": [],
-                "segments": [],
-                "usage": {"type": "duration", "seconds": 1},
-            },
-        ),
-        (
-            "diarized_json",
-            {
-                "task": "transcribe",
-                "duration": 1.0,
-                "text": "",
-                "segments": [],
-                "usage": {"type": "duration", "seconds": 1},
-            },
-        ),
-        ("text", ""),
-        ("srt", ""),
-        ("vtt", "WEBVTT\n"),
-    ],
-)
-@pytest.mark.asyncio
-async def test_openai_rest_empty_result_uses_requested_formatter(
-    monkeypatch,
-    response_format,
-    expected_body,
-):
-    from whisperlivekit.timed_objects import FrontData
-
-    basic_server = _import_basic_server(monkeypatch)
-    formatted_inputs = []
-    processor_kwargs = []
-    real_formatter = basic_server._format_openai_response
-
-    class EncodedUpload:
-        async def read(self):
-            return b"encoded audio"
-
-    class EmptyResults:
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self):
-            raise StopAsyncIteration
-
-    class EmptyAudioProcessor:
-        def __init__(self, **kwargs):
-            processor_kwargs.append(kwargs)
-            self.is_pcm_input = False
-
-        async def create_tasks(self):
-            return EmptyResults()
-
-        async def process_audio(self, audio_bytes):
-            pass
-
-        async def cleanup(self):
-            pass
-
-    async def fake_conversion(audio_bytes):
-        assert audio_bytes == b"encoded audio"
-        return b"\0" * 32_000
-
-    def tracking_formatter(*args, **kwargs):
-        formatted_inputs.append(args[0])
-        return real_formatter(*args, **kwargs)
-
-    monkeypatch.setattr(basic_server, "_API_TOKEN", None)
-    monkeypatch.setattr(basic_server.config, "diarization", True)
-    monkeypatch.setattr(basic_server, "_convert_to_pcm", fake_conversion)
-    monkeypatch.setattr(basic_server, "AudioProcessor", EmptyAudioProcessor)
-    monkeypatch.setattr(basic_server, "_format_openai_response", tracking_formatter)
-
-    response = await basic_server.create_transcription(
-        request=SimpleNamespace(headers={}),
-        file=EncodedUpload(),
-        model="ignored",
-        language="en",
-        prompt="WhisperLiveKit, Qwen3-ASR",
-        response_format=response_format,
-        timestamp_granularities=None,
-    )
-
-    assert len(formatted_inputs) == 1
-    assert processor_kwargs[0]["context"] == "WhisperLiveKit, Qwen3-ASR"
-    assert isinstance(formatted_inputs[0], FrontData)
-    assert formatted_inputs[0].lines == []
-    if isinstance(expected_body, dict):
-        assert json.loads(response.body) == expected_body
-    else:
-        assert response.body.decode() == expected_body
-
-
-def test_openai_rest_json_includes_duration_usage(monkeypatch):
-    basic_server = _import_basic_server(monkeypatch)
-
-    front_data = SimpleNamespace(
-        to_dict=lambda: {
-            "lines": [
-                {"text": "hello world", "start": "0:00:00.00", "end": "0:00:02.00", "speaker": 1},
-            ]
-        }
-    )
-
-    payload = basic_server._format_openai_response(front_data, "json", "en", 2.4)
-
-    assert payload == {
-        "text": "hello world",
-        "usage": {
-            "type": "duration",
-            "seconds": 2,
-        },
-    }
-
-
-def test_parse_cors_origins_defaults_to_disabled():
-    from whisperlivekit.config import parse_cors_origins
-
-    assert parse_cors_origins(None) == []
-    assert parse_cors_origins("") == []
-    assert parse_cors_origins("   ") == []
-
-
-def test_parse_cors_origins_accepts_comma_separated_values():
-    from whisperlivekit.config import parse_cors_origins
-
-    assert parse_cors_origins("https://app.example, http://localhost:3000") == [
-        "https://app.example",
-        "http://localhost:3000",
-    ]
-    assert parse_cors_origins("*") == ["*"]
-
-
-def test_parse_args_accepts_cors_origins(monkeypatch):
-    import sys
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["wlk", "--cors-origins", "https://app.example,http://localhost:3000"],
-    )
-
-    from whisperlivekit.parse_args import parse_args
-
-    config = parse_args()
-
-    assert config.cors_origins == "https://app.example,http://localhost:3000"
-
-
 class FakeFFmpegManager:
     def __init__(self, chunks=None):
         from whisperlivekit.ffmpeg_manager import FFmpegState
@@ -1371,6 +865,8 @@ class FakeFFmpegManager:
 
     async def stop(self):
         self.stopped = True
+
+
 
 
 @pytest.mark.asyncio

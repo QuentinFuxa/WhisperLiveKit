@@ -192,18 +192,20 @@ def test_pacing_skips_tail_only_updates_but_not_commits(sidecar):
     assert len(sidecar.updates) == n_after_first + 1
 
 
-def test_validate_buffer_and_reset_returns_streamed_partial(sidecar):
+def test_boundary_finalizes_once_before_the_next_utterance(sidecar):
     client = make_client(sidecar)
     client.insert_tokens([token("Hello", 0.0, 0.4), token("world", 0.5, 0.9)])
     client.process()
     validated, buffer = client.validate_buffer_and_reset()
-    assert validated.text == "HELLO WORLD"
+    assert validated.text == "HELLO WORLD [F]"
     assert validated.start == 0.0
     assert validated.end == 0.9
     assert buffer.text == ''
-    # the utterance rolls server-side on the next process()
+    # The final is already consumed; the next call belongs to the new utterance.
     client.insert_tokens([token("Next", 2.0, 2.4)])
-    client.process()
+    validated, buffer = client.process()
+    assert validated is None
+    assert buffer.text == "NEXT"
     finals = [u for u in sidecar.updates if u["is_final"]]
     assert len(finals) == 1
     assert [w[0] for w in finals[0]["words"]] == ["Hello", "world"]
@@ -303,6 +305,9 @@ def test_factory_routes_alignatt_engine():
     session_client = session_translation_factory(args, engine, "zh")
     assert isinstance(session_client, AlignAttTranslationClient)
     assert session_client.target_language == "zh"
+    source_client = session_translation_factory(args, engine, "de", source_language="fr")
+    assert source_client.source_language == "fr"
+    assert client.source_language == "en"
 
 
 def test_translation_processor_plumbing_with_fake_sidecar(sidecar):
@@ -324,15 +329,30 @@ def test_translation_processor_plumbing_with_fake_sidecar(sidecar):
         task = asyncio.create_task(
             AudioProcessor.translation_processor(processor)
         )
-        await processor.translation_queue.put(token("Hello", 0.0, 0.4))
-        await processor.translation_queue.put(token("world.", 0.5, 0.9))
-        await processor.translation_queue.put(
-            HypothesisTail(start=1.0, end=1.5, text="next words")
-        )
-        await asyncio.sleep(0.5)
-        await processor.translation_queue.put(SENTINEL)
-        await asyncio.wait_for(task, timeout=10)
+        try:
+            await processor.translation_queue.put(token("Hello", 0.0, 0.4))
+            # The user must see partial translation before punctuation arrives.
+            async with asyncio.timeout(5):
+                while processor.state.new_translation_buffer.text != "HELLO":
+                    await asyncio.sleep(0.01)
+            assert not processor.state.new_translation
+
+            await processor.translation_queue.put(token("world.", 0.5, 0.9))
+            await processor.translation_queue.put(
+                HypothesisTail(start=1.0, end=1.5, text="next words")
+            )
+            await processor.translation_queue.put(token("Last", 2.0, 2.3))
+            await processor.translation_queue.put(token("words", 2.4, 2.8))
+            await processor.translation_queue.put(SENTINEL)
+            await asyncio.wait_for(task, timeout=10)
+            assert not processor.state.new_translation_buffer.text
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
     asyncio.run(scenario())
     assert processor.state.new_translation, "no validated translation produced"
-    assert processor.state.new_translation[0].text == "HELLO WORLD. [F]"
+    assert " ".join(t.text for t in processor.state.new_translation) == "HELLO WORLD. [F] LAST WORDS [F]"
+    assert processor.translation._pending_finals == []
+    processor.translation.close()
+    assert processor.translation._ws is None

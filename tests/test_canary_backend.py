@@ -29,17 +29,6 @@ def test_parse_args_accepts_canary_options(monkeypatch):
     assert cfg.canary_lid_min_conf == 0.6
 
 
-def test_canary_config_defaults():
-    from whisperlivekit.config import WhisperLiveKitConfig
-
-    cfg = WhisperLiveKitConfig.from_kwargs(backend="canary")
-    assert cfg.canary_model == "nvidia/canary-1b-v2"
-    assert cfg.canary_default_lang == "en"
-    assert cfg.canary_lid_model == "langid_ambernet"
-    assert cfg.canary_lid_min_sec == 2.0
-    assert cfg.canary_lid_min_conf == 0.5
-
-
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
@@ -86,14 +75,6 @@ def test_canary_segment_end_ts():
     ]
     assert canary_segment_end_ts(seg_stamps) == [0.9, 1.5]
     assert canary_segment_end_ts(None) == []
-
-
-def test_map_voxlingua_to_canary_supported():
-    from whisperlivekit.canary_backend import map_voxlingua_to_canary
-
-    assert map_voxlingua_to_canary("en") == "en"
-    assert map_voxlingua_to_canary("de") == "de"
-    assert map_voxlingua_to_canary("uk") == "uk"
 
 
 def test_map_voxlingua_to_canary_unsupported_returns_none():

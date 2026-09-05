@@ -182,6 +182,12 @@ class WhisperLiveKitConfig:
     sortformer_max_speakers: Optional[int] = None
 
     def __post_init__(self):
+        if self.punctuation_split or self.disable_punctuation_split:
+            logger.warning(
+                "--punctuation-split and --disable-punctuation-split are deprecated "
+                "and have no effect. Speaker turns and --pause-segmentation-seconds "
+                "control transcript boundaries."
+            )
         self.pause_segmentation_seconds = validate_pause_segmentation_seconds(
             self.pause_segmentation_seconds
         )

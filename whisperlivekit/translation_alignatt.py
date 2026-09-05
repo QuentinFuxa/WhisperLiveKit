@@ -11,7 +11,9 @@ duck-typed contract as ``nllw.OnlineTranslation``:
   worker thread, sends the current utterance state and returns finalized
   utterance translations as validated segments and the streamed AlignAtt
   acceptance as the (stable, append-only) translation buffer;
-- ``validate_buffer_and_reset()``: silence/speaker boundary;
+- ``validate_buffer_and_reset()``: final quality pass at a silence/speaker boundary;
+- ``finish()``: drain all remaining committed words;
+- ``close()``: release the connection, also on cancellation;
 - ``insert_silence(duration)``: no-op.
 
 The smart part is upstream commitment mapping: committed words are sent with
@@ -68,8 +70,8 @@ class AlignAttRemoteEngine:
         self.latency = latency if latency in LATENCY_PRESETS else "balanced"
         self.context_text = context_text
 
-    def new_session(self, target_language: str) -> "AlignAttTranslationClient":
-        return AlignAttTranslationClient(self, target_language)
+    def new_session(self, target_language: str, source_language: str | None = None) -> "AlignAttTranslationClient":
+        return AlignAttTranslationClient(self, target_language, source_language)
 
 
 @dataclass
@@ -99,9 +101,13 @@ class _Utterance:
 class AlignAttTranslationClient:
     """One WebSocket session against alignatt-mt-server (sync, thread-driven)."""
 
-    def __init__(self, engine: AlignAttRemoteEngine, target_language: str):
+    def __init__(self, engine: AlignAttRemoteEngine, target_language: str,
+                 source_language: str | None = None):
         self.engine = engine
         self.target_language = target_language
+        self.source_language = source_language or engine.source_language
+        self.error = ""
+        self._closed = False
         preset = LATENCY_PRESETS[engine.latency]
         self.wants_hypothesis_tail: bool = bool(preset["tail"])
         self._overrides = dict(preset["overrides"])
@@ -155,27 +161,31 @@ class AlignAttTranslationClient:
             self._mark_down(exc)
             return None, self._buffer()
 
-    def validate_buffer_and_reset(self) -> Tuple[Translation, TimedText]:
-        """Silence / speaker-change boundary: close the open utterance now.
+    def validate_buffer_and_reset(self) -> Tuple[Optional[Translation], TimedText]:
+        """Finalize every committed word at a silence or speaker boundary.
 
-        Returns the already-streamed partial acceptance as the validated
-        segment (it was on screen; retracting it would violate append-only).
-        The utterance is queued as a final so the sidecar rolls its context;
-        the quality pass replaces nothing at this boundary in v1.
+        A partial remains a buffer until the quality pass succeeds. Publishing
+        it as a final here would duplicate it when the remote final arrives.
         """
-        validated = Translation(
-            start=self._segment_start(self._utterance.start),
-            end=self._utterance.end or self._segment_start(None),
-            text=self._emitted_partial,
-        )
         if self._utterance.tokens:
             self._pending_finals.append(self._utterance)
             self._utterance = _Utterance()
         self._tail = None
-        self._emitted_partial = ""
-        if validated.text:
-            self._last_translation_end = validated.end
-        return validated, TimedText()
+        return self.process()
+
+    def finish(self) -> Tuple[Optional[Translation], TimedText]:
+        """Drain committed words, including an unpunctuated final utterance."""
+        result = self.validate_buffer_and_reset()
+        if self._pending_finals:
+            self.error = "Translation incomplete: the translation server did not finalize all words."
+        return result
+
+    def close(self) -> None:
+        """Close the socket, also interrupting an in-flight worker on cancellation."""
+        self._closed = True
+        ws, self._ws = self._ws, None
+        if ws is not None:
+            ws.close()
 
     def insert_silence(self, duration: float) -> None:
         return None
@@ -192,9 +202,10 @@ class AlignAttTranslationClient:
     def _buffer(self) -> TimedText:
         if not self._emitted_partial:
             return TimedText()
+        utterance = self._pending_finals[0] if self._pending_finals else self._utterance
         return TimedText(
-            start=self._segment_start(self._utterance.start),
-            end=self._utterance.end,
+            start=self._segment_start(utterance.start),
+            end=utterance.end,
             text=self._emitted_partial,
         )
 
@@ -205,6 +216,9 @@ class AlignAttTranslationClient:
             except Exception:
                 pass
             self._ws = None
+        if self._closed:
+            return
+        self.error = "Translation server unavailable; transcription continues."
         delay = _RECONNECT_BACKOFF_SECONDS[
             min(self._retry_stage, len(_RECONNECT_BACKOFF_SECONDS) - 1)
         ]
@@ -221,6 +235,8 @@ class AlignAttTranslationClient:
             logger.debug("AlignAtt sidecar still down: %s", exc)
 
     def _ensure_connection(self) -> bool:
+        if self._closed:
+            return False
         if self._ws is not None:
             return True
         if time.monotonic() < self._retry_at:
@@ -228,11 +244,15 @@ class AlignAttTranslationClient:
         try:
             from websockets.sync.client import connect
 
-            ws = connect(self.engine.url, open_timeout=5.0)
+            ws = connect(self.engine.url, open_timeout=5.0, close_timeout=1.0)
+            if self._closed:
+                ws.close()
+                return False
+            self._ws = ws
             init = {
                 "type": "init",
                 "protocol_version": PROTOCOL_VERSION,
-                "source_lang": self.engine.source_language,
+                "source_lang": self.source_language,
                 "target_lang": self.target_language,
                 "overrides": self._overrides,
             }
@@ -299,12 +319,16 @@ class AlignAttTranslationClient:
         # 1. Finals first (punctuation boundaries and silence rollovers).
         while self._pending_finals:
             utterance = self._pending_finals[0]
-            response = self._call(
-                utterance,
-                tail=None,
-                is_final=True,
-                timeout=_CALL_TIMEOUT_SECONDS,
-            )
+            try:
+                response = self._call(
+                    utterance,
+                    tail=None,
+                    is_final=True,
+                    timeout=_CALL_TIMEOUT_SECONDS,
+                )
+            except Exception as exc:
+                self._mark_down(exc)
+                return validated, self._buffer()
             if response is None:
                 return validated, self._buffer()
             self._pending_finals.pop(0)
@@ -323,10 +347,15 @@ class AlignAttTranslationClient:
                 )
                 self._last_translation_end = utterance.end
                 self._emitted_partial = ""
-                # One validated segment per process() call keeps the contract
-                # simple; remaining finals go out on the next call.
-                return segment, self._buffer()
+                if validated is None:
+                    validated = segment
+                else:
+                    validated.text += " " + segment.text
+                    validated.end = segment.end
             self._emitted_partial = ""
+
+        if validated is not None:
+            return validated, self._buffer()
 
         # 2. Partial update for the open utterance (paced).
         has_content = bool(self._utterance.tokens) or bool(
@@ -390,4 +419,8 @@ class AlignAttTranslationClient:
         finally:
             self._last_call_duration = time.monotonic() - started
         self._committed_since_last_send = False
+        if response is not None:
+            self.error = ""
+        else:
+            self.error = "Translation update failed; waiting for the translation server."
         return response

@@ -25,7 +25,7 @@ RUN uv python install 3.12
 
 # Install dependencies first to leverage caching
 ARG EXTRAS=cu129
-COPY pyproject.toml uv.lock /app/
+COPY pyproject.toml uv.lock README.md LICENSE /app/
 # The qwen3 extras resolve qwen3-asr-causal from the submodule path
 # (tool.uv.sources); the build context must have submodules initialized:
 #   git submodule update --init
@@ -65,7 +65,7 @@ RUN apt-get update && \
 COPY --from=uvbin /uv /uvx /bin/
 
 # Copy the Python version
-COPY --from=builder-gpu --chown=python:python /python /python
+COPY --from=builder-gpu /python /python
 
 # Copy the virtual environment with all dependencies installed
 COPY --from=builder-gpu /app/.venv /app/.venv

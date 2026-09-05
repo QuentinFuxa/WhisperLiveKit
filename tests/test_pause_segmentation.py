@@ -2,7 +2,6 @@
 
 import asyncio
 import math
-import sys
 from time import time
 from types import SimpleNamespace
 
@@ -43,18 +42,6 @@ def test_pause_segmentation_config_rejects_invalid_values(value):
         match="pause_segmentation_seconds must be finite and non-negative",
     ):
         WhisperLiveKitConfig(pause_segmentation_seconds=value)
-
-
-def test_parse_args_accepts_pause_segmentation_seconds(monkeypatch):
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["wlk", "--pause-segmentation-seconds", "1.25"],
-    )
-
-    from whisperlivekit.parse_args import parse_args
-
-    assert parse_args().pause_segmentation_seconds == 1.25
 
 
 def _silence_processor(threshold: float) -> AudioProcessor:

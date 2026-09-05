@@ -14,6 +14,16 @@ def format_time(seconds: float) -> str:
     h = total_m // 60
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
+
+def format_subtitle_timestamp(seconds: float, fmt: str) -> str:
+    """Format SRT/VTT timestamps, carrying rounded milliseconds into seconds."""
+    total_ms = round(seconds * 1000)
+    total_s, ms = divmod(total_ms, 1000)
+    total_m, s = divmod(total_s, 60)
+    h, m = divmod(total_m, 60)
+    sep = "," if fmt == "srt" else "."
+    return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
+
 @dataclass
 class Timed:
     start: Optional[float] = 0
@@ -205,6 +215,7 @@ class FrontData():
     remaining_time_transcription_processing: float = 0.
     remaining_time_transcription_policy: float = 0.
     remaining_time_diarization: float = 0.
+    translation_error: str = ''
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the front-end data payload."""
@@ -218,6 +229,7 @@ class FrontData():
             'remaining_time_transcription_processing': self.remaining_time_transcription_processing,
             'remaining_time_transcription_policy': self.remaining_time_transcription_policy,
             'remaining_time_diarization': self.remaining_time_diarization,
+            'translation_error': self.translation_error,
         }
         if self.error:
             _dict['error'] = self.error
