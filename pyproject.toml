@@ -66,6 +66,10 @@ mlx-llm-mt = [
     'mlx>=0.31.2,<0.32; sys_platform == "darwin" and platform_machine == "arm64"',
     'mlx-lm>=0.31.3,<0.32; sys_platform == "darwin" and platform_machine == "arm64"',
 ]
+mlx-qwen3-asr = [
+    'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx-qwen3-asr>=0.3.5,<0.4; sys_platform == "darwin" and platform_machine == "arm64"',
+]
 voxtral-hf = [
     "transformers>=5.2.0; python_version >= '3.10'",
     "mistral-common[audio]",
@@ -181,6 +185,18 @@ conflicts = [
     ],
     [
         { extra = "mlx-llm-mt" },
+        { extra = "qwen3-vllm-metal" },
+    ],
+    [
+        { extra = "mlx-qwen3-asr" },
+        { extra = "qwen3-streaming" },
+    ],
+    [
+        { extra = "mlx-qwen3-asr" },
+        { extra = "qwen3-vllm" },
+    ],
+    [
+        { extra = "mlx-qwen3-asr" },
         { extra = "qwen3-vllm-metal" },
     ],
 ]
