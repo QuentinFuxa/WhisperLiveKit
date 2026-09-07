@@ -2,6 +2,24 @@
 
 Choose a backend for the hardware and languages you need. Installation extras are declared in [pyproject.toml](../pyproject.toml).
 
+## Whisper MLX direct translation
+
+With LocalAgreement on Apple Silicon, Whisper MLX can translate speech directly
+into English. Set the source language with `--language`:
+
+```bash
+wlk --backend mlx-whisper --backend-policy localagreement --language fr --direct-english-translation
+```
+
+Without `--direct-english-translation`, it transcribes in the source language.
+This MLX mode has not passed real-audio validation: the tested Whisper small
+snapshot produces repetitive or incorrect translations on French and Chinese
+FLEURS clips, including incorrect translations outside WLK. Forwarding the
+decoding task fixes the ignored option but does not establish translation quality.
+Translated word timestamps are approximate; Whisper does not provide reliable
+word alignment for translated speech. Translation into other languages uses the
+[separate translation stage](translation-mlx.md).
+
 ## Voxtral Backend
 
 WhisperLiveKit supports [Voxtral Mini](https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602),
