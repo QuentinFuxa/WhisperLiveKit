@@ -4,6 +4,13 @@ import platform
 
 logger = logging.getLogger(__name__)
 
+# https://huggingface.co/Qwen/Qwen3-ASR-1.7B#released-models-description-and-download
+QWEN_LANGUAGES = {
+    "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru",
+    "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs",
+    "fil", "fa", "el", "hu", "mk", "ro",
+}
+
 
 def module_available(module_name):
     """Return True if the given module can be imported."""
@@ -40,6 +47,29 @@ def qwen3_streaming_backend_available():
         module_available("torch")
         and module_available("transformers")
         and module_available("qwen_asr")
+    )
+
+
+def mlx_qwen3_asr_backend_available():
+    """Return True if the pure-MLX mlx-qwen3-asr backend is available.
+
+    This backend uses the `mlx-qwen3-asr` package (moona3k): a ground-up MLX
+    reimplementation of Qwen3-ASR with no torch/transformers dependency, so it
+    coexists cleanly with recent mlx-lm on transformers 5.x (unlike the
+    qwen3-streaming backend, which pins transformers==4.57.6).
+    """
+    return module_available("mlx_qwen3_asr")
+def nemotron_mlx_asr_backend_available():
+    """Return True if the Nemotron MLX ASR transducer backend is available.
+
+    Requires Apple Silicon (Darwin/arm64) with mlx and mlx_audio installed.
+    Pure-MLX: no torch, transformers, or nemo_toolkit.
+    """
+    return (
+        platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+        and module_available("mlx")
+        and module_available("mlx_audio")
     )
 
 

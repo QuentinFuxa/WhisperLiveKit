@@ -104,6 +104,16 @@ BACKENDS = [
         "devices": ["mlx"],
     },
     {
+        "id": "nemotron-mlx-asr",
+        "name": "Nemotron MLX ASR",
+        "module": "mlx_audio",
+        "install": "pip install whisperlivekit[nemotron-mlx-asr]",
+        "description": "NVIDIA Nemotron-3.5 streaming transducer on Apple Silicon (MLX, native timestamps)",
+        "platform": "darwin-arm64",
+        "streaming": "native",
+        "devices": ["mlx"],
+    },
+    {
         "id": "voxtral",
         "name": "Voxtral HF",
         "module": "transformers",
@@ -133,6 +143,16 @@ BACKENDS = [
         "description": "Qwen3-ASR through in-process vLLM with ForcedAligner timestamps",
         "streaming": "chunk",
         "devices": ["cuda"],
+    },
+    {
+        "id": "mlx-qwen3-asr",
+        "name": "MLX Qwen3-ASR",
+        "module": "mlx_qwen3_asr",
+        "install": "pip install mlx-qwen3-asr",
+        "description": "Pure-MLX Qwen3-ASR (moona3k) on Apple Silicon — no torch/transformers",
+        "platform": "darwin-arm64",
+        "streaming": "native",
+        "devices": ["mlx"],
     },
     {
         "id": "openai-api",

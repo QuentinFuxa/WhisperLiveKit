@@ -252,7 +252,7 @@ def build_parser():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "funasr", "voxtral", "voxtral-mlx", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming", "canary"],
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "funasr", "voxtral", "voxtral-mlx", "mlx-qwen3-asr", "nemotron-mlx-asr", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming", "canary"],
         help="Select the ASR backend implementation. Use 'funasr' for SenseVoiceSmall through LocalAgreement (zh/yue/en/ja/ko or auto). Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-streaming' for Qwen3-ASR through plain HF Transformers with a bounded-recompute audio cache (CUDA/MPS/CPU, no vLLM; requires an explicit --language). Use 'canary' for NVIDIA Canary through NeMo on CUDA or CPU with LocalAgreement.",
     )
     parser.add_argument(
@@ -557,6 +557,48 @@ def build_parser():
     # Qwen3 streaming backend arguments
     qwen3_streaming_group = parser.add_argument_group(
         'Qwen3 streaming backend arguments (only used with --backend qwen3-streaming)'
+    )
+    # MLX Qwen3-ASR backend arguments (pure-MLX, --backend mlx-qwen3-asr)
+    mlx_qwen3_group = parser.add_argument_group(
+        'MLX Qwen3-ASR backend arguments (only used with --backend mlx-qwen3-asr)'
+    )
+    mlx_qwen3_group.add_argument(
+        "--mlx-qwen3-asr-model",
+        type=str,
+        default="Qwen/Qwen3-ASR-0.6B",
+        dest="mlx_qwen3_asr_model",
+        help="Hugging Face model id for mlx-qwen3-asr (default: Qwen/Qwen3-ASR-0.6B; "
+        "also Qwen/Qwen3-ASR-1.7B).",
+    )
+    mlx_qwen3_group.add_argument(
+        "--mlx-qwen3-asr-context",
+        type=str,
+        default="",
+        dest="mlx_qwen3_asr_context",
+        help="Hotword bias context (space-separated terms) passed as the system prompt. "
+        "Steers recognition toward proper nouns; empty = off.",
+    )
+    mlx_qwen3_group.add_argument(
+        "--mlx-qwen3-asr-chunk-sec",
+        type=float,
+        default=2.0,
+        dest="mlx_qwen3_asr_chunk_sec",
+        help="Streaming chunk size in seconds (default 2.0).",
+    )
+    mlx_qwen3_group.add_argument(
+        "--mlx-qwen3-asr-max-context-sec",
+        type=float,
+        default=30.0,
+        dest="mlx_qwen3_asr_max_context_sec",
+        help="Bounded rolling context window in seconds (default 30.0).",
+    )
+    mlx_qwen3_group.add_argument(
+        "--mlx-qwen3-asr-finalization-mode",
+        type=str,
+        default="accuracy",
+        choices=["accuracy", "latency"],
+        dest="mlx_qwen3_asr_finalization_mode",
+        help="Finalization mode (default accuracy; latency skips tail refinement).",
     )
     qwen3_streaming_group.add_argument(
         "--qwen3-streaming-chunk-sec",
@@ -868,6 +910,27 @@ def build_parser():
         help="Minimum LID confidence (0-1) required to lock the detected language.",
     )
 
+    # Nemotron MLX ASR backend arguments
+    nemotron_group = parser.add_argument_group(
+        "Nemotron MLX ASR arguments (only used with --backend nemotron-mlx-asr)"
+    )
+    nemotron_group.add_argument(
+        "--nemotron-mlx-asr-model",
+        type=str,
+        default="mlx-community/nemotron-3.5-asr-streaming-0.6b",
+        dest="nemotron_mlx_asr_model",
+        help="Nemotron ASR model id (HuggingFace or local path). "
+             "Default mlx-community/nemotron-3.5-asr-streaming-0.6b.",
+    )
+    nemotron_group.add_argument(
+        "--nemotron-mlx-asr-att-context",
+        type=int,
+        nargs=2,
+        default=[56, 6],
+        dest="nemotron_mlx_asr_att_context",
+        help="Encoder attention context [left, right] in subsampled frames. "
+             "Default 56 6 (left cache, right+1 feed chunk).",
+    )
     translation_group = parser.add_argument_group("Translation backend")
     translation_group.add_argument(
         "--translation-backend",
