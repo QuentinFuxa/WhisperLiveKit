@@ -1,0 +1,95 @@
+{
+  "collected_at": "2026-09-07T12:41:26.377970+00:00",
+  "environments": {
+    "whisper-small-la": {
+      "python": "3.12.12 (main, Oct 31 2025, 23:21:56) [Clang 21.1.4 ]",
+      "versions": {
+        "mlx": "0.31.2",
+        "mlx-metal": "0.31.2",
+        "mlx-lm": "0.31.3",
+        "mlx-whisper": "0.4.3",
+        "torch": "2.11.0",
+        "transformers": "5.15.0",
+        "numpy": "2.4.4",
+        "soundfile": "0.14.0",
+        "onnxruntime": "1.26.0",
+        "psutil": "7.2.2",
+        "av": "17.0.1",
+        "librosa": "0.11.0",
+        "tokenizers": "0.22.2",
+        "safetensors": "0.8.0",
+        "huggingface-hub": "1.30.0",
+        "scipy": "1.17.1",
+        "numba": "0.65.0",
+        "sentencepiece": "0.2.2"
+      }
+    },
+    "nemotron-native": {
+      "python": "3.12.12 (main, Oct 31 2025, 23:21:56) [Clang 21.1.4 ]",
+      "versions": {
+        "mlx": "0.31.2",
+        "mlx-metal": "0.31.2",
+        "mlx-audio": "0.5.1",
+        "torch": "2.11.0",
+        "transformers": "5.15.0",
+        "numpy": "2.3.5",
+        "soundfile": "0.14.0",
+        "onnxruntime": "1.26.0",
+        "psutil": "7.2.2",
+        "av": "17.0.1",
+        "librosa": "0.11.0",
+        "tokenizers": "0.22.2",
+        "safetensors": "0.8.0",
+        "huggingface-hub": "1.14.0",
+        "scipy": "1.17.1",
+        "numba": "0.65.0"
+      }
+    },
+    "qwen-native": {
+      "python": "3.12.12 (main, Oct 31 2025, 23:21:56) [Clang 21.1.4 ]",
+      "versions": {
+        "mlx": "0.31.2",
+        "mlx-metal": "0.31.2",
+        "mlx-qwen3-asr": "0.3.5",
+        "torch": "2.11.0",
+        "numpy": "2.3.5",
+        "soundfile": "0.14.0",
+        "onnxruntime": "1.26.0",
+        "psutil": "7.2.2",
+        "av": "17.0.1",
+        "librosa": "0.11.0",
+        "tokenizers": "0.22.2",
+        "huggingface-hub": "1.14.0",
+        "scipy": "1.17.1",
+        "numba": "0.65.0"
+      }
+    },
+    "qwen-metal": {
+      "python": "3.12.12 (main, Oct 31 2025, 23:21:56) [Clang 21.1.4 ]",
+      "versions": {
+        "vllm": "0.21.0+cpu",
+        "vllm-metal": "0.2.0",
+        "mlx": "0.31.2",
+        "mlx-metal": "0.31.2",
+        "mlx-lm": "0.31.3",
+        "mlx-audio": "0.5.1",
+        "torch": "2.11.0",
+        "transformers": "5.8.1",
+        "numpy": "2.2.6",
+        "soundfile": "0.14.0",
+        "onnxruntime": "1.26.0",
+        "psutil": "7.2.2",
+        "av": "17.0.1",
+        "opencv-python": "4.13.0.92",
+        "librosa": "0.11.0",
+        "tokenizers": "0.22.2",
+        "safetensors": "0.7.0",
+        "qwen3-asr-causal": "0.1.0",
+        "huggingface-hub": "1.8.0",
+        "scipy": "1.17.1",
+        "numba": "0.65.0",
+        "sentencepiece": "0.2.1"
+      }
+    }
+  }
+}
