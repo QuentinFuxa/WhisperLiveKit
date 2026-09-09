@@ -107,6 +107,21 @@ class Translation(TimedText):
     pass
 
 @dataclass
+class TranslationProgress:
+    """Live source-progress state a translation backend reports to the
+    caption display layer.
+
+    Read through the backend contract: ``MlxLlmTranslation.progress()``.
+    The base segment translator reports the honest default (no drafts, no
+    source text — its buffer holds UNTRANSLATED source); the simultaneous
+    variant re-exposes its internal state here.
+    """
+    mt_call_count: int = 0
+    committed_text: str = ""
+    source_text: str = ""
+    source_end: Optional[float] = None
+
+@dataclass
 class HypothesisTail(TimedText):
     """Snapshot of the ASR's unstable hypothesis tail.
 

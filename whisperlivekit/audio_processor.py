@@ -235,9 +235,9 @@ class AudioProcessor:
             sink=_sinks[0] if len(_sinks) == 1 else FanOutSink(_sinks),
         )
         # dedupe state: emit ASR provisional only when the tail text changes
+        # (MT-provisional dedupe lives in the translation loop — it keys off
+        # the backend's progress contract there)
         self._last_asr_prov: str = ""
-        # dedupe state: emit MT provisional only when the draft text changes
-        self._last_mt_prov: str = ""
 
         # Silent-backend watchdog: flips once the ASR has produced anything.
         self._any_asr_output: bool = False
@@ -449,22 +449,6 @@ class AudioProcessor:
     def convert_pcm_to_float(self, pcm_buffer: Union[bytes, bytearray]) -> np.ndarray:
         """Convert PCM buffer in s16le format to normalized NumPy array."""
         return np.frombuffer(pcm_buffer, dtype=np.int16).astype(np.float32) / 32768.0
-
-    def _mt_committed_text(self) -> str:
-        """Committed source text the simul-MT layer has released against (best effort)."""
-        fn = getattr(self.translation, "_committed_text", None)
-        try:
-            return fn() if callable(fn) else ""
-        except Exception:
-            return ""
-
-    def _mt_source_text(self) -> str:
-        """Full source text (committed + tail) the simul-MT layer last saw (best effort)."""
-        fn = getattr(self.translation, "_source_text", None)
-        try:
-            return fn() if callable(fn) else ""
-        except Exception:
-            return ""
 
     def _latest_committed_transcription_end(self) -> float:
         latest_end = self.state.end_transcription_committed
@@ -920,7 +904,7 @@ class AudioProcessor:
     async def translation_processor(self) -> None:
         await run_translation(
             self.translation_queue, self.translation, self.state, self.lock,
-            getattr(self, "event_tap", None),
+            self.event_tap,
         )
 
     async def results_formatter(self) -> AsyncGenerator[FrontData, None]:
