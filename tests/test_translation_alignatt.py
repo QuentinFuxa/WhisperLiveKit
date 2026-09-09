@@ -317,11 +317,13 @@ def test_translation_processor_plumbing_with_fake_sidecar(sidecar):
     from whisperlivekit.audio_processor import SENTINEL, AudioProcessor
     from whisperlivekit.timed_objects import State
 
+    from whisperlivekit.caption_events import EventTap
     processor = SimpleNamespace(
         translation_queue=asyncio.Queue(),
         translation=make_client(sidecar),
         state=State(),
         lock=asyncio.Lock(),
+        event_tap=EventTap(),  # no-op sink; emission must not fail
     )
 
     async def scenario():

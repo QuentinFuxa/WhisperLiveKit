@@ -131,7 +131,6 @@ def _boundary_processor(
     processor._silent_backend_warned = False
     processor.event_tap = EventTap()  # no-op sink; emission must not fail
     processor._last_asr_prov = ""
-    processor._last_mt_prov = ""
     processor.processing_error = None
     processor._prune_state_tokens = lambda: None
     return processor

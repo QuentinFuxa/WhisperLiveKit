@@ -798,7 +798,6 @@ async def test_audio_processor_finish_commits_pending_buffer_as_interpolated_wor
     processor.sep = " "
     processor.event_tap = EventTap()  # no-op sink; emission must not fail
     processor._last_asr_prov = ""
-    processor._last_mt_prov = ""
     processor.processing_error = None
     processor.translation_queue = None
     processor._prune_state_tokens = lambda: None
