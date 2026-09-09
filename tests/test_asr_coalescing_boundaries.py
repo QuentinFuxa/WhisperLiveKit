@@ -117,7 +117,6 @@ def _processor_for(backend, *, translation=False):
     processor._silent_backend_warned = False
     processor.event_tap = EventTap()  # no-op sink; emission must not fail
     processor._last_asr_prov = ""
-    processor._last_mt_prov = ""
     processor.processing_error = None
     processor.tokens_alignment = SimpleNamespace(_retention_seconds=300.0)
     return processor
