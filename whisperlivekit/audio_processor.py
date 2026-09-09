@@ -16,6 +16,8 @@ from whisperlivekit.core import (
     online_factory,
     online_translation_factory,
 )
+from whisperlivekit.caption_events import EventLog, EventTap, FanOutSink
+from whisperlivekit.display_adapter import DisplayAdapter
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.processing_queue import (
     SENTINEL,
@@ -218,6 +220,24 @@ class AudioProcessor:
         # not flicker while the partial text evolves.
         self.translate_on_complete: bool = bool(getattr(self.args, "translate_on_complete", False))
         self._pending_translation_tokens: List[ASRToken] = []
+
+        # Caption event tap: emits the standardized caption event stream
+        # (transcription/translation provisional+final) alongside the FrontData
+        # snapshot path. The display layer (overlay, TUI) renders from this
+        # stream via the DisplayAdapter; the web UI is untouched.
+        self.display_adapter = DisplayAdapter()
+        self._event_log: Optional[EventLog] = None
+        _sinks: List[Any] = [self.display_adapter]
+        if getattr(self.args, "event_log", None):
+            self._event_log = EventLog()
+            _sinks.append(self._event_log)
+        self.event_tap = EventTap(
+            sink=_sinks[0] if len(_sinks) == 1 else FanOutSink(_sinks),
+        )
+        # dedupe state: emit ASR provisional only when the tail text changes
+        self._last_asr_prov: str = ""
+        # dedupe state: emit MT provisional only when the draft text changes
+        self._last_mt_prov: str = ""
 
         # Silent-backend watchdog: flips once the ASR has produced anything.
         self._any_asr_output: bool = False
@@ -430,6 +450,22 @@ class AudioProcessor:
         """Convert PCM buffer in s16le format to normalized NumPy array."""
         return np.frombuffer(pcm_buffer, dtype=np.int16).astype(np.float32) / 32768.0
 
+    def _mt_committed_text(self) -> str:
+        """Committed source text the simul-MT layer has released against (best effort)."""
+        fn = getattr(self.translation, "_committed_text", None)
+        try:
+            return fn() if callable(fn) else ""
+        except Exception:
+            return ""
+
+    def _mt_source_text(self) -> str:
+        """Full source text (committed + tail) the simul-MT layer last saw (best effort)."""
+        fn = getattr(self.translation, "_source_text", None)
+        try:
+            return fn() if callable(fn) else ""
+        except Exception:
+            return ""
+
     def _latest_committed_transcription_end(self) -> float:
         latest_end = self.state.end_transcription_committed
         if self.state.tokens:
@@ -597,6 +633,11 @@ class AudioProcessor:
                     )
             if final_tokens:
                 logger.info(f"Finish flushed {len(final_tokens)} tokens")
+                # caption events: the terminal flush commits the remaining tail
+                self.event_tap.transcription_final(
+                    final_tokens[-1].end or end_time,
+                    self.sep.join(t.text for t in final_tokens),
+                )
                 # Synthetic buffer recovery did not come from a counted backend
                 # call, but it still creates output tokens exposed to consumers.
                 self.metrics.n_tokens_produced += synthetic_token_count
@@ -637,6 +678,13 @@ class AudioProcessor:
                     _buffer_transcript = self.transcription.get_buffer()
                     async with self.lock:
                         self.state.buffer_transcription = _buffer_transcript
+                    _prov = (_buffer_transcript.text or "").strip()
+                    if _prov and _prov != self._last_asr_prov:
+                        self._last_asr_prov = _prov
+                        self.event_tap.transcription_provisional(
+                            _buffer_transcript.end if _buffer_transcript.end is not None else self.state.end_buffer,
+                            _prov,
+                        )
                     continue
 
                 if item is SENTINEL:
@@ -766,6 +814,20 @@ class AudioProcessor:
                 else:
                     self._warn_if_backend_silent(cumulative_pcm_duration_stream_time)
 
+                # caption events: committed tokens (final) + rolling tail (provisional)
+                if new_tokens:
+                    self.event_tap.transcription_final(
+                        new_tokens[-1].end or current_audio_processed_upto,
+                        self.sep.join(t.text for t in new_tokens),
+                    )
+                prov_text = (_buffer_transcript.text or "").strip()
+                if prov_text and prov_text != self._last_asr_prov:
+                    self._last_asr_prov = prov_text
+                    self.event_tap.transcription_provisional(
+                        _buffer_transcript.end if _buffer_transcript.end is not None else current_audio_processed_upto,
+                        prov_text,
+                    )
+
                 await self._queue_tokens_for_translation(new_tokens)
                 await self._queue_hypothesis_tail_for_translation(_buffer_transcript)
                 if isinstance(item, Silence) and item.is_starting:
@@ -856,7 +918,10 @@ class AudioProcessor:
         logger.info("Diarization processor task finished.")
 
     async def translation_processor(self) -> None:
-        await run_translation(self.translation_queue, self.translation, self.state, self.lock)
+        await run_translation(
+            self.translation_queue, self.translation, self.state, self.lock,
+            getattr(self, "event_tap", None),
+        )
 
     async def results_formatter(self) -> AsyncGenerator[FrontData, None]:
         """Format processing results for output."""
