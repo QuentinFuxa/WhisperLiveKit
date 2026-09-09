@@ -39,6 +39,7 @@ Usage::
 """
 
 import asyncio
+import dataclasses
 import logging
 import math
 import subprocess
@@ -140,6 +141,11 @@ class TestState:
     status: str = ""
     error: str = ""
     translation_error: str = ""
+    # Event-derived display state (from the processor's caption EventTap via
+    # DisplayAdapter). None when the processor has no tap. This is the display
+    # layer's source of truth; the FrontData-derived fields remain the web
+    # snapshot path.
+    display: Optional[Any] = None
 
     @classmethod
     def from_front_data(cls, front_data: FrontData, audio_position: float = 0.0) -> "TestState":
@@ -541,6 +547,11 @@ class TestHarness:
             if front_data.status == "error":
                 raise RuntimeError(front_data.error or "Transcription pipeline failed")
             self._state = TestState.from_front_data(front_data, self._audio_position)
+            # attach the event-derived display state (snapshot copy) so the
+            # display layer can render from the caption event stream
+            _da = getattr(self._processor, "display_adapter", None)
+            if _da is not None:
+                self._state.display = dataclasses.replace(_da.state)
             self._history.append(self._state)
             if self._on_update:
                 self._on_update(self._state)

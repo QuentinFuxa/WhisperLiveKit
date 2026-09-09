@@ -7,6 +7,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from whisperlivekit.caption_events import EventTap
+
 
 def _base_simul_kwargs(**overrides):
     kwargs = {
@@ -793,6 +795,11 @@ async def test_audio_processor_finish_commits_pending_buffer_as_interpolated_wor
     processor.state.end_buffer = 3.5
     processor.lock = asyncio.Lock()
     processor.metrics = SessionMetrics()
+    processor.sep = " "
+    processor.event_tap = EventTap()  # no-op sink; emission must not fail
+    processor._last_asr_prov = ""
+    processor._last_mt_prov = ""
+    processor.processing_error = None
     processor.translation_queue = None
     processor._prune_state_tokens = lambda: None
 
