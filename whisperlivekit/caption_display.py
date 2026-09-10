@@ -1,28 +1,39 @@
-"""Testable display-state model for caption display clients.
+"""Caption display policy: a pure state machine from caption events to
+display state.
 
-The caption display logic (the hold-drain + provisional→final
-replacement + scrollback) lives here as a pure state machine that
-produces a DOM-like ``DisplayState`` (a list of styled spans per line) from
-the event stream (preview/translation/partial/final). Views are thin
-consumers of this model; tests drive the model
+``CaptionDisplay`` consumes the caption event stream
+(``caption_events.py``) and produces ``DisplayState``: a list of styled
+spans per line, with the hold-drain, provisional-to-final replacement,
+and scrollback rules. Views are thin consumers; tests drive the display
 with a deterministic event stream and a fake clock, then assert on the
 ``DisplayState``.
 
-Styling (the "DOM"):
-  - provisional: dimmed (a draft — clearly not the final word)
+Styling:
+  - provisional: dimmed (a draft, clearly not the final word)
   - final same:  bright (unchanged from the provisional)
-  - final add:   green (the correction / new words)
-  - del spans are OMITTED from the final display (strikethrough is hard to
-    read in an overlay; the old words simply vanish, the green adds show
-    what changed). The provisional is shown dimmed first, so the reader sees
-    the draft, then the bright final with green corrections replaces it.
+  - final add:   green (the correction or the new words)
+  - deletions are omitted from the final display: the old words simply
+    vanish, the green additions show what changed. The provisional is
+    shown dimmed first, so the reader sees the draft, then the bright
+    final with green corrections replaces it.
+
+Threading contract: events are produced inside the pipeline's asyncio
+tasks (the ASR and translation loops) and forwarded by the tap
+synchronously on the event loop thread. ``CaptionDisplay`` and
+``CaptionLineAccumulator`` are single-threaded: call ``feed()`` or
+``emit()`` only from that loop thread. A view that renders on another
+thread (a native GUI loop) must marshal state across to its own thread;
+the state objects are plain data and safe to hand off.
 """
+
 from __future__ import annotations
 
 import re
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
+
+from whisperlivekit.caption_events import CaptionEvent
 
 # Hunyuan placeholder artifact (fullwidth-pipe-delimited token).
 _HY_PLACEHOLDER_RE = re.compile(r"<[\|｜][^\|｜]*[\|｜]>")
@@ -43,7 +54,7 @@ def _strip_hy_placeholder_preserve_ws(text: str) -> str:
     return _HY_PLACEHOLDER_RE.sub("", text)
 
 
-# Style tags (the "DOM" node kinds). The overlay view maps these to colors;
+# Style tags (the "DOM" node kinds). Views map these to colors;
 # tests assert on the tags directly.
 PROVISIONAL = "provisional"   # dimmed draft
 FINAL_SAME = "same"           # bright, unchanged from provisional
@@ -60,7 +71,7 @@ class Span:
 
 @dataclass
 class DisplayState:
-    """A snapshot of the overlay's two EN lines + the source partial, as styled spans.
+    """A snapshot of the two target lines + the source partial, as styled spans.
     Tests assert on this; views render it."""
     current: List[Span] = field(default_factory=list)   # the active caption line
     prev: List[Span] = field(default_factory=list)      # the scrolled-up history line
@@ -237,8 +248,8 @@ def _split_sentences(text: str) -> Tuple[List[str], str]:
     return sentences, text[start:].lstrip()
 
 
-class OverlayDisplayModel:
-    """Pure display-state state machine for the overlay's EN lines.
+class CaptionDisplay:
+    """Pure display-policy state machine for the caption target lines.
 
     Feed it the same events the renderer gets (preview/translation/partial/final) and
     call ``tick(now)`` to advance the hold-drain. ``tick`` returns the ``DisplayState``
@@ -291,7 +302,7 @@ class OverlayDisplayModel:
         # set by in-place updates (append effect) so tick() emits the new state
         self._dirty = False
 
-    # ---- event feed (mirrors OverlayRenderer callbacks) ----
+    # ---- event feed (the contract views call; also driven directly by tests) ----
 
     def set_partial(self, text: str, committed_len: int = 0) -> None:
         text = text or ""
@@ -869,3 +880,79 @@ class OverlayDisplayModel:
             partial=self._partial,
             partial_committed_len=self._partial_committed_len,
         )
+
+
+# ---------------------------------------------------------------------------
+# Caption line accumulator — the stream-level line state (tests + harness)
+#
+# A simpler reducer than CaptionDisplay: it accumulates finalized
+# (source, translation) lines and the current partials, one line per
+# translation_final. The test harness snapshots its state; the stream
+# tests drive it directly. It is NOT the display policy — the sentence,
+# hold, and stability rules live in CaptionDisplay above.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CaptionLineState:
+    """Line-oriented state of the caption stream (tests + harness view)."""
+    partial_transcription: str = ""   # current rolling ASR (transcription_provisional)
+    partial_translation: str = ""     # current provisional MT (translation_provisional)
+    # ASR commits since the last translation final — the source text that will
+    # pair with the next translation_final to form a finalized line.
+    committed_transcription: str = ""
+    # finalized lines: (source, translation) pairs, one per translation_final
+    final_lines: List[Tuple[str, str]] = field(default_factory=list)
+    # bookkeeping
+    _last_final: str = ""
+
+    def render_summary(self) -> str:
+        """Human-readable one-line state, for tests/debug."""
+        parts = []
+        if self.final_lines:
+            parts.append(f"finals={len(self.final_lines)}")
+        if self.partial_translation:
+            parts.append(f"prov={self.partial_translation!r}")
+        if self.partial_transcription:
+            parts.append(f"asr={self.partial_transcription!r}")
+        if self.committed_transcription:
+            parts.append(f"committed={self.committed_transcription!r}")
+        return " | ".join(parts) or "(empty)"
+
+
+class CaptionLineAccumulator:
+    """Stateful reducer: feed CaptionEvents, read CaptionLineState.
+
+    Rules:
+      - transcription_provisional    -> set partial_transcription (overwrites; rolling)
+      - transcription_final          -> append to committed_transcription, clear the
+                                        rolling draft (it is now committed)
+      - translation_provisional      -> set partial_translation (overwrites; provisional)
+      - translation_final            -> close the line: (committed_transcription, text)
+                                        appended to final_lines; clear both partials
+    """
+
+    def __init__(self) -> None:
+        self.state = CaptionLineState()
+
+    def emit(self, event: CaptionEvent) -> CaptionLineState:
+        """EventSink protocol — alias for feed()."""
+        return self.feed(event)
+
+    def feed(self, event: CaptionEvent) -> CaptionLineState:
+        t = event.type
+        if t == "transcription_provisional":
+            self.state.partial_transcription = event.text
+        elif t == "transcription_final":
+            if event.text:
+                sep = "" if not self.state.committed_transcription else " "
+                self.state.committed_transcription += sep + event.text
+            self.state.partial_transcription = ""  # committed; draft no longer rolling
+        elif t == "translation_provisional":
+            self.state.partial_translation = event.text
+        elif t == "translation_final":
+            if event.text and event.text != self.state._last_final:
+                self.state.final_lines.append((self.state.committed_transcription, event.text))
+                self.state._last_final = event.text
+            self.state.partial_translation = ""  # final replaces the provisional
+            self.state.committed_transcription = ""
+        return self.state
