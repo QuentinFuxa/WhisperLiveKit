@@ -1,0 +1,60 @@
+{"t": 0.0, "audio_t": 1.43, "type": "transcription_provisional", "text": "Hello"}
+{"t": 0.0, "audio_t": 1.67, "type": "transcription_provisional", "text": "Hello"}
+{"t": 0.0, "audio_t": 1.72, "type": "translation_provisional", "text": "大家好。", "committed": "", "source": "Hello everyone.", "fresh": true}
+{"t": 0.0, "audio_t": 1.77, "type": "transcription_final", "text": "Hello everyone."}
+{"t": 0.0, "audio_t": 1.77, "type": "translation_provisional", "text": "大家好。", "committed": "Hello everyone.", "source": "Hello everyone.", "fresh": false}
+{"t": 0.0, "audio_t": 2.45, "type": "transcription_provisional", "text": "My name"}
+{"t": 0.0, "audio_t": 3.03, "type": "transcription_provisional", "text": "My name is Ihab"}
+{"t": 0.0, "audio_t": 3.38, "type": "translation_provisional", "text": "大家好。我叫Ihab Bilad", "committed": "Hello everyone.", "source": "Hello everyone.My name is Ihab Bilad", "fresh": false}
+{"t": 0.0, "audio_t": 3.43, "type": "transcription_final", "text": "My name is Ihab Bilad"}
+{"t": 0.0, "audio_t": 3.43, "type": "translation_provisional", "text": "大家好。我叫Ihab Bilad", "committed": "Hello everyone.My name is Ihab Bilad", "source": "Hello everyone.My name is Ihab Bilad", "fresh": false}
+{"t": 0.0, "audio_t": 4.7, "type": "transcription_provisional", "text": "and I will give"}
+{"t": 0.0, "audio_t": 5.87, "type": "transcription_provisional", "text": "and I will give a short overview"}
+{"t": 0.0, "audio_t": 6.72, "type": "translation_provisional", "text": "大家好。我叫Ihab Bilad，我将简要介绍这篇论文", "committed": "Hello everyone.My name is Ihab Bilad", "source": "Hello everyone.My name is Ihab Biladand I will give a short overview of the paper", "fresh": false}
+{"t": 0.0, "audio_t": 6.77, "type": "transcription_final", "text": "and I will give a short overview of the paper"}
+{"t": 0.0, "audio_t": 6.77, "type": "translation_provisional", "text": "大家好。我叫Ihab Bilad，我将简要介绍这篇论文", "committed": "Hello everyone.My name is Ihab Biladand I will give a short overview of the paper", "source": "Hello everyone.My name is Ihab Biladand I will give a short overview of the paper", "fresh": false}
+{"t": 0.0, "audio_t": 7.8, "type": "transcription_provisional", "text": "\"Prompting Parm from"}
+{"t": 0.0, "audio_t": 8.73, "type": "transcription_provisional", "text": "\"Prompting Parm from Translation: Assessing Strategies"}
+{"t": 0.0, "audio_t": 9.38, "type": "translation_provisional", "text": "大家好。我叫Ihab Bilad，我将简要介绍这篇论文《Prompting Parm from Translation: 评估策略与性能》。", "committed": "Hello everyone.My name is Ihab Biladand I will give a short overview of the paper", "source": "Hello everyone.My name is Ihab Biladand I will give a short overview of the paper\"Prompting Parm from Translation: Assessing Strategies and Performance.\"", "fresh": false}
+{"t": 0.0, "audio_t": 9.43, "type": "transcription_final", "text": "\"Prompting Parm from Translation: Assessing Strategies and Performance.\""}
+{"t": 0.0, "audio_t": 9.63, "type": "translation_final", "text": "大家好。我叫Ihab Bilad，我将简要介绍这篇论文《Prompting Parm from Translation: 评估策略与性能》。"}
+{"t": 0.0, "audio_t": 10.35, "type": "transcription_provisional", "text": "This is"}
+{"t": 0.0, "audio_t": 11.17, "type": "transcription_provisional", "text": "This is joint work with"}
+{"t": 0.0, "audio_t": 11.72, "type": "translation_provisional", "text": "这是我与同事们共同完成的工作", "committed": "", "source": "This is joint work with my colleagues", "fresh": true}
+{"t": 0.0, "audio_t": 11.77, "type": "transcription_final", "text": "This is joint work with my colleagues"}
+{"t": 0.0, "audio_t": 11.77, "type": "translation_provisional", "text": "这是我与同事们共同完成的工作", "committed": "This is joint work with my colleagues", "source": "This is joint work with my colleagues", "fresh": false}
+{"t": 0.0, "audio_t": 12.22, "type": "transcription_provisional", "text": "from"}
+{"t": 0.0, "audio_t": 12.57, "type": "transcription_provisional", "text": "from Google"}
+{"t": 0.0, "audio_t": 12.72, "type": "translation_provisional", "text": "这是我与Google Translate的同事们共同完成的工作。", "committed": "This is joint work with my colleagues", "source": "This is joint work with my colleaguesfrom Google Translate.", "fresh": false}
+{"t": 0.0, "audio_t": 12.77, "type": "transcription_final", "text": "from Google Translate."}
+{"t": 0.0, "audio_t": 12.97, "type": "translation_final", "text": "这是我与Google Translate的同事们共同完成的工作。"}
+{"t": 0.0, "audio_t": 13.92, "type": "transcription_provisional", "text": "Parm is a"}
+{"t": 0.0, "audio_t": 14.97, "type": "transcription_provisional", "text": "Parm is a 540 billion parameters"}
+{"t": 0.0, "audio_t": 15.72, "type": "translation_provisional", "text": "Parm是一个拥有5400亿参数的大型语言模型", "committed": "", "source": "Parm is a 540 billion parameters large language model", "fresh": true}
+{"t": 0.0, "audio_t": 15.77, "type": "transcription_final", "text": "Parm is a 540 billion parameters large language model"}
+{"t": 0.0, "audio_t": 15.77, "type": "translation_provisional", "text": "Parm是一个拥有5400亿参数的大型语言模型", "committed": "Parm is a 540 billion parameters large language model", "source": "Parm is a 540 billion parameters large language model", "fresh": false}
+{"t": 0.0, "audio_t": 16.45, "type": "transcription_provisional", "text": "presented last"}
+{"t": 0.0, "audio_t": 17.03, "type": "transcription_provisional", "text": "presented last year in"}
+{"t": 0.0, "audio_t": 17.38, "type": "translation_provisional", "text": "Parm是一个拥有5400亿参数的大型语言模型，于2022年发布。", "committed": "Parm is a 540 billion parameters large language model", "source": "Parm is a 540 billion parameters large language modelpresented last year in 2022.", "fresh": false}
+{"t": 0.0, "audio_t": 17.43, "type": "transcription_final", "text": "presented last year in 2022."}
+{"t": 0.0, "audio_t": 17.63, "type": "translation_final", "text": "Parm是一个拥有5400亿参数的大型语言模型，于2022年发布。"}
+{"t": 0.0, "audio_t": 18.47, "type": "transcription_provisional", "text": "It's trained on"}
+{"t": 0.0, "audio_t": 19.4, "type": "transcription_provisional", "text": "It's trained on a large collection"}
+{"t": 0.0, "audio_t": 20.05, "type": "translation_provisional", "text": "它在一个大型文本集合上训练", "committed": "", "source": "It's trained on a large collection of text", "fresh": true}
+{"t": 0.0, "audio_t": 20.1, "type": "transcription_final", "text": "It's trained on a large collection of text"}
+{"t": 0.0, "audio_t": 20.1, "type": "translation_provisional", "text": "它在一个大型文本集合上训练", "committed": "It's trained on a large collection of text", "source": "It's trained on a large collection of text", "fresh": false}
+{"t": 0.0, "audio_t": 20.67, "type": "transcription_provisional", "text": "comprising"}
+{"t": 0.0, "audio_t": 21.13, "type": "transcription_provisional", "text": "comprising 780 billion"}
+{"t": 0.0, "audio_t": 21.38, "type": "translation_provisional", "text": "它在一个大型文本集合上训练，包含7800亿个token。", "committed": "It's trained on a large collection of text", "source": "It's trained on a large collection of textcomprising 780 billion tokens.", "fresh": false}
+{"t": 0.0, "audio_t": 21.43, "type": "transcription_final", "text": "comprising 780 billion tokens."}
+{"t": 0.0, "audio_t": 21.63, "type": "translation_final", "text": "它在一个大型文本集合上训练，包含7800亿个token。"}
+{"t": 0.0, "audio_t": 22.82, "type": "transcription_provisional", "text": "At the time of"}
+{"t": 0.0, "audio_t": 24.1, "type": "transcription_provisional", "text": "At the time of publication, it achieves state"}
+{"t": 0.0, "audio_t": 25.05, "type": "translation_provisional", "text": "在发表时，它达到了当时的最佳水平", "committed": "", "source": "At the time of publication, it achieves state of the art", "fresh": true}
+{"t": 0.0, "audio_t": 25.1, "type": "transcription_final", "text": "At the time of publication, it achieves state of the art"}
+{"t": 0.0, "audio_t": 25.1, "type": "translation_provisional", "text": "在发表时，它达到了当时的最佳水平", "committed": "At the time of publication, it achieves state of the art", "source": "At the time of publication, it achieves state of the art", "fresh": false}
+{"t": 0.0, "audio_t": 25.78, "type": "transcription_provisional", "text": "in hundreds"}
+{"t": 0.0, "audio_t": 26.37, "type": "transcription_provisional", "text": "in hundreds of NLP"}
+{"t": 0.0, "audio_t": 26.72, "type": "translation_provisional", "text": "在发表时，它在数百个NLP任务上达到了当时的最佳水平。", "committed": "At the time of publication, it achieves state of the art", "source": "At the time of publication, it achieves state of the artin hundreds of NLP tasks.", "fresh": false}
+{"t": 0.0, "audio_t": 26.77, "type": "transcription_final", "text": "in hundreds of NLP tasks."}
+{"t": 0.0, "audio_t": 26.97, "type": "translation_final", "text": "在发表时，它在数百个NLP任务上达到了当时的最佳水平。"}
