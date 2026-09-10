@@ -1,0 +1,69 @@
+{"t": 171669.743843666, "audio_t": 2.5, "type": "transcription_provisional", "text": "我们今天来讨论镭射。", "committed": "", "source": "", "fresh": false}
+{"t": 171670.564489708, "audio_t": 3.5, "type": "transcription_final", "text": "我们今天", "committed": "", "source": "", "fresh": false}
+{"t": 171670.564496166, "audio_t": 3.5, "type": "transcription_provisional", "text": "来讨论镭射。", "committed": "", "source": "", "fresh": false}
+{"t": 171671.492124958, "audio_t": 3.5, "type": "transcription_final", "text": "来讨论镭射在医学上的应用。", "committed": "", "source": "", "fresh": false}
+{"t": 171672.048921, "audio_t": 3.5, "type": "translation_final", "text": "Today, we will discuss the applications of laser in medicine.", "committed": "", "source": "", "fresh": false}
+{"t": 171673.30036475, "audio_t": 6.0, "type": "transcription_provisional", "text": "镭射技术可以精确的。", "committed": "", "source": "", "fresh": false}
+{"t": 171673.664786625, "audio_t": 6.5, "type": "translation_provisional", "text": "Today, we will discuss the applications of laser in medicine.", "committed": "", "source": "镭射技术可以精确的。", "fresh": true}
+{"t": 171673.66487875, "audio_t": 6.5, "type": "translation_provisional", "text": "Today, we will discuss the applications of laser in medicine.", "committed": "", "source": "镭射技术可以精确的。", "fresh": false}
+{"t": 171674.1085605, "audio_t": 7.0, "type": "transcription_final", "text": "镭射技术", "committed": "", "source": "", "fresh": false}
+{"t": 171674.108565708, "audio_t": 7.0, "type": "transcription_provisional", "text": "可以精确的。", "committed": "", "source": "", "fresh": false}
+{"t": 171674.108989958, "audio_t": 7.0, "type": "translation_provisional", "text": "Today, we will discuss the applications of laser in medicine.", "committed": "镭射技术", "source": "镭射技术可以精确的。", "fresh": false}
+{"t": 171674.612466375, "audio_t": 7.0, "type": "transcription_provisional", "text": "镭射技术可以精确的。", "committed": "", "source": "", "fresh": false}
+{"t": 171674.613819833, "audio_t": 7.038, "type": "translation_provisional", "text": "Today, we will discuss the applications of laser in medicine.", "committed": "镭射技术", "source": "镭射技术镭射技术可以精确的。", "fresh": false}
+{"t": 171674.833492291, "audio_t": 7.038, "type": "transcription_final", "text": "可以精确的切除肿瘤组织。", "committed": "", "source": "", "fresh": false}
+{"t": 171675.291282541, "audio_t": 7.038, "type": "translation_final", "text": "Laser technology can precisely remove tumor tissue.", "committed": "", "source": "", "fresh": false}
+{"t": 171676.820330791, "audio_t": 9.5, "type": "transcription_provisional", "text": "减少对周围健康组织。", "committed": "", "source": "", "fresh": false}
+{"t": 171677.263858666, "audio_t": 10.0, "type": "translation_provisional", "text": "Laser technology can precisely remove tumor tissue.", "committed": "", "source": "减少对周围健康组织。", "fresh": true}
+{"t": 171677.264146083, "audio_t": 10.0, "type": "translation_provisional", "text": "Laser technology can precisely remove tumor tissue.", "committed": "", "source": "减少对周围健康组织。", "fresh": false}
+{"t": 171677.634242958, "audio_t": 10.014, "type": "transcription_final", "text": "减少对周", "committed": "", "source": "", "fresh": false}
+{"t": 171677.634248583, "audio_t": 10.014, "type": "transcription_provisional", "text": "围健康组织。", "committed": "", "source": "", "fresh": false}
+{"t": 171677.634891625, "audio_t": 10.014, "type": "translation_provisional", "text": "Reduces damage to", "committed": "减少对周", "source": "减少对周围健康组织。", "fresh": false}
+{"t": 171677.82014775, "audio_t": 10.014, "type": "transcription_final", "text": "围健康组织的伤害。", "committed": "", "source": "", "fresh": false}
+{"t": 171678.206014708, "audio_t": 10.014, "type": "translation_final", "text": "Reduce damage to surrounding healthy tissues.", "committed": "", "source": "", "fresh": false}
+{"t": 171678.2060345, "audio_t": 11.0, "type": "translation_provisional", "text": "Reduces damage to", "committed": "", "source": "", "fresh": false}
+{"t": 171679.300947541, "audio_t": 11.742, "type": "transcription_final", "text": "在眼科手术中。", "committed": "", "source": "", "fresh": false}
+{"t": 171679.619891625, "audio_t": 11.742, "type": "translation_final", "text": "In ophthalmic surgery.", "committed": "", "source": "", "fresh": false}
+{"t": 171681.355800125, "audio_t": 13.822, "type": "transcription_final", "text": "雷射用来矫正视力。", "committed": "", "source": "", "fresh": false}
+{"t": 171681.81687275, "audio_t": 13.822, "type": "translation_final", "text": "Lasers are used to correct vision.", "committed": "", "source": "", "fresh": false}
+{"t": 171683.372982958, "audio_t": 15.742, "type": "transcription_final", "text": "治疗近视、看远视。", "committed": "", "source": "", "fresh": false}
+{"t": 171683.775811458, "audio_t": 15.742, "type": "translation_final", "text": "Treat myopia and correct hyperopia.", "committed": "", "source": "", "fresh": false}
+{"t": 171685.388080333, "audio_t": 18.0, "type": "transcription_provisional", "text": "牙医也使用镭射来进行。", "committed": "", "source": "", "fresh": false}
+{"t": 171685.898864125, "audio_t": 18.5, "type": "translation_provisional", "text": "Treat myopia and correct hyperopia.", "committed": "", "source": "牙医也使用镭射来进行。", "fresh": true}
+{"t": 171685.898952333, "audio_t": 18.5, "type": "translation_provisional", "text": "Treat myopia and correct hyperopia.", "committed": "", "source": "牙医也使用镭射来进行。", "fresh": false}
+{"t": 171686.198639541, "audio_t": 19.0, "type": "transcription_final", "text": "牙医也使用", "committed": "", "source": "", "fresh": false}
+{"t": 171686.19864475, "audio_t": 19.0, "type": "transcription_provisional", "text": "镭射来进行。", "committed": "", "source": "", "fresh": false}
+{"t": 171686.199226875, "audio_t": 19.0, "type": "translation_provisional", "text": "Treat myopia and correct hyperopia.", "committed": "牙医也使用", "source": "牙医也使用镭射来进行。", "fresh": false}
+{"t": 171686.70285025, "audio_t": 19.0, "type": "transcription_provisional", "text": "牙医也使用镭射来进行。", "committed": "", "source": "", "fresh": false}
+{"t": 171686.70410275, "audio_t": 19.07, "type": "translation_provisional", "text": "Treat myopia and correct hyperopia.", "committed": "牙医也使用", "source": "牙医也使用牙医也使用镭射来进行。", "fresh": false}
+{"t": 171686.918823791, "audio_t": 19.07, "type": "transcription_final", "text": "镭射来进行口腔手术。", "committed": "", "source": "", "fresh": false}
+{"t": 171687.422785375, "audio_t": 19.07, "type": "translation_final", "text": "Dentists also use laser technology for oral surgery.", "committed": "", "source": "", "fresh": false}
+{"t": 171688.917473166, "audio_t": 21.054, "type": "transcription_final", "text": "减少出血、汗、疼痛。", "committed": "", "source": "", "fresh": false}
+{"t": 171689.369598541, "audio_t": 21.054, "type": "translation_final", "text": "Reduce bleeding, sweating, and pain.", "committed": "", "source": "", "fresh": false}
+{"t": 171690.9415215, "audio_t": 23.5, "type": "transcription_provisional", "text": "皮肤科用镭射去除斑点。", "committed": "", "source": "", "fresh": false}
+{"t": 171691.416491791, "audio_t": 24.0, "type": "translation_provisional", "text": "Reduce bleeding, sweating, and pain.", "committed": "", "source": "皮肤科用镭射去除斑点。", "fresh": true}
+{"t": 171691.416571375, "audio_t": 24.0, "type": "translation_provisional", "text": "Reduce bleeding, sweating, and pain.", "committed": "", "source": "皮肤科用镭射去除斑点。", "fresh": false}
+{"t": 171691.737213625, "audio_t": 24.222, "type": "transcription_final", "text": "皮肤科用镭", "committed": "", "source": "", "fresh": false}
+{"t": 171691.737217958, "audio_t": 24.222, "type": "transcription_provisional", "text": "射去除斑点。", "committed": "", "source": "", "fresh": false}
+{"t": 171691.7378005, "audio_t": 24.222, "type": "translation_provisional", "text": "Dermatology uses laser", "committed": "皮肤科用镭", "source": "皮肤科用镭射去除斑点。", "fresh": false}
+{"t": 171691.978644541, "audio_t": 24.222, "type": "transcription_final", "text": "射去除斑点汗纹身。", "committed": "", "source": "", "fresh": false}
+{"t": 171692.521537458, "audio_t": 24.222, "type": "translation_final", "text": "Dermatology uses laser to remove spots and sun tattoos.", "committed": "", "source": "", "fresh": false}
+{"t": 171692.521557791, "audio_t": 25.0, "type": "translation_provisional", "text": "Dermatology uses laser", "committed": "", "source": "", "fresh": false}
+{"t": 171692.832837708, "audio_t": 25.054, "type": "transcription_final", "text": "总之。", "committed": "", "source": "", "fresh": false}
+{"t": 171693.057209541, "audio_t": 25.054, "type": "translation_final", "text": "Anyway.", "committed": "", "source": "", "fresh": false}
+{"t": 171694.944620041, "audio_t": 27.5, "type": "transcription_provisional", "text": "镭射在现代医学中扮演。", "committed": "", "source": "", "fresh": false}
+{"t": 171695.378335583, "audio_t": 28.0, "type": "translation_provisional", "text": "Anyway.", "committed": "", "source": "镭射在现代医学中扮演。", "fresh": true}
+{"t": 171695.378431875, "audio_t": 28.0, "type": "translation_provisional", "text": "Anyway.", "committed": "", "source": "镭射在现代医学中扮演。", "fresh": false}
+{"t": 171695.7590655, "audio_t": 28.5, "type": "transcription_final", "text": "镭射在现代", "committed": "", "source": "", "fresh": false}
+{"t": 171695.759070041, "audio_t": 28.5, "type": "transcription_provisional", "text": "医学中扮演。", "committed": "", "source": "", "fresh": false}
+{"t": 171695.759349458, "audio_t": 28.5, "type": "translation_provisional", "text": "Anyway.", "committed": "镭射在现代", "source": "镭射在现代医学中扮演。", "fresh": false}
+{"t": 171696.263157125, "audio_t": 28.5, "type": "transcription_provisional", "text": "镭射在现代医学中扮演。", "committed": "", "source": "", "fresh": false}
+{"t": 171696.263864166, "audio_t": 29.0, "type": "translation_provisional", "text": "Anyway.", "committed": "镭射在现代", "source": "镭射在现代镭射在现代医学中扮演。", "fresh": false}
+{"t": 171696.767561708, "audio_t": 29.182, "type": "translation_provisional", "text": "Anyway.", "committed": "镭射在现代", "source": "镭射在现代镭射在现代医学中扮演。", "fresh": false}
+{"t": 171697.039455833, "audio_t": 29.182, "type": "transcription_final", "text": "医学中扮演着越来越重要的角色。", "committed": "", "source": "", "fresh": false}
+{"t": 171697.519919958, "audio_t": 29.182, "type": "translation_final", "text": "Laser plays an increasingly important role in modern medicine.", "committed": "", "source": "", "fresh": false}
+{"t": 171698.963662333, "audio_t": 31.5, "type": "transcription_provisional", "text": "未來的應用將更加廣泛。", "committed": "", "source": "", "fresh": false}
+{"t": 171699.382401458, "audio_t": 31.551875, "type": "translation_provisional", "text": "Laser plays an increasingly important role in modern medicine.", "committed": "", "source": "未來的應用將更加廣泛。", "fresh": true}
+{"t": 171699.38250275, "audio_t": 31.551875, "type": "translation_provisional", "text": "Laser plays an increasingly important role in modern medicine.", "committed": "", "source": "未來的應用將更加廣泛。", "fresh": false}
+{"t": 171707.955690791, "audio_t": 31.551875, "type": "transcription_final", "text": "未来的应用将更加广泛。", "committed": "", "source": "", "fresh": false}
+{"t": 171708.3587205, "audio_t": 31.551875, "type": "translation_final", "text": "Future applications will be more widespread.", "committed": "", "source": "", "fresh": false}
