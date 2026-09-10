@@ -81,6 +81,7 @@ class WhisperLiveKitConfig:
     disable_punctuation_split: bool = False
     diarization_backend: str = "sortformer"
     sortformer_model_path: Optional[str] = None
+    sortformer_mlx_model: str = "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16"
     backend_policy: str = "simulstreaming"
     backend: str = "auto"
 
@@ -217,9 +218,10 @@ class WhisperLiveKitConfig:
                 raise ValueError(
                     "sortformer_max_speakers must be an integer between 1 and 4."
                 )
-            if self.diarization_backend != "sortformer":
+            if self.diarization_backend not in ("sortformer", "mlx-sortformer"):
                 raise ValueError(
-                    "sortformer_max_speakers requires diarization_backend=sortformer."
+                    "sortformer_max_speakers requires diarization_backend=sortformer "
+                    "or mlx-sortformer."
                 )
 
         # .en model suffix forces English for Whisper-family backends.
