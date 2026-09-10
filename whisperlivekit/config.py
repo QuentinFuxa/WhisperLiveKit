@@ -46,6 +46,8 @@ class WhisperLiveKitConfig:
     port: int = 8000
     # None = no auth; WLK_API_TOKEN env var applies when unset.
     api_token: Optional[str] = None
+    # Optional JSONL path: records the caption event stream for replay/testing.
+    event_log: Optional[str] = None
     translate_on_complete: bool = False
     diarization: bool = False
     punctuation_split: bool = False

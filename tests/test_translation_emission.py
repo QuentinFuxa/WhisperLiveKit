@@ -21,12 +21,9 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from whisperlivekit.caption_events import EventLog, EventTap
 from whisperlivekit.timed_objects import State, TimedText, TranslationProgress
 from whisperlivekit.translation_processor import run_translation
-
 
 
 def _tr(text, end=1.0):
@@ -81,7 +78,7 @@ def _run(items, translation):
         # unwrap get_all_from_queue semantics: it returns one item per call,
         # draining batches; feed items through a real asyncio.Queue for
         # fidelity with the production loop.
-        from whisperlivekit.processing_queue import ProcessingQueue, SENTINEL
+        from whisperlivekit.processing_queue import SENTINEL, ProcessingQueue
         q = ProcessingQueue("test")
         for it in items:
             await q.put(it)
@@ -142,7 +139,7 @@ def test_provisional_dedupe_identical_consecutive():
     lock = asyncio.Lock()
 
     async def driver():
-        from whisperlivekit.processing_queue import ProcessingQueue, SENTINEL
+        from whisperlivekit.processing_queue import SENTINEL, ProcessingQueue
         q = ProcessingQueue("test")
         for it in items:
             await q.put(it)
