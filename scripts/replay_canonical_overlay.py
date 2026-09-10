@@ -1,121 +1,84 @@
 #!/usr/bin/env python3
-"""Replay a captured canonical caption event stream through the REAL overlay
-view, capturing what the src row actually RENDERS (including the typing
-thread's intermediate frames), then run the flicker detector over the
-RENDERED sequence — not the model state.
+"""Replay a captured caption event stream through the display model and
+print the reader-visible target-row sequence.
 
-Flicker = the rendered text loses a suffix and that text re-appears soon
-after. A healthy stream only grows, flips style at commits, and resets at
-promotes.
+This is the model-level replay instrument: it drives OverlayDisplayModel
+directly with the recorded events (no view code) and traces the committed
+caption line as the hold-drain releases queued sentences. Use it to check
+what a viewer would see: sentence pacing, dim/bright transitions, and
+whether completed sentences display before the stream ends.
 
-Usage: .venv/bin/python scripts/replay_canonical_overlay.py <events.jsonl>
+Usage:
+  .venv/bin/python scripts/replay_canonical_overlay.py <events.jsonl>
+  REPLAY_PACE=0.8 .venv/bin/python scripts/replay_canonical_overlay.py <events.jsonl> --target
+
+A captured stream and the display model tests (tests/test_overlay_replay.py)
+are the regression pair: the tests assert the rules, the script shows the
+sequence.
 """
 from __future__ import annotations
-import sys, time
-from datetime import datetime
 
-from whisperlivekit.overlay import OverlayRenderer
-from whisperlivekit.overlay_model import OverlayDisplayModel
+import os
+import sys
+import time
+from datetime import datetime, timedelta
+
 from whisperlivekit.caption_events import EventLog
+from whisperlivekit.overlay_model import OverlayDisplayModel
 
 
 def replay_canonical(path: str, hold: float = 3.5, pace: float = 0.25) -> None:
     events = EventLog.load(path).events
     t0 = events[0].t
 
-    r = OverlayRenderer(overlay_mode="both")
-
     class C:
         now = 0.0
+
         def __call__(self): return self.now
+
         def advance(self, s): self.now += s
     clk = C()
-    r._model = OverlayDisplayModel(hold_sec=hold, clock=clk)
+    m = OverlayDisplayModel(hold_sec=hold, clock=clk)
 
-    # capture what actually renders (typing thread + hard-swaps both funnel
-    # through _set / _render_src_text; AppKit is None here so both go to _set)
-    rendered: list[tuple[float, str, str]] = []  # (elapsed, kind, text)
-    # target-row (EN) rendered line per caption event, for the reader-visible
-    # sentence-sequence trace (--target)
-    target_trace: list[tuple[float, str, str]] = []
+    trace: list[tuple[float, str, str]] = []
+    base = datetime.now()
 
-    class F: pass
-    r._field_partial = fp = object()
-
-    def traced_set(field, value):
-        if field is fp:
-            rendered.append((time.monotonic() - t0, "render", str(value)))
-    r._set = traced_set
-
-    import sys as _sys
-    trace_target = "--target" in _sys.argv
-
-    def snap_target(elapsed, etype):
-        if not trace_target:
-            return
-        m = r._model
-        cur = "".join(sp.text for sp in m._en_spans)
-        prev = "".join(sp.text for sp in m._en_prev_spans)
+    def snap(elapsed, etype):
+        cur = m._en_plain
+        prev = m._en_prev_plain
         tag = "BRIGHT" if m._en_is_final else "dim   "
-        target_trace.append((elapsed, etype, f"[{tag}] {cur!r}" + (f"  (prev {prev!r})" if prev else "")))
+        line = f"[{tag}] {cur!r}" + (f"  (prev {prev!r})" if prev else "")
+        trace.append((elapsed, etype, line))
 
     for e in events:
         clk.advance(pace)
-        now = datetime.now()
-        if e.type == "transcription_provisional":
-            r.partial("mic", e.text, now)
-        elif e.type == "transcription_final":
-            r.final("mic", [(None, e.text)], now)
-        elif e.type == "translation_provisional":
-            r.preview("mic", [(None, e.text)], now)
+        started = base + timedelta(seconds=e.t - t0)
+        if e.type == "translation_provisional":
+            m.preview([(None, e.text)], started)
         elif e.type == "translation_final":
-            r.translation("mic", [(None, e.text)], now)
+            m.translation([(None, e.text)], started)
         if e.type.startswith("translation"):
-            snap_target(time.monotonic() - t0, e.type.replace("translation_", ""))
-        # pump the drainer across the event's pacing window so the typing
-        # thread's intermediate frames are captured
+            snap(time.monotonic() - t0, e.type.replace("translation_", ""))
+        # pump the drain across the event's pacing window
         end = time.monotonic() + pace
         while time.monotonic() < end:
-            st = r._model.tick()
-            if st is not None:
-                r._reconcile(st)
+            m.tick()
             time.sleep(0.02)
 
-    # pump the drainer past the last event so queued sentences drain as they
-    # would in real time (the reader's clock keeps running after the last event)
-    if trace_target:
-        for _ in range(int(12 / pace)):
-            st = r._model.tick()
-            if st is not None:
-                r._reconcile(st)
-            snap_target(time.monotonic() - t0, "drain")
-            time.sleep(0.02)
-    if trace_target:
-        print(f"=== target-row reader-visible sequence: {path} ===")
-        for elapsed, etype, line in target_trace:
-            print(f"  [+{elapsed:7.2f}] {etype:10s} {line}")
-        return
+    # pump the drain past the last event: the reader's clock keeps running
+    # after the stream ends, so queued sentences must still surface
+    for _ in range(int(12 / pace)):
+        m.tick()
+        snap(time.monotonic() - t0, "drain")
+        time.sleep(0.02)
 
-    print(f"=== {len(rendered)} rendered src frames from {path} ===")
-    flickers = 0
-    prev = ""
-    i = 0
-    while i < len(rendered):
-        at, _ty, full = rendered[i]
-        if prev and full and len(full) < len(prev) and prev.startswith(full):
-            vanished = prev[len(full):].lstrip()
-            for j in range(i + 1, min(i + 8, len(rendered))):
-                full2 = rendered[j][2]
-                if len(full2) > len(full) and (
-                        full2 == prev or full2[len(full):].startswith(vanished)):
-                    print(f"  [+{at:6.2f}] {prev!r} -> {full!r} -> reappeared {full2!r}")
-                    flickers += 1
-                    break
-        if full:
-            prev = full
-        i += 1
-    print("src flicker events (rendered frames):", flickers)
+    print(f"=== target-row reader-visible sequence: {path} ===")
+    for elapsed, etype, line in trace:
+        print(f"  [+{elapsed:7.2f}] {etype:10s} {line}")
 
 
 if __name__ == "__main__":
-    replay_canonical(sys.argv[1] if len(sys.argv) > 1 else "/tmp/canonical_zh_long_qwen3.jsonl", pace=float(__import__("os").environ.get("REPLAY_PACE", "0.25")))
+    replay_canonical(
+        sys.argv[1] if len(sys.argv) > 1 else "/tmp/canonical_zh_long_qwen3.jsonl",
+        pace=float(os.environ.get("REPLAY_PACE", "0.25")),
+    )
