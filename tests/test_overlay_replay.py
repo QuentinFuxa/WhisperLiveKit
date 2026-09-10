@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from whisperlivekit.caption_display import CaptionDisplay
 from whisperlivekit.caption_events import EventLog
-from whisperlivekit.overlay_model import OverlayDisplayModel
 
 CANONICAL = CANONICAL = Path(__file__).parent / "golden" / "zh_long_canonical.jsonl"
 
@@ -21,7 +21,7 @@ def test_reword_retraction_held():
     text at the same commit boundary is held — the reader never sees a
     retraction; the commit resolves it."""
     import time as _t
-    m = OverlayDisplayModel(hold_sec=3.5, clock=_t.monotonic)
+    m = CaptionDisplay(hold_sec=3.5, clock=_t.monotonic)
     m.set_partial("我们今天来讨论镭射。在医学上的应用，镭射。", committed_len=0)
     st = m.tick()
     assert st.partial == "我们今天来讨论镭射。在医学上的应用，镭射。"

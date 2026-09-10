@@ -9,6 +9,7 @@ from typing import Any, AsyncGenerator, List, Optional, Union
 import numpy as np
 
 from whisperlivekit.audio_input import AudioInput
+from whisperlivekit.caption_display import CaptionLineAccumulator
 from whisperlivekit.caption_events import EventLog, EventTap, FanOutSink
 from whisperlivekit.config import validate_pause_segmentation_seconds
 from whisperlivekit.core import (
@@ -17,7 +18,6 @@ from whisperlivekit.core import (
     online_factory,
     online_translation_factory,
 )
-from whisperlivekit.display_adapter import DisplayAdapter
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.processing_queue import (
     SENTINEL,
@@ -223,11 +223,12 @@ class AudioProcessor:
 
         # Caption event tap: emits the standardized caption event stream
         # (transcription/translation provisional+final) alongside the FrontData
-        # snapshot path. The display layer (overlay) renders from this
-        # stream via the DisplayAdapter; the web UI is untouched.
-        self.display_adapter = DisplayAdapter()
+        # snapshot path. Caption consumers (the event log, and display views
+        # built on this stream) render from it via the caption line accumulator;
+        # the web UI is untouched.
+        self.caption_lines = CaptionLineAccumulator()
         self._event_log: Optional[EventLog] = None
-        _sinks: List[Any] = [self.display_adapter]
+        _sinks: List[Any] = [self.caption_lines]
         if getattr(self.args, "event_log", None):
             self._event_log = EventLog()
             _sinks.append(self._event_log)

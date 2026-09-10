@@ -1,6 +1,6 @@
 """Tests for the overlay display model (pure, AppKit-free).
 
-Drives OverlayDisplayModel with a deterministic event stream + fake clock and
+Drives CaptionDisplay with a deterministic event stream + fake clock and
 asserts on the DisplayState DOM — the same events the OverlayRenderer receives,
 without AppKit or real time. Uses the segment-based API (list of (speaker, text)
 tuples) matching the live callback contract.
@@ -8,13 +8,13 @@ tuples) matching the live callback contract.
 import os
 from datetime import datetime, timedelta
 
-from whisperlivekit.caption_events import EventLog
-from whisperlivekit.overlay_model import (
+from whisperlivekit.caption_display import (
     FINAL_ADD,
     FINAL_SAME,
     PROVISIONAL,
-    OverlayDisplayModel,
+    CaptionDisplay,
 )
+from whisperlivekit.caption_events import EventLog
 
 GOLDEN_PATH = os.path.join(os.path.dirname(__file__), "golden", "zh_long_ideal.jsonl")
 
@@ -35,7 +35,7 @@ class FakeClock:
 
 def make(hold=3.5):
     clk = FakeClock()
-    return OverlayDisplayModel(hold_sec=hold, clock=clk), clk
+    return CaptionDisplay(hold_sec=hold, clock=clk), clk
 
 
 def segs(text, diff=None):
@@ -279,7 +279,7 @@ def _feed_golden_to_overlay(hold=3.5):
         def __call__(self): return self.now
         def advance(self, s): self.now += s
     c = C()
-    m = OverlayDisplayModel(hold_sec=1.2, clock=c)  # short hold so pacing progresses
+    m = CaptionDisplay(hold_sec=1.2, clock=c)  # short hold so pacing progresses
     trace = []
     for e in events:
         t = e.type
@@ -315,7 +315,7 @@ def test_golden_final_survives_its_hold():
             self.now += s
 
     c = C()
-    m = OverlayDisplayModel(hold_sec=1.0, clock=c)
+    m = CaptionDisplay(hold_sec=1.0, clock=c)
     finals_seen = 0
     for e in events:
         t = e.type
@@ -367,8 +367,8 @@ def test_preempting_final_clears_stale_queued_draft():
 def test_set_partial_holds_on_pure_shrink():
     """A streaming revision that shrinks the tail (same committed split) is
     held — the display never vanishes/reappears on hypothesis churn."""
-    from whisperlivekit.overlay_model import OverlayDisplayModel
-    m = OverlayDisplayModel(hold_sec=3.5)
+    from whisperlivekit.caption_display import CaptionDisplay
+    m = CaptionDisplay(hold_sec=3.5)
     m.set_partial("我們今天來討論鐳射在醫學上的應用", committed_len=0)
     m.set_partial("我們今天來討論鐳射在", committed_len=0)  # revision shrank
     assert m.state().partial == "我們今天來討論鐳射在醫學上的應用", "shrink must be held"
@@ -378,7 +378,7 @@ def test_set_partial_holds_on_pure_shrink():
 
 def test_set_partial_commit_shrink_passes_through():
     """A legit commit shrinks the tail but grows committed_len — passes through."""
-    m = OverlayDisplayModel(hold_sec=3.5)
+    m = CaptionDisplay(hold_sec=3.5)
     m.set_partial("我們今天來討論鐳射在醫學上的應用", committed_len=0)
     m.set_partial("鐳射在醫學上的應用", committed_len=6)  # commit landed, tail stripped
     assert m.state().partial == "鐳射在醫學上的應用"
@@ -387,7 +387,7 @@ def test_set_partial_commit_shrink_passes_through():
 
 def test_set_partial_new_sentence_reset_passes_through():
     """A promote resets committed to empty — the shorter new-sentence tail must show."""
-    m = OverlayDisplayModel(hold_sec=3.5)
+    m = CaptionDisplay(hold_sec=3.5)
     m.set_partial("我們今天來討論鐳射在醫學上的應用。", committed_len=12)
     m.set_partial("鐳射技術", committed_len=0)  # new sentence after promote
     assert m.state().partial == "鐳射技術"
