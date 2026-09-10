@@ -315,9 +315,8 @@ def test_translation_processor_plumbing_with_fake_sidecar(sidecar):
     from types import SimpleNamespace
 
     from whisperlivekit.audio_processor import SENTINEL, AudioProcessor
-    from whisperlivekit.timed_objects import State
-
     from whisperlivekit.caption_events import EventTap
+    from whisperlivekit.timed_objects import State
     processor = SimpleNamespace(
         translation_queue=asyncio.Queue(),
         translation=make_client(sidecar),

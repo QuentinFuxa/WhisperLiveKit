@@ -7,13 +7,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from whisperlivekit.caption_events import EventTap
-
 from whisperlivekit.audio_processor import (
     SENTINEL,
     AudioProcessor,
     get_all_from_queue,
 )
+from whisperlivekit.caption_events import EventTap
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.timed_objects import (
     ASRToken,
