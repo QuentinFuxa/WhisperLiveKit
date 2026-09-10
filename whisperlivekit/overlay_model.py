@@ -1,12 +1,12 @@
-"""Testable display-state model for the overlay (no AppKit).
+"""Testable display-state model for caption display clients.
 
-The overlay's caption display logic (the hold-drain + provisional→final
-replacement + scrollback) is extracted here as a pure state machine that
+The caption display logic (the hold-drain + provisional→final
+replacement + scrollback) lives here as a pure state machine that
 produces a DOM-like ``DisplayState`` (a list of styled spans per line) from
-the event stream (preview/translation/partial/final). The AppKit
-``OverlayRenderer`` is a thin view over this model; tests drive the model
+the event stream (preview/translation/partial/final). Views are thin
+consumers of this model; tests drive the model
 with a deterministic event stream and a fake clock, then assert on the
-``DisplayState`` without touching the GUI.
+``DisplayState``.
 
 Styling (the "DOM"):
   - provisional: dimmed (a draft — clearly not the final word)
@@ -61,7 +61,7 @@ class Span:
 @dataclass
 class DisplayState:
     """A snapshot of the overlay's two EN lines + the source partial, as styled spans.
-    Tests assert on this; the AppKit view renders it."""
+    Tests assert on this; views render it."""
     current: List[Span] = field(default_factory=list)   # the active caption line
     prev: List[Span] = field(default_factory=list)      # the scrolled-up history line
     partial: str = ""                                    # the ASR source partial (plain)
@@ -252,7 +252,7 @@ class OverlayDisplayModel:
         self._hold = hold_sec
         self._clock = clock
         self._partial_shown_at = clock()
-        self._lock_held = False  # (the AppKit view adds its own threading.Lock; the model is single-threaded by construction)
+        self._lock_held = False  # (views add their own threading.Lock; the model is single-threaded by construction)
         # current line
         self._en_plain: str = ""
         self._en_spans: List[Span] = []
