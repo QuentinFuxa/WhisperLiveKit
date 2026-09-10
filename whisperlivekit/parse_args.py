@@ -868,6 +868,16 @@ def build_parser():
         help="Minimum LID confidence (0-1) required to lock the detected language.",
     )
 
+    parser.add_argument(
+        "--event-log",
+        type=str,
+        default=None,
+        metavar="PATH",
+        dest="event_log",
+        help="Record the caption event stream (transcription/translation "
+        "provisional and final) as JSONL for replay and testing.",
+    )
+
     translation_group = parser.add_argument_group("Translation backend")
     translation_group.add_argument(
         "--translation-backend",

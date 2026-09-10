@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from whisperlivekit.caption_events import EventTap
 from whisperlivekit.timed_objects import ASRToken, ChangeSpeaker, Silence, State
 from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
 
@@ -70,7 +71,8 @@ async def test_simultaneous_partial_failure_pause_and_eof(tmp_path, monkeypatch)
     _, buffer = engine.process()
     assert buffer.text == "您好" and "missing attention" in engine.error
     processor = SimpleNamespace(translation_queue=asyncio.Queue(), translation=engine,
-                                state=State(), lock=asyncio.Lock())
+                                state=State(), lock=asyncio.Lock(),
+                                event_tap=EventTap())  # no-op sink; emission must not fail
     for event in [Silence(start=2, end=3, is_starting=True, has_ended=True),
                   ASRToken(3, 7, "One."), ASRToken(7, 11, "Two."), ASRToken(11, 12, "Tail"), SENTINEL]:
         await processor.translation_queue.put(event)
@@ -141,6 +143,7 @@ async def test_mlx_translation_drains_batches_boundaries_and_eof(monkeypatch):
     processor = SimpleNamespace(
         translation_queue=asyncio.Queue(), translation=client,
         state=State(), lock=asyncio.Lock(),
+        event_tap=EventTap(),  # no-op sink; emission must not fail
     )
     for event in [
         ASRToken(0, 1, "One."), ASRToken(1, 2, " Two."), ASRToken(2, 3, " Three."),
