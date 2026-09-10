@@ -8,13 +8,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from whisperlivekit.caption_events import EventTap
-
 from whisperlivekit.audio_input import AudioInput
 from whisperlivekit.audio_processor import (
     SENTINEL,
     AudioProcessor,
 )
+from whisperlivekit.caption_events import EventTap
 from whisperlivekit.config import WhisperLiveKitConfig
 from whisperlivekit.diff_protocol import DiffTracker
 from whisperlivekit.metrics_collector import SessionMetrics
