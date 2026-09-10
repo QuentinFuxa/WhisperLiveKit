@@ -8,7 +8,7 @@ it carries the caption event types so generation can be tested for coherence
 independently of how the display renders it.
 
 Event types (named by what the viewer sees, not which subsystem produced it,
-aligning with the overlay's partial/preview/translation vocabulary and the
+aligning with the FrontData partial/preview/translation vocabulary and the
 FrontData buffer_transcription/buffer_translation fields):
 
   - ``transcription_provisional`` : the unstable ASR tail (rolling hypothesis,
@@ -86,7 +86,7 @@ class EventLog:
 
 
 class FanOutSink:
-    """Dispatch each event to multiple sinks (e.g. DisplayAdapter + EventLog)."""
+    """Dispatch each event to multiple sinks (e.g. CaptionLineAccumulator + EventLog)."""
     def __init__(self, sinks: List[EventSink]) -> None:
         self.sinks = list(sinks)
 

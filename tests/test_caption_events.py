@@ -1,7 +1,7 @@
 """Tests for the caption event stream + display adapter + diff (spike).
 
 Two independent test surfaces, decoupled:
-  1. DisplayAdapter: feed golden events, assert the rendered state is coherent
+  1. CaptionLineAccumulator: feed golden events, assert the rendered state is coherent
      (draft grows into final, no flicker, finals accumulate). Tests the DISPLAY
      layer with no ASR/MT running.
   2. diff_event_streams: assert a known-bad captured stream (fragment finals,
@@ -11,8 +11,8 @@ Two independent test surfaces, decoupled:
 """
 import os
 
+from whisperlivekit.caption_display import CaptionLineAccumulator
 from whisperlivekit.caption_events import CaptionEvent, EventLog, EventTap
-from whisperlivekit.display_adapter import DisplayAdapter
 
 GOLDEN_PATH = os.path.join(os.path.dirname(__file__), "golden", "zh_long_ideal.jsonl")
 
@@ -22,36 +22,36 @@ def _load_golden():
 
 
 # ---------------------------------------------------------------------------
-# DisplayAdapter — display layer tested with golden events (no ASR/MT)
+# CaptionLineAccumulator — line state tested with golden events (no ASR/MT)
 # ---------------------------------------------------------------------------
 
-class TestDisplayAdapter:
+class TestCaptionLineAccumulator:
     def test_golden_renders_one_final_per_sentence(self):
         """The golden stream has 6 translation_finals; the adapter should accumulate all 6."""
         events = _load_golden()
-        adapter = DisplayAdapter()
+        acc = CaptionLineAccumulator()
         for e in events:
-            adapter.feed(e)
-        assert len(adapter.state.final_lines) == 6, (
-            f"expected 6 finals, got {len(adapter.state.final_lines)}: {adapter.state.final_lines}"
+            acc.feed(e)
+        assert len(acc.state.final_lines) == 6, (
+            f"expected 6 finals, got {len(acc.state.final_lines)}: {acc.state.final_lines}"
         )
 
     def test_provisional_grows_then_clears_at_final(self):
         """Each translation_provisional sets partial_translation; the following translation_final clears it."""
         events = _load_golden()
-        adapter = DisplayAdapter()
+        acc = CaptionLineAccumulator()
         seen_prov = False
         cleared_after_final = True
         for e in events:
-            before = adapter.state.partial_translation
-            adapter.feed(e)
+            before = acc.state.partial_translation
+            acc.feed(e)
             if e.type == "translation_provisional":
-                assert adapter.state.partial_translation, (
+                assert acc.state.partial_translation, (
                     f"translation_provisional did not set provisional: {e}"
                 )
                 seen_prov = True
             elif e.type == "translation_final":
-                if before and adapter.state.partial_translation:
+                if before and acc.state.partial_translation:
                     cleared_after_final = False
         assert seen_prov, "no translation_provisional observed"
         assert cleared_after_final, "translation_final did not clear the provisional"
@@ -60,21 +60,21 @@ class TestDisplayAdapter:
         """transcription_final commits the draft; partial_transcription should clear."""
         events = [CaptionEvent(0, 2.0, "transcription_provisional", "hello"),
                   CaptionEvent(0, 2.1, "transcription_final", "hello")]
-        adapter = DisplayAdapter()
-        adapter.feed(events[0])
-        assert adapter.state.partial_transcription == "hello"
-        adapter.feed(events[1])
-        assert adapter.state.partial_transcription == ""
+        acc = CaptionLineAccumulator()
+        acc.feed(events[0])
+        assert acc.state.partial_transcription == "hello"
+        acc.feed(events[1])
+        assert acc.state.partial_transcription == ""
 
     def test_no_flicker_on_repeated_draft(self):
         """Repeated identical translation_provisionals should not append to final_lines."""
         events = [CaptionEvent(0, 1.0, "translation_provisional", "Hello"),
                   CaptionEvent(0, 1.1, "translation_provisional", "Hello"),
                   CaptionEvent(0, 1.2, "translation_provisional", "Hello world")]
-        adapter = DisplayAdapter()
+        acc = CaptionLineAccumulator()
         for e in events:
-            adapter.feed(e)
-        assert adapter.state.final_lines == [], "drafts must not become finals"
+            acc.feed(e)
+        assert acc.state.final_lines == [], "drafts must not become finals"
 
 
 # ---------------------------------------------------------------------------

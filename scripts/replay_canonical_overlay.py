@@ -2,7 +2,7 @@
 """Replay a captured caption event stream through the display model and
 print the reader-visible target-row sequence.
 
-This is the model-level replay instrument: it drives OverlayDisplayModel
+This is the model-level replay instrument: it drives CaptionDisplay
 directly with the recorded events (no view code) and traces the committed
 caption line as the hold-drain releases queued sentences. Use it to check
 what a viewer would see: sentence pacing, dim/bright transitions, and
@@ -24,7 +24,7 @@ import time
 from datetime import datetime, timedelta
 
 from whisperlivekit.caption_events import EventLog
-from whisperlivekit.overlay_model import OverlayDisplayModel
+from whisperlivekit.caption_display import CaptionDisplay
 
 
 def replay_canonical(path: str, hold: float = 3.5, pace: float = 0.25) -> None:
@@ -38,7 +38,7 @@ def replay_canonical(path: str, hold: float = 3.5, pace: float = 0.25) -> None:
 
         def advance(self, s): self.now += s
     clk = C()
-    m = OverlayDisplayModel(hold_sec=hold, clock=clk)
+    m = CaptionDisplay(hold_sec=hold, clock=clk)
 
     trace: list[tuple[float, str, str]] = []
     base = datetime.now()
