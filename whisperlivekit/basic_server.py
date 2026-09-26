@@ -3,7 +3,7 @@ import hmac
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import AsyncIterator, List, Optional, Union
 
 from fastapi import APIRouter, FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -222,10 +222,25 @@ _OPENAI_RESPONSE_FORMATS = frozenset({
 })
 
 _MAX_AUDIO_BYTES = 512 * 1024 * 1024
+_HARD_REST_TIMEOUT_CEILING = 3600.0  # 1 hour max for auto-computed REST budget
+_REST_CONCURRENCY_LIMIT = 2
+_rest_semaphore: asyncio.Semaphore | None = None
 
 
-async def _convert_to_pcm(audio_bytes: bytes) -> bytes:
-    """Convert audio with bounded output and a reaped process on every exit."""
+def _get_rest_semaphore() -> asyncio.Semaphore:
+    global _rest_semaphore
+    if _rest_semaphore is None:
+        _rest_semaphore = asyncio.Semaphore(_REST_CONCURRENCY_LIMIT)
+    return _rest_semaphore
+
+
+async def _convert_to_pcm(audio_input: Union[bytes, AsyncIterator[bytes]]) -> bytearray:
+    """Convert audio with bounded output and a reaped process on every exit.
+
+    Accepts either a bytes object (legacy callers) or an async chunk iterator
+    for streaming uploads without buffering the entire encoded body in memory.
+    Returns a bytearray to avoid an extra full-copy materialisation.
+    """
     from fastapi import HTTPException
 
     proc = await asyncio.create_subprocess_exec(
@@ -238,9 +253,14 @@ async def _convert_to_pcm(audio_bytes: bytes) -> bytes:
 
     async def feed():
         try:
-            for offset in range(0, len(audio_bytes), 65536):
-                proc.stdin.write(audio_bytes[offset:offset + 65536])
-                await proc.stdin.drain()
+            if isinstance(audio_input, (bytes, bytearray)):
+                for offset in range(0, len(audio_input), 65536):
+                    proc.stdin.write(audio_input[offset:offset + 65536])
+                    await proc.stdin.drain()
+            else:
+                async for chunk in audio_input:
+                    proc.stdin.write(chunk)
+                    await proc.stdin.drain()
         except (BrokenPipeError, ConnectionResetError):
             pass  # ffmpeg's exit code and stderr explain an invalid input
         finally:
@@ -265,7 +285,7 @@ async def _convert_to_pcm(audio_bytes: bytes) -> bytes:
         await proc.wait()
         if proc.returncode != 0:
             raise HTTPException(status_code=400, detail=f"Audio conversion failed: {detail}")
-        return bytes(pcm)
+        return pcm  # bytearray — avoids an extra full-copy materialisation
     finally:
         if proc.returncode is None:
             try:
@@ -478,6 +498,31 @@ async def create_transcription(
     if not _token_ok(_bearer_token(request), request):
         raise HTTPException(status_code=401, detail="invalid or missing API token")
 
+    # Cap concurrent REST transcriptions to prevent memory exhaustion from
+    # parallel unauthenticated uploads monopolising the shared ASR.
+    sem = _get_rest_semaphore()
+    try:
+        await asyncio.wait_for(sem.acquire(), timeout=30.0)
+    except TimeoutError:
+        raise HTTPException(status_code=503, detail="Server busy — too many concurrent transcriptions")
+    try:
+        return await _create_transcription_impl(request, file, model, language, prompt, response_format, timestamp_granularities, config, transcription_engine)
+    finally:
+        sem.release()
+
+
+async def _create_transcription_impl(
+    request: Request,
+    file: UploadFile,
+    model: str,
+    language: Optional[str],
+    prompt: str,
+    response_format: str,
+    timestamp_granularities: Optional[List[str]],
+    config,
+    transcription_engine,
+):
+
     if response_format not in _OPENAI_RESPONSE_FORMATS:
         allowed = ", ".join(sorted(_OPENAI_RESPONSE_FORMATS))
         raise HTTPException(
@@ -506,23 +551,35 @@ async def create_transcription(
         raise HTTPException(status_code=400, detail=str(e))
 
     max_upload_mb = 512
-    audio_bytes = await file.read(_MAX_AUDIO_BYTES + 1)
-    if not audio_bytes:
-        raise HTTPException(status_code=400, detail="Empty audio file")
-    if len(audio_bytes) > _MAX_AUDIO_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Audio file exceeds the {max_upload_mb} MB upload limit",
-        )
 
-    # Convert to PCM for pipeline processing
+    # Stream the upload into ffmpeg in chunks instead of buffering the
+    # entire encoded body in memory.  The byte cap is enforced while streaming.
+    total_read = 0
+    upload_ended = False
+
+    async def upload_chunks():
+        nonlocal total_read, upload_ended
+        while True:
+            chunk = await file.read(65536)
+            if not chunk:
+                upload_ended = True
+                break
+            total_read += len(chunk)
+            if total_read > _MAX_AUDIO_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Audio file exceeds the {max_upload_mb} MB upload limit",
+                )
+            yield chunk
+        upload_ended = True
+
+    # Convert to PCM for pipeline processing (streamed — no full encoded body resident)
     configured = float(getattr(config, "rest_timeout", 0) or 0)
     try:
         async with asyncio.timeout(configured if configured > 0 else 120):
-            pcm_data = await _convert_to_pcm(audio_bytes)
+            pcm_data = await _convert_to_pcm(upload_chunks())
     except TimeoutError:
         raise HTTPException(status_code=408, detail="Audio conversion timed out")
-    del audio_bytes
     duration = len(pcm_data) / (16000 * 2)  # 16kHz, 16-bit
 
     # Process through the full pipeline
@@ -552,7 +609,7 @@ async def create_transcription(
     # (issue #374: a fixed 120 s silently truncated long files) and can be
     # overridden with --rest-timeout.
     configured = float(getattr(config, "rest_timeout", 0) or 0)
-    timeout_sec = configured if configured > 0 else max(120.0, duration * 2.5)
+    timeout_sec = configured if configured > 0 else min(max(120.0, duration * 2.5), _HARD_REST_TIMEOUT_CEILING)
     timed_out = False
     try:
         async with asyncio.timeout(timeout_sec):
@@ -628,6 +685,26 @@ async def list_models(request: Request):
     })
 
 
+class _BodySizeLimitMiddleware:
+    """ASGI middleware that rejects requests with Content-Length exceeding the cap."""
+    def __init__(self, app, max_body_bytes: int = _MAX_AUDIO_BYTES):
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            for name, value in scope.get("headers", []):
+                if name == b"content-length":
+                    try:
+                        if int(value) > self.max_body_bytes:
+                            await send({"type": "http.response.start", "status": 413, "headers": []})
+                            await send({"type": "http.response.body", "body": b"Request body too large"})
+                            return
+                    except ValueError:
+                        pass
+        await self.app(scope, receive, send)
+
+
 def create_app(server_config: WhisperLiveKitConfig | None = None) -> FastAPI:
     """Build an ASGI application without reading the host process's arguments."""
     application = FastAPI(lifespan=lifespan)
@@ -637,6 +714,7 @@ def create_app(server_config: WhisperLiveKitConfig | None = None) -> FastAPI:
         allow_origins=parse_cors_origins(application.state.config.cors_origins),
         allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
     )
+    application.add_middleware(_BodySizeLimitMiddleware)
     application.include_router(router)
     return application
 
