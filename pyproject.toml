@@ -47,6 +47,7 @@ test = [
     "matplotlib>=3.8",
 ]
 translation = ["nllw"]
+dictate = ["pynput", "sounddevice", "pyperclip"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
 funasr = ["funasr~=1.4.1"]
 mlx-whisper = [

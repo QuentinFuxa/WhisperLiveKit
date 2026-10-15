@@ -1695,6 +1695,7 @@ Usage: wlk <command> [options]
 Commands:
   serve         Start the transcription server (default)
   listen        Live microphone transcription
+  dictate       Push-to-talk dictation: F9 to record, text pasted at the cursor
   run           Auto-pull model and start server
   transcribe    Transcribe audio files offline
   bench         Benchmark speed and accuracy
@@ -1754,6 +1755,10 @@ def main():
             return
         if subcmd == "listen":
             cmd_listen(sys.argv[2:])
+            return
+        if subcmd == "dictate":
+            from whisperlivekit.dictate.app import main as dictate_main
+            dictate_main(sys.argv[2:])
             return
         if subcmd == "diagnose":
             cmd_diagnose(sys.argv[2:])
