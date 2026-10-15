@@ -256,6 +256,13 @@ def build_parser():
         help="Select the ASR backend implementation. Use 'funasr' for SenseVoiceSmall through LocalAgreement (zh/yue/en/ja/ko or auto). Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-streaming' for Qwen3-ASR through plain HF Transformers with a bounded-recompute audio cache (CUDA/MPS/CPU, no vLLM; requires an explicit --language). Use 'canary' for NVIDIA Canary through NeMo on CUDA or CPU with LocalAgreement.",
     )
     parser.add_argument(
+        "--compute-type",
+        type=str,
+        default="auto",
+        dest="compute_type",
+        help="CTranslate2 compute type for the faster-whisper backend, e.g. float16, int8_float16, float32. 'auto' lets CTranslate2 choose.",
+    )
+    parser.add_argument(
         "--no-vac",
         action="store_true",
         default=False,

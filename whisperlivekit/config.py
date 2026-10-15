@@ -83,6 +83,7 @@ class WhisperLiveKitConfig:
     sortformer_model_path: Optional[str] = None
     backend_policy: str = "simulstreaming"
     backend: str = "auto"
+    compute_type: str = "auto"
 
     # Transcription common
     warmup_file: Optional[str] = None

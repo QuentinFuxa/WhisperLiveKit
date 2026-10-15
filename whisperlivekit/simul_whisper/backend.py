@@ -436,7 +436,7 @@ class SimulStreamingASR:
             self.fw_encoder = WhisperModel(
                 fw_model,
                 device='auto',
-                compute_type='auto',
+                compute_type=getattr(self, 'compute_type', 'auto'),
             )
             self.shared_model = self.load_model()
         else:

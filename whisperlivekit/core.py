@@ -249,6 +249,7 @@ class TranscriptionEngine:
                     "init_prompt": config.init_prompt,
                     "static_init_prompt": config.static_init_prompt,
                     "max_context_tokens": config.max_context_tokens,
+                    "compute_type": config.compute_type,
                 }
 
                 self.tokenizer = None
@@ -266,6 +267,7 @@ class TranscriptionEngine:
                     "buffer_trimming": config.buffer_trimming,
                     "confidence_validation": config.confidence_validation,
                     "buffer_trimming_sec": config.buffer_trimming_sec,
+                    "compute_type": config.compute_type,
                 }
 
                 self.asr = backend_factory(

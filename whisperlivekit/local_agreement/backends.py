@@ -102,6 +102,11 @@ class FasterWhisperASR(ASRBase):
     """Uses faster-whisper as the backend."""
     sep = ""
 
+    def __init__(self, *args, compute_type="auto", **kwargs):
+        # Set before super().__init__, which calls load_model
+        self.compute_type = compute_type
+        super().__init__(*args, **kwargs)
+
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
         from faster_whisper import WhisperModel
 
@@ -115,13 +120,12 @@ class FasterWhisperASR(ASRBase):
         else:
             raise ValueError("Either model_size or model_dir must be set")
         device = "auto" # Allow CTranslate2 to decide available device
-        compute_type = "auto" # Allow CTranslate2 to decide faster compute type
 
 
         model = WhisperModel(
             model_size_or_path,
             device=device,
-            compute_type=compute_type,
+            compute_type=self.compute_type,
             download_root=cache_dir,
         )
         return model

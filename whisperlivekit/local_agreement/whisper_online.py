@@ -85,6 +85,7 @@ def backend_factory(
             confidence_validation,
             warmup_file=None,
             min_chunk_size=None,
+            compute_type="auto",
             **_unused_kwargs,
         ):
     if backend == "funasr":
@@ -161,12 +162,14 @@ def backend_factory(
 
         t = time.time()
         logger.info(f"Loading Whisper {model_size} model for language {lan} using backend {backend_choice}...")
+        extra_kwargs = {"compute_type": compute_type} if asr_cls is FasterWhisperASR else {}
         asr = asr_cls(
             model_size=model_size,
             lan=lan,
             cache_dir=model_cache_dir,
             model_dir=model_override,
             lora_path=lora_path if backend_choice == "whisper" else None,
+            **extra_kwargs,
         )
         e = time.time()
         logger.info(f"done. It took {round(e-t,2)} seconds.")
