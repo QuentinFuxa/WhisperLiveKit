@@ -386,6 +386,46 @@ async def websocket_endpoint(websocket: WebSocket):
 **Frontend Implementation**: The package includes an HTML/JavaScript implementation [here](https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/whisperlivekit/web/live_transcription.html). You can also import it using `from whisperlivekit import get_inline_ui_html` & `page = get_inline_ui_html()`
 
 
+## Dictation (`wlk dictate`)
+
+Push-to-talk dictation for Linux (X11): press F9, speak, press F9 again, and the text is pasted where your cursor is. Audio goes straight into the streaming pipeline while you speak, so the text is ready within about half a second of stopping. No server or port is opened. F8 pastes the last text again.
+
+```bash
+sudo apt install xdotool x11-utils libnotify-bin   # paste, terminal detection, notifications
+pip install -e ".[dictate]"
+wlk dictate --model large-v3 --backend faster-whisper --backend-policy localagreement --lan en \
+  --min-chunk-size 1.0 --buffer_trimming_sec 8 --no-vac --log-level INFO
+```
+
+- `--hotkey` and `--repaste-hotkey` change the keys (default `f9` and `f8`). All other options are the same as `wlk serve`.
+- `--min-chunk-size 1.0 --buffer_trimming_sec 8 --no-vac` keep transcription ahead of your speech. With the defaults it re-transcribes too often and falls behind, so you wait after stopping.
+- Terminals get Ctrl+Shift+V instead of Ctrl+V. Your clipboard is restored after pasting.
+- Recordings with no speech, and filler Whisper produces from silence ("Thank you for watching."), are not pasted.
+- On RTX 50-series GPUs, `--compute-type int8_float16` needs a recent cuBLAS: `pip install nvidia-cublas-cu12==12.9.2.10` and set `LD_LIBRARY_PATH` to its `nvidia/cublas/lib` folder. With it, `large-v3` keeps up on a laptop GPU.
+
+Run it as a systemd user service:
+
+```ini
+# ~/.config/systemd/user/wlk-dictate.service
+[Unit]
+Description=WhisperLiveKit dictation
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/path/to/venv/bin/wlk dictate --model large-v3 --backend faster-whisper --backend-policy localagreement --lan en --min-chunk-size 1.0 --buffer_trimming_sec 8 --no-vac --log-level INFO
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
+```
+
+```bash
+systemctl --user daemon-reload && systemctl --user enable --now wlk-dictate
+```
+
+
 ## Parameters & Configuration
 
 
