@@ -12,6 +12,7 @@ same settings as the CLI.
 | `--model` | Model size or name for the selected backend | `base` |
 | `--language` | Source language; coverage depends on the backend | `auto` |
 | `--backend-policy` | Whisper streaming policy: `simulstreaming` or `localagreement` | `simulstreaming` |
+| `--compute-type` | CTranslate2 compute type for faster-whisper models, e.g. `float16` or `int8_float16` | `auto` |
 | `--target-language` | Enable translation to this language | disabled |
 | `--translation-backend` | `nllb`, the [AlignAtt4LLM server](translation-alignatt.md), or [local MLX translation](translation-mlx.md) | `nllb` |
 | `--diarization` | Attribute words to speakers | disabled |
