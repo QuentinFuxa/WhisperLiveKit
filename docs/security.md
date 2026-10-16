@@ -71,7 +71,7 @@ At 60 per minute a single user has roughly ten times the headroom they use, seve
 
 Uvicorn rewrites the client address from `X-Forwarded-For` before any middleware runs, so the guard and Uvicorn must trust the same proxies. With the guard enabled, `wlk` passes `--forwarded-allow-ips` to both. Without that option, proxy headers are turned off in Uvicorn, even when `FORWARDED_ALLOW_IPS` is set in the environment, so a client cannot change its identity by sending its own `X-Forwarded-For`.
 
-Behind a reverse proxy, set `--forwarded-allow-ips` to the proxy address, and every client is then counted by the address the proxy reports.
+Behind a reverse proxy, set `--forwarded-allow-ips` to the proxy address, and every client is then counted by the address the proxy reports. Do not use `*` with the guard: it trusts `X-Forwarded-For` from every peer, so any client could choose the address that is rate limited and banned. The server logs a warning when it is set.
 
 When the app is started directly with `uvicorn whisperlivekit.basic_server:app`, the guard trusts no proxy, so pass `--no-proxy-headers` to Uvicorn. Uvicorn's default of trusting only `127.0.0.1` is also safe for a proxy on the same host. Never set `FORWARDED_ALLOW_IPS=*` there: it would let any client choose its address.
 

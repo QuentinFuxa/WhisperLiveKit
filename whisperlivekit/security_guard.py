@@ -37,6 +37,10 @@ def trusted_proxies(forwarded_allow_ips: str | None) -> tuple[str, ...]:
     entries = []
     for entry in parse_csv(forwarded_allow_ips):
         if entry == "*":
+            logger.warning(
+                "forwarded_allow_ips '*' trusts X-Forwarded-For from every peer, so any client can choose "
+                "the address the security guard rate limits and bans; list your proxy addresses instead"
+            )
             entries += ["0.0.0.0/0", "::/0"]
         elif entry.startswith("/"):
             entries.append("unix")  # a socket path, the guard's name for a Unix socket peer

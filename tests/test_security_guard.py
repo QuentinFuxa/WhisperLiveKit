@@ -310,6 +310,12 @@ def test_guard_trusts_exactly_what_uvicorn_trusts():
     assert trusted_proxies(None) == ()
 
 
+def test_wildcard_forwarded_allow_ips_warns(caplog):
+    with caplog.at_level("WARNING", logger="whisperlivekit.security_guard"):
+        trusted_proxies("*")
+    assert any("any client can choose" in record.getMessage() for record in caplog.records)
+
+
 @requires_guard
 @pytest.mark.asyncio
 @pytest.mark.parametrize("forwarded", [None, "198.51.100.200"])
