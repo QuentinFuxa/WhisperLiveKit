@@ -28,6 +28,8 @@ location / {
 
 Configure `--forwarded-allow-ips` for the proxy addresses you trust. Use `--cors-origins` when a separate web origin calls the HTTP API.
 
+For a server reachable by other people, the optional [security guard](security.md) adds attack screening with automatic bans, per-client budgets and IP rules inside the application. It complements the proxy and does not replace TLS.
+
 ## GPU environments
 
 For source installs, initialize the submodule before using uv:

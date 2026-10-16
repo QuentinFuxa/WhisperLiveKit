@@ -13,6 +13,7 @@ from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_ht
 from whisperlivekit.api_auth import websocket_token
 from whisperlivekit.config import WhisperLiveKitConfig, parse_cors_origins
 from whisperlivekit.processing_queue import PipelineClosed, PipelineOverloaded
+from whisperlivekit.security_guard import guard_enabled, install_security_guard, uvicorn_proxy_kwargs
 from whisperlivekit.timed_objects import FrontData
 from whisperlivekit.timed_objects import format_subtitle_timestamp as _srt_timestamp
 
@@ -53,6 +54,9 @@ async def lifespan(app: FastAPI):
 
 
 router = APIRouter()
+# WebSocket routes live on their own router so the optional security guard can
+# run its handshake checks on exactly these routes.
+ws_router = APIRouter()
 
 @router.get("/")
 async def get():
@@ -91,7 +95,7 @@ async def handle_websocket_results(websocket, results_generator, diff_tracker=No
         logger.exception(f"Error in WebSocket results handler: {e}")
 
 
-@router.websocket("/asr")
+@ws_router.websocket("/asr")
 async def websocket_endpoint(websocket: WebSocket):
     config, transcription_engine = _session_settings(websocket)
 
@@ -192,7 +196,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # Deepgram-compatible WebSocket API  (/v1/listen)
 # ---------------------------------------------------------------------------
 
-@router.websocket("/v1/listen")
+@ws_router.websocket("/v1/listen")
 async def deepgram_websocket_endpoint(websocket: WebSocket):
     """Deepgram-compatible live transcription WebSocket."""
     config, transcription_engine = _session_settings(websocket)
@@ -632,12 +636,18 @@ def create_app(server_config: WhisperLiveKitConfig | None = None) -> FastAPI:
     """Build an ASGI application without reading the host process's arguments."""
     application = FastAPI(lifespan=lifespan)
     application.state.config = server_config if server_config is not None else WhisperLiveKitConfig()
+    ws_dependencies = []
+    if guard_enabled(application.state.config):
+        # Added before CORSMiddleware: Starlette makes the last-added middleware
+        # outermost, so guard rejections still carry CORS headers.
+        ws_dependencies = install_security_guard(application, create_transcription)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=parse_cors_origins(application.state.config.cors_origins),
         allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
     )
     application.include_router(router)
+    application.include_router(ws_router, dependencies=ws_dependencies)
     return application
 
 
@@ -676,8 +686,7 @@ def main():
 
     if ssl_kwargs:
         uvicorn_kwargs = {**uvicorn_kwargs, **ssl_kwargs}
-    if config.forwarded_allow_ips:
-        uvicorn_kwargs = {**uvicorn_kwargs, "forwarded_allow_ips": config.forwarded_allow_ips}
+    uvicorn_kwargs = {**uvicorn_kwargs, **uvicorn_proxy_kwargs(config)}
 
     uvicorn.run(**uvicorn_kwargs)
 
