@@ -374,6 +374,13 @@ asyncio.run(main())
 
 ## WebSocket Streaming API
 
+Both streaming routes share a server-configured session limit (64 per
+application/worker by default). When full, the server rejects the WebSocket
+upgrade with HTTP 403 before creating a processor or decoder. Retry after an
+existing session ends. Native `/asr` also closes with code 1001 after 60 seconds
+waiting for its next audio frame by default; ping/pong frames do not reset this
+timer. The settings are documented in [configuration](configuration.md).
+
 This section describes the WebSocket API for clients that want to stream audio and receive real-time transcription results from a WhisperLiveKit server.
 
 ---
@@ -407,6 +414,8 @@ ws://localhost:8000/asr?language=fr&context=WhisperLiveKit%2C+Qwen3-ASR&mode=dif
 4. Server sends transcription updates as JSON messages.
 5. Client sends empty bytes (`b""`) to signal end of audio.
 6. Server finishes processing remaining audio and sends a **ready_to_stop** message.
+7. Server closes the completed session normally (code 1000), after the final
+   result. The idle timeout does not interrupt this final drainage.
 
 ---
 
