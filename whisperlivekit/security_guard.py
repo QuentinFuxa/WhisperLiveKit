@@ -115,7 +115,7 @@ def _ip_listed(client_ip: str, entries) -> bool:
 def make_handshake_dependency(guard, security_config):
     """Handshake checks for the WebSocket routes, run before `accept()`.
 
-    fastapi-guard 8.1.1 checks bans, IP and country rules, cloud providers, the session
+    fastapi-guard 8.1.2 checks bans, IP and country rules, cloud providers, the session
     budget and attack patterns on a handshake; emergency mode and user-agent rules are
     HTTP-pipeline checks there, so they are applied here.
     """

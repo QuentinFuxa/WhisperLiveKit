@@ -2,7 +2,7 @@
 
 An optional application-layer security layer built on [fastapi-guard](https://github.com/Guard-Core/fastapi-guard). It runs inside the server, so it knows WhisperLiveKit's routes, and it complements a reverse proxy, WAF or firewall in front of the server (TLS stays there). Where nothing sits in front of the server, it is the protection. It is off by default: with it off, `guard` is never imported and the application is built exactly as before.
 
-Statements about engine behavior below hold with fastapi-guard 8.1.1 and guard-core 4.4.0.
+Statements about engine behavior below hold with fastapi-guard 8.1.2 and guard-core 4.4.0.
 
 ## What it adds
 
