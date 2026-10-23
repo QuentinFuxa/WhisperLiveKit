@@ -22,6 +22,7 @@ same settings as the CLI.
 | `--pcm-input` | Accept mono 16 kHz signed 16-bit little-endian PCM and bypass FFmpeg | disabled |
 | `--api-token` | Require authentication; falls back to `WLK_API_TOKEN` | unset |
 | `--cors-origins` | Comma-separated browser origins allowed to call the API | none |
+| `--security-guard` | Optional attack screening, bans, budgets and IP rules; see [security](security.md) | disabled |
 | `--host` / `--port` | Listening address | `localhost` / `8000` |
 
 Backend-specific model paths, language restrictions and optional dependencies

@@ -302,6 +302,59 @@ def build_parser():
         dest="cors_origins",
         help="Comma-separated list of allowed CORS origins. Empty disables CORS; use '*' to allow all origins.",
     )
+    security_group = parser.add_argument_group(
+        "Security guard (optional, needs: pip install 'whisperlivekit[security]')"
+    )
+    security_group.add_argument(
+        "--security-guard",
+        action="store_true",
+        default=False,
+        dest="security_guard",
+        help=(
+            "Enable the fastapi-guard application-layer security: attack-pattern "
+            "screening with automatic bans on HTTP routes and the /asr and "
+            "/v1/listen WebSocket handshakes, per-client budgets and upload "
+            "limits. Off by default; WLK_SECURITY_GUARD=1 also enables it. See "
+            "docs/security.md."
+        ),
+    )
+    for flag, dest, what in (
+        ("allow-ips", "security_guard_allow_ips", "Only these IPs or CIDR ranges may connect (comma-separated)."),
+        ("block-ips", "security_guard_block_ips", "IPs or CIDR ranges that are always refused (comma-separated)."),
+        ("allow-countries", "security_guard_allow_countries", "Only these ISO 3166-1 country codes may connect. Needs IPINFO_TOKEN."),
+        ("block-countries", "security_guard_block_countries", "Country codes that are refused. Needs IPINFO_TOKEN."),
+        ("block-clouds", "security_guard_block_clouds", "Cloud providers whose IP ranges are refused, e.g. AWS,GCP,Azure."),
+        ("block-user-agents", "security_guard_block_user_agents", "User-agent patterns that are refused."),
+    ):
+        security_group.add_argument(f"--security-guard-{flag}", type=str, default="", dest=dest, help=what)
+    security_group.add_argument(
+        "--security-guard-rate-limit", type=int, default=60, dest="security_guard_rate_limit",
+        help="Per client and window: maximum HTTP requests and, separately, new WebSocket sessions (default: 60).",
+    )
+    security_group.add_argument(
+        "--security-guard-rate-window", type=int, default=60, dest="security_guard_rate_window",
+        help="Window in seconds for the budgets above (default: 60).",
+    )
+    security_group.add_argument(
+        "--security-guard-upload-rate-limit", type=int, default=10, dest="security_guard_upload_rate_limit",
+        help="Per client and window: maximum POST /v1/audio/transcriptions requests (default: 10).",
+    )
+    security_group.add_argument(
+        "--security-guard-max-upload-mb", type=int, default=512, dest="security_guard_max_upload_mb",
+        help="Largest accepted /v1/audio/transcriptions request in MB (default: 512).",
+    )
+    security_group.add_argument(
+        "--security-guard-emergency", action="store_true", default=False, dest="security_guard_emergency",
+        help="Emergency mode: refuse everyone except --security-guard-emergency-allow-ips.",
+    )
+    security_group.add_argument(
+        "--security-guard-emergency-allow-ips", type=str, default="", dest="security_guard_emergency_allow_ips",
+        help="IPs or CIDR ranges admitted while emergency mode is on (comma-separated).",
+    )
+    security_group.add_argument(
+        "--security-guard-passive", action="store_true", default=False, dest="security_guard_passive",
+        help="Log what the guard would block without blocking, to try the rules before enforcing them (see docs/security.md for what passive covers).",
+    )
     parser.add_argument(
         "--pcm-input",
         action="store_true",

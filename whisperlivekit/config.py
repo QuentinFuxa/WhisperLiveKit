@@ -193,6 +193,26 @@ class WhisperLiveKitConfig:
     # None exposes every speaker channel provided by the Sortformer checkpoint.
     sortformer_max_speakers: Optional[int] = None
 
+    # Optional fastapi-guard security layer (docs/security.md). Off by default;
+    # WLK_SECURITY_GUARD=1 also enables it. Lists are comma-separated.
+    security_guard: bool = False
+    security_guard_allow_ips: str = ""
+    security_guard_block_ips: str = ""
+    security_guard_allow_countries: str = ""
+    security_guard_block_countries: str = ""
+    security_guard_block_clouds: str = ""
+    security_guard_block_user_agents: str = ""
+    # Per client, per window: HTTP requests and, separately, new WebSocket sessions.
+    security_guard_rate_limit: int = 60
+    security_guard_rate_window: int = 60
+    # Per client, per window, on POST /v1/audio/transcriptions.
+    security_guard_upload_rate_limit: int = 10
+    security_guard_max_upload_mb: int = 512
+    # Emergency mode admits only these IPs or CIDR ranges; passive only logs.
+    security_guard_emergency: bool = False
+    security_guard_emergency_allow_ips: str = ""
+    security_guard_passive: bool = False
+
     def __post_init__(self):
         for name in ("max_buffered_audio", "backpressure_timeout"):
             value = float(getattr(self, name))

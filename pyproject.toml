@@ -45,7 +45,9 @@ test = [
     "deepgram-sdk==7.8.1",
     "psutil>=5.9",
     "matplotlib>=3.8",
+    "fastapi-guard>=8.1.2",
 ]
+security = ["fastapi-guard>=8.1.2"]
 translation = ["nllw"]
 sentence_tokenizer = ["mosestokenizer", "wtpsplit"]
 funasr = ["funasr~=1.4.1"]
