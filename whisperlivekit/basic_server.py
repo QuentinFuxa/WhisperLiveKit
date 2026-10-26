@@ -8,12 +8,14 @@ from typing import List, Optional
 from fastapi import APIRouter, FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from starlette.websockets import WebSocketState
 
 from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
 from whisperlivekit.api_auth import websocket_token
 from whisperlivekit.config import WhisperLiveKitConfig, parse_cors_origins
 from whisperlivekit.processing_queue import PipelineClosed, PipelineOverloaded
 from whisperlivekit.security_guard import guard_enabled, install_security_guard, uvicorn_proxy_kwargs
+from whisperlivekit.session_limits import WebSocketSessionLimitMiddleware
 from whisperlivekit.timed_objects import FrontData
 from whisperlivekit.timed_objects import format_subtitle_timestamp as _srt_timestamp
 
@@ -161,9 +163,36 @@ async def websocket_endpoint(websocket: WebSocket):
         websocket_task = asyncio.create_task(
             handle_websocket_results(websocket, results_generator, diff_tracker)
         )
+        audio_ended = False
         while True:
-            message = await websocket.receive_bytes()
+            receive_task = asyncio.create_task(websocket.receive_bytes())
+            try:
+                done, _ = await asyncio.wait(
+                    (receive_task, websocket_task),
+                    timeout=None if audio_ended else config.session_idle_timeout or None,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not done:
+                    logger.info("Closing idle native WebSocket session")
+                    await websocket.close(code=1001, reason="session idle timeout")
+                    break
+                if websocket_task in done:
+                    await websocket_task
+                    if (
+                        websocket.application_state != WebSocketState.DISCONNECTED
+                        and websocket.client_state != WebSocketState.DISCONNECTED
+                    ):
+                        await websocket.close(code=1000)
+                    break
+                message = receive_task.result()  # propagate disconnects
+            finally:
+                if not receive_task.done():
+                    receive_task.cancel()
+                await asyncio.gather(receive_task, return_exceptions=True)
             await audio_processor.process_audio(message)
+            # EOF drains without an idle deadline, while still watching for
+            # client disconnects so an abandoned final decode is cleaned up.
+            audio_ended = audio_ended or not message
     except KeyError as e:
         if 'bytes' in str(e):
             logger.warning("Client has closed the connection.")
@@ -641,6 +670,10 @@ def create_app(server_config: WhisperLiveKitConfig | None = None) -> FastAPI:
         # Added before CORSMiddleware: Starlette makes the last-added middleware
         # outermost, so guard rejections still carry CORS headers.
         ws_dependencies = install_security_guard(application, create_transcription)
+    application.add_middleware(
+        WebSocketSessionLimitMiddleware,
+        max_sessions=application.state.config.max_concurrent_sessions,
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=parse_cors_origins(application.state.config.cors_origins),

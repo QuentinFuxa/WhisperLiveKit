@@ -192,6 +192,11 @@ class WhisperLiveKitConfig:
     pause_segmentation_seconds: float = 5.0
     # None exposes every speaker channel provided by the Sortformer checkpoint.
     sortformer_max_speakers: Optional[int] = None
+    # Shared by the streaming WebSocket routes within one application/worker.
+    max_concurrent_sessions: int = 64
+    # Native /asr receive timeout in seconds; 0 disables. Deepgram keeps its
+    # protocol-specific 30-second timeout and KeepAlive messages.
+    session_idle_timeout: float = 60.0
 
     # Optional fastapi-guard security layer (docs/security.md). Off by default;
     # WLK_SECURITY_GUARD=1 also enables it. Lists are comma-separated.
@@ -214,6 +219,15 @@ class WhisperLiveKitConfig:
     security_guard_passive: bool = False
 
     def __post_init__(self):
+        if (
+            isinstance(self.max_concurrent_sessions, bool)
+            or not isinstance(self.max_concurrent_sessions, int)
+            or self.max_concurrent_sessions < 1
+        ):
+            raise ValueError("max_concurrent_sessions must be a positive integer.")
+        self.session_idle_timeout = float(self.session_idle_timeout)
+        if not math.isfinite(self.session_idle_timeout) or self.session_idle_timeout < 0:
+            raise ValueError("session_idle_timeout must be finite and non-negative.")
         for name in ("max_buffered_audio", "backpressure_timeout"):
             value = float(getattr(self, name))
             if not math.isfinite(value) or value <= 0:

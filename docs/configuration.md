@@ -19,6 +19,8 @@ same settings as the CLI.
 | `--asr-coalesce-min-s` | Accumulate new audio before inference; trades update cadence for fewer calls | `0` |
 | `--max-buffered-audio` | Maximum queued audio, in seconds, per ASR/diarization stage | `30` |
 | `--backpressure-timeout` | Maximum wait for room in a processing queue, in seconds | `30` |
+| `--max-concurrent-sessions` | Maximum simultaneous WebSocket sessions per application/worker | `64` |
+| `--session-idle-timeout` | Seconds waiting for the next native `/asr` audio frame; `0` disables | `60` |
 | `--pcm-input` | Accept mono 16 kHz signed 16-bit little-endian PCM and bypass FFmpeg | disabled |
 | `--api-token` | Require authentication; falls back to `WLK_API_TOKEN` | unset |
 | `--cors-origins` | Comma-separated browser origins allowed to call the API | none |
@@ -45,6 +47,21 @@ for compatibility but have no effect and emit a warning. Diarization speaker
 turns and `--pause-segmentation-seconds` control the corresponding boundaries.
 
 ## Long sessions and file requests
+
+`--max-concurrent-sessions` must be a positive integer. The native `/asr` and
+Deepgram-compatible `/v1/listen` routes share this capacity. Excess connections
+are rejected before the WebSocket upgrade (HTTP 403), without creating a
+processor or FFmpeg decoder. A slot remains occupied until session cleanup
+finishes. Each application/worker has its own capacity; REST requests are not
+included. Lower the limit to match the memory and throughput of your backend.
+
+On `/asr`, `--session-idle-timeout` limits the wait for each next audio frame,
+including the first one. It must be finite and non-negative; `0` disables it.
+Expiry closes the socket with code 1001 and releases the session resources.
+Audio frames containing silence still count as activity; WebSocket ping/pong
+frames do not. This timer does not interrupt audio processing or final drainage.
+Deepgram retains its separate 30-second timeout, refreshed by audio or
+`KeepAlive` messages.
 
 `--retention-seconds` sets transcript history retention. Without an override,
 `mode=full` retains the entire transcript and `mode=diff` retains 300 seconds on
