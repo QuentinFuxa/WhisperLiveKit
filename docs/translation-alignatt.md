@@ -38,7 +38,7 @@ wlk --model base --language en --target-language de \
     --alignatt-url ws://localhost:8765
 ```
 
-Replace `localhost` with the reachable translation-server host when using separate machines. Install WhisperLiveKit and its ASR extra in its own environment. The `translation` extra is for NLLB and is not required by this remote backend.
+Replace `localhost` with the reachable translation-server host when using separate machines. The MT protocol carries transcript text and has no authentication of its own, so do not expose the translation-server port publicly. Across machines, use a private network or an SSH tunnel, or put a TLS proxy in front of the server and pass a `wss://` URL; WLK then connects over TLS with certificate verification. Install WhisperLiveKit and its ASR extra in its own environment. The `translation` extra is for NLLB and is not required by this remote backend.
 
 For the causal Qwen3 ASR route:
 

@@ -397,6 +397,57 @@ def test_alignatt_pending_utf8_tokens_preserve_original_timestamps():
     assert words[0].end == pytest.approx(4.12)
 
 
+def _make_alignatt_with_context(backend):
+    from whisperlivekit.whisper.tokenizer import get_tokenizer
+
+    if backend == "mlx":
+        pytest.importorskip("mlx_whisper")
+        import mlx.core as mx
+
+        from whisperlivekit.simul_whisper.mlx.decoder_state import MLXDecoderState as State
+        from whisperlivekit.simul_whisper.mlx.simul_whisper import MLXAlignAtt as Aligner
+
+        to_logits = mx.array
+    else:
+        import torch
+
+        from whisperlivekit.simul_whisper.decoder_state import DecoderState as State
+        from whisperlivekit.simul_whisper.simul_whisper import AlignAtt as Aligner
+
+        to_logits = torch.from_numpy
+
+    aligner = object.__new__(Aligner)
+    aligner.tokenizer = get_tokenizer(multilingual=True, language="pl", task="transcribe")
+    aligner.cfg = SimpleNamespace(
+        beam_size=1, nonspeech_prob=0.5,
+        static_init_prompt=None, init_prompt="Poprzednie zdanie.",
+    )
+    aligner.model = SimpleNamespace(device="cpu")
+    aligner.state = State()
+    aligner.init_tokens()
+    aligner.init_context()
+    return aligner, to_logits
+
+
+@pytest.mark.parametrize("backend", ["torch", "mlx"])
+def test_alignatt_no_speech_reads_sot_after_context_prompt(backend):
+    """Issue #467: once the context prompt precedes SOT, read no-speech at SOT."""
+    aligner, to_logits = _make_alignatt_with_context(backend)
+    current_tokens = aligner._current_tokens()
+    sot_position = aligner.state.context_token_length + aligner.state.sot_index
+    assert sot_position > 0
+    assert int(current_tokens[0, sot_position].item()) == aligner.tokenizer.sot
+
+    no_speech = aligner.tokenizer.no_speech
+    logits = np.zeros((1, current_tokens.shape[1], no_speech + 1), dtype=np.float32)
+    # <|startofprev|> has only seen the prompt, so its no-speech score is noise.
+    logits[0, 0, no_speech] = 20.0
+    assert not aligner._check_no_speech(to_logits(logits))
+
+    logits[0, sot_position, no_speech] = 20.0
+    assert aligner._check_no_speech(to_logits(logits))
+
+
 def test_decoder_state_clean_cache_does_not_empty_cuda_cache(monkeypatch):
     import torch
 
