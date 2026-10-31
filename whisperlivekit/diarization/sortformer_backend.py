@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import threading
 import wave
@@ -266,6 +267,12 @@ class SortformerDiarizationOnline:
         audio = self.buffer_audio[:threshold]
         self.buffer_audio = self.buffer_audio[threshold:]
 
+        # The forward pass can take seconds on a loaded host; running it on the
+        # event loop stalls every session and the WebSocket keepalive (#220).
+        return await asyncio.to_thread(self._diarize_chunk, audio)
+
+    def _diarize_chunk(self, audio: np.ndarray):
+        """Run one Sortformer streaming step on ``audio`` (blocking)."""
         device = self.diar_model.device
         audio_signal_chunk = torch.tensor(audio, device=device).unsqueeze(0)
         audio_signal_length_chunk = torch.tensor([audio_signal_chunk.shape[1]], device=device)
