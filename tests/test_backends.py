@@ -2,10 +2,40 @@
 
 import asyncio
 import sys
+from dataclasses import asdict
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
+
+
+def test_mlx_direct_translation_preserves_source_language_and_filters_vad(monkeypatch):
+    from whisperlivekit.config import WhisperLiveKitConfig
+    from whisperlivekit.local_agreement import whisper_online
+    from whisperlivekit.local_agreement.backends import MLXWhisper
+
+    def load_model(self, *args):
+        self.model_size_or_path = "local-whisper"
+
+        def transcribe(audio, *, language, **options):
+            assert language == "fr"
+            assert "vad_filter" not in options
+            text = " Hello." if options.get("task") == "translate" else " Bonjour."
+            return {"segments": [{"words": [{"start": 0, "end": 1, "word": text}]}]}
+
+        return transcribe
+
+    monkeypatch.setattr(MLXWhisper, "load_model", load_model)
+    monkeypatch.setattr(whisper_online, "mlx_backend_available", lambda **kwargs: True)
+    for translate, expected in [(False, " Bonjour."), (True, " Hello.")]:
+        config = WhisperLiveKitConfig(
+            backend="mlx-whisper", lan="fr", model_size="tiny",
+            direct_english_translation=translate, warmup_file="",
+        )
+        asr = whisper_online.backend_factory(**asdict(config))
+        asr.use_vad()
+        words = asr.ts_words(asr.transcribe(np.zeros(16000, dtype=np.float32)))
+        assert "".join(word.text for word in words) == expected
 
 
 def _base_simul_kwargs(**overrides):
