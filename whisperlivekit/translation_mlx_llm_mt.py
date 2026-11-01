@@ -8,7 +8,7 @@ import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
-from whisperlivekit.timed_objects import ASRToken, TimedText, Translation
+from whisperlivekit.timed_objects import ASRToken, TimedText, Translation, TranslationProgress
 
 # The profile dataclass + registry live in the neutral ``translation_profiles"
 # module so a future peer backend (vLLM, etc.) can share them without importing
@@ -92,6 +92,13 @@ class MlxLlmTranslation:
     the contract is stateless across sessions except for the per-instance
     segment buffer.
     """
+
+    # Display contract: does this backend produce provisional MT drafts?
+    # The base segment translator buffers UNTRANSLATED source — its buffer
+    # must never be shown as a draft (the caption event tap keys off this).
+    # Capability is a class attribute, matching upstream's class-based
+    # backend routing (session_translation_factory).
+    provides_drafts: bool = False
 
     _MODEL_CACHE: Dict[tuple, Tuple[Any, Any]] = {}
     # MLX models and tokenizers are shared, including mutable decode caches.
@@ -260,6 +267,14 @@ class MlxLlmTranslation:
     def _source_text(self) -> str:
         separator = "" if self._source_language.startswith(("zh", "ja", "cmn", "yue")) else " "
         return separator.join(t.text.strip() for t in self._buffer_tokens).strip()
+
+    def progress(self) -> TranslationProgress:
+        """Source-progress state for the caption event stream.
+
+        The base segment translator produces no drafts and exposes no
+        source text; the counter reflects real MT generations.
+        """
+        return TranslationProgress(mt_call_count=self._mt_call_count)
 
     def process(self) -> Tuple[Optional[Translation], TimedText]:
         """Drain completed sentences without discarding a failed generation."""

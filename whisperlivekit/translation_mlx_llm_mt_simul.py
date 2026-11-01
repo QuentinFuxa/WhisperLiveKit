@@ -15,7 +15,7 @@ from whisperlivekit.simul_mt_capture import (
     snapshot_capture,
     source_span,
 )
-from whisperlivekit.timed_objects import ASRToken, HypothesisTail, TimedText
+from whisperlivekit.timed_objects import ASRToken, HypothesisTail, TimedText, TranslationProgress
 from whisperlivekit.translation_mlx_llm_mt import (
     MlxLlmTranslation,
     _placeholder_stop_check,
@@ -143,6 +143,19 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
     def _committed_text(self):
         separator = "" if self._source_language.startswith(("zh", "ja", "cmn", "yue")) else " "
         return separator.join(t.text.strip() for t in self._committed_simul)
+
+    # Display contract (see MlxLlmTranslation): the simul engine produces
+    # provisional drafts and re-exposes its live state for the caption
+    # event stream. Pure re-expose — no internal state is renamed.
+    provides_drafts = True
+
+    def progress(self) -> TranslationProgress:
+        return TranslationProgress(
+            mt_call_count=self._mt_call_count,
+            committed_text=self._committed_text(),
+            source_text=self._source_text(),
+            source_end=self._tail.end if self._tail is not None else None,
+        )
 
     def _source_text(self):
         committed = self._committed_text()

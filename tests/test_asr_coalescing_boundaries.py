@@ -12,6 +12,7 @@ from whisperlivekit.audio_processor import (
     AudioProcessor,
     get_all_from_queue,
 )
+from whisperlivekit.caption_events import EventTap
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.timed_objects import (
     ASRToken,
@@ -113,6 +114,9 @@ def _processor_for(backend, *, translation=False):
     processor.is_stopping = False
     processor._any_asr_output = False
     processor._silent_backend_warned = False
+    processor.event_tap = EventTap()  # no-op sink; emission must not fail
+    processor._last_asr_prov = ""
+    processor.processing_error = None
     processor.tokens_alignment = SimpleNamespace(_retention_seconds=300.0)
     return processor
 
