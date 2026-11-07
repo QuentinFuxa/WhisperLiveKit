@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "whisperlivekit"
-version = "0.2.26"
+version = "0.2.27"
 description = "Real-time speech-to-text models"
 readme = "README.md"
 authors = [{ name = "Quentin Fuxa" }]
