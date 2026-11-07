@@ -91,6 +91,9 @@ diarization-sortformer = [
     "nemo-toolkit[asr]>=3.0,<4",
     "onnx>=1.22.0",
 ]
+diarization-mlx-sortformer = [
+    'mlx-audio>=0.4.4,<0.5; sys_platform == "darwin" and platform_machine == "arm64"',
+]
 canary = [
     "nemo-toolkit[asr]>=3.0,<4",
     "kaldialign>=0.12.0",
@@ -154,6 +157,14 @@ conflicts = [
     [
         { extra = "qwen3-vllm-metal" },
         { extra = "diarization-sortformer" },
+    ],
+    [
+        { extra = "qwen3-streaming" },
+        { extra = "diarization-mlx-sortformer" },
+    ],
+    [
+        { extra = "qwen3-vllm" },
+        { extra = "diarization-mlx-sortformer" },
     ],
     [
         { extra = "qwen3-vllm-metal" },
