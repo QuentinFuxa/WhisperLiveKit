@@ -1,0 +1,39 @@
+{
+  "timestamp": "2026-11-08T00:59:47+0100",
+  "options": {
+    "backend": "nemotron-mlx-asr",
+    "model_size": "0.6B",
+    "lan": "en",
+    "pcm_input": true,
+    "nemotron_mlx_asr_model": "/Users/quentin/.cache/huggingface/hub/models--mlx-community--nemotron-3.5-asr-streaming-0.6b/snapshots/e550040c0478027ed679b2b6b0d055502c103663"
+  },
+  "process_to_engine_ready_s": 6.263058207929134,
+  "status": "ok",
+  "log": [
+    "==================================================",
+    "MLX Whisper not found but you are on Apple Silicon. Consider installing mlx-whisper for better performance: `pip install mlx-whisper`",
+    "=================================================="
+  ],
+  "system": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "python_version": "3.12.12",
+    "whisperlivekit_version": "0.2.26",
+    "git_commit": "1842f4c6e4b3258d2776ecee688586417193f510",
+    "git_dirty": false,
+    "cpu": "Apple M5",
+    "ram_gb": 32,
+    "accelerator": "Apple Silicon (MPS)",
+    "backend_versions": {
+      "faster-whisper": "1.2.1",
+      "transformers": "5.15.0",
+      "torch": "2.11.0",
+      "mlx": "0.31.2",
+      "mlx-metal": "0.31.2",
+      "mlx-audio": "0.5.1",
+      "numpy": "2.3.5",
+      "psutil": "7.2.2"
+    }
+  },
+  "exit_code": 0
+}
