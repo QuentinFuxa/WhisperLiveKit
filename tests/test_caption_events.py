@@ -109,6 +109,58 @@ class TestEventTap:
         assert rec.events[1].committed == "c"
         assert rec.events[1].source == "s"
 
+    def test_one_utterance_emits_the_typed_sequence_in_order(self):
+        """One utterance driven through the tap: the caption sequence a
+        consumer sees, in emission order, with each event's text, audio
+        position and the source columns a provisional was drafted against.
+
+        Fails if an emit method stops forwarding its text or audio position,
+        if the emitted order changes, if `committed`/`source`/`fresh` are
+        mis-threaded on a provisional, or if the blank-text filter starts
+        swallowing a real event.
+        """
+        rec = _Recorder()
+        tap = EventTap(sink=rec, clock=lambda: 42.0)
+
+        # rolling source -> committed segment -> MT drafts against the
+        # committed source -> finalized translation
+        tap.transcription_provisional(0.8, "今天我們")
+        tap.transcription_provisional(1.4, "今天我們討論皮膚科。")
+        tap.transcription_final(1.4, "今天我們討論皮膚科。")
+        tap.translation_provisional(
+            1.5,
+            "Today we",
+            committed="今天我們",
+            source="今天我們討論皮膚科。",
+            fresh=True,
+        )
+        tap.translation_provisional(
+            1.6,
+            "Today we discuss",
+            committed="今天我們討論",
+            source="今天我們討論皮膚科。",
+        )
+        tap.translation_final(1.9, "Today we discuss dermatology.")
+
+        assert [(e.type, e.text, e.audio_t) for e in rec.events] == [
+            ("transcription_provisional", "今天我們", 0.8),
+            ("transcription_provisional", "今天我們討論皮膚科。", 1.4),
+            ("transcription_final", "今天我們討論皮膚科。", 1.4),
+            ("translation_provisional", "Today we", 1.5),
+            ("translation_provisional", "Today we discuss", 1.6),
+            ("translation_final", "Today we discuss dermatology.", 1.9),
+        ]
+        assert [
+            (e.committed, e.source, e.fresh)
+            for e in rec.events
+            if e.type == "translation_provisional"
+        ] == [
+            ("今天我們", "今天我們討論皮膚科。", True),
+            ("今天我們討論", "今天我們討論皮膚科。", False),
+        ]
+        # one clock reading per event, stamped at emit time
+        assert [e.t for e in rec.events] == [42.0] * 6
+
     def test_blank_text_is_not_emitted(self):
         rec = _Recorder()
         tap = EventTap(sink=rec)
