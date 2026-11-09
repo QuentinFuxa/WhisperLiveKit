@@ -38,14 +38,19 @@ class TestEventLog:
         assert rows[0]["type"] == "transcription_provisional"
         assert rows[1]["text"] == "你好"  # ensure_ascii=False keeps CJK readable
 
-    def test_line_is_on_disk_before_close(self, tmp_path):
-        """Each event is flushed as it is emitted, not only at session end."""
+    def test_two_events_are_two_lines_before_close(self, tmp_path):
+        """Lines are written as the events are emitted, not flushed at session
+        cleanup: the file is complete while the sink is still open."""
         path = tmp_path / "ev.jsonl"
         log = EventLog(str(path))
         log.emit(CaptionEvent(0.0, 1.0, "transcription_final", "one"))
         assert [r["text"] for r in _lines(path)] == ["one"]
-
         log.emit(CaptionEvent(0.0, 2.0, "transcription_final", "two"))
+
+        # read the file while the sink is still open
+        raw = path.read_text(encoding="utf-8")
+        assert raw.endswith("\n")
+        assert len(raw.splitlines()) == 2
         assert [r["text"] for r in _lines(path)] == ["one", "two"]
         log.close()
 
