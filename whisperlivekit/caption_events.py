@@ -23,15 +23,19 @@ FrontData buffer_transcription/buffer_translation fields):
   - ``translation_final``     : finalized translation (quality pass at a
     boundary).
 
-The display layer derives its own state from this stream; the web UI keeps
-using ``FrontData`` snapshots unchanged.
+Recording the stream is opt-in (``--event-log``); display views and tests
+consume the same stream. The web UI keeps using ``FrontData`` snapshots
+unchanged.
 """
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+import logging
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import List, Optional, Protocol
+from typing import Optional, Protocol
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -61,38 +65,34 @@ class EventSink(Protocol):
     def emit(self, event: CaptionEvent) -> None: ...
 
 
-@dataclass
 class EventLog:
-    """In-memory event log + JSONL save. Use as the sink for capture."""
-    events: List[CaptionEvent] = field(default_factory=list)
+    """JSONL sink: one line per event, appended and flushed as it is emitted.
+
+    The file is opened in append mode, so a restart adds to an existing log.
+    Sessions that share one path interleave their lines; each line is written
+    by a single ``emit()`` call, so the file stays parseable.
+    """
+
+    def __init__(self, path: str) -> None:
+        self.path = Path(path)
+        self._fh = self.path.open("a", encoding="utf-8")
 
     def emit(self, event: CaptionEvent) -> None:
-        self.events.append(event)
+        if self._fh is None:  # closed by session cleanup
+            return
+        try:
+            self._fh.write(json.dumps(event.to_dict(), ensure_ascii=False) + "\n")
+            self._fh.flush()
+        except OSError as exc:
+            # A recording instrument must not end a live session: report once
+            # and stop writing.
+            logger.warning("Caption event log %s disabled after write error: %s", self.path, exc)
+            self.close()
 
-    def save(self, path: str) -> None:
-        Path(path).write_text(
-            "\n".join(json.dumps(e.to_dict(), ensure_ascii=False) for e in self.events)
-            + "\n"
-        )
-
-    @classmethod
-    def load(cls, path: str) -> "EventLog":
-        log = cls()
-        for line in Path(path).read_text().splitlines():
-            if line.strip():
-                d = json.loads(line)
-                log.events.append(CaptionEvent(**d))
-        return log
-
-
-class FanOutSink:
-    """Dispatch each event to multiple sinks (e.g. CaptionLineAccumulator + EventLog)."""
-    def __init__(self, sinks: List[EventSink]) -> None:
-        self.sinks = list(sinks)
-
-    def emit(self, event: CaptionEvent) -> None:
-        for s in self.sinks:
-            s.emit(event)
+    def close(self) -> None:
+        if self._fh is not None:
+            self._fh.close()
+            self._fh = None
 
 
 class EventTap:

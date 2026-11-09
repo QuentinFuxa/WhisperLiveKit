@@ -21,9 +21,19 @@ from __future__ import annotations
 
 import asyncio
 
-from whisperlivekit.caption_events import EventLog, EventTap
+from whisperlivekit.caption_events import EventTap
 from whisperlivekit.timed_objects import State, TimedText, TranslationProgress
 from whisperlivekit.translation_processor import run_translation
+
+
+class _Recorder:
+    """In-memory sink for the emitted events (no file, no display)."""
+
+    def __init__(self):
+        self.events = []
+
+    def emit(self, event):
+        self.events.append(event)
 
 
 def _tr(text, end=1.0):
@@ -69,8 +79,8 @@ class _Tr:
 
 
 def _run(items, translation):
-    """Drive run_translation over `items` with a real EventLog sink."""
-    log = EventLog()
+    """Drive run_translation over `items` with a recording sink."""
+    log = _Recorder()
     tap = EventTap(sink=log)
     state = State()
     lock = asyncio.Lock()
@@ -133,7 +143,7 @@ def test_provisional_dedupe_identical_consecutive():
     draft = _tr("Today we will discuss")
     # two process() calls returning the identical draft (cached release)
     items = [object(), object()]
-    log = EventLog()
+    log = _Recorder()
     tap = EventTap(sink=log)
     state = State()
     lock = asyncio.Lock()
