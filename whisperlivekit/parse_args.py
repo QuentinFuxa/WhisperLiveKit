@@ -882,8 +882,9 @@ def build_parser():
         default=None,
         metavar="PATH",
         dest="event_log",
-        help="Record the caption event stream (transcription/translation "
-        "provisional and final) as JSONL for replay and testing.",
+        help="Append the caption event stream (transcription/translation "
+        "provisional and final) to PATH as JSONL, one line per event, written "
+        "as each event is emitted. Sessions sharing one PATH interleave lines.",
     )
 
     translation_group = parser.add_argument_group("Translation backend")

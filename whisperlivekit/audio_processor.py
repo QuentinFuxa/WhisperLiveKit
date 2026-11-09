@@ -9,8 +9,7 @@ from typing import Any, AsyncGenerator, List, Optional, Union
 import numpy as np
 
 from whisperlivekit.audio_input import AudioInput
-from whisperlivekit.caption_display import CaptionLineAccumulator
-from whisperlivekit.caption_events import EventLog, EventTap, FanOutSink
+from whisperlivekit.caption_events import EventLog, EventTap
 from whisperlivekit.config import validate_pause_segmentation_seconds
 from whisperlivekit.core import (
     TranscriptionEngine,
@@ -223,18 +222,12 @@ class AudioProcessor:
 
         # Caption event tap: emits the standardized caption event stream
         # (transcription/translation provisional+final) alongside the FrontData
-        # snapshot path. Caption consumers (the event log, and display views
-        # built on this stream) render from it via the caption line accumulator;
-        # the web UI is untouched.
-        self.caption_lines = CaptionLineAccumulator()
-        self._event_log: Optional[EventLog] = None
-        _sinks: List[Any] = [self.caption_lines]
-        if getattr(self.args, "event_log", None):
-            self._event_log = EventLog()
-            _sinks.append(self._event_log)
-        self.event_tap = EventTap(
-            sink=_sinks[0] if len(_sinks) == 1 else FanOutSink(_sinks),
-        )
+        # snapshot path. The web UI is untouched. The tap has a sink only when
+        # something consumes the stream — currently the optional --event-log
+        # JSONL recording; otherwise it is a no-op so the pipeline is unchanged.
+        _event_log_path = getattr(self.args, "event_log", None)
+        self._event_log: Optional[EventLog] = EventLog(_event_log_path) if _event_log_path else None
+        self.event_tap = EventTap(sink=self._event_log)
         # dedupe state: emit ASR provisional only when the tail text changes
         # (MT-provisional dedupe lives in the translation loop — it keys off
         # the backend's progress contract there)
@@ -1076,6 +1069,10 @@ class AudioProcessor:
         if created_tasks:
             await asyncio.gather(*created_tasks, return_exceptions=True)
         logger.info("All processing tasks cancelled or finished.")
+
+        # The producers have stopped, so the event log can be closed here.
+        if self._event_log is not None:
+            self._event_log.close()
 
         if not self.is_pcm_input and self.ffmpeg_manager:
             try:
