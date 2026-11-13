@@ -93,6 +93,23 @@ def test_stream_drains_partial_frame_at_pause_and_eof_without_repeating_words(sh
     assert online.finish()[0] == []
 
 
+def test_sentence_boundary_keeps_one_space(shared):
+    # Reproduces the real token sequence: the model closes an utterance with a
+    # standalone space token and opens the next one with a space-prefixed word.
+    # Joined verbatim that reads 'We.  We'.
+    shared.model.vocabulary = ['<unk>', '▁', '▁We', '.']
+    shared.model.blank_id = 4
+    online = NemotronMLXOnlineProcessor(shared)
+    online.insert_audio_chunk(
+        np.concatenate([np.full(1280, 2), np.full(1280, 3), np.full(1280, 1)]), 0.24)
+    first, _ = online.finish()
+    online.insert_audio_chunk(np.concatenate([np.full(1280, 2), np.full(1280, 3)]), 0.40)
+    second, _ = online.finish()
+    assert ''.join(t.text for t in first) == ' We.'
+    assert ''.join(t.text for t in second) == ' We.'
+    assert ''.join(t.text for t in first + second) == ' We. We.'
+
+
 def test_interleaved_sessions_have_separate_decoder_state_and_language(shared):
     args = SimpleNamespace(backend='nemotron-mlx-asr', backend_policy='simulstreaming')
     chinese = online_factory(args, shared, language='zh')

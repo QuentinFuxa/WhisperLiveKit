@@ -114,6 +114,14 @@ class NemotronMLXOnlineProcessor:
         hidden = self._decoder_hidden or ()
         self._encoder.materialize(*hidden)
         if final:
+            # The model closes an utterance with a standalone '▁' token and opens the
+            # next one with a space-prefixed first word. Both encode the same
+            # separator, so joining the committed pieces reads 'test.  We'. Keep the
+            # next utterance's space and drop this trailing one.
+            while tokens and not tokens[-1].text.strip():
+                tokens.pop()
+            if tokens:
+                tokens[-1].text = tokens[-1].text.rstrip()
             self._encoder = self._mel = None
             self._frame_offset = 0
             self._last_token = self.model.blank_id
@@ -143,10 +151,12 @@ class NemotronMLXOnlineProcessor:
                 if detected:
                     self._detected_language = detected
                 if not tokenizer.is_special_token(predicted, model.vocabulary):
+                    text = tokenizer.decode([predicted], model.vocabulary)
                     start = min(self._audio_end, self._utterance_start + (self._frame_offset + frame) * self._frame_sec)
-                    tokens.append(ASRToken(start=start, end=min(start+self._frame_sec, self._audio_end),
-                                           text=tokenizer.decode([predicted], model.vocabulary),
-                                           detected_language=self._detected_language))
+                    if text:
+                        tokens.append(ASRToken(start=start, end=min(start+self._frame_sec, self._audio_end),
+                                               text=text,
+                                               detected_language=self._detected_language))
                 symbols += 1
                 if model.max_symbols is not None and symbols >= model.max_symbols:
                     frame += 1
