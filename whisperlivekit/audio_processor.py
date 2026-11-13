@@ -9,6 +9,7 @@ from typing import Any, AsyncGenerator, List, Optional, Union
 import numpy as np
 
 from whisperlivekit.audio_input import AudioInput
+from whisperlivekit.caption_events import EventLog, EventTap
 from whisperlivekit.config import validate_pause_segmentation_seconds
 from whisperlivekit.core import (
     TranscriptionEngine,
@@ -218,6 +219,19 @@ class AudioProcessor:
         # not flicker while the partial text evolves.
         self.translate_on_complete: bool = bool(getattr(self.args, "translate_on_complete", False))
         self._pending_translation_tokens: List[ASRToken] = []
+
+        # Caption event tap: emits the standardized caption event stream
+        # (transcription/translation provisional+final) alongside the FrontData
+        # snapshot path. The web UI is untouched. The tap has a sink only when
+        # something consumes the stream — currently the optional --event-log
+        # JSONL recording; otherwise it is a no-op so the pipeline is unchanged.
+        _event_log_path = getattr(self.args, "event_log", None)
+        self._event_log: Optional[EventLog] = EventLog(_event_log_path) if _event_log_path else None
+        self.event_tap = EventTap(sink=self._event_log)
+        # dedupe state: emit ASR provisional only when the tail text changes
+        # (MT-provisional dedupe lives in the translation loop — it keys off
+        # the backend's progress contract there)
+        self._last_asr_prov: str = ""
 
         # Silent-backend watchdog: flips once the ASR has produced anything.
         self._any_asr_output: bool = False
@@ -597,6 +611,11 @@ class AudioProcessor:
                     )
             if final_tokens:
                 logger.info(f"Finish flushed {len(final_tokens)} tokens")
+                # caption events: the terminal flush commits the remaining tail
+                self.event_tap.transcription_final(
+                    final_tokens[-1].end or end_time,
+                    self.sep.join(t.text for t in final_tokens),
+                )
                 # Synthetic buffer recovery did not come from a counted backend
                 # call, but it still creates output tokens exposed to consumers.
                 self.metrics.n_tokens_produced += synthetic_token_count
@@ -637,6 +656,13 @@ class AudioProcessor:
                     _buffer_transcript = self.transcription.get_buffer()
                     async with self.lock:
                         self.state.buffer_transcription = _buffer_transcript
+                    _prov = (_buffer_transcript.text or "").strip()
+                    if _prov and _prov != self._last_asr_prov:
+                        self._last_asr_prov = _prov
+                        self.event_tap.transcription_provisional(
+                            _buffer_transcript.end if _buffer_transcript.end is not None else self.state.end_buffer,
+                            _prov,
+                        )
                     continue
 
                 if item is SENTINEL:
@@ -766,6 +792,20 @@ class AudioProcessor:
                 else:
                     self._warn_if_backend_silent(cumulative_pcm_duration_stream_time)
 
+                # caption events: committed tokens (final) + rolling tail (provisional)
+                if new_tokens:
+                    self.event_tap.transcription_final(
+                        new_tokens[-1].end or current_audio_processed_upto,
+                        self.sep.join(t.text for t in new_tokens),
+                    )
+                prov_text = (_buffer_transcript.text or "").strip()
+                if prov_text and prov_text != self._last_asr_prov:
+                    self._last_asr_prov = prov_text
+                    self.event_tap.transcription_provisional(
+                        _buffer_transcript.end if _buffer_transcript.end is not None else current_audio_processed_upto,
+                        prov_text,
+                    )
+
                 await self._queue_tokens_for_translation(new_tokens)
                 await self._queue_hypothesis_tail_for_translation(_buffer_transcript)
                 if isinstance(item, Silence) and item.is_starting:
@@ -856,7 +896,10 @@ class AudioProcessor:
         logger.info("Diarization processor task finished.")
 
     async def translation_processor(self) -> None:
-        await run_translation(self.translation_queue, self.translation, self.state, self.lock)
+        await run_translation(
+            self.translation_queue, self.translation, self.state, self.lock,
+            self.event_tap,
+        )
 
     async def results_formatter(self) -> AsyncGenerator[FrontData, None]:
         """Format processing results for output."""
@@ -1026,6 +1069,10 @@ class AudioProcessor:
         if created_tasks:
             await asyncio.gather(*created_tasks, return_exceptions=True)
         logger.info("All processing tasks cancelled or finished.")
+
+        # The producers have stopped, so the event log can be closed here.
+        if self._event_log is not None:
+            self._event_log.close()
 
         if not self.is_pcm_input and self.ffmpeg_manager:
             try:

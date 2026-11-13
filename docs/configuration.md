@@ -22,6 +22,7 @@ same settings as the CLI.
 | `--max-concurrent-sessions` | Maximum simultaneous WebSocket sessions per application/worker | `64` |
 | `--session-idle-timeout` | Seconds waiting for the next native `/asr` audio frame; `0` disables | `60` |
 | `--pcm-input` | Accept mono 16 kHz signed 16-bit little-endian PCM and bypass FFmpeg | disabled |
+| `--event-log` | Append the [caption event stream](#caption-event-log) to a JSONL file | disabled |
 | `--api-token` | Require authentication; falls back to `WLK_API_TOKEN` | unset |
 | `--cors-origins` | Comma-separated browser origins allowed to call the API | none |
 | `--host` / `--port` | Listening address | `localhost` / `8000` |
@@ -91,6 +92,26 @@ These bounds do not cap all process memory: model buffers, an incoming network
 message, REST uploads, translation-backend history and full transcript history
 have their own lifetimes. Measure the workload and limit concurrent sessions
 at deployment. See [deployment.md](deployment.md).
+
+## Caption event log
+
+`--event-log PATH` appends the caption event stream to `PATH` as JSONL: one
+JSON object per line, written and flushed as each event is emitted, so the file
+grows during the session instead of only at exit. Each line carries `t` (wall
+clock), `audio_t` (audio position), `type` (`transcription_provisional`,
+`transcription_final`, `translation_provisional`, `translation_final`), `text`,
+and, for provisional translations, `committed`, `source` and `fresh`.
+
+The file is opened in append mode, so a restart adds to an existing log. The
+path is not scoped per session: concurrent sessions that share a `PATH` —
+separate connections to one server, or separate processes — interleave their
+lines. Each line is written whole, so the file stays parseable, but rows from
+different sessions are not separable — give each concurrent session its own
+file when you need per-session streams.
+
+Recording is off by default. With it off the pipeline carries a no-op event tap
+and writes nothing. If a write fails mid-session, the log is disabled with one
+warning and transcription continues.
 
 ## Embedding the server
 
