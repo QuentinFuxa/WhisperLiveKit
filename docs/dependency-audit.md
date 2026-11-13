@@ -1,4 +1,4 @@
-# Dependency audit — September 2026
+# Dependency audit
 
 The lock contains several mutually exclusive backend environments. An advisory
 against a version in that lock is not proof that every installation uses it.
@@ -6,7 +6,53 @@ It also must not be dismissed merely because the default installation is safe.
 This review distinguishes installed code, reachable operations and blocked
 upgrades. No NVIDIA inference validation was available on the M5 host.
 
-## Changes verified locally
+## November 2026 refresh
+
+Advisories published in October were refreshed with a targeted
+`uv lock --upgrade-package` for packages that have a patched release. Torch,
+vLLM and Transformers were not upgraded; the September reasoning below still
+applies to them.
+
+| Scope | Upgraded |
+|---|---|
+| Default installation | certifi 2026.10.23, urllib3 2.8.0, filelock 4.2.9, fsspec 2026.6.0, msgpack 1.2.4 |
+| Optional extras | Pillow 13.0.0, PyJWT 2.15.1, brotli 1.2.1, aiohttp 3.14.5, multidict 6.9.1, dnspython 2.9.2, GitPython 3.2.1, gradio 6.17.3, Mako 1.4.3, Werkzeug 3.1.9, mcp 2.3.0, OpenTelemetry 1.45.2 |
+| Graphs not pinned by NeMo | Hydra 1.3.8, Lightning 2.6.6 |
+
+filelock moves to a new major version because no 3.x release fixes its
+advisories. multidict is held at 6.9.1, the first fixed release, instead of
+the 7.x major that the resolver would otherwise pick.
+
+Some graphs keep vulnerable versions because an upstream package pins them:
+
+- Pillow stays at 12.3.0 in the Qwen HF streaming and Qwen CUDA/vLLM graphs
+  (gradio, qwen-omni-utils and vLLM 0.22.1 exclude Pillow 13).
+- NeMo 3.0.0 still pins Hydra 1.3.2, Lightning 2.4.0 and fsspec 2025.12.0 in
+  the Canary and Sortformer graphs.
+- vLLM now has advisories fixed up to 0.32. The upgrade remains blocked by the
+  Transformers 5 migration described below.
+- setuptools, Accelerate and DiskCache are unchanged: setuptools is held by
+  the vLLM graph, and the Accelerate and DiskCache advisories name no patched
+  release.
+
+Dependabot could not open uv updates from September onwards: every run failed
+with `private_source_authentication_failure` on the GitHub release URL of the
+`vllm-metal==0.2.0` wheel, which the lock pinned through
+`override-dependencies`. vllm-metal is only distributed through GitHub
+releases, Homebrew and its own installer, and the `qwen3-vllm-metal` extra
+already required that installer for the CPU vLLM runtime. The extra now installs
+`qwen3-asr-causal` and MLX only, and the lock no longer contains a direct URL.
+Install vllm-metal with its official installer, then install the extra into
+that environment.
+
+Validation: `uv lock --check` with the uv version used in CI. In an environment
+synced from the lock (`--extra test`, Python 3.12, macOS arm64), the regression
+suite passes (339 passed, 17 skipped) and the real-audio Whisper streaming test
+passes. This does not validate the NeMo, Qwen, vLLM or NVIDIA runtimes.
+
+## September 2026 review
+
+### Changes verified locally
 
 Whisper checkpoint, shard and LoRA `.bin` loading now explicitly requests
 `weights_only=True`. The minimum supported PyTorch is 2.6, which fixes
@@ -27,14 +73,14 @@ requires setuptools below 81 on Python 3.12 and later. vLLM 0.24 removes that
 graph constraint but requires Transformers 5, conflicting with Qwen ASR's
 4.57.6 pin. Keep this pending with the Qwen/vLLM migration.
 
-## Backend-specific findings
+### Backend-specific findings
 
 | Environment | Finding | Disposition |
 |---|---|---|
 | Default Whisper and local MLX MT | Model paths are startup configuration; HTTP uploads are decoded as audio. The server does not load a checkpoint supplied by a session. | Explicit weights-only loading and minimum Torch above apply. Use trusted model artifacts. |
 | Qwen HF streaming | `qwen-asr==0.0.6` pins Transformers 4.57.6. The lock also contains Transformers 5.15.0 for compatible extras. | The 4.x branch remains affected by advisories for Trainer, model loading and chat-template saving. WLK uses ASR inference and does not expose Trainer or `save_pretrained` to clients. A Transformers 5 migration needs the upstream Qwen pin and runtime tests, not a forced lock override. |
 | Qwen CUDA/vLLM | vLLM 0.22.1 is behind fixes in 0.24 and 0.26. | WLK calls the in-process engine, not vLLM's public upload, derender, Anthropic or regex-output endpoints. Do not infer that the library is fully safe: engine/kernel issues need a compatible vLLM upgrade and NVIDIA validation. Keep this upgrade pending. |
-| Qwen Metal | The stable `vllm-metal==0.2.0` wheel is preserved for Python 3.12/macOS arm64. Its separately installed CPU vLLM package is outside the WLK lock. | Record that package too when validating an installation. The default extra alone is not a complete vLLM CPU installation. Do not replace the stable wheel with a nightly to silence dependency resolution errors. |
+| Qwen Metal | Superseded in November 2026: vllm-metal and its CPU vLLM package are now both outside the WLK lock. | Record both versions when validating an installation. |
 | NeMo Canary/Sortformer | NeMo 3.0.0 pins `hydra-core>1.3,<=1.3.2` and Lightning `>2.2.1,<=2.4.0`. | Hydra's fix starts at 1.3.4. Updating it violates the upstream pin; forcing it requires a tested NeMo compatibility change. Keep the NVIDIA-dependent runtime update pending. |
 | FunASR | Its Hydra requirement is `>=1.3.2`, but the shared locked graph can retain 1.3.2 alongside NeMo-compatible combinations. | A targeted lock refresh does not fix all those combinations. Do not present a partially upgraded lock as a general remedy or pass untrusted model metadata to Hydra. |
 | Diart | Its supported graph requires Torch `<2.9` and older Pyannote dependencies. | That conflicts with the fixes for the `unpack_sequence` and `lstm_cell` advisories. Keep the affected graph explicit; changing this bound needs Diart runtime validation rather than a global Torch upgrade. |

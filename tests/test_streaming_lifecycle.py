@@ -4,7 +4,9 @@ import asyncio
 import io
 import shutil
 import sys
+import threading
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import numpy as np
@@ -109,6 +111,40 @@ def engine(monkeypatch):
         lambda *args, **kwargs: SimpleNamespace(asr=SimpleNamespace(sep=" ")),
     )
     return shared
+
+
+def test_translation_cleanup_can_interrupt_a_saturated_inference_pool(engine):
+    from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
+
+    async def scenario():
+        # A single occupied worker reproduces starvation at any pool size.
+        with ThreadPoolExecutor(max_workers=1) as inference:
+            asyncio.get_running_loop().set_default_executor(inference)
+            processor = AudioProcessor(transcription_engine=engine)
+            translation = MlxLlmTranslation(source_language="en", target_language="zh", warmup=False)
+            processor.translation = translation
+            started = threading.Event()
+
+            def generate_until_cancelled():
+                started.set()
+                if not translation._closed.wait(5):
+                    raise TimeoutError("Translation was not interrupted")
+
+            worker = asyncio.create_task(asyncio.to_thread(generate_until_cancelled))
+            processor.all_tasks_for_cleanup = [worker]
+            try:
+                async with asyncio.timeout(1):
+                    while not started.is_set():
+                        await asyncio.sleep(.01)
+                    await processor.cleanup()
+                    assert worker.done()
+                    # Cancellation must release the inference worker for other sessions.
+                    assert await asyncio.to_thread(lambda: "available") == "available"
+            finally:
+                translation.close()
+                await asyncio.gather(worker, return_exceptions=True)
+
+    asyncio.run(scenario())
 
 
 @pytest.mark.asyncio

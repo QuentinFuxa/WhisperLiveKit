@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "whisperlivekit"
-version = "0.2.26"
+version = "0.2.27"
 description = "Real-time speech-to-text models"
 readme = "README.md"
 authors = [{ name = "Quentin Fuxa" }]
@@ -71,8 +71,13 @@ voxtral-hf = [
     "mistral-common[audio]",
     "accelerate>=0.12",
 ]
+# vllm-metal and its CPU vLLM runtime are distributed outside PyPI; install them
+# with the official vllm-metal installer, then install this extra into that
+# environment. Keeping the GitHub release wheel out of the lock lets Dependabot
+# resolve uv updates.
 qwen3-vllm-metal = [
-    "qwen3-asr-causal[metal]>=0.1.0",
+    "qwen3-asr-causal>=0.1.0",
+    'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
 ]
 qwen3-vllm = [
     "qwen3-asr-causal[vllm]>=0.1.0",
@@ -110,10 +115,6 @@ dev = ["rich>=14.3.3", "ruff==0.16.*"]
 [tool.uv]
 # Resolve Diart's Python <3.13 dependency graph separately from Python 3.13.
 environments = ["python_version < '3.13'", "python_version >= '3.13'"]
-# Override the retired nightly URL inherited from qwen3-asr-causal.
-override-dependencies = [
-    "vllm-metal[stt] @ https://github.com/vllm-project/vllm-metal/releases/download/v0.2.0/vllm_metal-0.2.0-cp312-cp312-macosx_11_0_arm64.whl ; python_version == '3.12' and sys_platform == 'darwin' and platform_machine == 'arm64'",
-]
 conflicts = [
     [
         { extra = "cpu" },

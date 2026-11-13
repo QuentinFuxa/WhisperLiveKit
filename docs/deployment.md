@@ -12,6 +12,13 @@ Set `WLK_API_TOKEN` or `--api-token` to require authentication for transcription
 
 Start with one worker. Each worker loads its own model weights, and inference locks serialize some backend operations within a process. Adding four workers can multiply model memory by four; measure your backend with concurrent sessions before increasing the process count.
 
+The server admits at most 64 simultaneous WebSocket sessions per worker by
+default, shared by `/asr` and `/v1/listen`. Set `--max-concurrent-sessions` to
+your measured capacity. Excess upgrades receive HTTP 403 before allocating a
+decoder; health checks and HTTP routes remain reachable. Native `/asr` sessions
+waiting for audio close after 60 seconds by default (`--session-idle-timeout`,
+`0` disables). See [configuration](configuration.md) for timeout semantics.
+
 A reverse proxy must forward WebSocket upgrades. For example, inside an Nginx server block:
 
 ```nginx

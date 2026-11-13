@@ -17,12 +17,15 @@ def _import_basic_server(monkeypatch):
 @pytest.mark.asyncio
 async def test_native_websocket_passes_context_and_advertises_capability(monkeypatch):
     from fastapi import WebSocketDisconnect
+    from starlette.websockets import WebSocketState
 
     basic_server = _import_basic_server(monkeypatch)
     processor_kwargs = []
     cleaned = []
 
     class RecordingSocket:
+        application_state = WebSocketState.CONNECTED
+        client_state = WebSocketState.CONNECTED
         query_params = {
             "language": "fr",
             "context": "WhisperLiveKit, Qwen3-ASR",

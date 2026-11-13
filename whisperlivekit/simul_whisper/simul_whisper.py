@@ -240,11 +240,13 @@ class AlignAtt(AlignAttBase):
         toks = self.state.tokens
         if toks[0].shape[0] == 1:
             toks[0] = toks[0].repeat_interleave(self.cfg.beam_size, dim=0)
+        self.state.context_token_length = 0
         if not self.state.context.is_empty():
             context_toks = self.state.context.as_tensor_beam(
                 self.cfg.beam_size, device=self.model.device,
             )
             toks = [context_toks] + toks
+            self.state.context_token_length = context_toks.shape[1]
         if len(toks) > 1:
             current_tokens = torch.cat(toks, dim=1)
         else:
@@ -369,7 +371,8 @@ class AlignAtt(AlignAttBase):
 
     def _check_no_speech(self, logits):
         if self.tokenizer.no_speech is not None:
-            probs_at_sot = logits[:, self.state.sot_index, :].float().softmax(dim=-1)
+            sot_position = self.state.context_token_length + self.state.sot_index
+            probs_at_sot = logits[:, sot_position, :].float().softmax(dim=-1)
             no_speech_probs = probs_at_sot[:, self.tokenizer.no_speech].tolist()
             if no_speech_probs[0] > self.cfg.nonspeech_prob:
                 logger.info("no speech, stop")

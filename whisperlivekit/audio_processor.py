@@ -36,7 +36,7 @@ from whisperlivekit.timed_objects import (
     Transcript,
 )
 from whisperlivekit.tokens_alignment import TokensAlignment, resolve_retention_seconds
-from whisperlivekit.translation_processor import run_translation
+from whisperlivekit.translation_processor import close_translation, run_translation
 
 logger = logging.getLogger(__name__)
 
@@ -1014,12 +1014,10 @@ class AudioProcessor:
         logger.info("Starting cleanup of AudioProcessor resources.")
         self.is_stopping = True
         self._close_queues()
-        close_translation = getattr(self.translation, "close", None)
-        if close_translation is not None:
-            try:
-                await asyncio.to_thread(close_translation)
-            except Exception:
-                logger.exception("Failed to close translation connection")
+        try:
+            await close_translation(self.translation)
+        except Exception:
+            logger.exception("Failed to close translation connection")
         for task in self.all_tasks_for_cleanup:
             if task and not task.done():
                 task.cancel()

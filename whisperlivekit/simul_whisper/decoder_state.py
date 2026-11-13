@@ -17,6 +17,8 @@ class DecoderState:
     initial_tokens: Optional[torch.Tensor] = None
     initial_token_length: int = 0
     sot_index: int = 0
+    # Prompt tokens placed before the SOT sequence in the decoder input.
+    context_token_length: int = 0
 
     align_source: Dict[int, List[Tuple[int, int]]] = field(default_factory=dict)
     num_align_heads: int = 0
