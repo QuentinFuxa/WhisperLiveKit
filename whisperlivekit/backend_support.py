@@ -57,7 +57,6 @@ def nemotron_mlx_asr_backend_available():
     )
 
 
-
 def faster_backend_available(warn_on_missing = False):
     available = module_available("faster_whisper")
     if not available and warn_on_missing and platform.system() != "Darwin":

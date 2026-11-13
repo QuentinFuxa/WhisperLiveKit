@@ -252,7 +252,8 @@ def build_parser():
         "--backend",
         type=str,
         default="auto",
-        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "funasr", "voxtral", "voxtral-mlx", "nemotron-mlx-asr", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming", "canary"],        help="Select the ASR backend implementation. Use 'funasr' for SenseVoiceSmall through LocalAgreement (zh/yue/en/ja/ko or auto). Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-streaming' for Qwen3-ASR through plain HF Transformers with a bounded-recompute audio cache (CUDA/MPS/CPU, no vLLM; requires an explicit --language). Use 'canary' for NVIDIA Canary through NeMo on CUDA or CPU with LocalAgreement.",
+        choices=["auto", "mlx-whisper", "faster-whisper", "whisper", "openai-api", "funasr", "voxtral", "voxtral-mlx", "nemotron-mlx-asr", "qwen3-vllm", "qwen3-vllm-metal", "qwen3-streaming", "canary"],
+        help="Select the ASR backend implementation. Use 'funasr' for SenseVoiceSmall through LocalAgreement (zh/yue/en/ja/ko or auto). Use 'qwen3-vllm' for Qwen3-ASR through in-process vLLM with ForcedAligner on GPU. Use 'qwen3-vllm-metal' for Qwen3-ASR through vllm-metal in-process STT on Apple Silicon. Use 'qwen3-streaming' for Qwen3-ASR through plain HF Transformers with a bounded-recompute audio cache (CUDA/MPS/CPU, no vLLM; requires an explicit --language). Use 'canary' for NVIDIA Canary through NeMo on CUDA or CPU with LocalAgreement.",
     )
     parser.add_argument(
         "--no-vac",

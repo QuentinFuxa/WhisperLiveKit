@@ -196,9 +196,9 @@ audio bounds; they are not forced word alignments.
 This is a low-latency option, not a general replacement for the other backends.
 On the fixed [benchmark corpus](../benchmarks/README.md)
 ([review](../benchmarks/evaluations/m5-20261107/REVIEW.md)) pooled end-of-file
-p95 is 0.12 s English, 0.11 s French and 0.05 s Chinese, 71% to 94% below
-Whisper small and Qwen Metal, and a ten-minute Chinese stream completes without
-a repetition loop.
+p95 is 0.12 s English, 0.11 s French and 0.05 s Chinese, 71% to 87% below
+Whisper small and 74% to 94% below Qwen Metal, and a ten-minute Chinese stream
+completes without a repetition loop.
 
 Recognition quality is strongest in French, where 14.97% WER beats both
 baselines (Whisper small 17.66%, Qwen Metal 24.68%). Chinese CER (22.62%) beats
