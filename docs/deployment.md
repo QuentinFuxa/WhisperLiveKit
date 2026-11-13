@@ -28,7 +28,7 @@ location / {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 3600s;
 }
@@ -46,7 +46,20 @@ WebSocket rejected: maximum concurrent sessions reached (client=203.0.113.7)
 
 The address is the direct peer. Behind a reverse proxy it is the proxy's own
 address unless the proxy sends `X-Forwarded-For` and `--forwarded-allow-ips`
-trusts it. The token itself is never logged.
+trusts it. The example above overwrites the header with the address Nginx
+saw, so a client cannot choose the address that is logged. The token itself is
+never logged.
+
+The session limit is shared by all clients of a worker. To keep one address
+from holding every session, limit connections per address at the proxy:
+
+```nginx
+# In the http block:
+limit_conn_zone $binary_remote_addr zone=wlk_sessions:10m;
+
+# In the location block above:
+limit_conn wlk_sessions 4;
+```
 
 ## GPU environments
 
