@@ -33,6 +33,12 @@ def _token_ok(candidate: Optional[str], connection=None) -> bool:
     return expected is None or bool(candidate) and hmac.compare_digest(candidate, expected)
 
 
+def _client_host(connection) -> str:
+    """Peer address for rejection logs. Uvicorn has already applied trusted proxy headers."""
+    client = getattr(connection, "client", None)
+    return client.host if client else "unknown"
+
+
 def _session_settings(connection):
     state = getattr(getattr(connection, "app", None), "state", None)
     return (
@@ -102,7 +108,9 @@ async def websocket_endpoint(websocket: WebSocket):
     ws_token = websocket_token(websocket)
     if not _token_ok(ws_token, websocket):
         await websocket.close(code=4401, reason="invalid or missing API token")
-        logger.warning("WebSocket rejected: invalid or missing API token")
+        logger.warning(
+            "WebSocket rejected: invalid or missing API token (client=%s)", _client_host(websocket)
+        )
         return
 
     # Read per-session options from query parameters
@@ -227,7 +235,10 @@ async def deepgram_websocket_endpoint(websocket: WebSocket):
     config, transcription_engine = _session_settings(websocket)
     if not _token_ok(websocket_token(websocket), websocket):
         await websocket.close(code=4401, reason="invalid or missing API token")
-        logger.warning("Deepgram WebSocket rejected: invalid or missing API token")
+        logger.warning(
+            "Deepgram WebSocket rejected: invalid or missing API token (client=%s)",
+            _client_host(websocket),
+        )
         return
     from whisperlivekit.deepgram_compat import handle_deepgram_websocket
     await handle_deepgram_websocket(websocket, transcription_engine, config)
@@ -505,6 +516,10 @@ async def create_transcription(
     from fastapi import HTTPException
 
     if not _token_ok(_bearer_token(request), request):
+        logger.warning(
+            "Transcription request rejected: invalid or missing API token (client=%s)",
+            _client_host(request),
+        )
         raise HTTPException(status_code=401, detail="invalid or missing API token")
 
     if response_format not in _OPENAI_RESPONSE_FORMATS:
