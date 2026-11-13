@@ -168,3 +168,41 @@ The full conflict list is in `[tool.uv].conflicts` in
 Diart supports Python 3.11–3.12; use Sortformer on Python 3.13.
 The vLLM Metal path additionally needs the vLLM Metal runtime; the source checkout
 pins a Python 3.12 macOS ARM64 wheel in `[tool.uv.sources]`.
+
+## Nemotron through MLX (candidate)
+
+```bash
+pip install 'whisperlivekit[nemotron-mlx-asr]'
+wlk --backend nemotron-mlx-asr --language fr
+```
+
+This adapter requires `mlx-audio>=0.5.1,<0.6` and an MLX conversion such as
+[`mlx-community/nemotron-3.5-asr-streaming-0.6b`](https://huggingface.co/mlx-community/nemotron-3.5-asr-streaming-0.6b).
+The NVIDIA repository's Transformers checkpoint has a different configuration
+and weight layout; passing that repository directly to the MLX loader fails.
+
+WLK feeds mlx-audio's incremental mel frontend and cached Conformer encoder.
+A small RNNT loop retains decoder state between pushes. Pauses, speaker changes
+and EOF flush the final mel/encoder frames; there is no separate VAD or full
+utterance re-decode. Sessions have separate caches and language prompts. Model
+loading and decoding stay on one dedicated thread because cached MLX streams
+cannot migrate between caller threads. Session terminology context is
+unsupported and rejected explicitly.
+
+`--nemotron-mlx-asr-att-context 56 6` is the default left/right encoder context.
+Emitted token timestamps follow encoder frames and are clipped to received
+audio bounds; they are not forced word alignments.
+
+This is a low-latency option, not a general replacement for the other backends.
+On the fixed [benchmark corpus](../benchmarks/README.md)
+([review](../benchmarks/evaluations/m5-20261107/REVIEW.md)) pooled end-of-file
+p95 is 0.12 s English, 0.11 s French and 0.05 s Chinese, 71% to 94% below
+Whisper small and Qwen Metal, and a ten-minute Chinese stream completes without
+a repetition loop.
+
+Recognition quality is strongest in French, where 14.97% WER beats both
+baselines (Whisper small 17.66%, Qwen Metal 24.68%). Chinese CER (22.62%) beats
+Whisper small (25.77%) but trails Qwen Metal (11.85%). English is the weak pass:
+19.27% WER beats Qwen Metal (21.36%) but is 7.6 points behind Whisper small
+(11.66%), so prefer Whisper where English accuracy matters more than
+end-of-utterance latency.
