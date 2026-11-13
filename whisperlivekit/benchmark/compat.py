@@ -16,6 +16,7 @@ _QWEN_LANGUAGES = {
 # None means all Whisper-supported languages.
 # A set means only those languages are supported.
 BACKEND_LANGUAGES: Dict[str, Optional[Set[str]]] = {
+    "nemotron-mlx-asr": {"en", "fr", "zh", "de", "es", "it", "ja", "ko", "pt"},
     "whisper": None,
     "faster-whisper": None,
     "mlx-whisper": None,

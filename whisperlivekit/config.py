@@ -1,7 +1,7 @@
 """Typed configuration for the WhisperLiveKit pipeline."""
 import logging
 import math
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -186,6 +186,10 @@ class WhisperLiveKitConfig:
     canary_lid_model: str = "langid_ambernet"
     canary_lid_min_sec: float = 2.0
     canary_lid_min_conf: float = 0.5
+
+    # Nemotron MLX ASR backend (FastConformer-RNNT transducer via mlx-audio)
+    nemotron_mlx_asr_model: str = "mlx-community/nemotron-3.5-asr-streaming-0.6b"
+    nemotron_mlx_asr_att_context: list = field(default_factory=lambda: [56, 6])
 
     # Keep new fields at the end to preserve positional dataclass construction.
     # Pauses longer than this become stable transcript boundaries; 0 disables.
