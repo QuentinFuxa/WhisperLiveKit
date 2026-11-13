@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-11-08T00:59:55+0100",
+  "options": {
+    "backend": "qwen3-vllm-metal",
+    "model_size": "0.6B",
+    "lan": "en",
+    "pcm_input": true,
+    "model_dir": "/Users/quentin/.cache/huggingface/hub/models--Qwen--Qwen3-ASR-0.6B/snapshots/5eb144179a02acc5e5ba31e748d22b0cf3e303b0"
+  },
+  "process_to_engine_ready_s": 4.1594925000099465,
+  "status": "ok",
+  "log": [
+    "==================================================",
+    "MLX Whisper not found but you are on Apple Silicon. Consider installing mlx-whisper for better performance: `pip install mlx-whisper`",
+    "==================================================",
+    "INFO 11-08 00:59:57 [__init__.py:44] Available plugins for group vllm.platform_plugins:",
+    "INFO 11-08 00:59:57 [__init__.py:46] - metal -> vllm_metal:register",
+    "INFO 11-08 00:59:57 [__init__.py:49] All plugins in this group will be loaded. Set `VLLM_PLUGINS` to control which plugins to load.",
+    "INFO 11-08 00:59:59 [__init__.py:238] Platform plugin metal is activated",
+    "/Users/quentin/.venv-vllm-metal/lib/python3.12/site-packages/transformers/modeling_rope_utils.py:1034: FutureWarning: `rope_config_validation` is deprecated and has been removed. Its functionality has been moved to RotaryEmbeddingConfigMixin.validate_rope method. PreTrainedConfig inherits this class, so please call self.validate_rope() instead. Also, make sure to use the new rope_parameters syntax. You can call self.standardize_rope_params() in the meantime.",
+    "  warnings.warn(",
+    "[transformers] Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'interleaved', 'mrope_interleaved', 'mrope_section'}",
+    "[transformers] Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'interleaved', 'mrope_interleaved', 'mrope_section'}",
+    "INFO 11-08 00:59:59 [qwen3_asr.py:417] thinker_config is None. Initializing thinker model with default values",
+    "[transformers] You are using a model of type `qwen3_asr` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please verify that the checkpoint is compatible with the model you are instantiating."
+  ],
+  "system": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "python_version": "3.12.12",
+    "whisperlivekit_version": "0.2.26",
+    "git_commit": "b2baee95069e956f1a29dabf0df1ef735ec89cc2",
+    "git_dirty": false,
+    "cpu": "Apple M5",
+    "ram_gb": 32,
+    "accelerator": "Apple Silicon (MPS)",
+    "backend_versions": {
+      "transformers": "5.8.1",
+      "torch": "2.11.0",
+      "mlx": "0.31.2",
+      "mlx-lm": "0.31.3",
+      "mlx-metal": "0.31.2",
+      "vllm": "0.21.0+cpu",
+      "vllm-metal": "0.2.0",
+      "numpy": "2.2.6",
+      "psutil": "7.2.2"
+    }
+  },
+  "exit_code": 0
+}
