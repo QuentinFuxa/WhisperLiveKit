@@ -93,6 +93,30 @@ def test_stream_drains_partial_frame_at_pause_and_eof_without_repeating_words(sh
     assert online.finish()[0] == []
 
 
+def test_token_starts_are_populated_and_monotonic_before_finish(shared):
+    # AC-2: the transducer times come out of the greedy decode, so they exist while
+    # the utterance is still open. `ASRToken.start`/`end` are this port's equivalent
+    # of the `AlignedToken.start` times livecaption keeps in `_hypothesis`; there is
+    # no hypothesis list here to inspect. Four frames push four tokens through
+    # process_iter() and nothing is finalized.
+    shared.model.vocabulary = ['<unk>', '▁un', '▁deux', '▁trois', '▁quatre']
+    shared.model.blank_id = 5
+    online = NemotronMLXOnlineProcessor(shared)
+    online.insert_audio_chunk(
+        np.concatenate([np.full(1280, value) for value in (1, 2, 3, 4)]), 0.32)
+    tokens, _ = online.process_iter()
+    assert online._encoder is not None  # Mid-utterance: finish() never ran.
+    assert [token.text for token in tokens] == [' un', ' deux', ' trois', ' quatre']
+    starts = [token.start for token in tokens]
+    ends = [token.end for token in tokens]
+    assert all(start is not None for start in starts + ends)
+    assert starts == sorted(starts), 'token starts must not go backwards'
+    assert len(set(starts)) == len(starts), 'each frame must carry its own start time'
+    assert ends == sorted(ends)
+    np.testing.assert_allclose(starts, [0.0, 0.08, 0.16, 0.24])
+    np.testing.assert_allclose(ends, [0.08, 0.16, 0.24, 0.32])
+
+
 def test_sentence_boundary_keeps_one_space(shared):
     # Reproduces the real token sequence: the model closes an utterance with a
     # standalone space token and opens the next one with a space-prefixed word.
