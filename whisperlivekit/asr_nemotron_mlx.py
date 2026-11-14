@@ -114,6 +114,9 @@ class NemotronMLXOnlineProcessor:
             tokens.extend(self._decode_chunk(prompted))
         hidden = self._decoder_hidden or ()
         self._encoder.materialize(*hidden)
+        # The flag describes the last text handed to the caller, so a call that
+        # returns nothing keeps the value the previous call left.
+        carried_ends_with_space = self._last_text_ends_with_space
         tokens = self._collapse_space_runs(tokens)
         if final:
             # The model closes an utterance with a standalone '▁' token and opens the
@@ -124,11 +127,13 @@ class NemotronMLXOnlineProcessor:
                 tokens.pop()
             if tokens:
                 tokens[-1].text = tokens[-1].text.rstrip()
-                # This line no longer ends in a space; the next utterance's
+                # The returned line no longer ends in a space; the next utterance's
                 # leading space supplies the separator.
                 self._last_text_ends_with_space = False
-            # A chunk that emits nothing (trailing silence) leaves the flag as the
-            # previous chunk left it: that text is still the last one committed.
+            else:
+                # Trailing silence, or only the closing space token that was just
+                # popped: nothing is returned, so the caller's last line is unchanged.
+                self._last_text_ends_with_space = carried_ends_with_space
             self._encoder = self._mel = None
             self._frame_offset = 0
             self._last_token = self.model.blank_id

@@ -153,6 +153,37 @@ def test_space_ending_line_survives_a_tokenless_finish(shared):
     assert '  ' not in joined
 
 
+def test_space_only_final_chunk_does_not_glue_the_next_utterance(shared):
+    # A final chunk whose only committed token is the closing space returns nothing
+    # after the trim. That space was never handed to the caller, so the next
+    # utterance must keep its leading space; clearing the flag instead glues the two
+    # lines into 'WeWe.'.
+    shared.model.vocabulary = ['<unk>', '▁', 'We', '.']
+    shared.model.blank_id = 4
+    scripted = []
+
+    def joint(feature, decoded):
+        prediction = scripted.pop(0)
+        return mx.array([int(i == prediction) for i in range(shared.model.blank_id + 1)])
+
+    shared.model.joint = joint
+    online = NemotronMLXOnlineProcessor(shared)
+    scripted.extend(value for piece in [2] for value in (piece, shared.model.blank_id))
+    online.insert_audio_chunk(np.zeros(1280, dtype=np.float32), 0.16)
+    head, _ = online.process_iter()
+    scripted.extend(value for piece in [1] for value in (piece, shared.model.blank_id))
+    online.insert_audio_chunk(np.zeros(1280, dtype=np.float32), 0.32)
+    tail, _ = online.finish()
+    assert [t.text for t in head] == ['We']
+    assert tail == []  # Only the closing space token arrived, and it was trimmed.
+    scripted.extend(value for piece in [1, 2, 3] for value in (piece, shared.model.blank_id))
+    online.insert_audio_chunk(np.zeros(1280 * 3, dtype=np.float32), 0.80)
+    second, _ = online.finish()
+    joined = ''.join(t.text for t in head + tail + second)
+    assert joined == 'We We.'
+    assert 'WeWe' not in joined
+
+
 def test_utterance_start_collapses_repeated_space_tokens(shared):
     # The next utterance's first decode can emit two space-only pieces before its
     # first word (`first_tokens=[' ', ' ', 'I']`), a seam inside one call that the
