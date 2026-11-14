@@ -85,7 +85,7 @@ def decoders(monkeypatch):
 @pytest.mark.parametrize("first_path", ["/asr", "/v1/listen?endpointing=false"])
 @pytest.mark.parametrize("second_path", ["/asr", "/v1/listen?endpointing=false"])
 async def test_streaming_routes_share_capacity_and_reject_before_decoder_start(
-    first_path, second_path, decoders,
+    first_path, second_path, decoders, caplog,
 ):
     async with _serve(_app(max_concurrent_sessions=1)) as origin:
         async with connect(f"ws://{origin}{first_path}") as first:
@@ -95,6 +95,8 @@ async def test_streaming_routes_share_capacity_and_reject_before_decoder_start(
                 async with connect(f"ws://{origin}{second_path}"):
                     pytest.fail("An excess session was accepted")
             assert rejected.value.response.status_code == 403
+            # Operators need the peer address to rate-limit or ban at the edge.
+            assert "maximum concurrent sessions reached (client=127.0.0.1)" in caplog.text
             assert len(decoders) == 1
             async with httpx.AsyncClient() as client:
                 assert (await client.get(f"http://{origin}/health")).status_code == 200
@@ -245,12 +247,15 @@ async def test_disconnect_during_final_drain_releases_capacity(monkeypatch, deco
 
 
 @pytest.mark.asyncio
-async def test_rejected_and_failed_sessions_return_capacity(monkeypatch, decoders):
+async def test_rejected_and_failed_sessions_return_capacity(monkeypatch, decoders, caplog):
     async with _serve(_app(max_concurrent_sessions=1, api_token="secret")) as origin:
-        for path in ("/asr", "/v1/listen"):
+        for path in ("/asr", "/v1/listen?token=wrong"):
+            caplog.clear()
             with pytest.raises(InvalidStatus):
                 async with connect(f"ws://{origin}{path}"):
                     pytest.fail("Unauthenticated connection accepted")
+            assert "invalid or missing API token (client=127.0.0.1)" in caplog.text
+            assert "wrong" not in caplog.text
         assert decoders == []
         # A handled parameter error must also return its reservation.
         async with connect(f"ws://{origin}/v1/listen?token=secret&encoding=invalid") as invalid:

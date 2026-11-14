@@ -610,7 +610,7 @@ async def test_audio_conversion_reaps_process_on_cancel_and_output_limit(monkeyp
     assert all(process.returncode is not None for process in processes)
 
 
-def test_embedded_apps_keep_authentication_and_cors_separate(monkeypatch):
+def test_embedded_apps_keep_authentication_and_cors_separate(monkeypatch, caplog):
     from fastapi.testclient import TestClient
 
     from whisperlivekit.config import WhisperLiveKitConfig
@@ -632,7 +632,9 @@ def test_embedded_apps_keep_authentication_and_cors_separate(monkeypatch):
                 "Origin": "https://untrusted.example", "Access-Control-Request-Method": "POST",
             }).status_code == 400
             files = {"file": ("audio.wav", b"encoded")}
+            caplog.clear()
             assert client.post("/v1/audio/transcriptions", files=files).status_code == 401
+            assert "invalid or missing API token (client=testclient)" in caplog.text
             response = client.post("/v1/audio/transcriptions", files=files,
                                    headers={"Authorization": f"Bearer {token}"},
                                    data={"response_format": "xml"})

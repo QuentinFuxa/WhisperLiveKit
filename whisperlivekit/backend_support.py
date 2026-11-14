@@ -61,6 +61,19 @@ def mlx_qwen3_asr_backend_available():
     return module_available("mlx_qwen3_asr")
 
 
+def nemotron_mlx_asr_backend_available():
+    """Return True if the Nemotron MLX ASR transducer backend is available.
+
+    Requires Apple Silicon (Darwin/arm64) with mlx and mlx_audio installed.
+    Pure-MLX: no torch, transformers, or nemo_toolkit.
+    """
+    return (
+        platform.system() == "Darwin"
+        and platform.machine() == "arm64"
+        and module_available("mlx")
+        and module_available("mlx_audio")
+    )
+
 
 def faster_backend_available(warn_on_missing = False):
     available = module_available("faster_whisper")

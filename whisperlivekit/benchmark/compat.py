@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 # A set means only those languages are supported.
 BACKEND_LANGUAGES: Dict[str, Optional[Set[str]]] = {
     "mlx-qwen3-asr": QWEN_LANGUAGES,
+    "nemotron-mlx-asr": {"en", "fr", "zh", "de", "es", "it", "ja", "ko", "pt"},
     "whisper": None,
     "faster-whisper": None,
     "mlx-whisper": None,

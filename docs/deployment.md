@@ -28,12 +28,38 @@ location / {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_read_timeout 3600s;
 }
 ```
 
 Configure `--forwarded-allow-ips` for the proxy addresses you trust. Use `--cors-origins` when a separate web origin calls the HTTP API.
+
+Rejected requests are logged at warning level with the peer address, so a log
+watcher such as fail2ban or a proxy rule can act on repeated attempts:
+
+```text
+WebSocket rejected: invalid or missing API token (client=203.0.113.7)
+WebSocket rejected: maximum concurrent sessions reached (client=203.0.113.7)
+```
+
+The address is the direct peer. Behind a reverse proxy it is the proxy's own
+address unless the proxy sends `X-Forwarded-For` and `--forwarded-allow-ips`
+trusts it. The example above overwrites the header with the address Nginx
+saw, so a client cannot choose the address that is logged. The token itself is
+never logged.
+
+The session limit is shared by all clients of a worker. To keep one address
+from holding every session, limit connections per address at the proxy:
+
+```nginx
+# In the http block:
+limit_conn_zone $binary_remote_addr zone=wlk_sessions:10m;
+
+# In the location block above:
+limit_conn wlk_sessions 4;
+```
 
 ## GPU environments
 
