@@ -97,21 +97,31 @@ at deployment. See [deployment.md](deployment.md).
 
 `--event-log PATH` appends the caption event stream to `PATH` as JSONL: one
 JSON object per line, written and flushed as each event is emitted, so the file
-grows during the session instead of only at exit. Each line carries `t` (wall
-clock), `audio_t` (audio position), `type` (`transcription_provisional`,
-`transcription_final`, `translation_provisional`, `translation_final`), `text`,
-and, for provisional translations, `committed`, `source` and `fresh`.
+grows during the session instead of only at exit. Every line carries `session`
+(an 8-character id of the session that wrote it), `t` (seconds since that
+session's stream started), `audio_t` (audio position), `type`
+(`transcription_provisional`, `transcription_final`, `translation_provisional`,
+`translation_final`) and `text`. `translation_provisional` lines additionally
+carry `committed` (the committed source the release was gated on), `source`
+(the full source the MT saw) and `fresh` (true for a line from a new MT forward
+pass, false for a replay of the cached attention — the call-count versus
+emission-count distinction). The other three event types have no source gate,
+so they carry none of those three fields.
 
-The file is opened in append mode, so a restart adds to an existing log. The
-path is not scoped per session: concurrent sessions that share a `PATH` —
-separate connections to one server, or separate processes — interleave their
-lines. Each line is written whole, so the file stays parseable, but rows from
-different sessions are not separable — give each concurrent session its own
-file when you need per-session streams.
+The file is opened in append mode, so a restart adds to an existing log.
+Concurrent sessions that share a `PATH` — separate connections to one server,
+or separate processes — interleave their lines; each line is written whole, so
+the file stays parseable, and the `session` id separates the rows. Filter on it
+to read one session's stream.
 
-Recording is off by default. With it off the pipeline carries a no-op event tap
-and writes nothing. If a write fails mid-session, the log is disabled with one
-warning and transcription continues.
+A `PATH` that cannot be written (missing directory, no permission) stops the
+server at startup with a `ValueError` naming the path; it is not discovered on
+the first connection.
+
+Recording is off by default. With it off the pipeline holds no event sink: the
+translation loop does not read backend progress for the stream, and nothing is
+written. If a write fails mid-session, the log is disabled with one warning and
+transcription continues.
 
 ## Embedding the server
 

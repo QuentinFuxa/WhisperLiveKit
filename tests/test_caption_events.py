@@ -1,14 +1,25 @@
 """Tests for the caption event stream contract.
 
 Covered here: the ``CaptionEvent`` payload, the ``EventTap`` no-op and
-forwarding behaviour, and the ``EventLog`` JSONL sink (a line per event,
-appended and flushed as it is emitted). Display policy is out of scope —
-it is a separate component with its own suite.
+forwarding behaviour, the ``EventLog`` JSONL sink (a line per event, appended
+and flushed as it is emitted, tagged with the writing session's id), and the
+startup check that rejects an unwritable ``--event-log`` path. Display policy
+is out of scope — it is a separate component with its own suite.
 """
+import asyncio
 import json
 import logging
+import sys
+from types import SimpleNamespace
 
-from whisperlivekit.caption_events import CaptionEvent, EventLog, EventTap
+import pytest
+
+from whisperlivekit.caption_events import (
+    CaptionEvent,
+    EventLog,
+    EventTap,
+    validate_event_log_path,
+)
 
 
 class _Recorder:
@@ -23,6 +34,19 @@ class _Recorder:
 
 def _lines(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+class _SteppingClock:
+    """Monotonic test clock: every read advances by ``step`` seconds."""
+
+    def __init__(self, start=100.0, step=0.5):
+        self.value = start
+        self.step = step
+
+    def __call__(self):
+        reading = self.value
+        self.value += self.step
+        return reading
 
 
 class TestEventLog:
@@ -72,6 +96,54 @@ class TestEventLog:
         log.close()
         log.emit(CaptionEvent(0.0, 1.0, "transcription_final", "late"))
 
+    def test_unwritable_path_raises_value_error_naming_the_path(self, tmp_path):
+        """A bad path is a configuration error, not a raw FileNotFoundError
+        escaping through the per-session factory."""
+        missing = tmp_path / "missing-dir" / "ev.jsonl"
+        with pytest.raises(ValueError) as excinfo:
+            EventLog(str(missing))
+        message = str(excinfo.value)
+        assert "not writable" in message
+        assert str(missing) in message
+
+    def test_line_carries_its_session_id(self, tmp_path):
+        """Two sessions sharing one path interleave, and each row names the
+        session that wrote it."""
+        path = tmp_path / "ev.jsonl"
+        first = EventLog(str(path))
+        second = EventLog(str(path))
+        first.emit(CaptionEvent(0.0, 1.0, "transcription_final", "one"))
+        second.emit(CaptionEvent(0.0, 1.0, "transcription_final", "two"))
+        first.close()
+        second.close()
+
+        rows = _lines(path)
+        assert rows[0]["session"] == first.session
+        assert rows[1]["session"] == second.session
+        assert rows[0]["session"] != rows[1]["session"]
+        assert len(rows[0]["session"]) == 8
+
+    def test_source_columns_only_on_translation_provisional(self, tmp_path):
+        """``committed``/``source``/``fresh`` describe a draft's source gating;
+        the other three event types must not carry empty columns."""
+        path = tmp_path / "ev.jsonl"
+        log = EventLog(str(path))
+        log.emit(CaptionEvent(0.0, 1.0, "transcription_provisional", "今天我們"))
+        log.emit(CaptionEvent(0.1, 1.1, "transcription_final", "今天我們討論皮膚科。"))
+        log.emit(CaptionEvent(0.2, 1.2, "translation_provisional", "Today we",
+                              "今天我們", "今天我們討論皮膚科。", True))
+        log.emit(CaptionEvent(0.3, 1.3, "translation_final", "Today we discuss dermatology."))
+        log.close()
+
+        rows = _lines(path)
+        base = {"session", "t", "audio_t", "type", "text"}
+        assert [set(row) for row in rows[:2]] == [base, base]
+        assert set(rows[2]) == base | {"committed", "source", "fresh"}
+        assert (rows[2]["committed"], rows[2]["source"], rows[2]["fresh"]) == (
+            "今天我們", "今天我們討論皮膚科。", True,
+        )
+        assert set(rows[3]) == base
+
     def test_write_error_disables_log_without_raising(self, tmp_path, caplog):
         """A recording instrument must not end a live session."""
 
@@ -98,6 +170,22 @@ class TestEventTap:
         tap.transcription_provisional(1.0, "hello")
         tap.translation_final(2.0, "你好")
 
+    def test_inert_tap_reports_itself_inactive(self):
+        """``active`` is what call sites check before building a payload, so
+        it must follow the sink, not a configuration flag."""
+        assert EventTap().active is False
+        assert EventTap(sink=_Recorder()).active is True
+
+    def test_t_is_seconds_since_the_stream_started(self):
+        """``t`` is measured from the tap's creation, not the raw process
+        clock: a stream starts at zero."""
+        rec = _Recorder()
+        clock = _SteppingClock(start=100.0, step=0.5)
+        tap = EventTap(sink=rec, clock=clock)
+        tap.transcription_final(1.0, "one")
+        tap.transcription_final(2.0, "two")
+        assert [e.t for e in rec.events] == [0.5, 1.0]
+
     def test_forwards_to_sink(self):
         rec = _Recorder()
         tap = EventTap(sink=rec, clock=lambda: 0.0)
@@ -120,7 +208,7 @@ class TestEventTap:
         swallowing a real event.
         """
         rec = _Recorder()
-        tap = EventTap(sink=rec, clock=lambda: 42.0)
+        tap = EventTap(sink=rec, clock=_SteppingClock(start=100.0, step=0.5))
 
         # rolling source -> committed segment -> MT drafts against the
         # committed source -> finalized translation
@@ -158,8 +246,9 @@ class TestEventTap:
             ("今天我們", "今天我們討論皮膚科。", True),
             ("今天我們討論", "今天我們討論皮膚科。", False),
         ]
-        # one clock reading per event, stamped at emit time
-        assert [e.t for e in rec.events] == [42.0] * 6
+        # one clock reading per event, stamped at emit time as the offset
+        # from the stream's start (the tap's creation)
+        assert [e.t for e in rec.events] == [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
 
     def test_blank_text_is_not_emitted(self):
         rec = _Recorder()
@@ -167,3 +256,44 @@ class TestEventTap:
         tap.transcription_provisional(1.0, "")
         tap.transcription_final(1.0, "   ")
         assert rec.events == []
+
+
+class TestEventLogStartupCheck:
+    def test_accepts_a_writable_path(self, tmp_path):
+        path = tmp_path / "ev.jsonl"
+        validate_event_log_path(str(path))
+        assert path.exists()
+
+    def test_no_path_configured_is_not_an_error(self):
+        validate_event_log_path(None)
+
+    def test_unwritable_path_raises_value_error_naming_the_path(self, tmp_path):
+        missing = tmp_path / "missing-dir" / "ev.jsonl"
+        with pytest.raises(ValueError) as excinfo:
+            validate_event_log_path(str(missing))
+        message = str(excinfo.value)
+        assert "--event-log path" in message
+        assert str(missing) in message
+
+    def test_server_startup_rejects_an_unwritable_path(self, tmp_path, monkeypatch):
+        """The check runs in the app's lifespan, so a bad path stops the server
+        at startup instead of failing every connection as it opens the log."""
+        monkeypatch.setattr(sys, "argv", ["whisperlivekit-server"])
+        from whisperlivekit import basic_server
+        from whisperlivekit.config import WhisperLiveKitConfig
+
+        # the engine load is not what this test is about
+        monkeypatch.setattr(
+            basic_server, "TranscriptionEngine",
+            lambda **kwargs: SimpleNamespace(args=kwargs["config"], asr=None),
+        )
+        app = basic_server.create_app(
+            WhisperLiveKitConfig(event_log=str(tmp_path / "missing-dir" / "ev.jsonl"))
+        )
+
+        async def startup():
+            async with basic_server.lifespan(app):
+                pass
+
+        with pytest.raises(ValueError, match="not writable"):
+            asyncio.run(startup())

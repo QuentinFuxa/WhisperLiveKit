@@ -67,6 +67,10 @@ async def run_translation(queue, translation, state, lock, event_tap=None) -> No
     # path re-emits the cached draft every process() until the source grows;
     # identical provisionals in a row are display noise (5x repeats in the
     # zh-en capture).
+    #
+    # ``event_tap`` is None when nothing consumes the caption stream: reading
+    # the backend's progress() rebuilds draft/source strings, so the caller
+    # drops an inert tap rather than paying for an unread result.
     last_mt_prov = ""
     last_seen_count = 0
     progress_reader = _ProgressReader(translation)

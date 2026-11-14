@@ -11,7 +11,10 @@ sites in ``whisperlivekit/audio_processor.py`` produce:
     tail (``transcription_provisional``) of a processed audio chunk;
   - the periodic refresh of a streaming decoder's buffer on the loop's queue
     timeout (text that arrived between chunks);
-  - the terminal flush of the remaining tail when the stream ends.
+  - the terminal flush of the remaining tail when the stream ends;
+  - a provisional that repeats the pre-final tail: the final reset the
+    dedupe, so the tail after it is a new event;
+  - an inert tap (no sink): the loop builds no event payloads at all.
 
 Run against a scripted streaming backend — no live model, no network.
 """
@@ -156,3 +159,115 @@ def test_one_utterance_emits_the_transcription_sequence():
         ("transcription_provisional", "討論皮膚科", 0.4),
         ("transcription_final", "皮膚科。", 0.75),
     ]
+
+
+class _RepeatingTailASR(_ScriptedStreamingASR):
+    """Commits one segment per chunk while leaving the same text in the tail.
+
+    The tail a chunk publishes is identical to the pre-final provisional, so
+    the provisional after the commit only survives if the final reset the
+    dedupe state.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.steps = [
+            ([ASRToken(0.0, 0.25, "今天我們")], "討論"),
+            ([ASRToken(0.25, 0.5, "皮膚科")], "討論"),
+        ]
+
+    def process_iter(self):
+        self.audio_buffer = np.array([], dtype=np.float32)
+        tokens, self.tail = self.steps.pop(0)
+        return tokens, self.end
+
+    def finish(self):
+        return [ASRToken(0.5, 0.75, "完成。")], 0.75
+
+
+class _InertCountingTap:
+    """A tap with no sink: ``active`` is False, and every call is recorded so
+    the test can see whether the loop skipped it."""
+
+    active = False
+
+    def __init__(self):
+        self.calls = []
+
+    def transcription_provisional(self, audio_t, text):
+        self.calls.append(("transcription_provisional", text))
+
+    def transcription_final(self, audio_t, text):
+        self.calls.append(("transcription_final", text))
+
+
+def test_provisional_after_a_final_is_not_suppressed():
+    """A committed segment consumes the tail the previous provisional
+    described, so the next provisional emits even when its text repeats.
+
+    Fails if `_last_asr_prov` survives a final: the second provisional (same
+    text as the pre-final one) would be swallowed as a duplicate.
+    """
+
+    async def driver():
+        recorder = _Recorder()
+        backend = _RepeatingTailASR()
+        processor = _processor_for(backend, EventTap(sink=recorder))
+        task = asyncio.create_task(processor.transcription_processor())
+
+        await processor.transcription_queue.put(np.zeros(4_000, dtype=np.float32))
+        observed = await _wait_for_events(recorder, 2)
+        assert [(e.type, e.text) for e in observed] == [
+            ("transcription_final", "今天我們"),
+            ("transcription_provisional", "討論"),
+        ]
+
+        # second chunk: same tail text, another committed segment
+        await processor.transcription_queue.put(np.zeros(4_000, dtype=np.float32))
+        observed = await _wait_for_events(recorder, 4)
+        assert len(observed) == 4, f"repeated tail after a final emitted {observed}"
+
+        await processor.transcription_queue.put(SENTINEL)
+        await asyncio.wait_for(task, timeout=5.0)
+        return recorder
+
+    recorder = asyncio.run(driver())
+    assert [(e.type, e.text) for e in recorder.events][:4] == [
+        ("transcription_final", "今天我們"),
+        ("transcription_provisional", "討論"),
+        ("transcription_final", "皮膚科"),
+        ("transcription_provisional", "討論"),
+    ]
+
+
+def test_inert_tap_is_never_called():
+    """With no sink the loop must not build event payloads (each call site
+    joins token text before the tap can discard it).
+
+    Fails if a call site emits unconditionally: the counting tap records the
+    call even though nothing consumes the stream.
+    """
+
+    async def driver():
+        tap = _InertCountingTap()
+        backend = _ScriptedStreamingASR()
+        processor = _processor_for(backend, tap)
+        task = asyncio.create_task(processor.transcription_processor())
+
+        await processor.transcription_queue.put(np.zeros(4_000, dtype=np.float32))
+        # The tap cannot tell the test that the chunk path ran (it is inert),
+        # so wait on the committed state instead.
+        deadline = time() + 5.0
+        while not processor.state.tokens and time() < deadline:
+            await asyncio.sleep(0.01)
+        # new tail text for the periodic refresh, which runs on the loop's
+        # 0.5 s queue timeout
+        backend.tail = "討論皮膚科"
+        await asyncio.sleep(0.6)
+
+        await processor.transcription_queue.put(SENTINEL)
+        await asyncio.wait_for(task, timeout=5.0)
+        return tap
+
+    tap = asyncio.run(driver())
+    assert tap.calls == []

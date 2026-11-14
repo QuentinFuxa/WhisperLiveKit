@@ -1,11 +1,11 @@
 """Standardized caption event stream — the contract between ASR+MT generation
 and the display/test layers.
 
-Parallel tap (spike): the pipeline emits these events alongside building
-``FrontData``. ``FrontData`` (the web UI wire protocol) is untouched — it
-stays built by ``audio_processor``. The event stream is the testable seam:
-it carries the caption event types so generation can be tested for coherence
-independently of how the display renders it.
+The pipeline emits these events alongside building ``FrontData``. ``FrontData``
+(the web UI wire protocol) is untouched — it stays built by ``audio_processor``.
+The event stream is the testable seam: it carries the caption event types so
+generation can be tested for coherence independently of how the display renders
+it.
 
 Event types (named by what the viewer sees, not which subsystem produced it,
 aligning with the FrontData partial/preview/translation vocabulary and the
@@ -31,17 +31,23 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Optional, Protocol
 
 logger = logging.getLogger(__name__)
+
+# Only translation_provisional compares its draft against source text; the
+# other event types carry no source columns (see CaptionEvent.to_dict).
+_SOURCE_COLUMNS = ("committed", "source", "fresh")
 
 
 @dataclass
 class CaptionEvent:
     """One event in the caption stream."""
-    t: float          # wall clock (seconds since stream start)
+    t: float          # seconds since this stream started (monotonic)
     audio_t: float    # audio position (seconds)
     type: str         # transcription_provisional | transcription_final |
                       # translation_provisional | translation_final
@@ -57,7 +63,14 @@ class CaptionEvent:
     fresh: bool = False
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        """The recorded payload. ``committed``/``source``/``fresh`` describe a
+        draft's source gating, so they are dropped from the three event types
+        that have no draft."""
+        row = asdict(self)
+        if self.type != "translation_provisional":
+            for column in _SOURCE_COLUMNS:
+                del row[column]
+        return row
 
 
 class EventSink(Protocol):
@@ -65,23 +78,48 @@ class EventSink(Protocol):
     def emit(self, event: CaptionEvent) -> None: ...
 
 
+def _open_event_log(path: Path):
+    """Open the JSONL log, reporting an unusable path as a config error.
+
+    A bad ``--event-log`` path is a startup problem: ``ValueError`` is what the
+    server's session factories already report to the client, whereas the raw
+    ``OSError`` would escape as an unexplained per-connection failure.
+    """
+    try:
+        return path.open("a", encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"--event-log path {path} is not writable: {exc}") from exc
+
+
+def validate_event_log_path(path: Optional[str]) -> None:
+    """Fail at startup rather than on the first connection when the log path
+    cannot be written. Sessions each open their own handle, so without this
+    check the path would first be touched per session."""
+    if not path:
+        return
+    _open_event_log(Path(path)).close()
+
+
 class EventLog:
     """JSONL sink: one line per event, appended and flushed as it is emitted.
 
     The file is opened in append mode, so a restart adds to an existing log.
-    Sessions that share one path interleave their lines; each line is written
-    by a single ``emit()`` call, so the file stays parseable.
+    Each line carries this sink's short ``session`` id: sessions that share one
+    path interleave their lines, and the id is what separates them. Each line
+    is written by a single ``emit()`` call, so the file stays parseable.
     """
 
     def __init__(self, path: str) -> None:
         self.path = Path(path)
-        self._fh = self.path.open("a", encoding="utf-8")
+        self.session = uuid.uuid4().hex[:8]
+        self._fh = _open_event_log(self.path)
 
     def emit(self, event: CaptionEvent) -> None:
         if self._fh is None:  # closed by session cleanup
             return
+        row = {"session": self.session, **event.to_dict()}
         try:
-            self._fh.write(json.dumps(event.to_dict(), ensure_ascii=False) + "\n")
+            self._fh.write(json.dumps(row, ensure_ascii=False) + "\n")
             self._fh.flush()
         except OSError as exc:
             # A recording instrument must not end a live session: report once
@@ -99,18 +137,30 @@ class EventTap:
     """Tap attached to the ASR+MT driver loop.
 
     The driver calls the emit methods at the points where each event is
-    produced; the tap forwards to its sink (if any). Kept stateless so a
-    no-op tap (sink=None) is zero-cost and the pipeline runs unchanged.
+    produced; the tap forwards to its sink (if any). A tap with no sink is
+    inert: ``active`` is False, callers skip it, and the pipeline runs
+    unchanged. ``t`` is measured from the tap's creation, so a stream's
+    timestamps start at zero regardless of the process clock.
     """
     def __init__(self, sink: Optional[EventSink] = None, clock=None):
         self._sink = sink
-        self._clock = clock  # callable returning wall seconds; None = perf_counter
+        self._clock = clock  # callable returning monotonic seconds; None = perf_counter
+        self._origin = self._read_clock()
 
-    def _now(self) -> float:
+    @property
+    def active(self) -> bool:
+        """True when a sink consumes the stream. Callers check this before
+        building an event's payload, so no sink means no work."""
+        return self._sink is not None
+
+    def _read_clock(self) -> float:
         if self._clock is not None:
             return self._clock()
-        import time
-        return time.perf_counter()
+        return perf_counter()
+
+    def _now(self) -> float:
+        """Seconds since this tap (this stream) was created."""
+        return self._read_clock() - self._origin
 
     def transcription_provisional(self, audio_t: float, text: str) -> None:
         if self._sink is None or not text or not text.strip():

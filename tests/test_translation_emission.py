@@ -13,7 +13,9 @@ display-correctness rules preserved:
   - the provisional payload (committed/source/source_end) comes from the
     backend's progress() contract, never from private-attribute probing;
   - a progress() that raises disables draft display for the session with
-    one visible warning (never a silent empty string).
+    one visible warning (never a silent empty string);
+  - with no sink consuming the stream the loop reads progress() zero times
+    (the tap is dropped, not just ignored).
 
 Run against mock translation objects — no live model.
 """
@@ -259,3 +261,78 @@ def test_state_still_updated():
     log, state = _run([object()], tr)
     assert state.new_translation_buffer is not None
     assert state.new_translation == []
+
+
+class _ProgressCountingTr:
+    """Draft-capable backend that records every read of its progress()."""
+
+    provides_drafts = True
+
+    def __init__(self):
+        self.progress_reads = 0
+        self.mt_calls = 0
+
+    def progress(self):
+        self.progress_reads += 1
+        return TranslationProgress(
+            mt_call_count=self.mt_calls,
+            committed_text="committed source",
+            source_text="committed source + tail",
+        )
+
+    def insert_tokens(self, tokens):
+        pass
+
+    def process(self):
+        self.mt_calls += 1
+        return (None, _tr("Draft text"))
+
+    def validate_buffer_and_reset(self):
+        return (None, None)
+
+
+def _processor_with_tap(translation, event_tap, items):
+    """An AudioProcessor with only what the translation loop touches, driven
+    over `items` until the loop's SENTINEL."""
+    from whisperlivekit.audio_processor import AudioProcessor
+    from whisperlivekit.processing_queue import SENTINEL, ProcessingQueue
+
+    processor = object.__new__(AudioProcessor)
+    processor.translation = translation
+    processor.state = State()
+    processor.lock = asyncio.Lock()
+    processor.event_tap = event_tap
+    processor.translation_queue = ProcessingQueue("test")
+
+    async def driver():
+        for item in items:
+            await processor.translation_queue.put(item)
+        await processor.translation_queue.put(SENTINEL)
+        await processor.translation_processor()
+
+    asyncio.run(driver())
+    return processor
+
+
+def test_no_sink_means_the_loop_never_reads_progress():
+    """Reading progress() rebuilds the draft and source strings. With no sink
+    (no --event-log) nothing consumes them, so the tap is inert and the loop
+    must not ask at all."""
+    tr = _ProgressCountingTr()
+    # exactly what AudioProcessor builds when --event-log is not given
+    _processor_with_tap(tr, EventTap(sink=None), [object(), object()])
+    assert tr.progress_reads == 0
+
+
+def test_a_sink_makes_the_loop_read_progress():
+    """The companion case: any sink turns the stream on, so the loop reads the
+    backend's progress once per iteration (the design is sink-driven, not
+    flag-driven)."""
+    tr = _ProgressCountingTr()
+    recorder = _Recorder()
+    _processor_with_tap(tr, EventTap(sink=recorder), [object(), object()])
+    # one read per loop iteration: the batched tokens item, then the SENTINEL
+    # finalize (get_all_from_queue drains queued tokens into one batch)
+    assert tr.progress_reads == 2
+    drafts = [e for e in recorder.events if e.type == "translation_provisional"]
+    assert [d.text for d in drafts] == ["Draft text"]

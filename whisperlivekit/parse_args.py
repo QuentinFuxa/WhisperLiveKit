@@ -906,7 +906,9 @@ def build_parser():
         dest="event_log",
         help="Append the caption event stream (transcription/translation "
         "provisional and final) to PATH as JSONL, one line per event, written "
-        "as each event is emitted. Sessions sharing one PATH interleave lines.",
+        "as each event is emitted. Each line carries the writing session's id, "
+        "so sessions sharing one PATH stay separable. An unwritable PATH is "
+        "rejected at startup.",
     )
 
     translation_group = parser.add_argument_group("Translation backend")
