@@ -1,7 +1,7 @@
 """Typed configuration for the WhisperLiveKit pipeline."""
 import logging
 import math
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -197,6 +197,9 @@ class WhisperLiveKitConfig:
     # Native /asr receive timeout in seconds; 0 disables. Deepgram keeps its
     # protocol-specific 30-second timeout and KeepAlive messages.
     session_idle_timeout: float = 60.0
+    # Nemotron MLX ASR backend (FastConformer-RNNT transducer via mlx-audio)
+    nemotron_mlx_asr_model: str = "mlx-community/nemotron-3.5-asr-streaming-0.6b"
+    nemotron_mlx_asr_att_context: list = field(default_factory=lambda: [56, 6])
 
     def __post_init__(self):
         if (

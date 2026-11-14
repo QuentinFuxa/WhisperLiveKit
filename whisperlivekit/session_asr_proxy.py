@@ -17,6 +17,7 @@ _PROMPT_BACKENDS = frozenset({
     "whisper",
 })
 _NON_PROMPT_BACKENDS = frozenset({
+    "nemotron-mlx-asr",
     "canary",
     "funasr",
     "qwen3-streaming",
