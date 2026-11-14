@@ -75,6 +75,12 @@ class AudioProcessor:
     Handles audio processing, state management, and result formatting.
     """
 
+    # A hand-built instance (object.__new__, bypassing __init__) must not raise on
+    # the emission path: this default has no sink, so EventTap.active is False and
+    # every guarded emission site skips. __init__ replaces it with the session's
+    # real tap.
+    event_tap: EventTap = EventTap()
+
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the audio processor with configuration, models, and state."""
         # Extract per-session options before passing to TranscriptionEngine

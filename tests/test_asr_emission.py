@@ -14,7 +14,9 @@ sites in ``whisperlivekit/audio_processor.py`` produce:
   - the terminal flush of the remaining tail when the stream ends;
   - a provisional that repeats the pre-final tail: the final reset the
     dedupe, so the tail after it is a new event;
-  - an inert tap (no sink): the loop builds no event payloads at all.
+  - an inert tap (no sink): the loop builds no event payloads at all;
+  - a hand-built processor whose ``__init__`` never ran: the class-level
+    default tap is inert, so the loop transcribes and emits nothing.
 
 Run against a scripted streaming backend — no live model, no network.
 """
@@ -79,7 +81,16 @@ class _ScriptedStreamingASR:
         return [ASRToken(0.55, 0.75, "皮膚科。")], 0.75
 
 
-def _processor_for(backend, tap):
+_NO_TAP = object()
+
+
+def _processor_for(backend, tap=_NO_TAP):
+    """Build a processor by hand, bypassing ``__init__``.
+
+    ``tap`` defaults to not being set at all, which is how a double stays
+    tap-less; every attribute below is what the transcription loop itself and
+    the emission sites read.
+    """
     processor = object.__new__(AudioProcessor)
     processor.args = SimpleNamespace(asr_coalesce_min_s=0.0)
     processor.pause_segmentation_seconds = 2.0
@@ -99,7 +110,8 @@ def _processor_for(backend, tap):
     processor.is_stopping = False
     processor._any_asr_output = False
     processor._silent_backend_warned = False
-    processor.event_tap = tap
+    if tap is not _NO_TAP:
+        processor.event_tap = tap
     processor._last_asr_prov = ""
     processor.processing_error = None
     processor.tokens_alignment = SimpleNamespace(_retention_seconds=300.0)
@@ -271,3 +283,40 @@ def test_inert_tap_is_never_called():
 
     tap = asyncio.run(driver())
     assert tap.calls == []
+
+
+def test_hand_built_processor_without_a_tap_transcribes_and_emits_nothing():
+    """A processor built with ``object.__new__`` never runs ``__init__``, so it
+    carries no session tap and never sets one.
+
+    The class-level default must absorb that: the loop still commits tokens and
+    reaches the emission sites, and the shared inert default reports ``active``
+    False so nothing is emitted. Fails with ``AttributeError: 'AudioProcessor'
+    object has no attribute 'event_tap'`` — recorded as ``processing_error`` —
+    if the class-level default is removed.
+    """
+
+    async def driver():
+        backend = _ScriptedStreamingASR()
+        processor = _processor_for(backend)  # no tap argument: event_tap unset
+        task = asyncio.create_task(processor.transcription_processor())
+
+        await processor.transcription_queue.put(np.zeros(4_000, dtype=np.float32))
+        deadline = time() + 5.0
+        while not processor.state.tokens and time() < deadline:
+            await asyncio.sleep(0.01)
+
+        await processor.transcription_queue.put(SENTINEL)
+        await asyncio.wait_for(task, timeout=5.0)
+        return processor
+
+    processor = asyncio.run(driver())
+
+    assert processor.processing_error is None
+    # The loop ran to the emission sites: both the committed segment and the
+    # terminal flush landed.
+    assert [t.text for t in processor.state.tokens] == ["今天我們", "皮膚科。"]
+    # The default is the one shared inert instance; a sink-less tap cannot have
+    # emitted anything.
+    assert processor.event_tap is AudioProcessor.event_tap
+    assert processor.event_tap.active is False
