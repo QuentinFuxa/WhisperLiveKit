@@ -156,20 +156,7 @@ Notes:
   is downloaded from NVIDIA NGC; review its model-card terms for your deployment.
 
 
-## Environment constraints
-
-For uv source installs, initialize `third_party/qwen3-asr-causal` with
-`git submodule update --init --recursive`. Published pip extras resolve the
-Qwen package as a dependency instead of using that checkout.
-
-Several extras require incompatible Torch, Transformers, or vLLM versions.
-The full conflict list is in `[tool.uv].conflicts` in
-[pyproject.toml](../pyproject.toml); do not install all extras into one environment.
-Diart supports Python 3.11–3.12; use Sortformer on Python 3.13.
-The vLLM Metal path additionally needs the vLLM Metal runtime; the source checkout
-pins a Python 3.12 macOS ARM64 wheel in `[tool.uv.sources]`.
-
-## Nemotron through MLX (candidate)
+## Nemotron through MLX
 
 ```bash
 pip install 'whisperlivekit[nemotron-mlx-asr]'
@@ -197,8 +184,10 @@ This is a low-latency option, not a general replacement for the other backends.
 On the fixed [benchmark corpus](../benchmarks/README.md)
 ([review](../benchmarks/evaluations/m5-20261107/REVIEW.md)) pooled end-of-file
 p95 is 0.12 s English, 0.11 s French and 0.05 s Chinese, 71% to 87% below
-Whisper small and 74% to 94% below Qwen Metal, and a ten-minute Chinese stream
-completes without a repetition loop.
+Whisper small and 74% to 94% below Qwen Metal. A ten-minute Chinese stream
+completes with valid timestamps and a 0.03 s EOF delay and does not enter a
+repetition loop, though its output carries one artifact: twenty Thai `า`
+characters inside a sentence at character 1543.
 
 Recognition quality is strongest in French, where 14.97% WER beats both
 baselines (Whisper small 17.66%, Qwen Metal 24.68%). Chinese CER (22.62%) beats
@@ -206,3 +195,16 @@ Whisper small (25.77%) but trails Qwen Metal (11.85%). English is the weak pass:
 19.27% WER beats Qwen Metal (21.36%) but is 7.6 points behind Whisper small
 (11.66%), so prefer Whisper where English accuracy matters more than
 end-of-utterance latency.
+
+## Environment constraints
+
+For uv source installs, initialize `third_party/qwen3-asr-causal` with
+`git submodule update --init --recursive`. Published pip extras resolve the
+Qwen package as a dependency instead of using that checkout.
+
+Several extras require incompatible Torch, Transformers, or vLLM versions.
+The full conflict list is in `[tool.uv].conflicts` in
+[pyproject.toml](../pyproject.toml); do not install all extras into one environment.
+Diart supports Python 3.11–3.12; use Sortformer on Python 3.13.
+The vLLM Metal path additionally needs the vLLM Metal runtime; the source checkout
+pins a Python 3.12 macOS ARM64 wheel in `[tool.uv.sources]`.
