@@ -606,7 +606,8 @@ def build_parser():
         default="accuracy",
         choices=["accuracy", "latency"],
         dest="mlx_qwen3_asr_finalization_mode",
-        help="Finalization mode (default accuracy; latency skips tail refinement).",
+        help="Finalization mode (default accuracy). mlx-qwen3-asr 0.4.x decodes the "
+        "pending tail in both modes; the flag is kept for API compatibility.",
     )
     qwen3_streaming_group.add_argument(
         "--qwen3-streaming-chunk-sec",
