@@ -897,6 +897,20 @@ def build_parser():
         help="Encoder attention context [left, right] in subsampled frames. "
              "Default 56 6 (left cache, right+1 feed chunk).",
     )
+
+    parser.add_argument(
+        "--event-log",
+        type=str,
+        default=None,
+        metavar="PATH",
+        dest="event_log",
+        help="Append the caption event stream (transcription/translation "
+        "provisional and final) to PATH as JSONL, one line per event, written "
+        "as each event is emitted. Each line carries the writing session's id, "
+        "so sessions sharing one PATH stay separable. An unwritable PATH is "
+        "rejected at startup.",
+    )
+
     translation_group = parser.add_argument_group("Translation backend")
     translation_group.add_argument(
         "--translation-backend",

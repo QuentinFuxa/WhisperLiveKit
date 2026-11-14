@@ -22,6 +22,7 @@ same settings as the CLI.
 | `--max-concurrent-sessions` | Maximum simultaneous WebSocket sessions per application/worker | `64` |
 | `--session-idle-timeout` | Seconds waiting for the next native `/asr` audio frame; `0` disables | `60` |
 | `--pcm-input` | Accept mono 16 kHz signed 16-bit little-endian PCM and bypass FFmpeg | disabled |
+| `--event-log` | Append the [caption event stream](#caption-event-log) to a JSONL file | disabled |
 | `--api-token` | Require authentication; falls back to `WLK_API_TOKEN` | unset |
 | `--cors-origins` | Comma-separated browser origins allowed to call the API | none |
 | `--host` / `--port` | Listening address | `localhost` / `8000` |
@@ -91,6 +92,36 @@ These bounds do not cap all process memory: model buffers, an incoming network
 message, REST uploads, translation-backend history and full transcript history
 have their own lifetimes. Measure the workload and limit concurrent sessions
 at deployment. See [deployment.md](deployment.md).
+
+## Caption event log
+
+`--event-log PATH` appends the caption event stream to `PATH` as JSONL: one
+JSON object per line, written and flushed as each event is emitted, so the file
+grows during the session instead of only at exit. Every line carries `session`
+(an 8-character id of the session that wrote it), `t` (seconds since that
+session's stream started), `audio_t` (audio position), `type`
+(`transcription_provisional`, `transcription_final`, `translation_provisional`,
+`translation_final`) and `text`. `translation_provisional` lines additionally
+carry `committed` (the committed source the release was gated on), `source`
+(the full source the MT saw) and `fresh` (true for a line from a new MT forward
+pass, false for a replay of the cached attention — the call-count versus
+emission-count distinction). The other three event types have no source gate,
+so they carry none of those three fields.
+
+The file is opened in append mode, so a restart adds to an existing log.
+Concurrent sessions that share a `PATH` — separate connections to one server,
+or separate processes — interleave their lines; each line is written whole, so
+the file stays parseable, and the `session` id separates the rows. Filter on it
+to read one session's stream.
+
+A `PATH` that cannot be written (missing directory, no permission) stops the
+server at startup with a `ValueError` naming the path; it is not discovered on
+the first connection.
+
+Recording is off by default. With it off the pipeline holds no event sink: the
+translation loop does not read backend progress for the stream, and nothing is
+written. If a write fails mid-session, the log is disabled with one warning and
+transcription continues.
 
 ## Embedding the server
 
