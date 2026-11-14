@@ -94,11 +94,8 @@ def test_stream_drains_partial_frame_at_pause_and_eof_without_repeating_words(sh
 
 
 def test_token_starts_are_populated_and_monotonic_before_finish(shared):
-    # AC-2: the transducer times come out of the greedy decode, so they exist while
-    # the utterance is still open. `ASRToken.start`/`end` are this port's equivalent
-    # of the `AlignedToken.start` times livecaption keeps in `_hypothesis`; there is
-    # no hypothesis list here to inspect. Four frames push four tokens through
-    # process_iter() and nothing is finalized.
+    # The transducer times come out of the greedy decode, so they exist while the
+    # utterance is still open.
     shared.model.vocabulary = ['<unk>', '▁un', '▁deux', '▁trois', '▁quatre']
     shared.model.blank_id = 5
     online = NemotronMLXOnlineProcessor(shared)
@@ -132,6 +129,111 @@ def test_sentence_boundary_keeps_one_space(shared):
     assert ''.join(t.text for t in first) == ' We.'
     assert ''.join(t.text for t in second) == ' We.'
     assert ''.join(t.text for t in first + second) == ' We. We.'
+
+
+def test_space_ending_line_survives_a_tokenless_finish(shared):
+    # A trailing-silence chunk finishes with no tokens, so the line already
+    # committed still ends in a space. Reading the trailing-space flag off that
+    # empty chunk drops it, the next utterance keeps its leading space, and the
+    # joined text reads 'We.  We'.
+    shared.model.vocabulary = ['<unk>', '▁', '▁We', '.']
+    shared.model.blank_id = 4
+    online = NemotronMLXOnlineProcessor(shared)
+    online.insert_audio_chunk(
+        np.concatenate([np.full(1280, 2), np.full(1280, 3), np.full(1280, 1)]), 0.24)
+    head, _ = online.process_iter()
+    assert ''.join(t.text for t in head) == ' We. '
+    assert online.finish()[0] == []  # Trailing-silence chunk commits no token.
+    online.insert_audio_chunk(
+        np.concatenate([np.full(1280, 1), np.full(1280, 2), np.full(1280, 3)]), 0.48)
+    tail, _ = online.finish()
+    assert [t.text for t in tail] == ['We', '.']
+    joined = ''.join(t.text for t in head + tail)
+    assert joined == ' We. We.'
+    assert '  ' not in joined
+
+
+def test_utterance_start_collapses_repeated_space_tokens(shared):
+    # The next utterance's first decode can emit two space-only pieces before its
+    # first word (`first_tokens=[' ', ' ', 'I']`), a seam inside one call that the
+    # previous utterance's trailing trim cannot reach: joined verbatim that reads
+    # 'We.  We'. The separator space must survive as exactly one.
+    shared.model.vocabulary = ['<unk>', '▁', 'We', '.']
+    shared.model.blank_id = 4
+    scripted = []
+
+    def joint(feature, decoded):
+        prediction = scripted.pop(0)
+        return mx.array([int(i == prediction) for i in range(shared.model.blank_id + 1)])
+
+    shared.model.joint = joint
+    online = NemotronMLXOnlineProcessor(shared)
+    utterances = []
+    for pieces in ([2, 3], [1, 1, 2, 3], [1, 1, 2, 3]):
+        # One mel frame per scripted piece, plus a blank frame to advance past it.
+        scripted.extend(value for piece in pieces for value in (piece, shared.model.blank_id))
+        online.insert_audio_chunk(np.zeros(1280 * len(pieces), dtype=np.float32), 0.16 * len(pieces))
+        utterances.append(online.finish()[0])
+    first, second, third = utterances
+    assert [t.text for t in first] == ['We', '.']
+    assert [t.text for t in second] == [' ', 'We', '.']
+    assert [t.text for t in third] == [' ', 'We', '.']
+    assert [t.text for t in first + second + third] == ['We', '.', ' ', 'We', '.', ' ', 'We', '.']
+    joined = ''.join(t.text for t in first + second + third)
+    assert joined == 'We. We. We.'
+    assert '  ' not in joined
+
+
+def test_intra_utterance_space_run_collapses_before_the_next_word(shared):
+    # Mid-utterance the decoder emits a standalone space token and then a
+    # space-prefixed word in the SAME batch ('the.  The'), a seam an utterance-start
+    # rule never reaches. The run collapses to one space; the word keeps its letters.
+    shared.model.vocabulary = ['<unk>', '▁', 'We', '.', '▁The']
+    shared.model.blank_id = 5
+    scripted = []
+
+    def joint(feature, decoded):
+        prediction = scripted.pop(0)
+        return mx.array([int(i == prediction) for i in range(shared.model.blank_id + 1)])
+
+    shared.model.joint = joint
+    online = NemotronMLXOnlineProcessor(shared)
+    pieces = [2, 3, 1, 4]
+    scripted.extend(value for piece in pieces for value in (piece, shared.model.blank_id))
+    online.insert_audio_chunk(np.zeros(1280 * len(pieces), dtype=np.float32), 0.16 * len(pieces))
+    tokens, _ = online.process_iter()
+    assert online._encoder is not None  # One decode batch, nothing finalised.
+    assert [t.text for t in tokens] == ['We', '.', ' ', 'The']
+    joined = ''.join(t.text for t in tokens)
+    assert joined == 'We. The'
+    assert '  ' not in joined
+
+
+def test_space_run_across_decode_batches_collapses(shared):
+    # The run can also straddle two batches of one utterance: a batch ends on a
+    # standalone space token and the next opens with a space-prefixed word, which the
+    # utterance-flush trim never sees. Joined verbatim that read 'We.  The'.
+    shared.model.vocabulary = ['<unk>', '▁', 'We', '.', '▁The']
+    shared.model.blank_id = 5
+    scripted = []
+
+    def joint(feature, decoded):
+        prediction = scripted.pop(0)
+        return mx.array([int(i == prediction) for i in range(shared.model.blank_id + 1)])
+
+    shared.model.joint = joint
+    online = NemotronMLXOnlineProcessor(shared)
+    scripted.extend(value for piece in [2, 3, 1] for value in (piece, shared.model.blank_id))
+    online.insert_audio_chunk(np.zeros(1280 * 3, dtype=np.float32), 0.48)
+    head, _ = online.process_iter()
+    assert ''.join(t.text for t in head) == 'We. '
+    scripted.extend(value for piece in [1, 4] for value in (piece, shared.model.blank_id))
+    online.insert_audio_chunk(np.zeros(1280 * 2, dtype=np.float32), 0.80)
+    tail, _ = online.finish()
+    assert ''.join(t.text for t in tail) == 'The'
+    joined = ''.join(t.text for t in head + tail)
+    assert joined == 'We. The'
+    assert '  ' not in joined
 
 
 def test_interleaved_sessions_have_separate_decoder_state_and_language(shared):

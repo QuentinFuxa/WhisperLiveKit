@@ -81,6 +81,7 @@ class NemotronMLXOnlineProcessor:
         self._last_token = self.model.blank_id
         self._decoder_hidden = None
         self._detected_language = self.language
+        self._last_text_ends_with_space = False
 
     def insert_audio_chunk(self, audio, audio_stream_end_time):
         audio = np.asarray(audio, dtype=np.float32)
@@ -113,6 +114,7 @@ class NemotronMLXOnlineProcessor:
             tokens.extend(self._decode_chunk(prompted))
         hidden = self._decoder_hidden or ()
         self._encoder.materialize(*hidden)
+        tokens = self._collapse_space_runs(tokens)
         if final:
             # The model closes an utterance with a standalone '▁' token and opens the
             # next one with a space-prefixed first word. Both encode the same
@@ -122,12 +124,35 @@ class NemotronMLXOnlineProcessor:
                 tokens.pop()
             if tokens:
                 tokens[-1].text = tokens[-1].text.rstrip()
+                # This line no longer ends in a space; the next utterance's
+                # leading space supplies the separator.
+                self._last_text_ends_with_space = False
+            # A chunk that emits nothing (trailing silence) leaves the flag as the
+            # previous chunk left it: that text is still the last one committed.
             self._encoder = self._mel = None
             self._frame_offset = 0
             self._last_token = self.model.blank_id
             self._decoder_hidden = None
             self._detected_language = self.language
         return tokens, self._audio_end
+
+    def _collapse_space_runs(self, tokens):
+        # The decoder emits a standalone space token and then a space-prefixed word
+        # whenever a word starts after a token boundary -- at an utterance start, but
+        # also mid-utterance and across decode batches. Joined verbatim that reads
+        # 'the.  We'. Collapse each run to exactly one space: the space separates the
+        # two words, so dropping all of it would glue them into 'the.We'.
+        kept = []
+        for token in tokens:
+            text = token.text
+            if self._last_text_ends_with_space and text.startswith(' '):
+                text = text.lstrip(' ')
+                token.text = text
+            if not text:
+                continue
+            self._last_text_ends_with_space = text.endswith(' ')
+            kept.append(token)
+        return kept
 
     def _decode_chunk(self, prompted):
         # The greedy recurrence follows mlx-audio's Model._decode_prompted_chunks;
