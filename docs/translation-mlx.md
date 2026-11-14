@@ -33,5 +33,6 @@ can keep ASR and translation dependencies in separate processes.
 If generation fails, `translation_error` reports the incomplete translation and
 ASR can continue. A failed sentence stays queued for retry; successful sentences
 are published once. An empty model response is an error, and untranslated source
-words are never shown as translated output. Cleanup interrupts generation at the
-next generated token.
+words are never shown as translated output. Disconnecting a client interrupts
+generation at the next generated token, including when inference workers are
+fully occupied by other sessions.

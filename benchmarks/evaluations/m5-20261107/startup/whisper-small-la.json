@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-11-08T00:59:42+0100",
+  "options": {
+    "backend": "mlx-whisper",
+    "model_size": "small",
+    "lan": "en",
+    "pcm_input": true,
+    "model_dir": "/Users/quentin/.cache/huggingface/hub/models--mlx-community--whisper-small-mlx/snapshots/45f3915923c7a79a5a5b5a7d909d39aeb0e5630e",
+    "backend_policy": "localagreement"
+  },
+  "process_to_engine_ready_s": 4.564849333022721,
+  "status": "ok",
+  "log": [],
+  "system": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "python_version": "3.12.12",
+    "whisperlivekit_version": "0.2.26",
+    "git_commit": "b2baee95069e956f1a29dabf0df1ef735ec89cc2",
+    "git_dirty": false,
+    "cpu": "Apple M5",
+    "ram_gb": 32,
+    "accelerator": "Apple Silicon (MPS)",
+    "backend_versions": {
+      "faster-whisper": "1.2.1",
+      "mlx-whisper": "0.4.3",
+      "torch": "2.11.0",
+      "mlx": "0.31.2",
+      "mlx-metal": "0.31.2",
+      "numpy": "2.3.5",
+      "psutil": "7.2.2"
+    }
+  },
+  "exit_code": 0
+}

@@ -353,5 +353,7 @@ def test_translation_processor_plumbing_with_fake_sidecar(sidecar):
     assert processor.state.new_translation, "no validated translation produced"
     assert " ".join(t.text for t in processor.state.new_translation) == "HELLO WORLD. [F] LAST WORDS [F]"
     assert processor.translation._pending_finals == []
-    processor.translation.close()
+    from whisperlivekit.translation_processor import close_translation
+
+    asyncio.run(close_translation(processor.translation))
     assert processor.translation._ws is None

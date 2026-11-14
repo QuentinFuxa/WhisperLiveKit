@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-11-08T00:59:53+0100",
+  "options": {
+    "backend": "mlx-qwen3-asr",
+    "model_size": "0.6B",
+    "lan": "en",
+    "pcm_input": true,
+    "mlx_qwen3_asr_model": "/Users/quentin/.cache/huggingface/hub/models--Qwen--Qwen3-ASR-0.6B/snapshots/5eb144179a02acc5e5ba31e748d22b0cf3e303b0"
+  },
+  "process_to_engine_ready_s": 1.7611186250578612,
+  "status": "ok",
+  "log": [
+    "==================================================",
+    "MLX Whisper not found but you are on Apple Silicon. Consider installing mlx-whisper for better performance: `pip install mlx-whisper`",
+    "=================================================="
+  ],
+  "system": {
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "python_version": "3.12.12",
+    "whisperlivekit_version": "0.2.26",
+    "git_commit": "24082a08da59e9be9f8fd9f5e1d66abcced8e932",
+    "git_dirty": false,
+    "cpu": "Apple M5",
+    "ram_gb": 32,
+    "accelerator": "Apple Silicon (MPS)",
+    "backend_versions": {
+      "faster-whisper": "1.2.1",
+      "torch": "2.11.0",
+      "mlx": "0.31.2",
+      "mlx-metal": "0.31.2",
+      "mlx-qwen3-asr": "0.3.5",
+      "numpy": "2.3.5",
+      "psutil": "7.2.2"
+    }
+  },
+  "exit_code": 0
+}

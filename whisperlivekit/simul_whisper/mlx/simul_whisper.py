@@ -246,9 +246,11 @@ class MLXAlignAtt(AlignAttBase):
         toks = self.state.tokens
         if toks[0].shape[0] == 1:
             toks[0] = mx.repeat(toks[0], self.cfg.beam_size, axis=0)
+        self.state.context_token_length = 0
         if not self.state.context.is_empty():
             context_toks = self.state.context.as_mlx_array_beam(self.cfg.beam_size)
             toks = [context_toks] + toks
+            self.state.context_token_length = context_toks.shape[1]
         if len(toks) > 1:
             current_tokens = mx.concatenate(toks, axis=1)
         else:
@@ -323,7 +325,8 @@ class MLXAlignAtt(AlignAttBase):
 
     def _check_no_speech(self, logits):
         if self.tokenizer.no_speech is not None:
-            probs_at_sot = mx.softmax(logits[:, self.state.sot_index, :], axis=-1)
+            sot_position = self.state.context_token_length + self.state.sot_index
+            probs_at_sot = mx.softmax(logits[:, sot_position, :], axis=-1)
             no_speech_probs = np.array(
                 probs_at_sot[:, self.tokenizer.no_speech],
             ).tolist()

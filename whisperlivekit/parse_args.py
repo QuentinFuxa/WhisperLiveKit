@@ -296,6 +296,14 @@ def build_parser():
     parser.add_argument("--ssl-keyfile", type=str, help="Path to the SSL private key file.", default=None)
     parser.add_argument("--forwarded-allow-ips", type=str, help="Allowed ips for reverse proxying.", default=None)
     parser.add_argument(
+        "--max-concurrent-sessions", type=int, default=64,
+        help="Maximum simultaneous WebSocket sessions per application/worker (default: 64). Excess handshakes are rejected before starting a decoder.",
+    )
+    parser.add_argument(
+        "--session-idle-timeout", type=float, default=60.0,
+        help="Seconds to wait for the next native /asr audio frame (default: 60; 0 disables). Deepgram retains its 30-second timeout and KeepAlive protocol.",
+    )
+    parser.add_argument(
         "--cors-origins",
         type=str,
         default="",
