@@ -13,6 +13,7 @@ MAX_SESSION_CONTEXT_CHARS = 1000
 _PROMPT_BACKENDS = frozenset({
     "faster-whisper",
     "mlx-whisper",
+    "mlx-qwen3-asr",
     "openai-api",
     "whisper",
 })

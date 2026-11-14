@@ -168,6 +168,10 @@ class TranscriptionEngine:
                     **transcription_common_params, **qwen3_streaming_params
                 )
                 logger.info("Using Qwen3-ASR streaming (HF Transformers) backend")
+            elif config.backend == "mlx-qwen3-asr":
+                from whisperlivekit.asr_mlx_qwen3 import MlxQwen3ASR
+                self.tokenizer = None
+                self.asr = MlxQwen3ASR(config)
             elif config.backend == "qwen3-vllm":
                 from whisperlivekit.qwen3_vllm_asr import Qwen3VLLMASR
                 self.tokenizer = None
@@ -463,6 +467,9 @@ def online_factory(args, asr, language=None, context=None):
     if backend == "qwen3-streaming":
         from whisperlivekit.qwen3_streaming import Qwen3StreamingOnlineProcessor
         return _ASRTokenNormalizer(Qwen3StreamingOnlineProcessor(asr))
+    if backend == "mlx-qwen3-asr":
+        from whisperlivekit.asr_mlx_qwen3 import MlxQwen3AsrOnlineProcessor
+        return MlxQwen3AsrOnlineProcessor(asr)
     if backend == "qwen3-vllm":
         from whisperlivekit.qwen3_vllm_asr import (
             Qwen3VLLMCausalOnlineProcessor,

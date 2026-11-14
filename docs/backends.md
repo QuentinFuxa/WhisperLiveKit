@@ -168,3 +168,73 @@ The full conflict list is in `[tool.uv].conflicts` in
 Diart supports Python 3.11–3.12; use Sortformer on Python 3.13.
 The vLLM Metal path additionally needs the vLLM Metal runtime; the source checkout
 pins a Python 3.12 macOS ARM64 wheel in `[tool.uv.sources]`.
+
+## Qwen3-ASR through native MLX (candidate)
+
+The `mlx-qwen3-asr` extra pins the upstream incremental stream
+(`mlx-qwen3-asr>=0.4.4,<0.5`):
+
+```bash
+pip install 'whisperlivekit[mlx-qwen3-asr]'
+wlk --backend mlx-qwen3-asr --language fr
+```
+
+The adapter commits the model's stable prefix and drains `finish_streaming()`
+on pauses, speaker changes and EOF. In 0.4.x that call re-decodes the bounded
+window together with the pending tail and replaces the window text with the
+result, so a segment's text is produced once: the adapter commits only the part
+clients do not already hold. WLK owns voice activity detection. Model loading
+and warmup run once at engine startup; sessions have separate decoder state and
+share a serialized model. Session language (including `auto`) and terminology
+context are passed to the native stream, which uses the session language for
+every window decode.
+
+`stable_text` stays empty for the first two chunks of a window, so a short
+utterance would otherwise commit nothing before its pause. While the library
+reports no stable prefix, the adapter commits the units two consecutive window
+decodes agree on (LocalAgreement-1) and holds the last five units back; CJK
+text is compared per character so the prefix can advance inside a Chinese
+sentence. A reported prefix that is not a prefix of the current text, or that
+rewrites text already committed, is repaired into an append of what the model
+now reports (upstream issue #31) instead of aborting the session. A pause whose
+leftover audio cannot be decoded — the log-mel frontend needs more than 200
+samples — ends the segment without a final decode instead of raising.
+
+`--mlx-qwen3-asr-finalization-mode accuracy|latency` is accepted for API
+compatibility with earlier versions; 0.4.x decodes the pending tail in both
+modes, so the flag no longer selects between two finalize paths. The chunk
+default is two seconds.
+
+Timestamps describe decode chunk bounds, not aligned words.
+
+### Reproducing the fixed-corpus measurement
+
+The comparison in the native-MLX review used the fixed manifest: 30 English, 30
+French and 30 Mandarin clips at a pinned FLEURS revision, three paced passes per
+backend. Metric definitions and the manifest's limits are in
+[benchmarks/README.md](../benchmarks/README.md).
+
+```bash
+pip install 'whisperlivekit[test,mlx-qwen3-asr,mlx-whisper,qwen3-vllm-metal]'
+python scripts/prepare_fleurs_benchmark.py
+
+wlk bench --backend mlx-qwen3-asr --model Qwen/Qwen3-ASR-0.6B \
+  --languages en,fr,zh --manifest benchmarks/corpora/fleurs-90.json \
+  --warmup --repeats 3 --speed 1 --json native-mlx-qwen3.json
+
+wlk bench --backend qwen3-vllm-metal --model Qwen/Qwen3-ASR-0.6B \
+  --languages en,fr,zh --manifest benchmarks/corpora/fleurs-90.json \
+  --warmup --repeats 3 --speed 1 --json qwen-metal.json
+
+wlk bench --backend mlx-whisper --model small \
+  --languages en,fr,zh --manifest benchmarks/corpora/fleurs-90.json \
+  --warmup --repeats 3 --speed 1 --json mlx-whisper-small.json
+```
+
+`--speed 1` is the paced pass; `--repeats 3` keeps every repetition in the
+report. Compare the two Qwen runs and the Whisper baseline on word error rate
+for `en`/`fr`, character error rate for `zh`, and end-of-file p95, sample by
+sample, after confirming the same 30 recording IDs are present in all three
+reports. A pooled p95 alone does not establish the comparison; check each
+repetition, and keep model downloads outside the measured runs.
+
