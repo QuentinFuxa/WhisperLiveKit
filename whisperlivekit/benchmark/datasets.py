@@ -45,7 +45,7 @@ class BenchmarkSample:
     tags: Set[str] = field(default_factory=set)
     expected_sha256: str = ""
     sentence_id: Optional[int] = None
-    # Reference of this same sentence_id in every other recorded language.
+    # Reference of this sentence_id in each recorded language, its own included.
     translation_references: Dict[str, str] = field(default_factory=dict)
 
 

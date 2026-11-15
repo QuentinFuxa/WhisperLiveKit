@@ -90,7 +90,8 @@ def compute_chrf(reference: str, hypothesis: str, max_n: int = 6, beta: float = 
     Both sides get the same NFC/lowercase/punctuation normalization as WER and
     then lose all whitespace, so formatting differences do not move the score
     and Chinese needs no tokenizer. Orders are averaged over the n-grams the
-    shorter text actually has, matching sacrebleu's char_order=6, beta=2.
+    shorter text actually has, over sacrebleu's char_order=6 and the chrF
+    paper's beta=2.
 
     Args:
         reference: Human reference translation.
