@@ -167,6 +167,12 @@ def test_chrf_scores_a_translation_without_a_model():
     # Orders are averaged over the n-grams a three-character text has: orders
     # 1 and 2 match once of twice each, order 3 never; F-beta is 38.89 at beta=2.
     assert compute_chrf("abc", "abd") == pytest.approx(38.8889, abs=1e-4)
+    # Precision equal to recall is the same value for any beta, so that pair
+    # cannot pin the exponent. This one separates them: a two-character
+    # reference is wholly contained in "abc" (recall 1) while precision
+    # averages to 7/12 over its two orders, so F-2 is 87.5, and 80.77 if beta
+    # stands in for beta squared.
+    assert compute_chrf("ab", "abc") == pytest.approx(87.5, abs=1e-4)
     # Formatting cannot move the score, and Chinese needs no tokenizer.
     assert compute_chrf("Hello  world", "hello world") == 100.0
     assert compute_chrf("你好世界。", "你好，世界！") == 100.0
