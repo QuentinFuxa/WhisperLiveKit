@@ -180,7 +180,9 @@ target-language sibling scores `null` instead of borrowing a reference.
   a null CER for English: a property of the run, not a missing measurement.
 
 A demonstration report from this machine is checked in at
-[evaluations/translation-fleurs-en-zh](evaluations/translation-fleurs-en-zh/).
-It exists to show the join, the score and the latency fields on a real cascade
-run; three samples establish no quality figure and are not a backend comparison.
+[evaluations/translation-fleurs-en-zh](evaluations/translation-fleurs-en-zh/),
+with its provenance and its limits in `NOTES.md`: three samples without drafting
+and one with it. They exist to show the join, the score and the latency fields
+on a real cascade run; three samples establish no quality figure and are not a
+backend comparison.
 
