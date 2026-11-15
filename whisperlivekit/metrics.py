@@ -1,11 +1,13 @@
 """Lightweight ASR evaluation metrics — no external dependencies.
 
 Provides WER (Word Error Rate) computation via word-level Levenshtein distance,
-text normalization, and word-level timestamp accuracy metrics with greedy alignment.
+chrF for translations, text normalization, and word-level timestamp accuracy
+metrics with greedy alignment.
 """
 
 import re
 import unicodedata
+from collections import Counter
 from typing import Dict, List
 
 
@@ -80,6 +82,44 @@ def compute_wer(reference: str, hypothesis: str) -> Dict:
         "ref_words": n,
         "hyp_words": m,
     }
+
+
+def compute_chrf(reference: str, hypothesis: str, max_n: int = 6, beta: float = 2.0) -> float:
+    """Compute chrF, the character n-gram F-beta score, as a percentage.
+
+    Both sides get the same NFC/lowercase/punctuation normalization as WER and
+    then lose all whitespace, so formatting differences do not move the score
+    and Chinese needs no tokenizer. Orders are averaged over the n-grams the
+    shorter text actually has, matching sacrebleu's char_order=6, beta=2.
+
+    Args:
+        reference: Human reference translation.
+        hypothesis: System translation.
+
+    Returns:
+        chrF in 0..100. Either side empty scores 0 rather than raising.
+    """
+    ref = "".join(normalize_text(reference).split())
+    hyp = "".join(normalize_text(hypothesis).split())
+    if not ref or not hyp:
+        return 0.0
+
+    precisions, recalls = [], []
+    for n in range(1, max_n + 1):
+        ref_ngrams = Counter(ref[index:index + n] for index in range(len(ref) - n + 1))
+        hyp_ngrams = Counter(hyp[index:index + n] for index in range(len(hyp) - n + 1))
+        if not ref_ngrams or not hyp_ngrams:
+            break
+        matched = sum(min(count, hyp_ngrams[gram]) for gram, count in ref_ngrams.items())
+        precisions.append(matched / sum(hyp_ngrams.values()))
+        recalls.append(matched / sum(ref_ngrams.values()))
+
+    precision = sum(precisions) / len(precisions)
+    recall = sum(recalls) / len(recalls)
+    if precision <= 0 or recall <= 0:
+        return 0.0
+    beta_squared = beta * beta
+    return 100 * (1 + beta_squared) * precision * recall / (beta_squared * precision + recall)
 
 
 def compute_timestamp_accuracy(

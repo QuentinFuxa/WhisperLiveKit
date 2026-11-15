@@ -819,6 +819,13 @@ def cmd_bench(args: list):
     parser.add_argument("--repeats", type=int, default=1, help="Measured passes over each sample")
     parser.add_argument("--warmup", action="store_true", help="Record a separate startup/warmup sample per language")
     parser.add_argument("--config", help="JSON object of additional engine options, including pinned model paths")
+    parser.add_argument("--target-language", default=None,
+                        help="Also translate into this language code (e.g. zh). Requires "
+                             "--translation-backend or a translation backend in --config")
+    parser.add_argument("--translation-backend", default=None,
+                        help="Translation backend for --target-language (e.g. mlx-llm-mt)")
+    parser.add_argument("--mt-model", default=None,
+                        help="MT model for --translation-backend mlx-llm-mt (e.g. hy-mt2-1.8b-8bit)")
     parser.add_argument("--quick", action="store_true",
                         help="Quick mode: small subset for smoke tests")
     parser.add_argument("--json", default=None, dest="json_out",
@@ -831,6 +838,11 @@ def cmd_bench(args: list):
                         help="Show detailed logs")
 
     parsed = parser.parse_args(args)
+
+    if parsed.translation_backend and not parsed.target_language:
+        parser.error("--translation-backend requires --target-language")
+    if parsed.mt_model and parsed.translation_backend != "mlx-llm-mt":
+        parser.error("--mt-model requires --translation-backend mlx-llm-mt")
 
     # Parse languages
     languages = None
@@ -879,6 +891,14 @@ async def _run_bench_new(parsed, languages, categories):
             print(f"\r  [{i + 1}/{total}] {name}...{' ' * 20}",
                   end="", file=sys.stderr, flush=True)
 
+    engine_kwargs = json.loads(Path(parsed.config).read_text()) if parsed.config else {}
+    # Explicit flags win over the same key in --config.
+    for value, key in ((parsed.target_language, "target_language"),
+                       (parsed.translation_backend, "translation_backend"),
+                       (parsed.mt_model, "mlx_llm_mt_model")):
+        if value:
+            engine_kwargs[key] = value
+
     runner = BenchmarkRunner(
         backend=parsed.backend,
         model_size=parsed.model_size,
@@ -889,7 +909,7 @@ async def _run_bench_new(parsed, languages, categories):
         on_progress=on_progress,
         samples=load_manifest(parsed.manifest, continuous=parsed.continuous) if parsed.manifest else None,
         repeats=parsed.repeats, warmup=parsed.warmup,
-        engine_kwargs=json.loads(Path(parsed.config).read_text()) if parsed.config else None,
+        engine_kwargs=engine_kwargs or None,
     )
 
     print("\n  Downloading benchmark samples (cached after first run)...",

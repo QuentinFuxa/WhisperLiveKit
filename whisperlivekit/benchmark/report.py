@@ -25,12 +25,29 @@ def print_report(report: BenchmarkReport, out: TextIO = sys.stderr) -> None:
         )
         if result.error:
             out.write(f"  {result.error}\n")
+        if result.chrf is not None or result.target_language:
+            out.write(
+                f"  translation -> {result.target_language or 'none'}: "
+                f"chrF {_number(result.chrf)}; first {_number(result.first_translation_time_s)}s; "
+                f"final {_number(result.final_translation_time_s)}s; "
+                f"provisional lead {_number(result.provisional_lead_s)}s\n"
+            )
         if result.status == "ok" and not (result.timing_valid and result.timing_monotonic):
             out.write("  Timestamp ordering/bounds require inspection.\n")
     out.write(f"\n{len(report.successful_results)}/{report.n_samples} completed; {report.n_failed} failed.\n")
     out.write(f"Successful samples: weighted WER {_number(report.weighted_wer * 100 if report.weighted_wer is not None else None)}%; ASR RTF {_number(report.overall_rtf, 3)}\n")
     if report.weighted_cer is not None:
         out.write(f"Chinese/Japanese character error rate: {report.weighted_cer * 100:.2f}%\n")
+    translation = report.translation
+    if translation.get("target_language"):
+        producer = " ".join(part for part in (translation.get("backend"), translation.get("model")) if part)
+        out.write(
+            f"Translation to {translation['target_language']}"
+            f"{' via ' + producer if producer else ''}: mean chrF {_number(report.avg_chrf)}%; "
+            f"first translation p95 {_number(report.percentile('first_translation_time_s'))}s; "
+            f"final translation p95 {_number(report.percentile('final_translation_time_s'))}s; "
+            f"provisional lead p95 {_number(report.percentile('provisional_lead_s'))}s\n"
+        )
     out.write("ASR RTF measures inference calls. Wall time includes audio pacing and EOF drain.\n")
     out.write("First visible text is measured only at speed=1; it is not per-word latency. EOF time starts after actual feeding ends.\n")
     out.write("Failed samples are excluded from scores; inspect their records before comparing runs.\n\n")

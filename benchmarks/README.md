@@ -42,10 +42,15 @@ publishing a comparison. Keep downloads outside measured runs.
 
 ## Measurements
 
-JSON schema 3.1 includes hypotheses, references, WER/CER edit counts, errors,
+JSON schema 3.2 includes hypotheses, references, WER/CER edit counts, errors,
 audio hashes, effective configuration, dependency versions, hardware, source
-commit and dirty state. Separate startup/warmup records do not contribute to
-measured quality or latency. All measured repetitions retain their sample IDs.
+commit and dirty state. It adds the translation half of an
+audio-to-translation run: `target_language`, `translation`,
+`translation_reference`, `chrf`, `final_translation_time_s` and
+`provisional_lead_s` per row, and `config.translation`. Analyzer scripts under
+`benchmarks/evaluations/` remain pinned to the 3.1 reports they were written for.
+Separate startup/warmup records do not contribute to measured quality or
+latency. All measured repetitions retain their sample IDs.
 
 Paced audio packets are sent when their final sample becomes available, using
 absolute deadlines. Processing and scheduler delays do not accumulate into
@@ -137,5 +142,45 @@ quality. Replotting either archive cannot recover missing evidence.
 
 For simultaneous translation, see the [MLX calibration notes](../docs/simul_mt_calibration.md),
 [AlignAtt4LLM evaluation code](https://github.com/QuentinFuxa/Alignatt4LLM) and
-[paper](https://arxiv.org/abs/2606.03967). A WLK audio-to-translation benchmark is a
-separate experiment; it must record both ASR and MT configurations.
+[paper](https://arxiv.org/abs/2606.03967).
+
+## Audio-to-translation runs
+
+`--target-language` engages the translation half of the same pipeline and turns
+a run into an audio-to-translation experiment. `--translation-backend` selects
+the translator and `--mt-model` its model; both require `--target-language`, and
+a flag wins over the same key in `--config`. The run records **both halves**:
+each row keeps its `effective_config`, and `config.translation` states the
+target language, the translation backend, the loaded model and whether the
+backend drafted.
+
+```bash
+wlk bench --backend nemotron-mlx-asr --languages en --target-language zh \
+  --translation-backend mlx-llm-mt --mt-model hy-mt2-1.8b-8bit \
+  --manifest benchmarks/corpora/fleurs-90.json --speed 1 --json results.json
+```
+
+FLEURS is parallel, so the manifest load joins rows on `sentence_id`: an English
+recording's translation reference is the row of the same ID in the target
+language. No second corpus and no download. A row whose ID has no
+target-language sibling scores `null` instead of borrowing a reference.
+
+- **chrF:** character n-gram F-beta (n = 1..6, beta = 2), as a percentage. Both
+  sides get the WER normalization and lose their whitespace, so formatting
+  differences cannot move the score and Chinese needs no tokenizer. It is null
+  on a row with no translation hypothesis or no translation reference.
+- **First translation:** delay from feed start to the first provisional or
+  committed translation. Paced runs only, like first visible text.
+- **Final translation:** the last committed line that first showed a
+  translation, also from feed start. A translation that keeps growing on one
+  line does not move it.
+- **Provisional lead:** final minus first translation time, so how long drafting
+  ran before the translation settled. It is null unless the backend drafted
+  provisional text (`mlx_llm_mt_simultaneous`), which is the same convention as
+  a null CER for English: a property of the run, not a missing measurement.
+
+A demonstration report from this machine is checked in at
+[evaluations/translation-fleurs-en-zh](evaluations/translation-fleurs-en-zh/).
+It exists to show the join, the score and the latency fields on a real cascade
+run; three samples establish no quality figure and are not a backend comparison.
+

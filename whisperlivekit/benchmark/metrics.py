@@ -46,6 +46,13 @@ class SampleResult:
     timing_monotonic: bool = True
     hypothesis: str = ""
     reference: str = ""
+    # Translation half of an audio-to-translation run; empty without a target language.
+    target_language: str = ""
+    translation: str = ""
+    translation_reference: str = ""
+    chrf: Optional[float] = None
+    final_translation_time_s: Optional[float] = None
+    provisional_lead_s: Optional[float] = None
     source: str = ""
     tags: List[str] = field(default_factory=list)
     audio_sha256: str = ""
@@ -70,6 +77,7 @@ class BenchmarkReport:
     warmup_results: List[SampleResult] = field(default_factory=list)
     corpus_sha256: str = ""
     model_artifacts: Dict[str, Any] = field(default_factory=dict)
+    translation: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def successful_results(self) -> List[SampleResult]:
@@ -116,6 +124,11 @@ class BenchmarkReport:
     def overall_rtf(self) -> Optional[float]:
         return self.total_processing_s / self.total_audio_s if self.total_audio_s else None
 
+    @property
+    def avg_chrf(self) -> Optional[float]:
+        values = [r.chrf for r in self.successful_results if r.chrf is not None]
+        return sum(values) / len(values) if values else None
+
     def percentile(self, field_name, quantile=.95):
         values = sorted(value for r in self.successful_results
                         if (value := getattr(r, field_name)) is not None)
@@ -127,11 +140,11 @@ class BenchmarkReport:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "benchmark_version": "3.1",
+            "benchmark_version": "3.2",
             "timestamp": self.timestamp,
             "system_info": self.system_info,
             "config": {"backend": self.backend, "model_size": self.model_size,
-                       "feed_speed": self.feed_speed},
+                       "feed_speed": self.feed_speed, "translation": self.translation},
             "measurement": {
                 "audio_pacing": "speed>0: absolute chunk-end deadlines; no post-feed sleep. speed=0: immediate",
                 "rtf": "successful ASR call time / audio duration",
@@ -144,6 +157,10 @@ class BenchmarkReport:
                 "rss_peak_bytes": "largest process RSS sampled every 50 ms, including startup; not an exact high-water mark",
                 "mlx_peak_bytes": "MLX allocator peak since per-sample reset; separate from RSS, do not add them",
                 "quality": "NFC, lowercase, punctuation-normalized WER; Chinese uses CER with whitespace removed",
+                "chrf": "character n-gram F-beta (n=1..6, beta=2) of the translation against the same sentence_id's reference in the target language; both sides use the WER normalization and drop whitespace; null without a translation hypothesis and reference",
+                "translation_reference": "reference of the same sentence_id in the target language, joined from the corpus manifest",
+                "final_translation_time_s": "last committed line that first showed a translation, since feed start; paced runs only",
+                "provisional_lead_s": "final_translation_time_s minus first_translation_time_s, so how long drafting ran before the translation settled; null unless the backend drafted provisional text",
                 "asr_call_p95_ms": "last 4096 inference calls per sample, not word latency",
                 "model_revisions": "explicit local artifacts are hashed; floating Hub aliases are not resolved",
             },
@@ -160,6 +177,10 @@ class BenchmarkReport:
                 "avg_wer": self.avg_wer,
                 "weighted_wer": self.weighted_wer,
                 "weighted_cer": self.weighted_cer,
+                "avg_chrf": self.avg_chrf,
+                "first_translation_p95_s": self.percentile("first_translation_time_s"),
+                "final_translation_p95_s": self.percentile("final_translation_time_s"),
+                "provisional_lead_p95_s": self.percentile("provisional_lead_s"),
                 "finalization_p95_s": self.percentile("finalization_time_s"),
                 "first_visible_p95_s": self.percentile("first_visible_time_s"),
                 "source_end_lag_p95_s": self.percentile("source_end_lag_s"),
@@ -243,6 +264,24 @@ def get_system_info() -> Dict[str, Any]:
             pass
     info["backend_versions"] = versions
     return info
+
+
+def describe_translation_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Record the MT half of an audio-to-translation run.
+
+    An audio-to-translation benchmark has to state what produced the target
+    text, not only the ASR backend: the language pair, the backend and the
+    loaded model. Drafting changes what a latency number means, so it is
+    recorded beside them.
+    """
+    backend = config.get("translation_backend", "")
+    return {
+        "target_language": config.get("target_language", ""),
+        "backend": backend,
+        "model": config.get("mlx_llm_mt_model") if backend == "mlx-llm-mt" else None,
+        "simultaneous": bool(config.get("mlx_llm_mt_simultaneous", False))
+        if backend == "mlx-llm-mt" else None,
+    }
 
 
 def describe_model_artifacts(config):

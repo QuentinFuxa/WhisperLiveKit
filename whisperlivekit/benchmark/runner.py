@@ -9,10 +9,29 @@ from typing import Callable, List, Optional
 
 from whisperlivekit.benchmark.compat import backend_supports_language, resolve_backend
 from whisperlivekit.benchmark.datasets import BenchmarkSample, get_benchmark_samples
-from whisperlivekit.benchmark.metrics import BenchmarkReport, SampleResult, get_system_info
+from whisperlivekit.benchmark.metrics import (
+    BenchmarkReport,
+    SampleResult,
+    describe_translation_config,
+    get_system_info,
+)
 from whisperlivekit.benchmark.resources import ResourceMonitor
 
 logger = logging.getLogger(__name__)
+
+
+def _line_translation(line) -> str:
+    """Translation text carried by one front-end line, or "" when it has none."""
+    translation = line.get("translation")
+    if not translation:
+        return ""
+    text = translation if isinstance(translation, str) else getattr(translation, "text", "")
+    return (text or "").strip()
+
+
+def _committed_translation(lines) -> str:
+    """Join the translations attached to the committed lines."""
+    return " ".join(text for text in (_line_translation(line) for line in lines) if text)
 
 
 class BenchmarkRunner:
@@ -69,23 +88,31 @@ class BenchmarkRunner:
         # Hash after timing: reading weights beforehand would warm the OS cache.
         from whisperlivekit.benchmark.metrics import describe_model_artifacts
         report.model_artifacts = describe_model_artifacts(kwargs)
+        report.translation = describe_translation_config(self.engine_kwargs)
         return report
 
     async def _run_sample(self, sample: BenchmarkSample, harness_kwargs: dict, compute_wer) -> SampleResult:
-        from whisperlivekit.metrics import normalize_text
+        from whisperlivekit.metrics import compute_chrf, normalize_text
         from whisperlivekit.test_harness import TestHarness
 
+        target_language = harness_kwargs.get("target_language", "")
         result = SampleResult(sample_name=sample.name, language=sample.language, category=sample.category,
                               duration_s=sample.duration, reference=sample.reference,
-                              source=sample.source, tags=sorted(sample.tags))
+                              source=sample.source, tags=sorted(sample.tags),
+                              target_language=target_language)
         if not backend_supports_language(self.backend, sample.language):
             result.status = "skipped"
             result.error = f"Language {sample.language} unsupported by benchmark backend {self.backend}"
             return result
         kwargs = {**harness_kwargs, "lan": sample.language}
         feed_started = None
+        # First moment each committed line showed a translation, and whether the
+        # backend drafted at all: both are needed to read the translation latency.
+        line_translation_times = {}
+        drafted = False
 
         def observe(state):
+            nonlocal drafted
             if state.translation_error and state.translation_error not in result.translation_errors:
                 result.translation_errors.append(state.translation_error)
             if self.speed != 1:
@@ -99,6 +126,11 @@ class BenchmarkRunner:
                 state.buffer_translation or any(line.get("translation") for line in state.lines)
             ):
                 result.first_translation_time_s = elapsed
+            if state.buffer_translation:
+                drafted = True
+            for line in state.lines:
+                if _line_translation(line):
+                    line_translation_times.setdefault(str(line.get("start")), elapsed)
 
         monitor = ResourceMonitor()
         try:
@@ -131,6 +163,14 @@ class BenchmarkRunner:
                     finally:
                         result.wall_time_s = time.perf_counter() - feed_started
                         result.hypothesis = harness.state.committed_text or harness.state.text
+                        result.translation = (_committed_translation(harness.state.lines)
+                                              or harness.state.buffer_translation)
+                        if line_translation_times:
+                            result.final_translation_time_s = max(line_translation_times.values())
+                        if drafted and result.first_translation_time_s is not None \
+                                and result.final_translation_time_s is not None:
+                            result.provisional_lead_s = (result.final_translation_time_s
+                                                         - result.first_translation_time_s)
                     metrics = harness.metrics
                     result.processing_time_s = metrics.total_processing_time_s
                     result.rtf = result.processing_time_s / sample.duration if sample.duration > 0 else None
@@ -140,6 +180,10 @@ class BenchmarkRunner:
                     result.timing_valid, result.timing_monotonic = state.timing_valid, state.timing_monotonic
             if result.translation_errors:
                 raise RuntimeError("Translation failed: " + "; ".join(result.translation_errors))
+            if result.target_language:
+                result.translation_reference = sample.translation_references.get(result.target_language, "")
+                if result.translation.strip() and result.translation_reference.strip():
+                    result.chrf = compute_chrf(result.translation_reference, result.translation)
             if sample.reference.strip():
                 if sample.language in {"zh", "cmn", "ja", "yue"}:
                     ref = " ".join("".join(normalize_text(sample.reference).split()))
