@@ -640,3 +640,34 @@ def test_embedded_apps_keep_authentication_and_cors_separate(monkeypatch, caplog
                                    data={"response_format": "xml"})
             assert response.status_code == 400
             assert "Unsupported response_format" in response.json()["detail"]
+
+
+def test_non_ascii_api_token_is_rejected_with_401_not_a_server_error(monkeypatch, caplog):
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    from whisperlivekit.config import WhisperLiveKitConfig
+
+    monkeypatch.setattr(sys, "argv", ["host-program"])
+    server = importlib.reload(importlib.import_module("whisperlivekit.basic_server"))
+    monkeypatch.setattr(server, "TranscriptionEngine", lambda **kwargs: SimpleNamespace(
+        args=kwargs["config"], asr=None,
+    ))
+    app = server.create_app(WhisperLiveKitConfig(api_token="s3cret"))
+    with TestClient(app, raise_server_exceptions=True) as client:
+        files = {"file": ("audio.wav", b"encoded")}
+        caplog.clear()
+        response = client.post("/v1/audio/transcriptions", files=files,
+                               headers=[(b"authorization", "Bearer café".encode("latin-1"))])
+        assert response.status_code == 401
+        assert "invalid or missing API token" in caplog.text
+        for path in ("/asr?token=caf%C3%A9", "/v1/listen?token=caf%C3%A9"):
+            with pytest.raises(WebSocketDisconnect) as closed:
+                with client.websocket_connect(path):
+                    pass
+            assert closed.value.code == 4401
+
+    # A configured token with non-ASCII characters still matches itself (sent as ?token=).
+    settings = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(config=WhisperLiveKitConfig(api_token="café"))))
+    assert server._token_ok("café", settings) is True
+    assert server._token_ok("cafe", settings) is False
