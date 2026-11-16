@@ -250,6 +250,14 @@ compatibility with earlier versions; 0.4.x decodes the pending tail in both
 modes, so the flag no longer selects between two finalize paths. The chunk
 default is two seconds.
 
+`--model`/`model_size` selects the weights, like every other backend: a Hugging
+Face repo id or a local path is loaded as given, and the short specs `0.6b`,
+`1.7b`, `qwen3-0.6b`, `qwen3-1.7b`, `tiny`/`small` and `medium`/`large` map to
+the two published checkpoints. `base` is the generic default and means "not
+set", so `mlx_qwen3_asr_model` answers instead. An unrecognised spec raises
+either way — a silent fallback would run the configured model under the
+requested model's name.
+
 Timestamps describe decode chunk bounds, not aligned words.
 
 ### Reproducing the fixed-corpus measurement

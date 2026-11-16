@@ -47,6 +47,46 @@ _HOLD_BACK_UNITS = 5
 _CJK_UNIT_RE = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 _WORD_UNIT_RE = re.compile(r"\S+\s*")
 
+# Model specs to Hub ids for this backend. `model_size` reaches the adapter from
+# `--model` and from the benchmark runner, and a spec that is set has to select
+# the weights: an unhonoured `--model` runs the configured default while the
+# report claims the requested model. "base" is the runner's generic default and
+# means "not set".
+MLX_QWEN3_ASR_MODEL_MAPPING = {
+    "tiny": "Qwen/Qwen3-ASR-0.6B",
+    "small": "Qwen/Qwen3-ASR-0.6B",
+    "0.6b": "Qwen/Qwen3-ASR-0.6B",
+    "qwen3-asr-0.6b": "Qwen/Qwen3-ASR-0.6B",
+    "qwen3-0.6b": "Qwen/Qwen3-ASR-0.6B",
+    "medium": "Qwen/Qwen3-ASR-1.7B",
+    "large": "Qwen/Qwen3-ASR-1.7B",
+    "large-v3": "Qwen/Qwen3-ASR-1.7B",
+    "1.7b": "Qwen/Qwen3-ASR-1.7B",
+    "qwen3-asr-1.7b": "Qwen/Qwen3-ASR-1.7B",
+    "qwen3-1.7b": "Qwen/Qwen3-ASR-1.7B",
+}
+
+
+def _resolve_model_id(model_size, configured_model):
+    """Model id to load: a set ``model_size`` selects the weights, else config.
+
+    A repo id or a local path is used as given. An unknown non-path spec raises
+    rather than falling back to the configured model, because the fallback is
+    silent: the run reports one model and decodes another.
+    """
+    spec = (model_size or "").strip()
+    if not spec or spec == "base":
+        return configured_model
+    if "/" in spec or spec.startswith((".", "/")):
+        return spec
+    mapped = MLX_QWEN3_ASR_MODEL_MAPPING.get(spec.lower())
+    if mapped is None:
+        raise ValueError(
+            f"Unknown mlx-qwen3-asr model_size {spec!r}: pass a Hugging Face repo "
+            f"id or a local path, or set mlx_qwen3_asr_model"
+        )
+    return mapped
+
 
 def _resolve_language(language):
     if not language or language.strip().lower() == "auto":
@@ -161,7 +201,7 @@ class MlxQwen3ASR:
         from mlx_qwen3_asr import load_model
         from mlx_qwen3_asr.streaming import feed_audio, finish_streaming
 
-        self.model_id = config.mlx_qwen3_asr_model
+        self.model_id = _resolve_model_id(config.model_size, config.mlx_qwen3_asr_model)
         self.language = _resolve_language(config.lan)
         self.hotwords = config.mlx_qwen3_asr_context
         self.chunk_size_sec = config.mlx_qwen3_asr_chunk_sec

@@ -16,10 +16,12 @@ import numpy as np
 import pytest
 
 from whisperlivekit.asr_mlx_qwen3 import (
+    MlxQwen3ASR,
     MlxQwen3AsrOnlineProcessor,
     _append_only_delta,
 )
 from whisperlivekit.audio_processor import SENTINEL, AudioProcessor
+from whisperlivekit.config import WhisperLiveKitConfig
 from whisperlivekit.core import online_factory
 from whisperlivekit.metrics_collector import SessionMetrics
 from whisperlivekit.timed_objects import Silence, State
@@ -122,6 +124,47 @@ def test_pause_eof_and_new_speaker_preserve_spaces_and_commit_once(native):
     assert text(committed) == 'Bonjour le monde. Dernière phrase sans ponctuation'
     assert [(t.start, t.end) for t in committed] == [(0, 4), (4, 4), (5, 6)]
     assert online.finish()[0] == []
+
+
+def _install_fake_loader(monkeypatch):
+    """Replace the native loader so MlxQwen3ASR records the id it would load."""
+    loaded = []
+
+    def load_model(path_or_hf_repo, *args, **kwargs):
+        loaded.append(path_or_hf_repo)
+        return object(), None
+
+    monkeypatch.setattr(sys.modules['mlx_qwen3_asr'], 'load_model', load_model, raising=False)
+    return loaded
+
+
+def test_model_size_selects_the_weights(native, monkeypatch):
+    """`--model`/`model_size` picks the weights for this backend too.
+
+    The benchmark runner passes it in kwargs while forbidding the model id in
+    --config, so ignoring it runs the configured default under the requested
+    model's name; a 1.7B arm scored byte-identically to the 0.6B default.
+    """
+    for model_size, expected in [
+        ('mlx-community/Qwen3-ASR-1.7B-8bit', 'mlx-community/Qwen3-ASR-1.7B-8bit'),
+        ('/models/qwen3-asr-1.7b', '/models/qwen3-asr-1.7b'),
+        ('1.7B', 'Qwen/Qwen3-ASR-1.7B'),
+        ('base', 'Qwen/Qwen3-ASR-0.6B'),
+        ('', 'Qwen/Qwen3-ASR-0.6B'),
+    ]:
+        loaded = _install_fake_loader(monkeypatch)
+        config = WhisperLiveKitConfig(backend='mlx-qwen3-asr', lan='en', model_size=model_size)
+        asr = MlxQwen3ASR(config)
+        assert asr.model_id == expected
+        assert loaded == [expected]
+
+
+def test_unknown_model_size_fails_instead_of_running_the_default(native, monkeypatch):
+    loaded = _install_fake_loader(monkeypatch)
+    with pytest.raises(ValueError, match='Unknown mlx-qwen3-asr model_size'):
+        MlxQwen3ASR(WhisperLiveKitConfig(backend='mlx-qwen3-asr', lan='en',
+                                        model_size='medium-en'))
+    assert loaded == []
 
 
 def test_sessions_keep_their_language_context_and_cjk_boundaries(native):
