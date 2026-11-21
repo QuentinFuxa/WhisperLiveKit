@@ -235,8 +235,13 @@ reports no stable prefix, the adapter commits the units two consecutive window
 decodes agree on (LocalAgreement-1) and holds the last five units back; CJK
 text is compared per character so the prefix can advance inside a Chinese
 sentence. A reported prefix that is not a prefix of the current text, or that
-rewrites text already committed, is repaired into an append of what the model
-now reports (upstream issue #31) instead of aborting the session. A pause whose
+rewrites text already committed (upstream issue #31), is appended instead of
+aborting the session: committed text cannot be taken back, so the wording a
+client already renders stays and only the candidate's units beyond the ones
+clients hold are sent, with a separator when the held text does not end with
+one. Aligning that append on units is what keeps a rewritten span from being
+glued onto the held text — a character cutoff used to deliver `montagnesD'une`
+for `Une des montagnes` followed by `D'une des montagnes`. A pause whose
 leftover audio cannot be decoded — the log-mel frontend needs more than 200
 samples — ends the segment without a final decode instead of raising.
 

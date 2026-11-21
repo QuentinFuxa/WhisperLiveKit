@@ -192,29 +192,136 @@ ISSUE_31_SPLIT = [
 ]
 
 
+# The maintainer's four glued-join traces from the 30-clip French FLEURS run on
+# 91d2b01 (`/tmp/wlk18/91-fr.json`), each a full hypothesis of that run: the text
+# clients held, the window text that rewrote it, the text the client must end up
+# with, and the glued string the run actually delivered. All four reproduce on
+# 91d2b01 and none of them comes from a capitalised rewrite only: `1836`'s seam
+# is lowercase and `1913` keeps the word it revises.
+REWRITTEN_SPAN_TRACES = [
+    pytest.param(
+        'Situé au sommet Une des montagnes',
+        "Situé au sommet D'une des montagnes au nord de la Meck, la grotte est "
+        'totalement isolée du reste du monde.',
+        'Situé au sommet Une des montagnes au nord de la Meck, la grotte est '
+        'totalement isolée du reste du monde.',
+        "montagnesD'une",
+        id='fleurs_fr_1739',
+    ),
+    pytest.param(
+        "Les Sans d'arbon sont la",
+        "Les Sans d'arbon C'est la plus grande ceinture de mangrove côtière du "
+        "monde, s'étendant sur quatre-vingt kilomètres cinquante miles depuis la "
+        "côte jusqu'à l'arrière pays bangladais et indien.",
+        "Les Sans d'arbon sont la plus grande ceinture de mangrove côtière du "
+        "monde, s'étendant sur quatre-vingt kilomètres cinquante miles depuis la "
+        "côte jusqu'à l'arrière pays bangladais et indien.",
+        "laC'est",
+        id='fleurs_fr_1893',
+    ),
+    pytest.param(
+        'Le mouvement du',
+        'Le mouvement Roussement du ting ne ressemble pas roussement en pluie de '
+        'liant mais plutôt à une phrase dans les mots serait des cris et des '
+        'grondements',
+        'Le mouvement du ting ne ressemble pas roussement en pluie de liant mais '
+        'plutôt à une phrase dans les mots serait des cris et des grondements',
+        'duRoussement',
+        id='fleurs_fr_1913',
+    ),
+    pytest.param(
+        "Depuis l'Antiquité. Les peuples sont familiers des éléments chimiques de "
+        "base comme l'or. L'argent et le cuivre. car il se trouve dans",
+        "Depuis l'Antiquité. Les peuples sont familiers des éléments chimiques de "
+        "base comme l'or. L'argent et le cuivre. car il se trouve ds se trouvent "
+        "dans la nature sous forme brute et sont assez simples à miner à l'aide "
+        "d'outils primitifs",
+        "Depuis l'Antiquité. Les peuples sont familiers des éléments chimiques de "
+        "base comme l'or. L'argent et le cuivre. car il se trouve dans se "
+        "trouvent dans la nature sous forme brute et sont assez simples à miner "
+        "à l'aide d'outils primitifs",
+        'danss se trouvent',
+        id='fleurs_fr_1836',
+    ),
+]
+
+
+@pytest.mark.parametrize(('held', 'candidate', 'expected', 'glued'), REWRITTEN_SPAN_TRACES)
+def test_a_rewritten_span_is_appended_at_a_unit_boundary(
+    held, candidate, expected, glued
+):
+    """A candidate that rewrites held text appends from the next unit.
+
+    Aligning the append on a shared character prefix cuts inside a word, which
+    is what delivered `montagnesD'une`, `laC'est`, `duRoussement` and
+    `danss se trouvent` to clients; a unit cutoff cannot. Cutting the append on
+    units instead of characters is the whole change, so restoring the character
+    cutoff fails every one of these four.
+    """
+    delta = _append_only_delta(held, candidate)
+    assert held + delta == expected
+    # The wording the client already renders is never taken back...
+    assert expected.startswith(held)
+    # ...and the seam is a separator, not two words run together.
+    assert delta.startswith(' ') and not held.endswith(' ')
+    assert glued not in held + delta
+
+
+def test_a_rewrite_that_keeps_the_last_held_word_does_not_repeat_it():
+    # 1913's candidate keeps 'du' across the rewrite. Appending from the unit
+    # count alone would send 'du' twice; a candidate unit equal to the last held
+    # unit is skipped, so the client reads 'du ting'.
+    delta = _append_only_delta(
+        'Le mouvement du', 'Le mouvement Roussement du ting ne ressemble pas'
+    )
+    assert delta == ' ting ne ressemble pas'
+
+
+def test_cjk_revisions_advance_one_character_at_a_time():
+    # CJK runs without separators, so a unit is one character and the append
+    # starts at the character clients hold; the fragment before it stays put.
+    assert _append_only_delta('甲乙', '甲丙丁戊') == '丁戊'
+    # A Latin token is one unit, so the four characters plus 'Co' put the
+    # boundary at '蒂'.
+    assert _append_only_delta('我们去了Co', '我们去了科蒂纳。') == '蒂纳。'
+
+
+def test_a_rewrite_of_the_last_held_unit_is_dropped_not_glued():
+    # The case that motivated committing only at boundaries: provisional "the
+    # number is eight", finalize "the number is 802.11a". Under a character
+    # cutoff the correction was glued on (`the number is eight802.11a`); under a
+    # unit cutoff it cannot reach a client that already renders "eight", so the
+    # held wording stays and nothing is concatenated.
+    held = 'the number is eight'
+    assert _append_only_delta(held, 'the number is 802.11a') == ''
+    assert 'eight802' not in held
+
+
+def test_a_candidate_that_retracts_sends_nothing():
+    # Clients already render the longer text, so a shorter candidate adds
+    # nothing. A candidate that only changes the last held unit cannot reach
+    # them either: `fish and chips.` keeps the units they hold, punctuation
+    # included, and the next unit is what gets appended.
+    assert _append_only_delta('fish and chips', 'fish and') == ''
+    assert _append_only_delta('fish and chips', 'fish and chips.') == ''
+    assert _append_only_delta('fish and chips', 'fish and chips. Today') == ' Today'
+
+
 @pytest.mark.parametrize(('previous_stable', 'new_text', 'candidate', 'expected'), [
     # Only the part the client does not already hold; the revision's tail comes
     # with the next window instead of repeating the fragment.
-    ('我们去了Co', '我们去了科蒂纳。', '我们去了Co', '科蒂纳。'),
-    # The rewrite reaches the client once: '丙丁戊' is not appended twice.
-    ('甲乙', '甲丙丁戊己庚辛壬癸', '甲丙丁戊', '丙丁戊己庚辛壬癸'),
-    ('甲乙丙', '甲乙丙丁戊己庚', '甲乙丙', '丁戊己庚'),
+    ('我们去了Co', '我们去了科蒂纳。', '我们去了Co', '我们去了Co蒂纳。'),
+    # '丁戊' follows the two characters clients hold; '丙' is inside their span.
+    ('甲乙', '甲丙丁戊己庚辛壬癸', '甲丙丁戊', '甲乙丁戊己庚辛壬癸'),
+    ('甲乙丙', '甲乙丙丁戊己庚', '甲乙丙', '甲乙丙丁戊己庚'),
     ('', 'one two three four five six', 'one', 'one two three four five six'),
 ])
 def test_issue_31_candidates_are_absorbed_as_appends(
     previous_stable, new_text, candidate, expected
 ):
-    source, first = _append_only_delta(previous_stable, candidate)
-    _, second = _append_only_delta(source, new_text)
-    assert first + second == expected
-
-
-def test_appending_never_retracts_committed_text():
-    # Clients already hold the longer text, so a shorter candidate adds nothing
-    # and the source stays put; the text can come back without being repeated.
-    source, delta = _append_only_delta('fish and chips', 'fish and')
-    assert (source, delta) == ('fish and chips', '')
-    assert _append_only_delta(source, 'fish and chips.') == ('fish and chips.', '.')
+    held = previous_stable + _append_only_delta(previous_stable, candidate)
+    held += _append_only_delta(held, new_text)
+    assert held == expected
 
 
 def test_issue_31_revision_neither_raises_nor_repeats_at_a_pause(native):
@@ -225,10 +332,11 @@ def test_issue_31_revision_neither_raises_nor_repeats_at_a_pause(native):
     online.insert_audio_chunk(np.zeros(32000), 4.0)
     committed, _ = online.process_iter()
     assert text(committed) == '我们去了Co'
-    assert online.get_buffer().text == '科蒂纳'
+    # Past the units clients hold, not the whole fragment again.
+    assert online.get_buffer().text == '蒂纳'
     native.finals.append('我们去了科蒂纳。')
     tokens, _ = online.start_silence()
-    assert text(committed + tokens) == '我们去了Co科蒂纳。'
+    assert text(committed + tokens) == '我们去了Co蒂纳。'
     assert online.get_buffer().text == ''
 
 
@@ -244,12 +352,13 @@ def test_issue_31_rewrite_is_absorbed_once(native):
     native.script.append(('甲丙丁戊己庚辛壬癸', '甲丙丁戊'))
     online.insert_audio_chunk(np.zeros(32000), 6.0)
     committed += online.process_iter()[0]
-    assert text(committed) == '甲乙丙丁戊'
+    assert text(committed) == '甲乙丁戊'
     assert online.get_buffer().text == '己庚辛壬癸'
     native.finals.append('甲丙丁戊己庚辛壬癸')
     tokens, _ = online.start_silence()
-    # '丙丁戊' reaches the client once even though two decodes report it.
-    assert text(committed + tokens) == '甲乙丙丁戊己庚辛壬癸'
+    # '丁戊' reaches the client once even though two decodes report it, and '丙'
+    # inside the span they already hold stays as it was sent.
+    assert text(committed + tokens) == '甲乙丁戊己庚辛壬癸'
 
 
 @pytest.mark.parametrize(('previous_stable', 'new_text', 'candidate'), ISSUE_31_SPLIT)
@@ -361,28 +470,18 @@ async def _drive(processor, items):
 def test_case_only_revision_at_segment_start_does_not_duplicate():
     """The maintainer's trace: only the first letter changed case.
 
-    source_before = 'là il y a eu tel'
-    candidate     = 'Là il y a eu tel second de silence et je repars'
+    held      = 'là il y a eu tel'
+    candidate = 'Là il y a eu tel second de silence et je repars'
     """
-    source, delta = _append_only_delta(
-        "là il y a eu tel", "Là il y a eu tel second de silence et je repars"
-    )
-    assert source == "Là il y a eu tel second de silence et je repars"
-    assert delta.strip() == "second de silence et je repars"
-    assert "Là" not in delta
+    held = "là il y a eu tel"
+    delta = _append_only_delta(held, "Là il y a eu tel second de silence et je repars")
+    assert delta == " second de silence et je repars"
+    assert held + delta == "là il y a eu tel second de silence et je repars"
 
 
 def test_case_only_revision_keeps_no_duplicate_on_fleurs_fr_1935():
-    source, delta = _append_only_delta(
+    delta = _append_only_delta(
         "cependant ce n'est pas vrai bien",
         "Cependant ce n'est pas vrai bien qu'il y ait une raison",
     )
-    assert delta.strip() == "qu'il y ait une raison"
-
-
-def test_rewrite_inside_a_word_reconstructs_instead_of_duplicating():
-    # The source is cut inside "petit"; the tail completes it, so what clients
-    # hold plus the delta must equal the candidate, with nothing repeated.
-    held = "c'est le plus pet"
-    source, delta = _append_only_delta(held, "C'est le plus petit pays du monde")
-    assert (held + delta).casefold() == "c'est le plus petit pays du monde".casefold()
+    assert delta == " qu'il y ait une raison"

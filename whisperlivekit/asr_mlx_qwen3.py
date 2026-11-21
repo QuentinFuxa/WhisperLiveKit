@@ -11,9 +11,10 @@ first ``unfixed_chunk_num`` chunks, so a short utterance would commit nothing
 before its pause; the adapter derives a prefix from agreement between
 consecutive window texts meanwhile. And ``stable_text`` is neither guaranteed to
 be a prefix of ``text`` nor monotone across chunks (upstream issue #31), so a
-candidate that revises committed text is repaired to an append instead of
-aborting the session. That repair tracks the text the last commit came from, not
-the text clients hold, so a revised fragment reaches clients once.
+candidate that revises text clients already hold is appended to it instead of
+aborting the session. Committed tokens are append-only downstream, so the old
+wording stays and only the candidate's units beyond the ones clients hold are
+sent; aligning that append on units keeps two words from being glued together.
 """
 from __future__ import annotations
 
@@ -81,27 +82,37 @@ def _common_prefix_length(left: str, right: str) -> int:
     return limit
 
 
-def _append_only_delta(source: str, candidate: str) -> tuple[str, str]:
-    """Return ``(source, delta)`` for a candidate that may revise earlier text.
+def _append_only_delta(held: str, candidate: str) -> str:
+    """Text a client holding ``held`` may still be sent from ``candidate``.
 
-    WLK tokens are append-only, so a candidate that does not extend the text a
-    commit came from cannot be adopted verbatim. ``source`` is that text, not the
-    text clients already hold: the two diverge once a revision was absorbed, and
-    computing the next delta against the accumulated text would repeat the
-    revised fragment.
+    WLK tokens are append-only: text a client already renders cannot be taken
+    back, so a candidate that rewrites part of ``held`` can only contribute what
+    follows it, and the wording of the rewritten span stays as it was sent.
 
-    A candidate that extends the source contributes its tail. A candidate at
-    least as long as the source that rewrote it becomes the new source and
-    contributes its part after the shared prefix, so the rewrite reaches clients
-    exactly once. A shorter candidate retracts nothing: clients keep the longer
-    text, so it contributes nothing and the source stays put, which also lets the
-    text come back later without being appended twice.
+    The append is aligned on units (whitespace-delimited words, or one unit per
+    CJK character) rather than on a shared character prefix. Counting the units
+    ``held`` holds and appending the candidate's units beyond them cannot glue
+    two words together; a character cutoff picks an arbitrary mid-word point, so
+    a rewritten span used to reach the client as ``montagnesD'une`` or
+    ``danss se trouvent``. A shared prefix that ends inside the held text is the
+    common case, not an error: it means the model revised, not extended.
     """
-    if candidate.startswith(source):
-        return candidate, candidate[len(source):]
-    if len(candidate) < len(source):
-        return source, ""
-    return candidate, candidate[_common_prefix_length(source, candidate):]
+    held_units = _split_text_units(held)
+    candidate_units = _split_text_units(candidate)
+    start = len(held_units)
+    # A rewrite can keep the last word a client already shows; sending a
+    # candidate unit that repeats it would show that word twice.
+    while (start < len(candidate_units) and held_units
+           and candidate_units[start].strip().casefold()
+           == held_units[-1].strip().casefold()):
+        start += 1
+    delta = "".join(candidate_units[start:])
+    if not delta or not held or held[-1].isspace() or delta[0].isspace():
+        return delta
+    if _CJK_UNIT_RE.match(delta[0]):
+        # CJK runs without separators; a space would split the sentence.
+        return delta
+    return " " + delta
 
 
 def _split_text_units(text: str) -> list[str]:
@@ -178,7 +189,6 @@ class MlxQwen3AsrOnlineProcessor:
         self._state = None
         self._pending = []
         self._committed = ""
-        self._committed_source = ""
         self._audio_end = 0.0
         self._token_start = 0.0
         self._previous_text = ""
@@ -247,7 +257,7 @@ class MlxQwen3AsrOnlineProcessor:
         return candidate
 
     def _commit(self, candidate):
-        source, delta = _append_only_delta(self._committed_source, (candidate or "").strip())
+        delta = _append_only_delta(self._committed, (candidate or "").strip())
         if not delta:
             return []
         token = ASRToken(
@@ -255,7 +265,6 @@ class MlxQwen3AsrOnlineProcessor:
             text=self._boundary_prefix(delta) + delta,
             detected_language=self.language or getattr(self._state, "language", None),
         )
-        self._committed_source = source
         self._committed += delta
         self._previous_text = self._committed
         self._token_start = self._audio_end
@@ -295,7 +304,6 @@ class MlxQwen3AsrOnlineProcessor:
             tokens = self._commit(final_text)
             self._state = None
             self._committed = ""
-            self._committed_source = ""
             self._previous_window_text = ""
             return tokens, self._audio_end
 
@@ -309,10 +317,11 @@ class MlxQwen3AsrOnlineProcessor:
         self._audio_end += silence_duration
 
     def get_buffer(self):
-        # The unstable tail is what the current window says beyond the text the
-        # last commit was derived from; measuring it against the committed text
-        # would re-show a fragment a revision already carried.
+        # The unstable tail is what the next commit would send: the window's
+        # units beyond the ones clients hold, aligned the same way that commit
+        # will align them, so the provisional text never shows wording the
+        # commit then re-sends differently.
         text = (self._state.text if self._state else "") or ""
-        tail = text[_common_prefix_length(self._committed_source, text):]
+        delta = _append_only_delta(self._committed, text) if text else ""
         return Transcript(start=self._token_start, end=self._audio_end,
-                          text=self._boundary_prefix(tail) + tail if tail else "")
+                          text=self._boundary_prefix(delta) + delta if delta else "")
