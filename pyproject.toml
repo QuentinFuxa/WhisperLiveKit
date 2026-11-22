@@ -118,7 +118,17 @@ dev = ["rich>=14.3.3", "ruff==0.16.*"]
 
 [tool.uv]
 # Resolve Diart's Python <3.13 dependency graph separately from Python 3.13.
-environments = ["python_version < '3.13'", "python_version >= '3.13'"]
+# Only lock the platforms Torch publishes wheels for. uv 0.13 (used by
+# Dependabot and the Docker images) rejects a fork that has no Torch wheel, and
+# dependency markers otherwise create emscripten and s390x forks.
+environments = [
+    "python_version < '3.13' and sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+    "python_version < '3.13' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "python_version < '3.13' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.13' and sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+    "python_version >= '3.13' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "python_version >= '3.13' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+]
 conflicts = [
     [
         { extra = "cpu" },

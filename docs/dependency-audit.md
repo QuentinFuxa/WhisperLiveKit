@@ -6,6 +6,68 @@ It also must not be dismissed merely because the default installation is safe.
 This review distinguishes installed code, reachable operations and blocked
 upgrades. No NVIDIA inference validation was available on the M5 host.
 
+## Late November 2026 refresh
+
+Dependabot listed 96 open advisories on `uv.lock`. A lock refresh that keeps
+the upstream pins cannot close any of them: Dependabot keeps an advisory open
+while any locked version is affected, and every affected package still has one
+version that an upstream package requires.
+
+| Package (alerts) | Affected locked version | Held by |
+|---|---|---|
+| Pillow (43) | 12.3.0 | Qwen HF streaming and Qwen vLLM graphs. `qwen-asr==0.0.6` pins Transformers 4.57.6, which requires huggingface-hub below 1.0. The last gradio release that accepts it, 6.17.3, requires Pillow below 13. No other package in those graphs caps Pillow. |
+| vLLM (36) | 0.22.1 | Qwen vLLM graph. vLLM 0.24 and later require Transformers 5.5.3 or later, which conflicts with the `qwen-asr` pin. |
+| Transformers (5) | 4.57.6 | `qwen-asr==0.0.6`. The other graphs use 5.15.0, outside every advisory range. |
+| setuptools (2) | 80.10.2, 81.0.0, 84.0.0 | vLLM requires setuptools below 81 on Python 3.12 and later; Torch 2.11 requires below 82. The Diart graph's 84.0.0 is affected only by the low-severity advisory, and `-P setuptools` moves it to 81.0.0 rather than 84.2.1 (see below). |
+| Accelerate (1) | 1.12.0 | `qwen-asr==0.0.6`. |
+| DiskCache (1) | 5.6.3 | vLLM pins it. The advisory names no patched release. |
+| Torch (4) | 2.8.0 (all four), 2.11.0 (`torch.jit.script`) | The Diart extra pins Torch below 2.9 in `pyproject.toml`. See below for 2.11. |
+| Hydra (2), Lightning (1), fsspec (1) | 1.3.2, 2.4.0, 2025.12.0 | NeMo 3.0.0 pins Hydra 1.3.2 or earlier and Lightning 2.4.0 or earlier; Lightning 2.4.0 caps fsspec below 2026. |
+
+The `qwen-asr` pins account for 88 of the 96 advisories, so the Qwen/vLLM
+migration below is the change that would clear most of them.
+
+Changes in this refresh, compared per extra and platform against the previous
+lock (the default and `test` graphs are unchanged):
+
+- Accelerate 1.13.0 to 1.16.0 in the Voxtral HF graph.
+- `cpu` on macOS arm64: Torch 2.8.0 to 2.11.0, the version the other
+  platforms already used (the old lock reused Diart's 2.8.0 there). setuptools
+  follows Torch 2.11's cap, from 84.0.0 to 81.0.0.
+- `cu129` on Linux aarch64 now follows the declared source marker (cu129 index
+  on x86_64 only) and gets PyPI Torch 2.11.0, a CUDA 13 build, instead of
+  2.11.0+cu129. On macOS and Windows, the old lock pointed `cu129` at +cu129
+  wheels that do not exist for those platforms; it now uses PyPI 2.11.0.
+- `qwen3-vllm` on macOS and Windows no longer lists vLLM-only packages
+  (fastapi-cli, sentry-sdk and others); vLLM is Linux-only.
+- The lock now covers only the platforms Torch publishes wheels for: Linux
+  x86_64 and aarch64, macOS arm64 and Windows AMD64. The emscripten and s390x
+  forks and the packages only they pulled (httpx2-jsfetch, win32-setctime) are
+  gone. Intel macOS is not listed: the base install requires Torch 2.6 or
+  later, and the last Torch release with a macOS x86_64 wheel is 2.2.2, so
+  `uv sync` could not install there before this change either. Listing it
+  brings the uv 0.13 failure back. The environments only govern `uv sync` and
+  `uv run` from a source checkout; installs from PyPI are unaffected.
+
+Torch and setuptools were tried and left unchanged. `uv lock -P torch` moves
+the default graph to Torch 2.15.0 and cu129 to 2.13.0, but uv's cross-fork
+version preference then gives the Windows `cpu` extra Diart's 2.8.0+cpu, which
+all four Torch advisories affect. `-P setuptools` likewise moves the graphs on
+84.0.0 back to 81.0.0. Neither closes an advisory while Diart and vLLM hold the
+older versions.
+
+Dependabot's uv updates failed on every run in November with
+`dependency_file_not_resolvable`. Dependabot runs uv 0.13, which rejects a fork
+that has no compatible Torch wheel; CI's uv 0.10 does not check this. httpx2's
+emscripten markers and vLLM's xgrammar s390x marker created such forks. With
+the restricted environments, uv 0.13.7 resolves Dependabot-style updates such
+as `uv lock --upgrade-package fastapi==0.162.5`. Updates that the pins above
+forbid still fail per package (Transformers, Torch 2.15 on the cu129 index).
+A Pillow security update does resolve, but by downgrading gradio from 6.17.3
+to 3.36.1 in the Qwen graphs; review that change before merging such a pull
+request. The separate `setuptools` "No files have changed" error comes from
+Dependabot proposing a bump that only the vLLM graph's pin blocks.
+
 ## November 2026 refresh
 
 Advisories published in October were refreshed with a targeted
