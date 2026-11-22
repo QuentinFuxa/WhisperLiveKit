@@ -31,7 +31,8 @@ def _token_ok(candidate: Optional[str], connection=None) -> bool:
     """No token configured = open server; otherwise constant-time compare."""
     settings = getattr(getattr(getattr(connection, "app", None), "state", None), "config", None)
     expected = _API_TOKEN if settings is None else settings.api_token or os.environ.get("WLK_API_TOKEN") or None
-    return expected is None or bool(candidate) and hmac.compare_digest(candidate, expected)
+    # compare_digest raises TypeError on str with non-ASCII characters, so compare UTF-8 bytes.
+    return expected is None or bool(candidate) and hmac.compare_digest(candidate.encode(), expected.encode())
 
 
 def _client_host(connection) -> str:
