@@ -819,7 +819,7 @@ def cmd_bench(args: list):
     parser.add_argument("--continuous", action="store_true", help="Use the manifest's continuous streams")
     parser.add_argument("--repeats", type=int, default=1, help="Measured passes over each sample")
     parser.add_argument("--warmup", action="store_true", help="Record a separate startup/warmup sample per language")
-    parser.add_argument("--config", help="JSON object of additional engine options, including pinned model paths")
+    parser.add_argument("--config", help="Path to a JSON file of additional engine options, including pinned model paths")
     parser.add_argument("--target-language", default=None,
                         help="Also translate into this language code (e.g. zh). Requires "
                              "--translation-backend or a translation backend in --config")
