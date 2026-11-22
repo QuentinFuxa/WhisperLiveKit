@@ -4,7 +4,7 @@ import asyncio
 import io
 import json
 import wave
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import pytest
 
@@ -355,6 +355,48 @@ def test_the_bench_translation_flag_rejects_a_name_the_engine_would_not_route(ca
     assert "nllw" in capsys.readouterr().err
 
 
+def test_a_bench_config_with_an_unlisted_translation_backend_is_rejected(tmp_path, monkeypatch):
+    """`--config` bypasses the subparser's choices, so the name is bounded again.
+
+    engine_kwargs from `--config` go to the engine as written, and the engine
+    sends every name outside `TRANSLATION_BACKENDS` down the nllb branch: an
+    unlisted one ran nllw while the run reported the name the caller wrote.
+    Sampling is stubbed out so the rejection has to happen before the run rather
+    than at the first probe.
+    """
+    from whisperlivekit.benchmark import runner as runner_module
+    from whisperlivekit.cli import cmd_bench
+    from whisperlivekit.config import TRANSLATION_BACKENDS
+
+    def sampled(*args, **kwargs):
+        raise AssertionError("the run started sampling with an unlisted backend")
+
+    monkeypatch.setattr(runner_module, "get_benchmark_samples", sampled)
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"target_language": "zh",
+                                  "translation_backend": "seamless"}))
+    # --verbose, so the run does not install cmd_bench's process-wide logging and
+    # warning filters on the way to a rejection it raises before any sample.
+    with pytest.raises(ValueError) as rejected:
+        cmd_bench(["--verbose", "--config", str(config)])
+    assert "seamless" in str(rejected.value)
+    assert ", ".join(TRANSLATION_BACKENDS) in str(rejected.value)
+
+
+def test_the_config_rejects_an_unlisted_translation_backend():
+    """One bound for the programmatic path too: the configuration judges the name."""
+    from whisperlivekit.config import TRANSLATION_BACKENDS, WhisperLiveKitConfig
+
+    for resolve in (lambda name: WhisperLiveKitConfig(translation_backend=name),
+                     lambda name: WhisperLiveKitConfig.from_kwargs(translation_backend=name)):
+        with pytest.raises(ValueError) as rejected:
+            resolve("seamless")
+        assert "seamless" in str(rejected.value)
+        assert ", ".join(TRANSLATION_BACKENDS) in str(rejected.value)
+    for name in TRANSLATION_BACKENDS:
+        assert WhisperLiveKitConfig(translation_backend=name).translation_backend == name
+
+
 def test_translation_config_records_what_an_alignatt_run_can_know():
     """AC-4 beyond one backend: the alignatt record names the endpoint it called."""
     from whisperlivekit.benchmark.metrics import describe_translation_config, drafts_provisional_text
@@ -424,11 +466,12 @@ def _cascade_run(monkeypatch, tmp_path):
 
     class FakeHarness:
         def __init__(self, **kwargs):
-            # The real harness records `asdict(WhisperLiveKitConfig)`, which
-            # names an MT backend even when the caller never asked for one, so
-            # the fake resolves those two keys instead of echoing kwargs only.
-            resolved = {"translation_backend": WhisperLiveKitConfig.translation_backend,
-                        "mlx_llm_mt_simultaneous": False, **kwargs}
+            # Derive the record the way the engine does instead of writing it:
+            # the real harness records `asdict(WhisperLiveKitConfig)` from the
+            # engine's args, where an MT backend is named even when the caller
+            # asked for none. Resolving here keeps the cases testing that
+            # resolution rather than a hand-written copy of its answer.
+            resolved = asdict(WhisperLiveKitConfig.from_kwargs(**kwargs))
             self._states = observed_states(resolved)
             self.state = self._states[0]
             self.metrics = SimpleNamespace(total_processing_time_s=.1, avg_latency_ms=1., p95_latency_ms=2.,

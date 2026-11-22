@@ -152,7 +152,10 @@ For simultaneous translation, see the [MLX calibration notes](../docs/simul_mt_c
 `--target-language` engages the translation half of the same pipeline and turns
 a run into an audio-to-translation experiment. `--translation-backend` selects
 the translator and `--mt-model` its model; both require `--target-language`, and
-a flag wins over the same key in `--config`. The run records **both halves**:
+a flag wins over the same key in `--config`. The flag's accepted set — and
+`--config`'s, and a Python `WhisperLiveKitConfig`'s — is the four names the
+engine routes, so `wlk bench --translation-backend nllw` used to run the NLLB
+path and now exits 2, as `wlk serve` always did. The run records **both halves**:
 each row keeps its `effective_config`, and `config.translation` states the
 target language, the translation backend, the loaded model and whether the
 backend drafted. Where the model runs somewhere the client cannot see — the

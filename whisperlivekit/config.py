@@ -11,7 +11,8 @@ FUNASR_LANGUAGES = frozenset({"auto", "zh", "yue", "en", "ja", "ko"})
 # The MT backends ``TranscriptionEngine`` routes to a path of their own: alignatt
 # over its sidecar, mlx-llm-mt and its hunyuan-mlx alias in process, nllb in
 # process through nllw. Any other name falls through to the nllb branch, so it is
-# not a second spelling for it and neither CLI accepts one.
+# not a second spelling for it: neither CLI accepts one, and
+# ``WhisperLiveKitConfig`` rejects one on every path that reaches it.
 TRANSLATION_BACKENDS = ("nllb", "alignatt", "mlx-llm-mt", "hunyuan-mlx")
 
 
@@ -208,6 +209,13 @@ class WhisperLiveKitConfig:
     nemotron_mlx_asr_att_context: list = field(default_factory=lambda: [56, 6])
 
     def __post_init__(self):
+        if self.translation_backend not in TRANSLATION_BACKENDS:
+            accepted = ", ".join(TRANSLATION_BACKENDS)
+            raise ValueError(
+                f"translation_backend {self.translation_backend!r} is not one of: "
+                f"{accepted}. The engine routes only those names and sends every "
+                "other one down the nllb branch."
+            )
         if (
             isinstance(self.max_concurrent_sessions, bool)
             or not isinstance(self.max_concurrent_sessions, int)

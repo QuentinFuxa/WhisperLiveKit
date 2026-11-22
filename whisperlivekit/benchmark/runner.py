@@ -57,6 +57,13 @@ class BenchmarkRunner:
             raise ValueError(f"Unknown benchmark engine options: {sorted(unknown)}")
         if {"backend", "model_size", "lan"} & self.engine_kwargs.keys():
             raise ValueError("Set backend, model_size and language using the benchmark options")
+        if "translation_backend" in self.engine_kwargs:
+            # Judge the requested name before any sample runs, through the one
+            # bound `WhisperLiveKitConfig` applies rather than a second copy of
+            # the set. Left to the engine, an unlisted name reaches the nllb
+            # branch and every row is scored under a translator nobody asked for.
+            WhisperLiveKitConfig.from_kwargs(
+                translation_backend=self.engine_kwargs["translation_backend"])
 
     async def run(self) -> BenchmarkReport:
         from whisperlivekit.metrics import compute_wer
@@ -91,7 +98,11 @@ class BenchmarkRunner:
         report.model_artifacts = describe_model_artifacts(kwargs)
         # Record what the engine ran with, not only what was asked for: the
         # configuration fills in defaults engine_kwargs never mentions, such as
-        # the alignatt endpoint or the MT model id.
+        # the alignatt endpoint or the MT model id. When every row was skipped or
+        # failed before the harness, there is no effective_config and this falls
+        # back to the request, which carries no translation_backend unless the
+        # caller named one: such a record names no backend. Pre-existing; no lead
+        # is affected, since a skipped row has none.
         effective = next((r.effective_config for r in report.results if r.effective_config), None)
         report.translation = describe_translation_config(
             effective or self.engine_kwargs, (sample.language for sample in samples))

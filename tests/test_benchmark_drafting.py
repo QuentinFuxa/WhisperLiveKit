@@ -7,32 +7,41 @@ buffer, then asserts the predicate answers the same way. A backend whose buffer
 changes without a matching answer fails here, and so does a backend added to
 `--translation-backend` without a case.
 
-Each case records what driving its backend established; the last test reads that
-record, so the set of classified backends cannot be widened by editing a mapping
-beside the flag's choices. Only running a backend puts it in the record.
+Driving happens in the module-scoped `driven` fixture that every case requests,
+and each driver records what it established in `_DRIVEN`; the completeness case
+reads that record. So the classified set is what running a backend produced, and
+it does not depend on the order the cases run in: alone, under `-k`, under
+`--lf`, or split across workers.
 """
 
 from __future__ import annotations
 
-from typing import Dict
+import asyncio
+from typing import Any, Dict, NamedTuple
 
 import pytest
 
-# The answer each case established by driving that backend, keyed by the name
+# The answer each driver established by running a backend, keyed by the name
 # `--translation-backend` accepts: the drafting answer for a run that names only
 # that backend.
 _DRIVEN: Dict[str, bool] = {}
 
 
 def drove(backend: str, drafts: bool) -> None:
-    """Record the answer a case above established for this backend's buffer."""
+    """Record the answer driving this backend's buffer established."""
     _DRIVEN[backend] = drafts
 
 
-def test_an_alignatt_sidecar_partial_is_a_draft():
-    """The sidecar's committed text arrives as the buffer, so alignatt drafts."""
+class Driven(NamedTuple):
+    """What one `process()`-style backend returned: validated tokens and buffer."""
+
+    validated: Any
+    buffer: Any
+
+
+def drive_alignatt() -> Driven:
+    """Drive the sidecar client, whose committed text arrives as the buffer."""
     from tests.test_translation_alignatt import FakeSidecar, make_client, token
-    from whisperlivekit.benchmark.metrics import drafts_provisional_text
 
     server = FakeSidecar()
     try:
@@ -41,16 +50,12 @@ def test_an_alignatt_sidecar_partial_is_a_draft():
         validated, buffer = client.process()
     finally:
         server.stop()
-
-    assert validated is None
-    assert buffer.text == "HELLO WORLD"
-    assert drafts_provisional_text({"translation_backend": "alignatt"})
     drove("alignatt", True)
+    return Driven(validated, buffer)
 
 
-def test_the_segment_mlx_backend_returns_an_empty_buffer(monkeypatch):
-    """The segment path translates completed sentences and drafts nothing."""
-    from whisperlivekit.benchmark.metrics import drafts_provisional_text
+def drive_mlx_segment(monkeypatch) -> Driven:
+    """Drive the segment MLX path, which translates completed sentences only."""
     from whisperlivekit.timed_objects import ASRToken
     from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
 
@@ -58,19 +63,15 @@ def test_the_segment_mlx_backend_returns_an_empty_buffer(monkeypatch):
     monkeypatch.setattr(client, "_translate_text", lambda text: "你好")
     client.insert_tokens([ASRToken(0, 1, "Hello.")])
     validated, buffer = client.process()
-
-    assert validated is not None and validated.text == "你好"
-    assert not buffer.text
     # Both spellings of the MLX segment path resolve to that same answer.
     for backend in ("mlx-llm-mt", "hunyuan-mlx"):
-        assert not drafts_provisional_text({"translation_backend": backend})
         drove(backend, False)
+    return Driven(validated, buffer)
 
 
-def test_the_simultaneous_mlx_backend_returns_a_drafted_buffer(tmp_path, monkeypatch):
-    """Drafting is the simultaneous switch on one class, not a second backend."""
+def drive_mlx_simul(tmp_path, monkeypatch) -> Driven:
+    """Drive the simultaneous switch on the same class, which does draft."""
     from tests.test_translation_mlx import _test_calibration
-    from whisperlivekit.benchmark.metrics import drafts_provisional_text
     from whisperlivekit.timed_objects import ASRToken, HypothesisTail
     from whisperlivekit.translation_mlx_llm_mt_simul import MlxLlmTranslationSimul
 
@@ -79,19 +80,13 @@ def test_the_simultaneous_mlx_backend_returns_a_drafted_buffer(tmp_path, monkeyp
     monkeypatch.setattr(engine, "_translate_simul", lambda source, committed: "您好")
     engine.insert_tokens([ASRToken(0, 1, "Hello"), HypothesisTail(1, 2, "world")])
     validated, buffer = engine.process()
-
-    assert validated is None
-    assert buffer.text == "您好"
-    # The switch is a second arrangement on the same backend, so the answer for
-    # the bare name stays the segment case's.
-    for backend in ("mlx-llm-mt", "hunyuan-mlx"):
-        assert drafts_provisional_text({"translation_backend": backend,
-                                        "mlx_llm_mt_simultaneous": True})
+    # The switch is a second arrangement on the same backend, so the record keeps
+    # the bare name's answer and the switch is asserted in its own case.
+    return Driven(validated, buffer)
 
 
-@pytest.mark.asyncio
-async def test_the_nllb_backend_publishes_its_draft_buffer():
-    """The default backend drafts: nllw returns its uncommitted target tokens.
+async def drive_nllb() -> list:
+    """Drive the publisher and return the buffers it published, in order.
 
     The stand-in below is the surface `run_translation` calls and the shape
     `nllw.OnlineTranslation.process()` returns (nllw 0.1.6, `translation.py:51-72`):
@@ -100,10 +95,7 @@ async def test_the_nllb_backend_publishes_its_draft_buffer():
     optional `nllw` extra, which the tests cannot load without its NLLB
     checkpoint; the publisher it is driven through is the real one.
     """
-    import asyncio
-
     from whisperlivekit.audio_processor import SENTINEL
-    from whisperlivekit.benchmark.metrics import drafts_provisional_text
     from whisperlivekit.timed_objects import ASRToken, State, TimedText
     from whisperlivekit.translation_processor import run_translation
 
@@ -139,19 +131,75 @@ async def test_the_nllb_backend_publishes_its_draft_buffer():
     for event in [ASRToken(0, 1, "Welcome to my"), SENTINEL]:
         await queue.put(event)
     await asyncio.wait_for(run_translation(queue, OnlineTranslation(), state, lock), 5)
-
-    assert published[0] == "欢迎来到我的"
     # `nllw` is the library name behind this backend, not a second backend: only
     # the name the flag accepts is recorded.
+    drove("nllb", True)
+    return published
+
+
+@pytest.fixture(scope="module")
+def driven(tmp_path_factory):
+    """Drive every backend once for this module, whichever case runs first.
+
+    Module scope, because the record the completeness case reads has to be full
+    before that case runs even when it is the only one selected.
+    """
+    calibration_dir = tmp_path_factory.mktemp("simul_calibration")
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        return {
+            "alignatt": drive_alignatt(),
+            "mlx_segment": drive_mlx_segment(monkeypatch),
+            "mlx_simul": drive_mlx_simul(calibration_dir, monkeypatch),
+            "nllb": asyncio.run(drive_nllb()),
+        }
+
+
+def test_an_alignatt_sidecar_partial_is_a_draft(driven):
+    """The sidecar's committed text arrives as the buffer, so alignatt drafts."""
+    from whisperlivekit.benchmark.metrics import drafts_provisional_text
+
+    validated, buffer = driven["alignatt"]
+    assert validated is None
+    assert buffer.text == "HELLO WORLD"
+    assert drafts_provisional_text({"translation_backend": "alignatt"})
+
+
+def test_the_segment_mlx_backend_returns_an_empty_buffer(driven):
+    """The segment path translates completed sentences and drafts nothing."""
+    from whisperlivekit.benchmark.metrics import drafts_provisional_text
+
+    validated, buffer = driven["mlx_segment"]
+    assert validated is not None and validated.text == "你好"
+    assert not buffer.text
+    for backend in ("mlx-llm-mt", "hunyuan-mlx"):
+        assert not drafts_provisional_text({"translation_backend": backend})
+
+
+def test_the_simultaneous_mlx_backend_returns_a_drafted_buffer(driven):
+    """Drafting is the simultaneous switch on one class, not a second backend."""
+    from whisperlivekit.benchmark.metrics import drafts_provisional_text
+
+    validated, buffer = driven["mlx_simul"]
+    assert validated is None
+    assert buffer.text == "您好"
+    for backend in ("mlx-llm-mt", "hunyuan-mlx"):
+        assert drafts_provisional_text({"translation_backend": backend,
+                                        "mlx_llm_mt_simultaneous": True})
+
+
+def test_the_nllb_backend_publishes_its_draft_buffer(driven):
+    """The default backend drafts: nllw returns its uncommitted target tokens."""
+    from whisperlivekit.benchmark.metrics import drafts_provisional_text
+
+    assert driven["nllb"][0] == "欢迎来到我的"
     for backend in ("nllb", "nllw"):
         assert drafts_provisional_text({"translation_backend": backend})
-    drove("nllb", True)
 
 
-def test_every_translation_backend_the_cli_accepts_has_a_case_that_drives_it():
+def test_every_translation_backend_the_cli_accepts_has_a_case_that_drives_it(driven):
     """A backend added to `--translation-backend` without a case fails here.
 
-    The answers come from `_DRIVEN`, which only the cases above fill by running
+    The answers come from `_DRIVEN`, which only the drivers above fill by running
     a backend, so an entry added to this check without one to drive it leaves
     the backend unrecorded and fails rather than passing as a listed name.
     """
