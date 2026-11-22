@@ -123,26 +123,27 @@ class TestEventLog:
         assert rows[0]["session"] != rows[1]["session"]
         assert len(rows[0]["session"]) == 8
 
-    def test_source_columns_only_on_translation_provisional(self, tmp_path):
-        """``committed``/``source``/``fresh`` describe a draft's source gating;
-        the other three event types must not carry empty columns."""
+    def test_line_shape_is_session_t_audio_t_type_text(self, tmp_path):
+        """The recorded row is the same five keys for every event type: the
+        session that wrote it plus the typed payload."""
         path = tmp_path / "ev.jsonl"
         log = EventLog(str(path))
         log.emit(CaptionEvent(0.0, 1.0, "transcription_provisional", "今天我們"))
         log.emit(CaptionEvent(0.1, 1.1, "transcription_final", "今天我們討論皮膚科。"))
-        log.emit(CaptionEvent(0.2, 1.2, "translation_provisional", "Today we",
-                              "今天我們", "今天我們討論皮膚科。", True))
+        log.emit(CaptionEvent(0.2, 1.2, "translation_provisional", "Today we"))
         log.emit(CaptionEvent(0.3, 1.3, "translation_final", "Today we discuss dermatology."))
         log.close()
 
         rows = _lines(path)
-        base = {"session", "t", "audio_t", "type", "text"}
-        assert [set(row) for row in rows[:2]] == [base, base]
-        assert set(rows[2]) == base | {"committed", "source", "fresh"}
-        assert (rows[2]["committed"], rows[2]["source"], rows[2]["fresh"]) == (
-            "今天我們", "今天我們討論皮膚科。", True,
-        )
-        assert set(rows[3]) == base
+        expected = {"session", "t", "audio_t", "type", "text"}
+        assert [set(row) for row in rows] == [expected] * 4
+        assert [row["type"] for row in rows] == [
+            "transcription_provisional",
+            "transcription_final",
+            "translation_provisional",
+            "translation_final",
+        ]
+        assert rows[2]["text"] == "Today we"
 
     def test_write_error_disables_log_without_raising(self, tmp_path, caplog):
         """A recording instrument must not end a live session."""
@@ -190,44 +191,32 @@ class TestEventTap:
         rec = _Recorder()
         tap = EventTap(sink=rec, clock=lambda: 0.0)
         tap.transcription_provisional(1.0, "rolling")
-        tap.translation_provisional(2.0, "prov", committed="c", source="s")
+        tap.translation_provisional(2.0, "prov")
         assert [e.type for e in rec.events] == [
             "transcription_provisional", "translation_provisional",
         ]
-        assert rec.events[1].committed == "c"
-        assert rec.events[1].source == "s"
+        assert [e.text for e in rec.events] == ["rolling", "prov"]
+        assert [e.audio_t for e in rec.events] == [1.0, 2.0]
 
     def test_one_utterance_emits_the_typed_sequence_in_order(self):
         """One utterance driven through the tap: the caption sequence a
-        consumer sees, in emission order, with each event's text, audio
-        position and the source columns a provisional was drafted against.
+        consumer sees, in emission order, with each event's text and audio
+        position.
 
         Fails if an emit method stops forwarding its text or audio position,
-        if the emitted order changes, if `committed`/`source`/`fresh` are
-        mis-threaded on a provisional, or if the blank-text filter starts
+        if the emitted order changes, or if the blank-text filter starts
         swallowing a real event.
         """
         rec = _Recorder()
         tap = EventTap(sink=rec, clock=_SteppingClock(start=100.0, step=0.5))
 
-        # rolling source -> committed segment -> MT drafts against the
-        # committed source -> finalized translation
+        # rolling source -> committed segment -> MT drafts over the committed
+        # source -> finalized translation
         tap.transcription_provisional(0.8, "今天我們")
         tap.transcription_provisional(1.4, "今天我們討論皮膚科。")
         tap.transcription_final(1.4, "今天我們討論皮膚科。")
-        tap.translation_provisional(
-            1.5,
-            "Today we",
-            committed="今天我們",
-            source="今天我們討論皮膚科。",
-            fresh=True,
-        )
-        tap.translation_provisional(
-            1.6,
-            "Today we discuss",
-            committed="今天我們討論",
-            source="今天我們討論皮膚科。",
-        )
+        tap.translation_provisional(1.5, "Today we")
+        tap.translation_provisional(1.6, "Today we discuss")
         tap.translation_final(1.9, "Today we discuss dermatology.")
 
         assert [(e.type, e.text, e.audio_t) for e in rec.events] == [
@@ -237,14 +226,6 @@ class TestEventTap:
             ("translation_provisional", "Today we", 1.5),
             ("translation_provisional", "Today we discuss", 1.6),
             ("translation_final", "Today we discuss dermatology.", 1.9),
-        ]
-        assert [
-            (e.committed, e.source, e.fresh)
-            for e in rec.events
-            if e.type == "translation_provisional"
-        ] == [
-            ("今天我們", "今天我們討論皮膚科。", True),
-            ("今天我們討論", "今天我們討論皮膚科。", False),
         ]
         # one clock reading per event, stamped at emit time as the offset
         # from the stream's start (the tap's creation)

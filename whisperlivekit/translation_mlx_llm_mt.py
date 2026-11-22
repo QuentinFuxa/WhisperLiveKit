@@ -8,7 +8,7 @@ import time
 from collections import deque
 from typing import Any, Dict, List, Optional, Tuple
 
-from whisperlivekit.timed_objects import ASRToken, TimedText, Translation, TranslationProgress
+from whisperlivekit.timed_objects import ASRToken, TimedText, Translation
 
 # The profile dataclass + registry live in the neutral ``translation_profiles"
 # module so a future peer backend (vLLM, etc.) can share them without importing
@@ -267,14 +267,6 @@ class MlxLlmTranslation:
     def _source_text(self) -> str:
         separator = "" if self._source_language.startswith(("zh", "ja", "cmn", "yue")) else " "
         return separator.join(t.text.strip() for t in self._buffer_tokens).strip()
-
-    def progress(self) -> TranslationProgress:
-        """Source-progress state for the caption event stream.
-
-        The base segment translator produces no drafts and exposes no
-        source text; the counter reflects real MT generations.
-        """
-        return TranslationProgress(mt_call_count=self._mt_call_count)
 
     def process(self) -> Tuple[Optional[Translation], TimedText]:
         """Drain completed sentences without discarding a failed generation."""

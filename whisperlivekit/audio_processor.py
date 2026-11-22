@@ -235,8 +235,7 @@ class AudioProcessor:
         self._event_log: Optional[EventLog] = EventLog(_event_log_path) if _event_log_path else None
         self.event_tap = EventTap(sink=self._event_log)
         # dedupe state: emit ASR provisional only when the tail text changes
-        # (MT-provisional dedupe lives in the translation loop — it keys off
-        # the backend's progress contract there)
+        # (MT-provisional dedupe lives in the translation loop)
         self._last_asr_prov: str = ""
 
         # Silent-backend watchdog: flips once the ASR has produced anything.
@@ -911,9 +910,8 @@ class AudioProcessor:
         logger.info("Diarization processor task finished.")
 
     async def translation_processor(self) -> None:
-        # The translation loop reads backend progress only to feed the caption
-        # stream; with no sink it must not pay for that work at all, so an
-        # inert tap is passed on as no tap.
+        # Only a consuming sink turns the caption stream on; with no sink an
+        # inert tap is passed on as no tap, so the loop skips the event block.
         await run_translation(
             self.translation_queue, self.translation, self.state, self.lock,
             self.event_tap if self.event_tap.active else None,

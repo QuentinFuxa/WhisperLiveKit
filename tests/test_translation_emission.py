@@ -9,13 +9,11 @@ display-correctness rules preserved:
     the base path's buffer holds untranslated source and must never be
     flashed as an MT draft;
   - identical consecutive provisionals are deduped (display noise);
-  - fresh=True only when the MT call counter advanced;
-  - the provisional payload (committed/source/source_end) comes from the
-    backend's progress() contract, never from private-attribute probing;
-  - a progress() that raises disables draft display for the session with
-    one visible warning (never a silent empty string);
-  - with no sink consuming the stream the loop reads progress() zero times
-    (the tap is dropped, not just ignored).
+  - the provisional's audio position is the ASR-side ``state.end_buffer``,
+    the same fallback the final uses;
+  - a final in the same batch as a buffer suppresses the provisional;
+  - with no sink the loop emits nothing (the inert tap is passed on as no
+    tap); with a sink the processor's tap reaches the loop.
 
 Run against mock translation objects — no live model.
 """
@@ -24,7 +22,7 @@ from __future__ import annotations
 import asyncio
 
 from whisperlivekit.caption_events import EventTap
-from whisperlivekit.timed_objects import State, TimedText, TranslationProgress
+from whisperlivekit.timed_objects import State, TimedText
 from whisperlivekit.translation_processor import run_translation
 
 
@@ -43,25 +41,13 @@ def _tr(text, end=1.0):
 
 
 class _Tr:
-    """Mock translation backend implementing the progress display contract
-    (stand-in for MlxLlmTranslationSimul)."""
+    """Mock draft-capable translation backend (stand-in for
+    MlxLlmTranslationSimul): it produces provisional buffers as it streams."""
 
     provides_drafts = True
 
     def __init__(self):
-        self._mt_call_count = 0
-        self._committed = "committed source"
-        self._source = "committed source + tail"
-        self._source_end = None
         self.next_result = None  # (final, buffer) per process() call
-
-    def progress(self):
-        return TranslationProgress(
-            mt_call_count=self._mt_call_count,
-            committed_text=self._committed,
-            source_text=self._source,
-            source_end=self._source_end,
-        )
 
     def insert_tokens(self, tokens):
         pass
@@ -73,7 +59,6 @@ class _Tr:
         return result
 
     def process(self):
-        self._mt_call_count += 1
         return self._take()
 
     def validate_buffer_and_reset(self):
@@ -121,13 +106,12 @@ def test_provisional_requires_provides_drafts():
     # backend without draft capability: buffer with text must NOT emit a draft
     class _Base:
         provides_drafts = False
-        _mt_call_count = 0
-        def progress(self):
-            return TranslationProgress()
         def insert_tokens(self, tokens):
             pass
         def process(self):
             return (None, _tr("raw untranslated source queue"))
+        def validate_buffer_and_reset(self):
+            return (None, None)
 
     log, _ = _run([object()], _Base())
     assert not [e for e in log.events if e.type == "translation_provisional"]
@@ -157,11 +141,7 @@ def test_provisional_dedupe_identical_consecutive():
             await q.put(it)
         await q.put(SENTINEL)
 
-        def two_results():
-            tr._mt_call_count += 1
-            return (None, draft)
-
-        tr.process = two_results
+        tr.process = lambda: (None, draft)
         await run_translation(q, tr, state, lock, tap)
 
     asyncio.run(driver())
@@ -169,81 +149,50 @@ def test_provisional_dedupe_identical_consecutive():
     assert len(provs) == 1, f"identical draft emitted {len(provs)}x"
 
 
-def test_provisional_carries_committed_source_fresh():
+def test_provisional_audio_t_is_the_asr_end_buffer():
+    """The provisional's audio position is the ASR-side ``state.end_buffer`` —
+    the same fallback ``translation_final`` uses — not a position the backend
+    reports.
+
+    Fails if the provisional goes back to a backend-supplied source position
+    (the draft buffer's own ``end``), or falls back to 0.0: the buffer here
+    ends at 1.0 and the ASR has processed 12.5 s.
+    """
     tr = _Tr()
-    tr.next_result = (None, _tr("Draft text"))
-    log, _ = _run([object()], tr)
-    prov = [e for e in log.events if e.type == "translation_provisional"][0]
-    assert prov.committed == "committed source"
-    assert prov.source == "committed source + tail"
-    assert prov.fresh is True  # the MT call counter advanced
+    tr.next_result = (None, _tr("Draft text", end=1.0))
+    tap = EventTap(sink=_Recorder())
+    state = State()
+    state.end_buffer = 12.5
 
-    # fresh=False when the call counter does not advance (cached release)
-    tr2 = _Tr()
-    tr2.next_result = (None, _tr("Draft one"))
-    tr2.process = lambda: (None, _tr("Draft two"))  # no counter bump
-    log2, _ = _run([object()], tr2)
-    prov2 = [e for e in log2.events if e.type == "translation_provisional"][0]
-    assert prov2.fresh is False
+    async def driver():
+        from whisperlivekit.processing_queue import SENTINEL, ProcessingQueue
+        q = ProcessingQueue("test")
+        await q.put(object())
+        await q.put(SENTINEL)
+        await run_translation(q, tr, state, asyncio.Lock(), tap)
 
-
-def test_provisional_timestamp_prefers_progress_source_end():
-    # the provisional's audio clock comes from progress().source_end when
-    # the backend reports it (real source-tail position), falling back to
-    # the ASR-side end_buffer otherwise
-    tr = _Tr()
-    tr._source_end = 5.5
-    tr.next_result = (None, _tr("Draft text"))
-    log, _ = _run([object()], tr)
-    prov = [e for e in log.events if e.type == "translation_provisional"][0]
-    assert prov.audio_t == 5.5
-
-    tr2 = _Tr()  # source_end None → end_buffer fallback (0.0 default state)
-    tr2.next_result = (None, _tr("Draft text"))
-    log2, _ = _run([object()], tr2)
-    prov2 = [e for e in log2.events if e.type == "translation_provisional"][0]
-    assert prov2.audio_t == 0.0
+    asyncio.run(driver())
+    prov = tap._sink.events[0]
+    assert prov.type == "translation_provisional"
+    assert prov.audio_t == 12.5
 
 
 def test_base_backend_contract_defaults_are_honest():
-    # the REAL base class (no model load): capability off, progress() empty,
-    # and the emission loop never flashes its buffer as a draft even when
-    # the base path returns one
+    # the REAL base class (no model load): capability off, and the emission
+    # loop never flashes its buffer as a draft even when the base path
+    # returns one
     from whisperlivekit.translation_mlx_llm_mt import MlxLlmTranslation
     base = MlxLlmTranslation(model_id="hy-mt2-1.8b-8bit", warmup=False)
+    # the honest default: this backend's buffer holds source, not a draft
     assert base.provides_drafts is False
-    d = base.progress()
-    assert d.committed_text == "" and d.source_text == ""
-    assert d.source_end is None and d.mt_call_count == 0
+    # no progress() accessor survives the reduced payload
+    assert not hasattr(base, "progress")
 
     # drive the real base through the loop (empty token batch — no model
     # load): no draft emission, FrontData contract unchanged
     log, state = _run([[]], base)
     assert not [e for e in log.events if e.type == "translation_provisional"]
     assert state.new_translation == []  # FrontData contract unchanged
-
-
-def test_progress_raise_disables_drafts_with_one_warning(caplog):
-    # a progress() that raises is a backend bug: one warning, draft display
-    # disabled for the session, finals and the loop itself keep working
-    class _Broken(_Tr):
-        def progress(self):
-            raise RuntimeError("backend state exploded")
-
-        def process(self):
-            return (None, _tr("Draft text"))
-
-        def validate_buffer_and_reset(self):
-            return (None, None)
-
-    tr = _Broken()
-    import logging
-    with caplog.at_level(logging.WARNING):
-        log, state = _run([object(), object()], tr)  # two items — loop continues
-    assert not [e for e in log.events if e.type == "translation_provisional"]
-    warnings = [r for r in caplog.records if "progress()" in r.message]
-    assert len(warnings) == 1, "exactly one warning per session"
-    assert "_Broken" in warnings[0].message  # names the backend class
 
 
 def test_final_suppresses_provisional_in_same_batch():
@@ -261,34 +210,6 @@ def test_state_still_updated():
     log, state = _run([object()], tr)
     assert state.new_translation_buffer is not None
     assert state.new_translation == []
-
-
-class _ProgressCountingTr:
-    """Draft-capable backend that records every read of its progress()."""
-
-    provides_drafts = True
-
-    def __init__(self):
-        self.progress_reads = 0
-        self.mt_calls = 0
-
-    def progress(self):
-        self.progress_reads += 1
-        return TranslationProgress(
-            mt_call_count=self.mt_calls,
-            committed_text="committed source",
-            source_text="committed source + tail",
-        )
-
-    def insert_tokens(self, tokens):
-        pass
-
-    def process(self):
-        self.mt_calls += 1
-        return (None, _tr("Draft text"))
-
-    def validate_buffer_and_reset(self):
-        return (None, None)
 
 
 def _processor_with_tap(translation, event_tap, items):
@@ -314,25 +235,26 @@ def _processor_with_tap(translation, event_tap, items):
     return processor
 
 
-def test_no_sink_means_the_loop_never_reads_progress():
-    """Reading progress() rebuilds the draft and source strings. With no sink
-    (no --event-log) nothing consumes them, so the tap is inert and the loop
-    must not ask at all."""
-    tr = _ProgressCountingTr()
-    # exactly what AudioProcessor builds when --event-log is not given
-    _processor_with_tap(tr, EventTap(sink=None), [object(), object()])
-    assert tr.progress_reads == 0
+def test_inert_tap_through_the_processor_emits_nothing():
+    """With no sink (no ``--event-log``) the processor passes no tap to the
+    loop, so nothing is emitted — the stream is sink-driven, not flag-driven.
+
+    Fails if ``translation_processor`` stops dropping its inert tap and the
+    loop starts emitting into a display nobody asked for.
+    """
+    tr = _Tr()
+    tr.next_result = (None, _tr("Draft text"))
+    processor = _processor_with_tap(tr, EventTap(sink=None), [object(), object()])
+    assert processor.state.new_translation_buffer is not None  # the loop ran
+    assert processor.event_tap._sink is None
 
 
-def test_a_sink_makes_the_loop_read_progress():
-    """The companion case: any sink turns the stream on, so the loop reads the
-    backend's progress once per iteration (the design is sink-driven, not
-    flag-driven)."""
-    tr = _ProgressCountingTr()
+def test_the_processors_tap_reaches_the_translation_loop():
+    """The companion case: any sink turns the stream on, and the events the
+    loop emits arrive at the processor's own sink."""
+    tr = _Tr()
+    tr.next_result = (None, _tr("Draft text"))
     recorder = _Recorder()
     _processor_with_tap(tr, EventTap(sink=recorder), [object(), object()])
-    # one read per loop iteration: the batched tokens item, then the SENTINEL
-    # finalize (get_all_from_queue drains queued tokens into one batch)
-    assert tr.progress_reads == 2
     drafts = [e for e in recorder.events if e.type == "translation_provisional"]
     assert [d.text for d in drafts] == ["Draft text"]

@@ -16,10 +16,6 @@ FrontData buffer_transcription/buffer_translation fields):
   - ``transcription_final``   : committed ASR tokens (a finalized segment).
   - ``translation_provisional``: provisional translation (AlignAtt release
     against committed source; held target is NOT released yet).
-    ``fresh=True`` if this is a freshly drafted translation (a new MT forward
-    pass); ``fresh=False`` if it is replayed from the cached attention (a
-    free release — no MT call). Exposes the hysteresis distinction (call
-    count vs emission count).
   - ``translation_final``     : finalized translation (quality pass at a
     boundary).
 
@@ -39,10 +35,6 @@ from typing import Optional, Protocol
 
 logger = logging.getLogger(__name__)
 
-# Only translation_provisional compares its draft against source text; the
-# other event types carry no source columns (see CaptionEvent.to_dict).
-_SOURCE_COLUMNS = ("committed", "source", "fresh")
-
 
 @dataclass
 class CaptionEvent:
@@ -52,25 +44,11 @@ class CaptionEvent:
     type: str         # transcription_provisional | transcription_final |
                       # translation_provisional | translation_final
     text: str
-    # translation_provisional only: what AlignAtt released against (committed source)
-    committed: str = ""
-    # translation_provisional only: the full source the MT saw (committed + tail)
-    source: str = ""
-    # translation_provisional only: True if a freshly drafted translation (a
-    # new MT forward pass); False if replayed from cached attention (a free
-    # release — no MT call). Exposes the hysteresis lever (call count vs
-    # emission count).
-    fresh: bool = False
 
     def to_dict(self) -> dict:
-        """The recorded payload. ``committed``/``source``/``fresh`` describe a
-        draft's source gating, so they are dropped from the three event types
-        that have no draft."""
-        row = asdict(self)
-        if self.type != "translation_provisional":
-            for column in _SOURCE_COLUMNS:
-                del row[column]
-        return row
+        """The recorded payload: the four fields above, the same for every
+        event type."""
+        return asdict(self)
 
 
 class EventSink(Protocol):
@@ -172,10 +150,10 @@ class EventTap:
             return
         self._sink.emit(CaptionEvent(self._now(), audio_t, "transcription_final", text))
 
-    def translation_provisional(self, audio_t: float, text: str, committed: str = "", source: str = "", fresh: bool = False) -> None:
+    def translation_provisional(self, audio_t: float, text: str) -> None:
         if self._sink is None or not text or not text.strip():
             return
-        self._sink.emit(CaptionEvent(self._now(), audio_t, "translation_provisional", text, committed, source, fresh))
+        self._sink.emit(CaptionEvent(self._now(), audio_t, "translation_provisional", text))
 
     def translation_final(self, audio_t: float, text: str) -> None:
         if self._sink is None or not text or not text.strip():
