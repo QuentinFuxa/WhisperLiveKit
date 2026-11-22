@@ -242,11 +242,101 @@ def test_manifest_sentence_id_join_supplies_the_translation_reference(tmp_path):
 
 @pytest.mark.asyncio
 async def test_translated_rows_carry_chrf_and_derived_translation_latency(tmp_path, monkeypatch):
+    sample, runner, compute_wer = _cascade_run(monkeypatch, tmp_path)
+    from whisperlivekit.benchmark.metrics import BenchmarkReport, describe_translation_config
+
+    config = dict(transcription=False, pcm_input=True, target_language="zh",
+                  translation_backend="mlx-llm-mt", mlx_llm_mt_model="hy-mt2-1.8b-8bit",
+                  mlx_llm_mt_simultaneous=True)
+    result = await runner._run_sample(sample, config, compute_wer)
+    assert result.status == "ok"
+    assert result.translation == "你好 世界"
+    assert result.translation_reference == "你好世界"
+    # Whitespace is all that separates them, and chrF removes whitespace.
+    assert result.chrf == pytest.approx(100.0)
+    assert result.first_translation_time_s is not None and result.final_translation_time_s is not None
+    assert result.final_translation_time_s >= result.first_translation_time_s
+    # The drafting state carried provisional text, so the lead is measurable.
+    assert result.provisional_lead_s is not None
+
+    # Without a target language the pair is not joined and nothing is scored.
+    asr_only = await runner._run_sample(sample, dict(transcription=False, pcm_input=True), compute_wer)
+    assert asr_only.target_language == "" and asr_only.translation_reference == ""
+    assert asr_only.chrf is None and asr_only.provisional_lead_s is None
+
+    report = BenchmarkReport("whisper", "tiny", results=[result],
+                             translation=describe_translation_config(config, ["en"]))
+    data = report.to_dict()
+    assert data["benchmark_version"] == "3.2"
+    # Both halves of the run are named: the recognizer and the translator.
+    assert data["config"]["asr"] == {"backend": "whisper", "model": "tiny"}
+    assert data["config"]["translation"] == {"source_languages": ["en"], "target_language": "zh",
+                                             "backend": "mlx-llm-mt",
+                                             "model": "hy-mt2-1.8b-8bit", "simultaneous": True}
+    assert data["summary"]["corpus_chrf"] == pytest.approx(100.0)
+    assert data["summary"]["avg_chrf"] == pytest.approx(100.0)
+    assert describe_translation_config({})["backend"] == ""
+
+
+@pytest.mark.asyncio
+async def test_a_non_drafting_backend_leaves_the_provisional_lead_null(tmp_path, monkeypatch):
+    """Untranslated source text in the buffer is not a draft, so there is no lead."""
+    sample, runner, compute_wer = _cascade_run(monkeypatch, tmp_path)
+    from whisperlivekit.benchmark.metrics import drafts_provisional_text
+
+    # The fake run carries source text in the buffer while the backend returns
+    # completed segments only, which is what mlx-llm-mt does without the
+    # simultaneous switch. Both timing endpoints exist, so a lead would be
+    # computable: null has to come from the backend, not from missing times.
+    config = dict(transcription=False, pcm_input=True, target_language="zh",
+                  translation_backend="mlx-llm-mt", mlx_llm_mt_model="hy-mt2-1.8b-8bit")
+    assert not drafts_provisional_text(config)
+    result = await runner._run_sample(sample, config, compute_wer)
+    assert result.status == "ok"
+    assert result.first_translation_time_s is not None and result.final_translation_time_s is not None
+    assert result.final_translation_time_s > result.first_translation_time_s
+    assert result.provisional_lead_s is None
+    # The nllb default has no drafting path either, whatever the buffer holds.
+    assert not drafts_provisional_text({**config, "translation_backend": "nllb"})
+    assert drafts_provisional_text({**config, "translation_backend": "alignatt"})
+
+
+def test_translation_config_records_what_an_alignatt_run_can_know():
+    """AC-4 beyond one backend: the alignatt record names the endpoint it called."""
+    from whisperlivekit.benchmark.metrics import describe_translation_config, drafts_provisional_text
+
+    config = {"translation_backend": "alignatt", "target_language": "zh",
+              "alignatt_url": "ws://localhost:8765", "alignatt_preset": "quality",
+              "alignatt_latency": "balanced"}
+    record = describe_translation_config(config, ["en", "en"])
+    assert record["backend"] == "alignatt"
+    assert record["source_languages"] == ["en"] and record["target_language"] == "zh"
+    # The model lives in the server; the record says so rather than claiming one.
+    assert record["model"] is None
+    assert "server" in record["model_note"]
+    assert record["server"] == {"url": "ws://localhost:8765", "preset": "quality",
+                                "latency": "balanced"}
+    # The same drafting answer the runner uses for the lead, per backend.
+    assert drafts_provisional_text(config)
+    assert not drafts_provisional_text({**config, "translation_backend": "nllb"})
+    nllb = describe_translation_config({"translation_backend": "nllb", "target_language": "zh",
+                                        "nllb_size": "600M"}, ["en"])
+    assert nllb["model"] is None and "nllb_size" in nllb["model_note"]
+
+
+def _cascade_run(monkeypatch, tmp_path):
+    """Fake TestHarness whose observed states follow the configured MT backend.
+
+    A drafting backend puts a partial translation in the buffer while audio is
+    still arriving; a segment backend returns completed segments and still
+    leaves untranslated source text in the buffer. Both cases are what the real
+    backends do, so the runner is exercised against the buffer contents it will
+    actually see rather than against an empty one.
+    """
     from types import SimpleNamespace
 
     import whisperlivekit.test_harness as testing
     from whisperlivekit.benchmark.datasets import BenchmarkSample
-    from whisperlivekit.benchmark.metrics import BenchmarkReport, describe_translation_config
     from whisperlivekit.benchmark.runner import BenchmarkRunner
     from whisperlivekit.metrics import compute_wer
 
@@ -259,23 +349,27 @@ async def test_translated_rows_carry_chrf_and_derived_translation_latency(tmp_pa
             speech_lines=lines,
         )
 
-    # Each state is delivered while audio is still being fed, so the runner has
-    # to timestamp the first and the last committed line itself. A run without a
-    # target language never receives provisional or committed translation text.
     hello, world = {"start": "0:00:00.00", "text": "Hello"}, {"start": "0:00:02.00", "text": "World"}
 
-    def observed_states(translating):
-        if not translating:
+    def observed_states(config):
+        if not config.get("target_language"):
             return [state([hello]), state([hello, world])]
+        # Branch on the backend's own switch, not on the predicate under test.
+        if config.get("mlx_llm_mt_simultaneous"):
+            return [
+                state([{**hello, "translation": ""}], buffer_translation="你"),
+                state([{**hello, "translation": "你好"}]),
+                state([{**hello, "translation": "你好"}, {**world, "translation": "世界"}]),
+            ]
         return [
-            state([{**hello, "translation": ""}], buffer_translation="你"),
-            state([{**hello, "translation": "你好"}]),
+            state([{**hello, "translation": ""}], buffer_translation="Hello"),
             state([{**hello, "translation": "你好"}, {**world, "translation": "世界"}]),
         ]
 
     class FakeHarness:
         def __init__(self, **kwargs):
-            self._states = observed_states(bool(kwargs.get("target_language")))
+            self._kwargs = kwargs
+            self._states = observed_states(kwargs)
             self.state = self._states[0]
             self.metrics = SimpleNamespace(total_processing_time_s=.1, avg_latency_ms=1., p95_latency_ms=2.,
                                            n_transcription_calls=1, n_tokens_produced=1)
@@ -315,34 +409,4 @@ async def test_translated_rows_carry_chrf_and_derived_translation_latency(tmp_pa
         audio.writeframes(bytes(3200))
     sample = BenchmarkSample("fleurs_en_1", str(path), "Hello World.", .1, "en", "fleurs",
                              sentence_id=1, translation_references={"en": "Hello World.", "zh": "你好世界"})
-    config = dict(transcription=False, pcm_input=True, target_language="zh",
-                  translation_backend="mlx-llm-mt", mlx_llm_mt_model="hy-mt2-1.8b-8bit")
-    runner = BenchmarkRunner(backend="whisper", speed=1)
-    result = await runner._run_sample(sample, config, compute_wer)
-    assert result.status == "ok"
-    assert result.translation == "你好 世界"
-    assert result.translation_reference == "你好世界"
-    # Whitespace is all that separates them, and chrF removes whitespace.
-    assert result.chrf == pytest.approx(100.0)
-    assert result.first_translation_time_s is not None and result.final_translation_time_s is not None
-    assert result.final_translation_time_s >= result.first_translation_time_s
-    # The drafting state carried provisional text, so the lead is measurable.
-    assert result.provisional_lead_s is not None
-
-    # Without a target language the pair is not joined and nothing is scored.
-    asr_only = await runner._run_sample(sample, dict(transcription=False, pcm_input=True), compute_wer)
-    assert asr_only.target_language == "" and asr_only.translation_reference == ""
-    assert asr_only.chrf is None and asr_only.provisional_lead_s is None
-
-    report = BenchmarkReport("whisper", "tiny", results=[result],
-                             translation=describe_translation_config(config, ["en"]))
-    data = report.to_dict()
-    assert data["benchmark_version"] == "3.2"
-    # Both halves of the run are named: the recognizer and the translator.
-    assert data["config"]["asr"] == {"backend": "whisper", "model": "tiny"}
-    assert data["config"]["translation"] == {"source_languages": ["en"], "target_language": "zh",
-                                             "backend": "mlx-llm-mt",
-                                             "model": "hy-mt2-1.8b-8bit", "simultaneous": False}
-    assert data["summary"]["corpus_chrf"] == pytest.approx(100.0)
-    assert data["summary"]["avg_chrf"] == pytest.approx(100.0)
-    assert describe_translation_config({})["backend"] == ""
+    return sample, BenchmarkRunner(backend="whisper", speed=1), compute_wer

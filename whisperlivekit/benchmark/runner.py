@@ -13,6 +13,7 @@ from whisperlivekit.benchmark.metrics import (
     BenchmarkReport,
     SampleResult,
     describe_translation_config,
+    drafts_provisional_text,
     get_system_info,
 )
 from whisperlivekit.benchmark.resources import ResourceMonitor
@@ -88,8 +89,12 @@ class BenchmarkRunner:
         # Hash after timing: reading weights beforehand would warm the OS cache.
         from whisperlivekit.benchmark.metrics import describe_model_artifacts
         report.model_artifacts = describe_model_artifacts(kwargs)
+        # Record what the engine ran with, not only what was asked for: the
+        # configuration fills in defaults engine_kwargs never mentions, such as
+        # the alignatt endpoint or the MT model id.
+        effective = next((r.effective_config for r in report.results if r.effective_config), None)
         report.translation = describe_translation_config(
-            self.engine_kwargs, (sample.language for sample in samples))
+            effective or self.engine_kwargs, (sample.language for sample in samples))
         return report
 
     async def _run_sample(self, sample: BenchmarkSample, harness_kwargs: dict, compute_wer) -> SampleResult:
@@ -97,6 +102,10 @@ class BenchmarkRunner:
         from whisperlivekit.test_harness import TestHarness
 
         target_language = harness_kwargs.get("target_language", "")
+        # Drafting is a property of the configured MT backend, not of the
+        # buffer: a segment backend can hold untranslated source text there,
+        # and a lead computed from that would invent a provisional translation.
+        drafting_backend = drafts_provisional_text(harness_kwargs)
         result = SampleResult(sample_name=sample.name, language=sample.language, category=sample.category,
                               duration_s=sample.duration, reference=sample.reference,
                               source=sample.source, tags=sorted(sample.tags),
@@ -107,13 +116,11 @@ class BenchmarkRunner:
             return result
         kwargs = {**harness_kwargs, "lan": sample.language}
         feed_started = None
-        # First moment each committed line showed a translation, and whether the
-        # backend drafted at all: both are needed to read the translation latency.
+        # First moment each committed line showed a translation: one half of the
+        # translation latency, taken with whether the backend drafts above.
         line_translation_times = {}
-        drafted = False
 
         def observe(state):
-            nonlocal drafted
             if state.translation_error and state.translation_error not in result.translation_errors:
                 result.translation_errors.append(state.translation_error)
             if self.speed != 1:
@@ -127,8 +134,6 @@ class BenchmarkRunner:
                 state.buffer_translation or any(line.get("translation") for line in state.lines)
             ):
                 result.first_translation_time_s = elapsed
-            if state.buffer_translation:
-                drafted = True
             for line in state.lines:
                 if _line_translation(line):
                     line_translation_times.setdefault(str(line.get("start")), elapsed)
@@ -168,7 +173,7 @@ class BenchmarkRunner:
                                               or harness.state.buffer_translation)
                         if line_translation_times:
                             result.final_translation_time_s = max(line_translation_times.values())
-                        if drafted and result.first_translation_time_s is not None \
+                        if drafting_backend and result.first_translation_time_s is not None \
                                 and result.final_translation_time_s is not None:
                             result.provisional_lead_s = (result.final_translation_time_s
                                                          - result.first_translation_time_s)

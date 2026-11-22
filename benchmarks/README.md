@@ -155,7 +155,10 @@ the translator and `--mt-model` its model; both require `--target-language`, and
 a flag wins over the same key in `--config`. The run records **both halves**:
 each row keeps its `effective_config`, and `config.translation` states the
 target language, the translation backend, the loaded model and whether the
-backend drafted.
+backend drafted. Where the model runs somewhere the client cannot see — the
+alignatt server, or the `nllw` default that resolves NLLB's checkpoint from its
+size and backend — the record carries a `model_note` and the endpoint or
+settings it called instead of claiming a model id.
 
 ```bash
 wlk bench --backend nemotron-mlx-asr --languages en --target-language zh \
@@ -168,6 +171,13 @@ recording's translation reference is the row of the same ID in the target
 language. No second corpus and no download. A row whose ID has no
 target-language sibling scores `null` instead of borrowing a reference.
 
+- **Translation:** the translation text of each committed line, joined. When no
+  committed line carries one, the row falls back to the in-flight buffer, and on
+  a drafting backend that buffer holds a **provisional** translation rather than
+  the settled one, so the scored text can be a draft. The run's
+  `config.translation.simultaneous` or its alignatt backend, and a non-null
+  `provisional_lead_s`, say when that run could draft; a fallback draft is
+  scored as it stood at end of stream.
 - **chrF:** sacrebleu's chrF, `CHRF(char_order=6, word_order=0, beta=2)`: the
   character n-gram F-beta of the translation against the same `sentence_id`'s
   reference in the target language, with whitespace removed and case and
@@ -183,9 +193,20 @@ target-language sibling scores `null` instead of borrowing a reference.
   translation, also from feed start. A translation that keeps growing on one
   line does not move it.
 - **Provisional lead:** final minus first translation time, so how long drafting
-  ran before the translation settled. It is null unless the backend drafted
-  provisional text (`mlx_llm_mt_simultaneous`), which is the same convention as
-  a null CER for English: a property of the run, not a missing measurement.
+  ran before the translation settled. It is null unless the **configured
+  backend drafts** — the alignatt server, or MLX with
+  `mlx_llm_mt_simultaneous` — which is the same convention as a null CER for
+  English: a property of the run, not a missing measurement. A non-empty buffer
+  is not evidence of drafting: a backend not known to draft counts as one, and
+  whatever sits in its buffer is not read as a draft, so the field stays null.
+
+An audio-to-translation run measures the whole cascade on the emitted output; it
+does not isolate the translation commit policy. The **realizable commit
+fraction** is that other measurement's number: it comes from
+`bench_commit_fraction.py`, the calibrated-attention coverage script owned by
+the `km` simultaneous-frontier work. When that script is not on the base, the
+run reports the row as `not run` rather than reimplementing a second capture
+path.
 
 A demonstration report from this machine is checked in at
 [evaluations/translation-fleurs-en-zh](evaluations/translation-fleurs-en-zh/),

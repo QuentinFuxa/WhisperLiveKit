@@ -305,6 +305,29 @@ def describe_asr_config(backend: str, model: str) -> Dict[str, Any]:
     return {"backend": backend, "model": model}
 
 
+# MT backends with an in-process simultaneous variant selected by
+# ``mlx_llm_mt_simultaneous``; those are the ones whose drafting is a switch.
+_SIMULTANEOUS_MLX_BACKENDS = ("mlx-llm-mt", "hunyuan-mlx")
+
+
+def drafts_provisional_text(config: Dict[str, Any]) -> bool:
+    """Whether the configured MT backend publishes provisional target text.
+
+    Two arrangements put a partial translation in the streaming buffer: the
+    alignatt server, which returns a translation of each connected word as its
+    buffer, and the MLX backend with ``mlx_llm_mt_simultaneous``. Every other
+    backend, the segment MLX path among them, is treated as non-drafting: a
+    non-empty buffer there is not known to hold a translation rather than
+    untranslated source text, and reading one as a draft would report a
+    translation lead the run never had. A draft this cannot identify is not
+    reported.
+    """
+    backend = config.get("translation_backend", "")
+    if backend == "alignatt":
+        return True
+    return backend in _SIMULTANEOUS_MLX_BACKENDS and bool(config.get("mlx_llm_mt_simultaneous", False))
+
+
 def describe_translation_config(config: Dict[str, Any],
                                 source_languages=()) -> Dict[str, Any]:
     """Record the MT half of an audio-to-translation run.
@@ -312,17 +335,35 @@ def describe_translation_config(config: Dict[str, Any],
     An audio-to-translation benchmark has to state what produced the target
     text, not only the ASR backend: the direction (the source languages that
     were fed against the target language), the backend and the loaded model.
-    Drafting changes what a latency number means, so it is recorded beside them.
+    ``simultaneous`` is the MLX drafting switch and stays null where the backend
+    has no such switch. Two backends cannot name a model from the client side,
+    so they say what they can see instead of leaving ``model`` to be read as an
+    unknown: the alignatt model runs in a server whose endpoint is recorded, and
+    nllw resolves NLLB's checkpoint from its own settings.
     """
     backend = config.get("translation_backend", "")
-    return {
+    record = {
         "source_languages": sorted({language for language in source_languages if language}),
         "target_language": config.get("target_language", ""),
         "backend": backend,
-        "model": config.get("mlx_llm_mt_model") if backend == "mlx-llm-mt" else None,
-        "simultaneous": bool(config.get("mlx_llm_mt_simultaneous", False))
-        if backend == "mlx-llm-mt" else None,
+        "model": None,
+        "simultaneous": None,
     }
+    if backend in _SIMULTANEOUS_MLX_BACKENDS:
+        record["model"] = config.get("mlx_llm_mt_model")
+        record["simultaneous"] = bool(config.get("mlx_llm_mt_simultaneous", False))
+    elif backend == "alignatt":
+        # The MT model is loaded by the translation server, so the run records
+        # which server it called; the checkpoint behind it is not visible here.
+        record["model_note"] = ("the translation model runs in the alignatt server; this run "
+                                "records the endpoint it called, not the served checkpoint")
+        record["server"] = {"url": config.get("alignatt_url"),
+                            "preset": config.get("alignatt_preset"),
+                            "latency": config.get("alignatt_latency")}
+    elif backend:
+        record["model_note"] = ("nllw selects the NLLB checkpoint from nllb_backend and "
+                                "nllb_size; both are recorded in each row's effective_config")
+    return record
 
 
 def describe_model_artifacts(config):

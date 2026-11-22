@@ -97,3 +97,15 @@ provisional text, so a null there is a property of the run, not a missing
 measurement. The drafting run shows the intended shape — on `fleurs_en_1921`
 first translation at 2.45 s and final at 11.25 s inside a 9.72 s sample, with
 `final_translation_time_s >= first_translation_time_s` on every row.
+
+## Rows these runs report as not run
+
+| Row | Status | Why |
+|---|---|---|
+| Realizable commit fraction | **not run** | `bench_commit_fraction.py` (the calibrated-attention coverage script) is not on this base — the `km` simultaneous-frontier work owns it. Tier 1 reports the row as `not run` and does not reimplement a second capture path. These reports measure the whole cascade on emitted output; they do not isolate the commit policy. |
+
+One field needs reading with care. A row's `translation` is the joined
+translations of its committed lines, with a fallback to the in-flight buffer
+when no committed line carries one; on a drafting backend that buffer is a
+provisional translation, so a fallback row scores a draft as it stood at end of
+stream. The README states the same, next to the field definitions.
