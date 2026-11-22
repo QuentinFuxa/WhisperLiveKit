@@ -144,6 +144,10 @@ class MlxLlmTranslationSimul(MlxLlmTranslation):
         separator = "" if self._source_language.startswith(("zh", "ja", "cmn", "yue")) else " "
         return separator.join(t.text.strip() for t in self._committed_simul)
 
+    # Display contract (see MlxLlmTranslation): the simul engine produces
+    # provisional drafts, so its intermediate buffer is shown as a draft.
+    provides_drafts = True
+
     def _source_text(self):
         committed = self._committed_text()
         tail = self._tail.text.strip() if self._tail else ""

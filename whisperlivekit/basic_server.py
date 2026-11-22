@@ -12,6 +12,7 @@ from starlette.websockets import WebSocketState
 
 from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
 from whisperlivekit.api_auth import websocket_token
+from whisperlivekit.caption_events import validate_event_log_path
 from whisperlivekit.config import WhisperLiveKitConfig, parse_cors_origins
 from whisperlivekit.processing_queue import PipelineClosed, PipelineOverloaded
 from whisperlivekit.session_limits import WebSocketSessionLimitMiddleware
@@ -57,6 +58,9 @@ def _bearer_token(request: Request) -> Optional[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # A configuration error (e.g. an unwritable --event-log path) must stop the
+    # server here rather than fail each connection as it opens the log.
+    validate_event_log_path(getattr(app.state.config, "event_log", None))
     app.state.transcription_engine = TranscriptionEngine(config=app.state.config)
     yield
 

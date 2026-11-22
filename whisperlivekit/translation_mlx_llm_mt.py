@@ -93,6 +93,13 @@ class MlxLlmTranslation:
     segment buffer.
     """
 
+    # Display contract: does this backend produce provisional MT drafts?
+    # The base segment translator buffers UNTRANSLATED source — its buffer
+    # must never be shown as a draft (the caption event tap keys off this).
+    # A class attribute: draft capability belongs to the backend kind, not to
+    # one session's buffer state.
+    provides_drafts: bool = False
+
     _MODEL_CACHE: Dict[tuple, Tuple[Any, Any]] = {}
     # MLX models and tokenizers are shared, including mutable decode caches.
     _MODEL_LOCK = threading.RLock()

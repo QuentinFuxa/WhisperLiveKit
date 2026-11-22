@@ -13,6 +13,7 @@ from whisperlivekit.audio_processor import (
     SENTINEL,
     AudioProcessor,
 )
+from whisperlivekit.caption_events import EventTap
 from whisperlivekit.config import WhisperLiveKitConfig
 from whisperlivekit.diff_protocol import DiffTracker
 from whisperlivekit.metrics_collector import SessionMetrics
@@ -127,6 +128,9 @@ def _boundary_processor(
     processor.is_stopping = False
     processor._any_asr_output = False
     processor._silent_backend_warned = False
+    processor.event_tap = EventTap()  # no-op sink; emission must not fail
+    processor._last_asr_prov = ""
+    processor.processing_error = None
     processor._prune_state_tokens = lambda: None
     return processor
 
