@@ -44,6 +44,9 @@ class BenchmarkSample:
     source: str = ""
     tags: Set[str] = field(default_factory=set)
     expected_sha256: str = ""
+    sentence_id: Optional[int] = None
+    # Reference of this sentence_id in each recorded language, its own included.
+    translation_references: Dict[str, str] = field(default_factory=dict)
 
 
     def to_dict(self) -> Dict:
@@ -62,14 +65,27 @@ class BenchmarkSample:
 
 
 def load_manifest(path, *, continuous=False):
-    """Load a fixed corpus using its recorded cache location and hashes."""
+    """Load a fixed corpus using its recorded cache location and hashes.
+
+    Rows are joined on ``sentence_id``: a parallel corpus records the same
+    sentence in several languages, so a row's translation reference is the
+    sibling row's reference. That needs no second corpus and no download.
+    Rows without a ``sentence_id`` or without a sibling get no references.
+    """
     manifest = json.loads(Path(path).read_text())
     root = CACHE_DIR / manifest["cache_subdir"]
+    rows = manifest["continuous" if continuous else "samples"]
+    by_sentence_id: Dict[int, Dict[str, str]] = {}
+    for row in rows:
+        if row.get("sentence_id") is not None:
+            by_sentence_id.setdefault(row["sentence_id"], {})[row["language"]] = row["reference"]
     return [BenchmarkSample(
         name=row["name"], path=str(root / row["file"]), reference=row["reference"],
         duration=row["duration"], language=row["language"], category=row["category"],
         sample_rate=row["sample_rate"], source=row["source"], expected_sha256=row["audio_sha256"],
-    ) for row in manifest["continuous" if continuous else "samples"]]
+        sentence_id=row.get("sentence_id"),
+        translation_references=dict(by_sentence_id.get(row.get("sentence_id"), {})),
+    ) for row in rows]
 
 
 # ---------------------------------------------------------------------------

@@ -42,10 +42,18 @@ publishing a comparison. Keep downloads outside measured runs.
 
 ## Measurements
 
-JSON schema 3.1 includes hypotheses, references, WER/CER edit counts, errors,
+JSON schema 3.2 includes hypotheses, references, WER/CER edit counts, errors,
 audio hashes, effective configuration, dependency versions, hardware, source
-commit and dirty state. Separate startup/warmup records do not contribute to
-measured quality or latency. All measured repetitions retain their sample IDs.
+commit and dirty state. It adds the translation half of an
+audio-to-translation run: `target_language`, `translation`,
+`translation_reference`, `chrf`, `final_translation_time_s` and
+`provisional_lead_s` per row, `corpus_chrf` in the summary, and both halves of
+the configuration — `config.asr` with the backend and model that recognized the
+audio, `config.translation` with the source languages, target language, backend
+and model that translated it. Analyzer scripts under
+`benchmarks/evaluations/` remain pinned to the 3.1 reports they were written for.
+Separate startup/warmup records do not contribute to measured quality or
+latency. All measured repetitions retain their sample IDs.
 
 Paced audio packets are sent when their final sample becomes available, using
 absolute deadlines. Processing and scheduler delays do not accumulate into
@@ -137,5 +145,77 @@ quality. Replotting either archive cannot recover missing evidence.
 
 For simultaneous translation, see the [MLX calibration notes](../docs/simul_mt_calibration.md),
 [AlignAtt4LLM evaluation code](https://github.com/QuentinFuxa/Alignatt4LLM) and
-[paper](https://arxiv.org/abs/2606.03967). A WLK audio-to-translation benchmark is a
-separate experiment; it must record both ASR and MT configurations.
+[paper](https://arxiv.org/abs/2606.03967).
+
+## Audio-to-translation runs
+
+`--target-language` engages the translation half of the same pipeline and turns
+a run into an audio-to-translation experiment. `--translation-backend` selects
+the translator and `--mt-model` its model; both require `--target-language`, and
+a flag wins over the same key in `--config`. The flag's accepted set — and
+`--config`'s, and a Python `WhisperLiveKitConfig`'s — is the four names the
+engine routes, so `wlk bench --translation-backend nllw` used to run the NLLB
+path and now exits 2, as `wlk serve` always did. The run records **both halves**:
+each row keeps its `effective_config`, and `config.translation` states the
+target language, the translation backend, the loaded model and whether the
+backend drafted. Where the model runs somewhere the client cannot see — the
+alignatt server, or the `nllw` default that resolves NLLB's checkpoint from its
+size and backend — the record carries a `model_note` and the endpoint or
+settings it called instead of claiming a model id.
+
+```bash
+wlk bench --backend nemotron-mlx-asr --languages en --target-language zh \
+  --translation-backend mlx-llm-mt --mt-model hy-mt2-1.8b-8bit \
+  --manifest benchmarks/corpora/fleurs-90.json --speed 1 --json results.json
+```
+
+FLEURS is parallel, so the manifest load joins rows on `sentence_id`: an English
+recording's translation reference is the row of the same ID in the target
+language. No second corpus and no download. A row whose ID has no
+target-language sibling scores `null` instead of borrowing a reference.
+
+- **Translation:** the translation text of each committed line, joined. When no
+  committed line carries one, the row falls back to the in-flight buffer, and on
+  a drafting backend that buffer holds a **provisional** translation rather than
+  the settled one, so the scored text can be a draft. The run's
+  `config.translation` says which translator ran, and a non-null
+  `provisional_lead_s` says that run drafted; a fallback draft is scored as it
+  stood at end of stream.
+- **chrF:** sacrebleu's chrF, `CHRF(char_order=6, word_order=0, beta=2)`: the
+  character n-gram F-beta of the translation against the same `sentence_id`'s
+  reference in the target language, with whitespace removed and case and
+  punctuation kept. It scores ASR and MT together, so ASR errors flow into it.
+  The summary's `corpus_chrf` is the number to quote: sacrebleu's corpus score
+  for the pair, from the n-gram counts summed over every scored row. The per-row
+  `chrf` and their unweighted mean `avg_chrf` stay for inspection; a mean of
+  per-sentence scores is not a corpus score. The per-row value is null on a row
+  with no translation hypothesis or no translation reference.
+- **First translation:** delay from feed start to the first provisional or
+  committed translation. Paced runs only, like first visible text.
+- **Final translation:** the last committed line that first showed a
+  translation, also from feed start. A translation that keeps growing on one
+  line does not move it.
+- **Provisional lead:** final minus first translation time, so how long drafting
+  ran before the translation settled. It is null unless the **configured
+  backend drafts** — the default `nllb`, the alignatt server, or MLX with
+  `mlx_llm_mt_simultaneous` — which is the same convention as a null CER for
+  English: a property of the run, not a missing measurement. Those are all the
+  backends `--translation-backend` accepts, so a null here means the run's
+  translator did not draft: the MLX segment path returns completed sentences
+  only, and whatever source text it leaves in the buffer is not read as a draft.
+
+An audio-to-translation run measures the whole cascade on the emitted output; it
+does not isolate the translation commit policy. The **realizable commit
+fraction** is that other measurement's number: it comes from
+`bench_commit_fraction.py`, the calibrated-attention coverage script owned by
+the `km` simultaneous-frontier work. When that script is not on the base, the
+run reports the row as `not run` rather than reimplementing a second capture
+path.
+
+A demonstration report from this machine is checked in at
+[evaluations/translation-fleurs-en-zh](evaluations/translation-fleurs-en-zh/),
+with its provenance and its limits in `NOTES.md`: three samples without drafting
+and the same three with it. They exist to show the join, the score and the
+latency fields on a real cascade run; three samples establish no quality figure
+and are not a backend comparison.
+
