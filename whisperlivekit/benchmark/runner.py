@@ -14,6 +14,38 @@ from whisperlivekit.benchmark.resources import ResourceMonitor
 
 logger = logging.getLogger(__name__)
 
+# Engine options that name the MT half of an audio-to-translation run. Only
+# these are recorded as the translation configuration; the rest of the engine
+# options describe ASR.
+_TRANSLATION_OPTIONS = (
+    "target_language", "translation_backend", "nllb_backend", "nllb_size",
+    "mlx_llm_mt_model", "mlx_llm_mt_simultaneous", "mlx_llm_mt_calibration",
+    "mlx_llm_mt_simul_commit", "mlx_llm_mt_simul_mass_threshold",
+    "mlx_llm_mt_simul_soft_max_s", "mlx_llm_mt_simul_hard_max_s",
+    "alignatt_preset", "alignatt_latency",
+)
+
+
+def translation_config(engine_kwargs: dict) -> dict:
+    """The MT configuration a report must carry next to the ASR configuration."""
+    if not engine_kwargs.get("target_language"):
+        return {}
+    return {key: engine_kwargs[key] for key in _TRANSLATION_OPTIONS if key in engine_kwargs}
+
+
+def translated_text(state) -> str:
+    """The validated translation of a finished sample, in reading order.
+
+    Each speech line owns at most one validated translation; silence carries
+    none. A backend may also leave text in the uncommitted buffer, which is
+    not part of the translation the reader received.
+    """
+    return " ".join(
+        (line.get("translation") or "").strip()
+        for line in state.speech_lines
+        if (line.get("translation") or "").strip()
+    )
+
 
 class BenchmarkRunner:
     def __init__(
@@ -52,7 +84,8 @@ class BenchmarkRunner:
         kwargs = {"model_size": self.model_size, "pcm_input": True, "backend": self.backend,
                   **self.engine_kwargs}
         report = BenchmarkReport(backend=self.backend, model_size=self.model_size,
-                                 system_info=get_system_info(), feed_speed=self.speed)
+                                 system_info=get_system_info(), feed_speed=self.speed,
+                                 translation_config=translation_config(self.engine_kwargs))
         if self.warmup:
             for language in dict.fromkeys(sample.language for sample in samples):
                 sample = next(sample for sample in samples if sample.language == language)
@@ -77,17 +110,26 @@ class BenchmarkRunner:
 
         result = SampleResult(sample_name=sample.name, language=sample.language, category=sample.category,
                               duration_s=sample.duration, reference=sample.reference,
-                              source=sample.source, tags=sorted(sample.tags))
+                              source=sample.source, tags=sorted(sample.tags),
+                              translation_reference=sample.translation_reference)
         if not backend_supports_language(self.backend, sample.language):
             result.status = "skipped"
             result.error = f"Language {sample.language} unsupported by benchmark backend {self.backend}"
             return result
         kwargs = {**harness_kwargs, "lan": sample.language}
         feed_started = None
+        # Whether the MT backend drafts over the unstable ASR tail. Backends
+        # without drafts publish only committed translations, so the first
+        # visible translation is not a provisional lead and must not be
+        # reported as one (it would credit them with latency they lack).
+        backend_drafts = False
 
         def observe(state):
+            nonlocal backend_drafts
             if state.translation_error and state.translation_error not in result.translation_errors:
                 result.translation_errors.append(state.translation_error)
+            if state.buffer_translation:
+                backend_drafts = True
             if self.speed != 1:
                 return
             elapsed = time.perf_counter() - feed_started
@@ -128,9 +170,12 @@ class BenchmarkRunner:
                         result.finalization_time_s = finished - feed_finished
                         if self.speed:
                             result.source_end_lag_s = finished - feed_started - sample.duration/self.speed
+                            if result.first_translation_time_s is not None:
+                                result.final_translation_time_s = finished - feed_started
                     finally:
                         result.wall_time_s = time.perf_counter() - feed_started
                         result.hypothesis = harness.state.committed_text or harness.state.text
+                        result.translation_hypothesis = translated_text(harness.state)
                     metrics = harness.metrics
                     result.processing_time_s = metrics.total_processing_time_s
                     result.rtf = result.processing_time_s / sample.duration if sample.duration > 0 else None
@@ -140,6 +185,14 @@ class BenchmarkRunner:
                     result.timing_valid, result.timing_monotonic = state.timing_valid, state.timing_monotonic
             if result.translation_errors:
                 raise RuntimeError("Translation failed: " + "; ".join(result.translation_errors))
+            if result.translation_reference and result.translation_hypothesis:
+                from whisperlivekit.benchmark.chrf import compute_chrf
+                result.chrf = compute_chrf(result.translation_hypothesis, result.translation_reference)
+                if (result.first_translation_time_s is not None
+                        and result.final_translation_time_s is not None and backend_drafts):
+                    result.provisional_lead_s = (
+                        result.final_translation_time_s - result.first_translation_time_s
+                    )
             if sample.reference.strip():
                 if sample.language in {"zh", "cmn", "ja", "yue"}:
                     ref = " ".join("".join(normalize_text(sample.reference).split()))

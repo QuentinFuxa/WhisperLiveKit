@@ -879,6 +879,7 @@ async def _run_bench_new(parsed, languages, categories):
             print(f"\r  [{i + 1}/{total}] {name}...{' ' * 20}",
                   end="", file=sys.stderr, flush=True)
 
+    engine_kwargs = json.loads(Path(parsed.config).read_text()) if parsed.config else None
     runner = BenchmarkRunner(
         backend=parsed.backend,
         model_size=parsed.model_size,
@@ -887,9 +888,14 @@ async def _run_bench_new(parsed, languages, categories):
         quick=parsed.quick,
         speed=parsed.speed,
         on_progress=on_progress,
-        samples=load_manifest(parsed.manifest, continuous=parsed.continuous) if parsed.manifest else None,
+        # The manifest is joined against its parallel rows so each sample gets a
+        # translation reference; the manifest file and its hashes stay untouched.
+        samples=load_manifest(
+            parsed.manifest, continuous=parsed.continuous,
+            target_language=(engine_kwargs or {}).get("target_language", ""),
+        ) if parsed.manifest else None,
         repeats=parsed.repeats, warmup=parsed.warmup,
-        engine_kwargs=json.loads(Path(parsed.config).read_text()) if parsed.config else None,
+        engine_kwargs=engine_kwargs,
     )
 
     print("\n  Downloading benchmark samples (cached after first run)...",
