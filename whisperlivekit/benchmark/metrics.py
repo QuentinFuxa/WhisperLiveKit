@@ -305,6 +305,10 @@ def describe_asr_config(backend: str, model: str) -> Dict[str, Any]:
     return {"backend": backend, "model": model}
 
 
+# MT backends that always draft: those whose ``process()`` returns the target
+# text they cannot commit yet as its second element. ``nllw`` is the library
+# behind the ``nllb`` backend, accepted as the same name.
+_ALWAYS_DRAFTING_BACKENDS = ("nllb", "nllw", "alignatt")
 # MT backends with an in-process simultaneous variant selected by
 # ``mlx_llm_mt_simultaneous``; those are the ones whose drafting is a switch.
 _SIMULTANEOUS_MLX_BACKENDS = ("mlx-llm-mt", "hunyuan-mlx")
@@ -314,16 +318,16 @@ def drafts_provisional_text(config: Dict[str, Any]) -> bool:
     """Whether the configured MT backend publishes provisional target text.
 
     Two arrangements put a partial translation in the streaming buffer: the
-    alignatt server, which returns a translation of each connected word as its
-    buffer, and the MLX backend with ``mlx_llm_mt_simultaneous``. Every other
-    backend, the segment MLX path among them, is treated as non-drafting: a
-    non-empty buffer there is not known to hold a translation rather than
-    untranslated source text, and reading one as a draft would report a
-    translation lead the run never had. A draft this cannot identify is not
-    reported.
+    alignatt server and nllw's ``OnlineTranslation`` (the ``nllb`` backend),
+    which both return the target tokens outside the committed prefix as their
+    buffer, and the MLX backend with ``mlx_llm_mt_simultaneous``. That covers
+    every backend ``--translation-backend`` accepts, so the segment MLX path is
+    the only non-drafting one: it translates completed segments and returns an
+    empty buffer, and a non-empty one there holds untranslated source text,
+    which read as a draft would report a translation lead the run never had.
     """
     backend = config.get("translation_backend", "")
-    if backend == "alignatt":
+    if backend in _ALWAYS_DRAFTING_BACKENDS:
         return True
     return backend in _SIMULTANEOUS_MLX_BACKENDS and bool(config.get("mlx_llm_mt_simultaneous", False))
 

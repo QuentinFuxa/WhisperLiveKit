@@ -296,9 +296,26 @@ async def test_a_non_drafting_backend_leaves_the_provisional_lead_null(tmp_path,
     assert result.first_translation_time_s is not None and result.final_translation_time_s is not None
     assert result.final_translation_time_s > result.first_translation_time_s
     assert result.provisional_lead_s is None
-    # The nllb default has no drafting path either, whatever the buffer holds.
-    assert not drafts_provisional_text({**config, "translation_backend": "nllb"})
+    # The sidecar backend drafts, which is the answer the lead is gated on.
     assert drafts_provisional_text({**config, "translation_backend": "alignatt"})
+
+
+@pytest.mark.asyncio
+async def test_the_nllb_backend_reports_a_measured_provisional_lead(tmp_path, monkeypatch):
+    """The default backend drafts, so its buffer yields a lead rather than null."""
+    sample, runner, compute_wer = _cascade_run(monkeypatch, tmp_path)
+    from whisperlivekit.benchmark.metrics import drafts_provisional_text
+
+    config = dict(transcription=False, pcm_input=True, target_language="zh",
+                  translation_backend="nllb", nllb_backend="transformers", nllb_size="600M")
+    assert drafts_provisional_text(config)
+    result = await runner._run_sample(sample, config, compute_wer)
+    assert result.status == "ok"
+    assert result.first_translation_time_s is not None and result.final_translation_time_s is not None
+    # Same two endpoints as the non-drafting run above, so the difference is the backend.
+    assert result.provisional_lead_s == pytest.approx(
+        result.final_translation_time_s - result.first_translation_time_s)
+    assert result.provisional_lead_s > 0
 
 
 def test_translation_config_records_what_an_alignatt_run_can_know():
@@ -318,7 +335,7 @@ def test_translation_config_records_what_an_alignatt_run_can_know():
                                 "latency": "balanced"}
     # The same drafting answer the runner uses for the lead, per backend.
     assert drafts_provisional_text(config)
-    assert not drafts_provisional_text({**config, "translation_backend": "nllb"})
+    assert drafts_provisional_text({**config, "translation_backend": "nllb"})
     nllb = describe_translation_config({"translation_backend": "nllb", "target_language": "zh",
                                         "nllb_size": "600M"}, ["en"])
     assert nllb["model"] is None and "nllb_size" in nllb["model_note"]
@@ -354,8 +371,9 @@ def _cascade_run(monkeypatch, tmp_path):
     def observed_states(config):
         if not config.get("target_language"):
             return [state([hello]), state([hello, world])]
-        # Branch on the backend's own switch, not on the predicate under test.
-        if config.get("mlx_llm_mt_simultaneous"):
+        # Branch on the backend's own configuration — its simultaneous switch or
+        # its name — not on the predicate under test.
+        if config.get("mlx_llm_mt_simultaneous") or config.get("translation_backend") in ("nllb", "nllw"):
             return [
                 state([{**hello, "translation": ""}], buffer_translation="你"),
                 state([{**hello, "translation": "你好"}]),

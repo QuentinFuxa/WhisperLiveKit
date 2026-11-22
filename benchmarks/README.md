@@ -175,9 +175,9 @@ target-language sibling scores `null` instead of borrowing a reference.
   committed line carries one, the row falls back to the in-flight buffer, and on
   a drafting backend that buffer holds a **provisional** translation rather than
   the settled one, so the scored text can be a draft. The run's
-  `config.translation.simultaneous` or its alignatt backend, and a non-null
-  `provisional_lead_s`, say when that run could draft; a fallback draft is
-  scored as it stood at end of stream.
+  `config.translation` says which translator ran, and a non-null
+  `provisional_lead_s` says that run drafted; a fallback draft is scored as it
+  stood at end of stream.
 - **chrF:** sacrebleu's chrF, `CHRF(char_order=6, word_order=0, beta=2)`: the
   character n-gram F-beta of the translation against the same `sentence_id`'s
   reference in the target language, with whitespace removed and case and
@@ -194,11 +194,12 @@ target-language sibling scores `null` instead of borrowing a reference.
   line does not move it.
 - **Provisional lead:** final minus first translation time, so how long drafting
   ran before the translation settled. It is null unless the **configured
-  backend drafts** — the alignatt server, or MLX with
+  backend drafts** — the default `nllb`, the alignatt server, or MLX with
   `mlx_llm_mt_simultaneous` — which is the same convention as a null CER for
-  English: a property of the run, not a missing measurement. A non-empty buffer
-  is not evidence of drafting: a backend not known to draft counts as one, and
-  whatever sits in its buffer is not read as a draft, so the field stays null.
+  English: a property of the run, not a missing measurement. Those are all the
+  backends `--translation-backend` accepts, so a null here means the run's
+  translator did not draft: the MLX segment path returns completed sentences
+  only, and whatever source text it leaves in the buffer is not read as a draft.
 
 An audio-to-translation run measures the whole cascade on the emitted output; it
 does not isolate the translation commit policy. The **realizable commit
