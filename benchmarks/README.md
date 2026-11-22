@@ -42,10 +42,12 @@ publishing a comparison. Keep downloads outside measured runs.
 
 ## Measurements
 
-JSON schema 3.1 includes hypotheses, references, WER/CER edit counts, errors,
+JSON schema 3.2 includes hypotheses, references, WER/CER edit counts, errors,
 audio hashes, effective configuration, dependency versions, hardware, source
 commit and dirty state. Separate startup/warmup records do not contribute to
 measured quality or latency. All measured repetitions retain their sample IDs.
+Schema 3.2 adds the translation fields below; 3.1 reports keep their shape and
+are not rewritten.
 
 Paced audio packets are sent when their final sample becomes available, using
 absolute deadlines. Processing and scheduler delays do not accumulate into
@@ -55,6 +57,28 @@ used relative waits after packets, which gave decoding an artificial interval
 before EOF; do not compare their latency values with 3.1 runs.
 
 - **ASR RTF:** successful inference-call time divided by audio duration.
+- **Translation quality:** corpus chrF per language pair, from the character
+  n-gram statistics summed over all rows of that pair, using sacrebleu's
+  definition (char order 6, word order 0, beta 2, whitespace removed). The
+  per-row `chrf` stays in the record for inspection; the summary is the corpus
+  figure because a mean of row scores over-weights short rows. It scores the
+  translated transcript, so ASR errors flow into it; read it next to the WER of
+  the same run. A row without a parallel reference is unscored (`chrf: null`),
+  not 0% translation. sacrebleu is not a runtime dependency: the implementation
+  is checked against values computed with it, pinned in
+  `tests/test_benchmark_translation.py`.
+- **Translation latency:** `first_translation_time_s` is the first provisional
+  or committed translation; `final_translation_time_s` is the complete
+  validated translation, both measured from feed start at speed 1.
+  `provisional_lead_s` is the gap between them, and it is null unless the MT
+  backend actually drafts over the unstable ASR tail: for a backend that only
+  publishes committed translations, the first visible translation is the final
+  one, and reporting a lead there would credit it with latency it does not
+  have.
+- **Both configurations:** schema 3.2 records the MT side
+  (`translation.config`: target language, backend, model, and the
+  simultaneous-MT settings) next to the ASR backend and model, as this file
+  asks.
 - **Startup:** harness/model initialization. For a fresh process, the separate
   warmup record includes the initial load and model warmup; this is not a cold
   filesystem-cache measurement.
@@ -138,4 +162,19 @@ quality. Replotting either archive cannot recover missing evidence.
 For simultaneous translation, see the [MLX calibration notes](../docs/simul_mt_calibration.md),
 [AlignAtt4LLM evaluation code](https://github.com/QuentinFuxa/Alignatt4LLM) and
 [paper](https://arxiv.org/abs/2606.03967). A WLK audio-to-translation benchmark is a
-separate experiment; it must record both ASR and MT configurations.
+separate experiment; it must record both ASR and MT configurations. Schema 3.2
+does that: pass `--config` with `target_language` and `--manifest` with a
+parallel corpus (the pinned `fleurs-90.json` has English, French and Mandarin
+rows for the same 30 sentence ids). The reference for a row is joined at load
+time from the row of the same `sentence_id` in the target language, so the
+manifest and its hashes stay unchanged:
+
+```bash
+wlk bench --backend faster-whisper --model base --languages en \
+  --manifest benchmarks/corpora/fleurs-90.json \
+  --config translation.json --speed 1 --json translation.json
+```
+
+`translation.json` holds `{"target_language": "fr", ...}` plus any other engine
+options. Compare runs only when the ASR configuration, the MT configuration and
+the scored row count all match.

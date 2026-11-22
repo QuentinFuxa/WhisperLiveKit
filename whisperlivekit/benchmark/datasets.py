@@ -44,6 +44,14 @@ class BenchmarkSample:
     source: str = ""
     tags: Set[str] = field(default_factory=set)
     expected_sha256: str = ""
+    # Spoken language of the recording, and the manifest's parallel-corpus id.
+    # ``language`` stays the ASR language recorded in the report; these exist
+    # so a parallel corpus can pair rows without touching the manifest on disk.
+    source_language: str = ""
+    sentence_id: Optional[int] = None
+    # Text this row's translation should reproduce. Joined from a parallel
+    # corpus when the manifest is loaded, never stored in the manifest itself.
+    translation_reference: str = ""
 
 
     def to_dict(self) -> Dict:
@@ -61,15 +69,40 @@ class BenchmarkSample:
         }
 
 
-def load_manifest(path, *, continuous=False):
-    """Load a fixed corpus using its recorded cache location and hashes."""
+def load_manifest(path, *, continuous=False, target_language: str = ""):
+    """Load a fixed corpus using its recorded cache location and hashes.
+
+    ``target_language`` is optional. When the corpus is parallel (its rows
+    carry ``sentence_id``) and it records rows in that language, every sample
+    gets the ``translation_reference`` its translation should reproduce,
+    joined on ``sentence_id``. The manifest and its hashes are only read, so
+    the join cannot change a pinned corpus.
+    """
     manifest = json.loads(Path(path).read_text())
     root = CACHE_DIR / manifest["cache_subdir"]
-    return [BenchmarkSample(
+    rows = manifest["continuous" if continuous else "samples"]
+    samples = [BenchmarkSample(
         name=row["name"], path=str(root / row["file"]), reference=row["reference"],
         duration=row["duration"], language=row["language"], category=row["category"],
         sample_rate=row["sample_rate"], source=row["source"], expected_sha256=row["audio_sha256"],
-    ) for row in manifest["continuous" if continuous else "samples"]]
+        source_language=row["language"], sentence_id=row.get("sentence_id"),
+    ) for row in rows]
+    if target_language:
+        target_rows = {
+            row.get("sentence_id"): row["reference"]
+            for row in rows
+            if row["language"] == target_language
+            and row.get("sentence_id") is not None
+            and row.get("reference", "").strip()
+        }
+        for sample in samples:
+            # A row already spoken in the target language would be "translating"
+            # into itself, which is neither the user's path nor a measurement.
+            # Leaving it unscored keeps a `--languages all` run honest.
+            if sample.source_language == target_language:
+                continue
+            sample.translation_reference = target_rows.get(sample.sentence_id, "")
+    return samples
 
 
 # ---------------------------------------------------------------------------

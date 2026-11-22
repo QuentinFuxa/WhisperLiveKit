@@ -50,6 +50,18 @@ class SampleResult:
     tags: List[str] = field(default_factory=list)
     audio_sha256: str = ""
     effective_config: Dict[str, Any] = field(default_factory=dict)
+    # Translation half of the run. The hypothesis is the validated translation
+    # of the committed transcript; the reference is joined from the manifest's
+    # parallel rows. chrF stays null when the row has no reference to score
+    # against, which is not the same as a 0% translation.
+    translation_hypothesis: str = ""
+    translation_reference: str = ""
+    chrf: Optional[float] = None
+    # Reader-visible translation latency: when the complete validated
+    # translation landed, and how long before that a draft was visible.
+    # Both are paced (speed=1) measurements, like the ASR latencies.
+    final_translation_time_s: Optional[float] = None
+    provisional_lead_s: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         result = asdict(self)
@@ -70,6 +82,18 @@ class BenchmarkReport:
     warmup_results: List[SampleResult] = field(default_factory=list)
     corpus_sha256: str = ""
     model_artifacts: Dict[str, Any] = field(default_factory=dict)
+    # Both halves of an audio-to-translation run are recorded: the ASR side is
+    # `backend`/`model_size`, and this is the MT side. Empty for ASR-only runs.
+    translation_config: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def translation_scored_results(self) -> List[SampleResult]:
+        """Rows that carry a parallel reference; the corpus figure uses them.
+
+        A row with a reference and an empty hypothesis is a 0% measurement,
+        not a missing one, so empty text does not remove a row here.
+        """
+        return [r for r in self.successful_results if r.translation_reference]
 
     @property
     def successful_results(self) -> List[SampleResult]:
@@ -126,8 +150,11 @@ class BenchmarkReport:
         return values[lower] + (values[min(lower+1, len(values)-1)] - values[lower]) * (index-lower)
 
     def to_dict(self) -> Dict[str, Any]:
+        from whisperlivekit.benchmark.chrf import corpus_chrf_by_language
+
+        scored = corpus_chrf_by_language(self.translation_scored_results)
         return {
-            "benchmark_version": "3.1",
+            "benchmark_version": "3.2",
             "timestamp": self.timestamp,
             "system_info": self.system_info,
             "config": {"backend": self.backend, "model_size": self.model_size,
@@ -139,6 +166,13 @@ class BenchmarkReport:
                 "first_text_time_s": "first committed text since feed start; paced runs only",
                 "first_visible_time_s": "first committed or provisional ASR text since feed start; paced runs only",
                 "first_translation_time_s": "first committed or provisional translation since feed start; paced runs only",
+                "final_translation_time_s": "complete validated translation since feed start; paced runs only",
+                "provisional_lead_s": "how long a provisional translation was visible before the complete one; null when the MT backend produces no drafts",
+                "chrf": "corpus-level chrF from summed character n-gram statistics per language pair, "
+                        "sacrebleu definition (char order 6, word order 0, beta 2, whitespace removed); "
+                        "per-row chrf is kept for inspection; ASR errors flow into it because it scores "
+                        "the translated transcript, not the engine in isolation",
+                "chrf_null": "a row without a parallel reference is unscored, not 0% translation",
                 "finalization_time_s": "EOF completion minus actual end of audio feeding",
                 "source_end_lag_s": "EOF completion minus nominal source duration / feed speed; includes feed backlog",
                 "rss_peak_bytes": "largest process RSS sampled every 50 ms, including startup; not an exact high-water mark",
@@ -149,6 +183,10 @@ class BenchmarkReport:
             },
             "corpus_sha256": self.corpus_sha256,
             "model_artifacts": self.model_artifacts,
+            "translation": {
+                "config": self.translation_config,
+                "corpus_chrf_by_language": scored,
+            },
             "warmup_results": [r.to_dict() for r in self.warmup_results],
             "summary": {
                 "n_samples": self.n_samples,
@@ -162,6 +200,11 @@ class BenchmarkReport:
                 "weighted_cer": self.weighted_cer,
                 "finalization_p95_s": self.percentile("finalization_time_s"),
                 "first_visible_p95_s": self.percentile("first_visible_time_s"),
+                "first_translation_p95_s": self.percentile("first_translation_time_s"),
+                "final_translation_p95_s": self.percentile("final_translation_time_s"),
+                "provisional_lead_p95_s": self.percentile("provisional_lead_s"),
+                "corpus_chrf_by_language": scored,
+                "n_translation_scored": sum(values["n_rows"] for values in scored.values()),
                 "source_end_lag_p95_s": self.percentile("source_end_lag_s"),
                 "n_warmup_failed": sum(r.status in ("error", "timeout") for r in self.warmup_results),
                 "n_invalid_timestamps": sum(not (r.timing_valid and r.timing_monotonic) for r in self.successful_results),
