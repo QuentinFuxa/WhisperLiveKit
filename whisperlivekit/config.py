@@ -8,6 +8,12 @@ logger = logging.getLogger(__name__)
 
 FUNASR_LANGUAGES = frozenset({"auto", "zh", "yue", "en", "ja", "ko"})
 
+# The MT backends ``TranscriptionEngine`` routes to a path of their own: alignatt
+# over its sidecar, mlx-llm-mt and its hunyuan-mlx alias in process, nllb in
+# process through nllw. Any other name falls through to the nllb branch, so it is
+# not a second spelling for it and neither CLI accepts one.
+TRANSLATION_BACKENDS = ("nllb", "alignatt", "mlx-llm-mt", "hunyuan-mlx")
+
 
 def validate_pause_segmentation_seconds(value: float) -> float:
     """Return a normalized pause threshold or raise for invalid input."""

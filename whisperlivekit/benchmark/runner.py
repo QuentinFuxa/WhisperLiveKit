@@ -102,10 +102,6 @@ class BenchmarkRunner:
         from whisperlivekit.test_harness import TestHarness
 
         target_language = harness_kwargs.get("target_language", "")
-        # Drafting is a property of the configured MT backend, not of the
-        # buffer: a segment backend can hold untranslated source text there,
-        # and a lead computed from that would invent a provisional translation.
-        drafting_backend = drafts_provisional_text(harness_kwargs)
         result = SampleResult(sample_name=sample.name, language=sample.language, category=sample.category,
                               duration_s=sample.duration, reference=sample.reference,
                               source=sample.source, tags=sorted(sample.tags),
@@ -153,6 +149,14 @@ class BenchmarkRunner:
                         key: value for key, value in vars(harness._processor.args).items()
                         if key != "api_token"
                     }
+                    # Drafting is a property of the MT backend the engine
+                    # resolved, not of the flags the caller passed: the bench
+                    # CLI leaves --translation-backend unset by default and the
+                    # configuration fills in nllb, which drafts. It is not a
+                    # property of the buffer either: a segment backend can hold
+                    # untranslated source text there, and a lead computed from
+                    # that would invent a provisional translation.
+                    drafting_backend = drafts_provisional_text(result.effective_config)
                     feed_started = time.perf_counter()
                     try:
                         # Decode before starting the audio clock; conversion is not streaming latency.

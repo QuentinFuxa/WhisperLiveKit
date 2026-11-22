@@ -1,6 +1,8 @@
 
 from argparse import ArgumentParser, BooleanOptionalAction
 
+from whisperlivekit.config import TRANSLATION_BACKENDS
+
 
 def build_parser():
     parser = ArgumentParser(description="Whisper FastAPI Online Server")
@@ -902,7 +904,7 @@ def build_parser():
         "--translation-backend",
         type=str,
         default="nllb",
-        choices=["nllb", "alignatt", "mlx-llm-mt", "hunyuan-mlx"],
+        choices=list(TRANSLATION_BACKENDS),
         help="Translation engine for --target-language: 'nllb' (in-process, "
         "CPU-friendly) or 'alignatt' (Alignatt4LLM sidecar over WebSocket, "
         "streaming LLM translation with attention-gated commits; requires a "

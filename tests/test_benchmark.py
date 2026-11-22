@@ -318,6 +318,43 @@ async def test_the_nllb_backend_reports_a_measured_provisional_lead(tmp_path, mo
     assert result.provisional_lead_s > 0
 
 
+@pytest.mark.asyncio
+async def test_a_run_that_names_no_backend_reports_the_default_ones_lead(tmp_path, monkeypatch):
+    """`wlk bench --target-language zh` names no backend, and the default drafts.
+
+    The requested kwargs cannot answer whether the run drafted: the backend
+    comes from WhisperLiveKitConfig, which fills in nllb. Reading the request
+    instead of the resolved configuration reported null beside a recorded
+    backend of nllb, which the README reads as a run that did not draft.
+    """
+    sample, runner, compute_wer = _cascade_run(monkeypatch, tmp_path)
+
+    config = dict(transcription=False, pcm_input=True, target_language="zh")
+    assert "translation_backend" not in config
+    result = await runner._run_sample(sample, config, compute_wer)
+    assert result.status == "ok"
+    assert result.effective_config["translation_backend"] == "nllb"
+    assert result.first_translation_time_s is not None and result.final_translation_time_s is not None
+    assert result.provisional_lead_s == pytest.approx(
+        result.final_translation_time_s - result.first_translation_time_s)
+    assert result.provisional_lead_s > 0
+
+
+def test_the_bench_translation_flag_rejects_a_name_the_engine_would_not_route(capsys):
+    """A misspelt `wlk bench --translation-backend` must not run nllb silently.
+
+    The engine routes only the names in `TRANSLATION_BACKENDS` and sends every
+    other one down the nllb branch, so before the bench flag had choices an
+    unlisted name ran nllw and reported that translator's lead.
+    """
+    from whisperlivekit.cli import cmd_bench
+
+    with pytest.raises(SystemExit) as exit_info:
+        cmd_bench(["--target-language", "zh", "--translation-backend", "nllw"])
+    assert exit_info.value.code == 2
+    assert "nllw" in capsys.readouterr().err
+
+
 def test_translation_config_records_what_an_alignatt_run_can_know():
     """AC-4 beyond one backend: the alignatt record names the endpoint it called."""
     from whisperlivekit.benchmark.metrics import describe_translation_config, drafts_provisional_text
@@ -355,6 +392,7 @@ def _cascade_run(monkeypatch, tmp_path):
     import whisperlivekit.test_harness as testing
     from whisperlivekit.benchmark.datasets import BenchmarkSample
     from whisperlivekit.benchmark.runner import BenchmarkRunner
+    from whisperlivekit.config import WhisperLiveKitConfig
     from whisperlivekit.metrics import compute_wer
 
     def state(lines, buffer_translation=""):
@@ -386,12 +424,16 @@ def _cascade_run(monkeypatch, tmp_path):
 
     class FakeHarness:
         def __init__(self, **kwargs):
-            self._kwargs = kwargs
-            self._states = observed_states(kwargs)
+            # The real harness records `asdict(WhisperLiveKitConfig)`, which
+            # names an MT backend even when the caller never asked for one, so
+            # the fake resolves those two keys instead of echoing kwargs only.
+            resolved = {"translation_backend": WhisperLiveKitConfig.translation_backend,
+                        "mlx_llm_mt_simultaneous": False, **kwargs}
+            self._states = observed_states(resolved)
             self.state = self._states[0]
             self.metrics = SimpleNamespace(total_processing_time_s=.1, avg_latency_ms=1., p95_latency_ms=2.,
                                            n_transcription_calls=1, n_tokens_produced=1)
-            self._processor = SimpleNamespace(args=SimpleNamespace(pcm_input=True))
+            self._processor = SimpleNamespace(args=SimpleNamespace(**resolved))
             self._on_update = None
 
         async def __aenter__(self):

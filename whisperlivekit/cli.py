@@ -18,6 +18,7 @@ import logging
 import platform
 import sys
 
+from whisperlivekit.config import TRANSLATION_BACKENDS
 from whisperlivekit.timed_objects import format_subtitle_timestamp as _subtitle_timestamp
 
 logger = logging.getLogger(__name__)
@@ -822,7 +823,7 @@ def cmd_bench(args: list):
     parser.add_argument("--target-language", default=None,
                         help="Also translate into this language code (e.g. zh). Requires "
                              "--translation-backend or a translation backend in --config")
-    parser.add_argument("--translation-backend", default=None,
+    parser.add_argument("--translation-backend", default=None, choices=list(TRANSLATION_BACKENDS),
                         help="Translation backend for --target-language (e.g. mlx-llm-mt)")
     parser.add_argument("--mt-model", default=None,
                         help="MT model for --translation-backend mlx-llm-mt (e.g. hy-mt2-1.8b-8bit)")

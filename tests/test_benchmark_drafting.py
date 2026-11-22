@@ -6,11 +6,27 @@ provisional lead. That is a claim about the second element each backend's
 buffer, then asserts the predicate answers the same way. A backend whose buffer
 changes without a matching answer fails here, and so does a backend added to
 `--translation-backend` without a case.
+
+Each case records what driving its backend established; the last test reads that
+record, so the set of classified backends cannot be widened by editing a mapping
+beside the flag's choices. Only running a backend puts it in the record.
 """
 
 from __future__ import annotations
 
+from typing import Dict
+
 import pytest
+
+# The answer each case established by driving that backend, keyed by the name
+# `--translation-backend` accepts: the drafting answer for a run that names only
+# that backend.
+_DRIVEN: Dict[str, bool] = {}
+
+
+def drove(backend: str, drafts: bool) -> None:
+    """Record the answer a case above established for this backend's buffer."""
+    _DRIVEN[backend] = drafts
 
 
 def test_an_alignatt_sidecar_partial_is_a_draft():
@@ -29,6 +45,7 @@ def test_an_alignatt_sidecar_partial_is_a_draft():
     assert validated is None
     assert buffer.text == "HELLO WORLD"
     assert drafts_provisional_text({"translation_backend": "alignatt"})
+    drove("alignatt", True)
 
 
 def test_the_segment_mlx_backend_returns_an_empty_buffer(monkeypatch):
@@ -47,6 +64,7 @@ def test_the_segment_mlx_backend_returns_an_empty_buffer(monkeypatch):
     # Both spellings of the MLX segment path resolve to that same answer.
     for backend in ("mlx-llm-mt", "hunyuan-mlx"):
         assert not drafts_provisional_text({"translation_backend": backend})
+        drove(backend, False)
 
 
 def test_the_simultaneous_mlx_backend_returns_a_drafted_buffer(tmp_path, monkeypatch):
@@ -64,6 +82,8 @@ def test_the_simultaneous_mlx_backend_returns_a_drafted_buffer(tmp_path, monkeyp
 
     assert validated is None
     assert buffer.text == "您好"
+    # The switch is a second arrangement on the same backend, so the answer for
+    # the bare name stays the segment case's.
     for backend in ("mlx-llm-mt", "hunyuan-mlx"):
         assert drafts_provisional_text({"translation_backend": backend,
                                         "mlx_llm_mt_simultaneous": True})
@@ -121,20 +141,27 @@ async def test_the_nllb_backend_publishes_its_draft_buffer():
     await asyncio.wait_for(run_translation(queue, OnlineTranslation(), state, lock), 5)
 
     assert published[0] == "欢迎来到我的"
+    # `nllw` is the library name behind this backend, not a second backend: only
+    # the name the flag accepts is recorded.
     for backend in ("nllb", "nllw"):
         assert drafts_provisional_text({"translation_backend": backend})
+    drove("nllb", True)
 
 
-def test_every_translation_backend_the_cli_accepts_is_classified():
-    """A backend added to `--translation-backend` without a case fails here."""
+def test_every_translation_backend_the_cli_accepts_has_a_case_that_drives_it():
+    """A backend added to `--translation-backend` without a case fails here.
+
+    The answers come from `_DRIVEN`, which only the cases above fill by running
+    a backend, so an entry added to this check without one to drive it leaves
+    the backend unrecorded and fails rather than passing as a listed name.
+    """
     from whisperlivekit.benchmark.metrics import drafts_provisional_text
     from whisperlivekit.parse_args import build_parser
 
     parser = build_parser()
     choices = set(parser._option_string_actions["--translation-backend"].choices)
-
-    # The answer each case above establishes by driving that backend.
-    drilled = {"nllb": True, "alignatt": True, "mlx-llm-mt": False, "hunyuan-mlx": False}
-    assert choices == set(drilled)
-    for backend, drafts in drilled.items():
+    undriven = choices - set(_DRIVEN)
+    assert not undriven, f"--translation-backend accepts {sorted(undriven)} with no case that drives it"
+    assert set(_DRIVEN) <= choices
+    for backend, drafts in _DRIVEN.items():
         assert drafts_provisional_text({"translation_backend": backend}) is drafts
