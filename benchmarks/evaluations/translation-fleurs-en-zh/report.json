@@ -1,12 +1,12 @@
 {
   "benchmark_version": "3.2",
-  "timestamp": "2026-11-14T17:21:52-0800",
+  "timestamp": "2026-11-21T20:35:24-0800",
   "system_info": {
     "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
     "machine": "arm64",
     "python_version": "3.13.12",
     "whisperlivekit_version": "0.2.26",
-    "git_commit": "07218307318b121b3e1c5e6e0b2e38531cc1b470",
+    "git_commit": "06a902c6ca961ffe9bfd9c0ec678a2b7f909c0cb",
     "git_dirty": false,
     "cpu": "Apple M4",
     "ram_gb": 32,
@@ -24,15 +24,20 @@
     }
   },
   "config": {
-    "backend": "nemotron-mlx-asr",
-    "model_size": "base",
-    "feed_speed": 1.0,
+    "asr": {
+      "backend": "nemotron-mlx-asr",
+      "model": "base"
+    },
     "translation": {
+      "source_languages": [
+        "en"
+      ],
       "target_language": "zh",
       "backend": "mlx-llm-mt",
       "model": "hy-mt2-1.8b-8bit",
       "simultaneous": false
-    }
+    },
+    "feed_speed": 1.0
   },
   "measurement": {
     "audio_pacing": "speed>0: absolute chunk-end deadlines; no post-feed sleep. speed=0: immediate",
@@ -46,14 +51,16 @@
     "rss_peak_bytes": "largest process RSS sampled every 50 ms, including startup; not an exact high-water mark",
     "mlx_peak_bytes": "MLX allocator peak since per-sample reset; separate from RSS, do not add them",
     "quality": "NFC, lowercase, punctuation-normalized WER; Chinese uses CER with whitespace removed",
-    "chrf": "character n-gram F-beta (n=1..6, beta=2) of the translation against the same sentence_id's reference in the target language; both sides use the WER normalization and drop whitespace; null without a translation hypothesis and reference",
+    "chrf": "per-row chrF: sacrebleu's CHRF(char_order=6, word_order=0, beta=2) for the translation against the same sentence_id's reference in the target language, whitespace removed and case and punctuation kept; null without a translation hypothesis and reference",
+    "corpus_chrf": "the report's chrF: character n-gram counts summed over every scored row of the language pair, scored once as sacrebleu scores a corpus; the headline quality figure",
+    "avg_chrf": "unweighted mean of the per-row chrf values, kept for inspection only; it overweights short rows and is not corpus chrF",
     "translation_reference": "reference of the same sentence_id in the target language, joined from the corpus manifest",
     "final_translation_time_s": "last committed line that first showed a translation, since feed start; paced runs only",
     "provisional_lead_s": "final_translation_time_s minus first_translation_time_s, so how long drafting ran before the translation settled; null unless the backend drafted provisional text",
     "asr_call_p95_ms": "last 4096 inference calls per sample, not word latency",
     "model_revisions": "explicit local artifacts are hashed; floating Hub aliases are not resolved"
   },
-  "corpus_sha256": "b28bb71f2acdc2e9bc073fe39e03e3ac6b430ba4cdc0b171c3e687132600b1e2",
+  "corpus_sha256": "bec39c83431782c760373dc102be1726bbac512577efc48a5ac1f504bceb0a7f",
   "model_artifacts": {},
   "warmup_results": [],
   "summary": {
@@ -62,22 +69,23 @@
     "n_failed": 0,
     "n_skipped": 0,
     "total_audio_s": 25.580000000000002,
-    "total_processing_s": 4.39281907863915,
+    "total_processing_s": 4.867808541283011,
     "avg_wer": 0.11952861952861953,
     "weighted_wer": 0.13725490196078433,
     "weighted_cer": null,
-    "avg_chrf": 7.00521731506517,
-    "first_translation_p95_s": 7.751219246163965,
-    "final_translation_p95_s": 7.751219246163965,
+    "corpus_chrf": 8.591371459868263,
+    "avg_chrf": 8.571983865128734,
+    "first_translation_p95_s": 7.850492528825998,
+    "final_translation_p95_s": 7.850492528825998,
     "provisional_lead_p95_s": null,
-    "finalization_p95_s": 0.4448417745530605,
-    "first_visible_p95_s": 2.6124628299847243,
-    "source_end_lag_p95_s": 0.447711050558835,
+    "finalization_p95_s": 0.5074841217137873,
+    "first_visible_p95_s": 2.710600908473134,
+    "source_end_lag_p95_s": 0.5160725296959279,
     "n_warmup_failed": 0,
     "n_invalid_timestamps": 0,
     "rss_peak_bytes": null,
-    "mlx_peak_bytes": 3966215598,
-    "overall_rtf": 0.17172865827361802
+    "mlx_peak_bytes": 3896916420,
+    "overall_rtf": 0.19029744101966423
   },
   "results": [
     {
@@ -91,14 +99,14 @@
       "cer_details": {},
       "repeat": 1,
       "translation_errors": [],
-      "first_visible_time_s": 2.6649298341944814,
-      "first_translation_time_s": 4.018662792630494,
-      "feed_time_s": 7.202960459515452,
-      "finalization_time_s": 0.490768457762897,
-      "source_end_lag_s": 0.4937289172783492,
+      "first_visible_time_s": 2.7725005000829697,
+      "first_translation_time_s": 4.280866832472384,
+      "feed_time_s": 7.202853582799435,
+      "finalization_time_s": 0.5434582093730569,
+      "source_end_lag_s": 0.5463117921724914,
       "rss_peak_bytes": null,
       "rss_samples": 0,
-      "mlx_peak_bytes": 3881827104,
+      "mlx_peak_bytes": 3881830272,
       "mlx_active_bytes": 3220758312,
       "wer_details": {
         "substitutions": 0,
@@ -107,11 +115,11 @@
         "ref_words": 11,
         "hyp_words": 11
       },
-      "processing_time_s": 1.0404679123312235,
-      "rtf": 0.1445094322682255,
-      "wall_time_s": 7.693733209744096,
-      "startup_time_s": 6.350725333206356,
-      "first_text_time_s": 2.6649298341944814,
+      "processing_time_s": 1.213981376029551,
+      "rtf": 0.16860852444854876,
+      "wall_time_s": 7.746315999887884,
+      "startup_time_s": 6.483362666331232,
+      "first_text_time_s": 2.7725005000829697,
       "n_transcription_calls": 13,
       "n_lines": 1,
       "n_tokens": 27,
@@ -122,8 +130,8 @@
       "target_language": "zh",
       "translation": "它就在下面。 玛里亚和蒂克尔在高地上。",
       "translation_reference": "阴暗面下面的地壳薄一些，高地下的地壳厚一些。",
-      "chrf": 5.303753180661578,
-      "final_translation_time_s": 4.018662792630494,
+      "chrf": 5.581001131739981,
+      "final_translation_time_s": 4.280866832472384,
       "provisional_lead_s": null,
       "source": "google/fleurs@70bb2e84b976b7e960aa89f1c648e09c59f894dd/en_us/test",
       "tags": [],
@@ -255,8 +263,8 @@
         ]
       },
       "sample": "fleurs_en_1700",
-      "asr_call_mean_ms": 80.03599325624796,
-      "asr_call_p95_ms": 160.03129072487354
+      "asr_call_mean_ms": 93.38318277150393,
+      "asr_call_p95_ms": 243.29741671681404
     },
     {
       "language": "en",
@@ -269,11 +277,11 @@
       "cer_details": {},
       "repeat": 1,
       "translation_errors": [],
-      "first_visible_time_s": 2.140259792096913,
-      "first_translation_time_s": 7.848267833702266,
-      "feed_time_s": 9.722048624418676,
-      "finalization_time_s": 0.031501625664532185,
-      "source_end_lag_s": 0.033550250083207445,
+      "first_visible_time_s": 2.1456827502697706,
+      "first_translation_time_s": 7.934863207861781,
+      "feed_time_s": 9.84376791678369,
+      "finalization_time_s": 0.12015125062316656,
+      "source_end_lag_s": 0.24391916740685637,
       "rss_peak_bytes": null,
       "rss_samples": 0,
       "mlx_peak_bytes": 3896916420,
@@ -285,11 +293,11 @@
         "ref_words": 22,
         "hyp_words": 23
       },
-      "processing_time_s": 1.663883501663804,
-      "rtf": 0.1711814302123255,
-      "wall_time_s": 9.75355212483555,
-      "startup_time_s": 0.00018570758402347565,
-      "first_text_time_s": 2.140259792096913,
+      "processing_time_s": 1.7939985003322363,
+      "rtf": 0.18456774694776093,
+      "wall_time_s": 9.963923124596477,
+      "startup_time_s": 0.00022583361715078354,
+      "first_text_time_s": 2.1456827502697706,
       "n_transcription_calls": 18,
       "n_lines": 1,
       "n_tokens": 62,
@@ -298,10 +306,10 @@
       "hypothesis": " On the other hand, icy and snowy conditions are normal in many countries and the traffic goes on most unerruptly. All year round.",
       "reference": "On the other hand, icy and snowy conditions are normal in many countries, and traffic goes on mostly uninterrupted all year round.",
       "target_language": "zh",
-      "translation": "另一方面，在许多市场中，条件并不正常，交易也大多出现问题。 一年又一年。",
+      "translation": "另一方面，在许多市场中，条件并不正常，交易也大多出现问题。 全年都如此。",
       "translation_reference": "另一方面，冰雪天气在很多国家都十分常见，全年交通也几乎不会中断。",
-      "chrf": 10.48398949013488,
-      "final_translation_time_s": 7.848267833702266,
+      "chrf": 14.671229713481907,
+      "final_translation_time_s": 7.934863207861781,
       "provisional_lead_s": null,
       "source": "google/fleurs@70bb2e84b976b7e960aa89f1c648e09c59f894dd/en_us/test",
       "tags": [],
@@ -433,8 +441,8 @@
         ]
       },
       "sample": "fleurs_en_1921",
-      "asr_call_mean_ms": 92.43797231465578,
-      "asr_call_p95_ms": 136.6667076945305
+      "asr_call_mean_ms": 99.6665833517909,
+      "asr_call_p95_ms": 172.735333442688
     },
     {
       "language": "en",
@@ -447,14 +455,14 @@
       "cer_details": {},
       "repeat": 1,
       "translation_errors": [],
-      "first_visible_time_s": 2.137572541832924,
-      "first_translation_time_s": 6.877781958319247,
-      "feed_time_s": 8.66325379256159,
-      "finalization_time_s": 0.0024834154173731804,
-      "source_end_lag_s": 0.00573720797896371,
+      "first_visible_time_s": 2.1535045839846134,
+      "first_translation_time_s": 7.091156417503953,
+      "feed_time_s": 8.669159709475935,
+      "finalization_time_s": 0.18371733278036118,
+      "source_end_lag_s": 0.19287704225629554,
       "rss_peak_bytes": null,
       "rss_samples": 0,
-      "mlx_peak_bytes": 3966215598,
+      "mlx_peak_bytes": 3895472516,
       "mlx_active_bytes": 3220758348,
       "wer_details": {
         "substitutions": 3,
@@ -463,11 +471,11 @@
         "ref_words": 18,
         "hyp_words": 17
       },
-      "processing_time_s": 1.6884676646441221,
-      "rtf": 0.1949731714369656,
-      "wall_time_s": 8.665740166790783,
-      "startup_time_s": 0.000133417546749115,
-      "first_text_time_s": 2.137572541832924,
+      "processing_time_s": 1.8598286649212241,
+      "rtf": 0.2147608158107649,
+      "wall_time_s": 8.852880709804595,
+      "startup_time_s": 0.00038116704672574997,
+      "first_text_time_s": 2.1535045839846134,
       "n_transcription_calls": 18,
       "n_lines": 1,
       "n_tokens": 56,
@@ -476,10 +484,10 @@
       "hypothesis": " The tensioning storm of the Atlantic Hurricane season, subtropic storm jerry. Worn in the Atlantic Ocean today.",
       "reference": "The tenth named storm of the Atlantic Hurricane season, Subtropical Storm Jerry, formed in the Atlantic Ocean today.",
       "target_language": "zh",
-      "translation": "亚兰蒂克历史中的张力模式是动态的，而替代模式则是持续的。 今天在亚特兰大有个比赛。",
+      "translation": "亚伦蒂克历史中的张力模式总是如此，替代性模式则每时每刻都存在。 今天在亚特兰大有个比赛。",
       "translation_reference": "亚热带风暴杰瑞 (Jerry) 今天在大西洋形成，这是大西洋飓风季节中第十个被命名的风暴。",
-      "chrf": 5.227909274399055,
-      "final_translation_time_s": 6.877781958319247,
+      "chrf": 5.463720750164314,
+      "final_translation_time_s": 7.091156417503953,
       "provisional_lead_s": null,
       "source": "google/fleurs@70bb2e84b976b7e960aa89f1c648e09c59f894dd/en_us/test",
       "tags": [],
@@ -611,8 +619,8 @@
         ]
       },
       "sample": "fleurs_en_1993",
-      "asr_call_mean_ms": 93.80375914689567,
-      "asr_call_p95_ms": 236.9253747165203
+      "asr_call_mean_ms": 103.32381471784578,
+      "asr_call_p95_ms": 243.3990826830268
     }
   ]
 }
