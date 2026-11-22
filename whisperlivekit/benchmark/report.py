@@ -41,9 +41,12 @@ def print_report(report: BenchmarkReport, out: TextIO = sys.stderr) -> None:
     translation = report.translation
     if translation.get("target_language"):
         producer = " ".join(part for part in (translation.get("backend"), translation.get("model")) if part)
+        direction = "->".join(("+".join(translation.get("source_languages") or [])
+                               or "?", translation["target_language"]))
         out.write(
-            f"Translation to {translation['target_language']}"
-            f"{' via ' + producer if producer else ''}: mean chrF {_number(report.avg_chrf)}%; "
+            f"Translation {direction}"
+            f"{' via ' + producer if producer else ''}: corpus chrF {_number(report.corpus_chrf)}% "
+            f"(per-row mean {_number(report.avg_chrf)}%); "
             f"first translation p95 {_number(report.percentile('first_translation_time_s'))}s; "
             f"final translation p95 {_number(report.percentile('final_translation_time_s'))}s; "
             f"provisional lead p95 {_number(report.percentile('provisional_lead_s'))}s\n"

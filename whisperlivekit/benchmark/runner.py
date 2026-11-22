@@ -88,7 +88,8 @@ class BenchmarkRunner:
         # Hash after timing: reading weights beforehand would warm the OS cache.
         from whisperlivekit.benchmark.metrics import describe_model_artifacts
         report.model_artifacts = describe_model_artifacts(kwargs)
-        report.translation = describe_translation_config(self.engine_kwargs)
+        report.translation = describe_translation_config(
+            self.engine_kwargs, (sample.language for sample in samples))
         return report
 
     async def _run_sample(self, sample: BenchmarkSample, harness_kwargs: dict, compute_wer) -> SampleResult:

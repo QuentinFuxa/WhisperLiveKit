@@ -158,26 +158,62 @@ async def test_pcm_pacing_uses_chunk_end_deadlines_without_an_eof_delay(monkeypa
             await harness.feed_pcm(audio, **options)
 
 
-def test_chrf_scores_a_translation_without_a_model():
+def test_chrf_matches_sacrebleu_on_pinned_inputs():
+    """chrF is sacrebleu's CHRF(char_order=6, word_order=0, beta=2), value for value.
+
+    Each expected value below was computed once with sacrebleu 2.6.0 and
+    hard-coded, so the suite checks against the reference implementation
+    without importing it.
+    """
     from whisperlivekit.metrics import compute_chrf
 
-    assert compute_chrf("Hello world", "Hello world") == 100.0
+    assert compute_chrf("Hello world", "Hello world") == pytest.approx(100.0)
     assert compute_chrf("Hello world", "") == 0.0
     assert compute_chrf("", "Hello world") == 0.0
-    # Orders are averaged over the n-grams a three-character text has: orders
-    # 1 and 2 match once of twice each, order 3 never; F-beta is 38.89 at beta=2.
-    assert compute_chrf("abc", "abd") == pytest.approx(38.8889, abs=1e-4)
+    assert compute_chrf("abc", "abd") == pytest.approx(38.888889)
     # Precision equal to recall is the same value for any beta, so that pair
     # cannot pin the exponent. This one separates them: a two-character
     # reference is wholly contained in "abc" (recall 1) while precision
     # averages to 7/12 over its two orders, so F-2 is 87.5, and 80.77 if beta
     # stands in for beta squared.
-    assert compute_chrf("ab", "abc") == pytest.approx(87.5, abs=1e-4)
-    # Formatting cannot move the score, and Chinese needs no tokenizer.
-    assert compute_chrf("Hello  world", "hello world") == 100.0
-    assert compute_chrf("你好世界。", "你好，世界！") == 100.0
+    assert compute_chrf("ab", "abc") == pytest.approx(87.5)
+    # sacrebleu removes whitespace and nothing else. Case and punctuation are
+    # part of the score, which is what makes the number comparable; the old
+    # WER-normalized variant scored both of these inputs 100.0.
+    assert compute_chrf("The Cat Sat", "the cat sat") == pytest.approx(17.361111)
+    assert compute_chrf("你好世界。", "你好，世界！") == pytest.approx(24.910180)
+    # Whitespace is the one thing removed, so layout cannot move the score and a
+    # character language needs no tokenizer.
+    assert compute_chrf("Hello world", "Hello  world") == 100.0
+    assert compute_chrf("你好世界。", "你好世界") == pytest.approx(72.573464)
     # A metric that cannot rank two translations would pass every check above.
     assert compute_chrf("你好世界", "你好") < compute_chrf("你好世界", "你好世界")
+
+
+def test_corpus_chrf_sums_ngram_counts_rather_than_averaging_rows():
+    """The report's chrF is sacrebleu's corpus score, not the mean of per-row scores."""
+    from whisperlivekit.benchmark.metrics import BenchmarkReport, SampleResult
+    from whisperlivekit.metrics import compute_chrf
+
+    pairs = [("Hello world.", "Hello word."),
+             ("你好世界。", "你好，世界！"),
+             ("The cat sat on the mat.", "the cat sat on a mat")]
+    report = BenchmarkReport("whisper", "tiny", translation={"target_language": "zh"}, results=[
+        SampleResult(sample_name=f"row{index}", language="en", category="fleurs", duration_s=1.0,
+                     target_language="zh", translation=hypothesis, translation_reference=reference,
+                     chrf=compute_chrf(reference, hypothesis))
+        for index, (reference, hypothesis) in enumerate(pairs)])
+    # sacrebleu 2.6.0 corpus score over the same three segments, and the mean of
+    # the same three per-sentence scores: 59.094 against 51.049.
+    assert report.corpus_chrf == pytest.approx(59.093996)
+    assert report.avg_chrf == pytest.approx(51.048780)
+    assert report.to_dict()["summary"]["corpus_chrf"] == pytest.approx(59.093996)
+    # A row with no translation is not part of the pair and must not dilute it.
+    report.results.append(SampleResult(sample_name="asr only", language="en", category="fleurs",
+                                       duration_s=1.0))
+    assert report.corpus_chrf == pytest.approx(59.093996)
+    # Nothing scored at all is null rather than zero.
+    assert BenchmarkReport("whisper", "tiny").corpus_chrf is None
 
 
 def test_manifest_sentence_id_join_supplies_the_translation_reference(tmp_path):
@@ -278,14 +314,15 @@ async def test_translated_rows_carry_chrf_and_derived_translation_latency(tmp_pa
         audio.setframerate(16000)
         audio.writeframes(bytes(3200))
     sample = BenchmarkSample("fleurs_en_1", str(path), "Hello World.", .1, "en", "fleurs",
-                             sentence_id=1, translation_references={"en": "Hello World.", "zh": "你好世界。"})
+                             sentence_id=1, translation_references={"en": "Hello World.", "zh": "你好世界"})
     config = dict(transcription=False, pcm_input=True, target_language="zh",
                   translation_backend="mlx-llm-mt", mlx_llm_mt_model="hy-mt2-1.8b-8bit")
     runner = BenchmarkRunner(backend="whisper", speed=1)
     result = await runner._run_sample(sample, config, compute_wer)
     assert result.status == "ok"
     assert result.translation == "你好 世界"
-    assert result.translation_reference == "你好世界。"
+    assert result.translation_reference == "你好世界"
+    # Whitespace is all that separates them, and chrF removes whitespace.
     assert result.chrf == pytest.approx(100.0)
     assert result.first_translation_time_s is not None and result.final_translation_time_s is not None
     assert result.final_translation_time_s >= result.first_translation_time_s
@@ -298,10 +335,14 @@ async def test_translated_rows_carry_chrf_and_derived_translation_latency(tmp_pa
     assert asr_only.chrf is None and asr_only.provisional_lead_s is None
 
     report = BenchmarkReport("whisper", "tiny", results=[result],
-                             translation=describe_translation_config(config))
+                             translation=describe_translation_config(config, ["en"]))
     data = report.to_dict()
     assert data["benchmark_version"] == "3.2"
-    assert data["config"]["translation"] == {"target_language": "zh", "backend": "mlx-llm-mt",
+    # Both halves of the run are named: the recognizer and the translator.
+    assert data["config"]["asr"] == {"backend": "whisper", "model": "tiny"}
+    assert data["config"]["translation"] == {"source_languages": ["en"], "target_language": "zh",
+                                             "backend": "mlx-llm-mt",
                                              "model": "hy-mt2-1.8b-8bit", "simultaneous": False}
+    assert data["summary"]["corpus_chrf"] == pytest.approx(100.0)
     assert data["summary"]["avg_chrf"] == pytest.approx(100.0)
     assert describe_translation_config({})["backend"] == ""

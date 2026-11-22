@@ -47,7 +47,10 @@ audio hashes, effective configuration, dependency versions, hardware, source
 commit and dirty state. It adds the translation half of an
 audio-to-translation run: `target_language`, `translation`,
 `translation_reference`, `chrf`, `final_translation_time_s` and
-`provisional_lead_s` per row, and `config.translation`. Analyzer scripts under
+`provisional_lead_s` per row, `corpus_chrf` in the summary, and both halves of
+the configuration — `config.asr` with the backend and model that recognized the
+audio, `config.translation` with the source languages, target language, backend
+and model that translated it. Analyzer scripts under
 `benchmarks/evaluations/` remain pinned to the 3.1 reports they were written for.
 Separate startup/warmup records do not contribute to measured quality or
 latency. All measured repetitions retain their sample IDs.
@@ -165,10 +168,15 @@ recording's translation reference is the row of the same ID in the target
 language. No second corpus and no download. A row whose ID has no
 target-language sibling scores `null` instead of borrowing a reference.
 
-- **chrF:** character n-gram F-beta (n = 1..6, beta = 2), as a percentage. Both
-  sides get the WER normalization and lose their whitespace, so formatting
-  differences cannot move the score and Chinese needs no tokenizer. It is null
-  on a row with no translation hypothesis or no translation reference.
+- **chrF:** sacrebleu's chrF, `CHRF(char_order=6, word_order=0, beta=2)`: the
+  character n-gram F-beta of the translation against the same `sentence_id`'s
+  reference in the target language, with whitespace removed and case and
+  punctuation kept. It scores ASR and MT together, so ASR errors flow into it.
+  The summary's `corpus_chrf` is the number to quote: sacrebleu's corpus score
+  for the pair, from the n-gram counts summed over every scored row. The per-row
+  `chrf` and their unweighted mean `avg_chrf` stay for inspection; a mean of
+  per-sentence scores is not a corpus score. The per-row value is null on a row
+  with no translation hypothesis or no translation reference.
 - **First translation:** delay from feed start to the first provisional or
   committed translation. Paced runs only, like first visible text.
 - **Final translation:** the last committed line that first showed a
@@ -182,7 +190,7 @@ target-language sibling scores `null` instead of borrowing a reference.
 A demonstration report from this machine is checked in at
 [evaluations/translation-fleurs-en-zh](evaluations/translation-fleurs-en-zh/),
 with its provenance and its limits in `NOTES.md`: three samples without drafting
-and one with it. They exist to show the join, the score and the latency fields
-on a real cascade run; three samples establish no quality figure and are not a
-backend comparison.
+and the same three with it. They exist to show the join, the score and the
+latency fields on a real cascade run; three samples establish no quality figure
+and are not a backend comparison.
 

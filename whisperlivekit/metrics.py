@@ -84,14 +84,66 @@ def compute_wer(reference: str, hypothesis: str) -> Dict:
     }
 
 
-def compute_chrf(reference: str, hypothesis: str, max_n: int = 6, beta: float = 2.0) -> float:
-    """Compute chrF, the character n-gram F-beta score, as a percentage.
+# sacrebleu's CHRF defaults: char_order=6, word_order=0, beta=2, whitespace off.
+CHRF_CHAR_ORDER = 6
+CHRF_BETA = 2.0
 
-    Both sides get the same NFC/lowercase/punctuation normalization as WER and
-    then lose all whitespace, so formatting differences do not move the score
-    and Chinese needs no tokenizer. Orders are averaged over the n-grams the
-    shorter text actually has, over sacrebleu's char_order=6 and the chrF
-    paper's beta=2.
+
+def chrf_statistics(reference: str, hypothesis: str) -> List[int]:
+    """Character n-gram match counts per order, as sacrebleu's CHRF counts them.
+
+    Returns three counts for each order 1..``CHRF_CHAR_ORDER`` — hypothesis
+    n-grams, reference n-grams and matched n-grams — over the text with all
+    whitespace removed. Case and punctuation are kept: sacrebleu removes neither
+    by default, so unlike :func:`normalize_text` this is the published metric.
+
+    Summing these lists over the rows of one language pair and passing the sum
+    to :func:`chrf_score` is sacrebleu's corpus score; scoring one row's own
+    list is that row's score, and the mean of those is a different number.
+    """
+    ref = "".join(reference.split())
+    hyp = "".join(hypothesis.split())
+    statistics: List[int] = []
+    for n in range(1, CHRF_CHAR_ORDER + 1):
+        ref_ngrams = Counter(ref[index:index + n] for index in range(len(ref) - n + 1))
+        hyp_ngrams = Counter(hyp[index:index + n] for index in range(len(hyp) - n + 1))
+        matched = sum(min(count, hyp_ngrams[gram]) for gram, count in ref_ngrams.items())
+        # An order the reference has no n-gram for is excluded from the average;
+        # reporting the hypothesis count as zero is how sacrebleu does that.
+        statistics += [sum(hyp_ngrams.values()) if ref_ngrams else 0,
+                       sum(ref_ngrams.values()), matched]
+    return statistics
+
+
+def chrf_score(statistics: List[int]) -> float:
+    """chrF as a percentage, from :func:`chrf_statistics` counts.
+
+    Precision and recall are averaged over the orders both sides have n-grams
+    for, then combined as F-beta with beta=2.
+    """
+    precisions, recalls = [], []
+    for order in range(len(statistics) // 3):
+        hypothesis_count, reference_count, matched = statistics[3*order:3*order + 3]
+        if hypothesis_count > 0 and reference_count > 0:
+            precisions.append(matched / hypothesis_count)
+            recalls.append(matched / reference_count)
+    if not precisions:
+        return 0.0
+    precision = sum(precisions) / len(precisions)
+    recall = sum(recalls) / len(recalls)
+    if precision + recall <= 0:
+        return 0.0
+    beta_squared = CHRF_BETA * CHRF_BETA
+    return 100 * (1 + beta_squared) * precision * recall / (beta_squared * precision + recall)
+
+
+def compute_chrf(reference: str, hypothesis: str) -> float:
+    """Compute chrF for one pair, in 0..100, exactly as sacrebleu reports it.
+
+    Equivalent to ``sacrebleu.metrics.CHRF(char_order=6, word_order=0,
+    beta=2)``: whitespace removed, everything else kept. Two different metrics
+    carry this name in this repository — this one is the comparable one, and
+    :func:`normalize_text` remains the WER/CER normalization.
 
     Args:
         reference: Human reference translation.
@@ -100,27 +152,7 @@ def compute_chrf(reference: str, hypothesis: str, max_n: int = 6, beta: float = 
     Returns:
         chrF in 0..100. Either side empty scores 0 rather than raising.
     """
-    ref = "".join(normalize_text(reference).split())
-    hyp = "".join(normalize_text(hypothesis).split())
-    if not ref or not hyp:
-        return 0.0
-
-    precisions, recalls = [], []
-    for n in range(1, max_n + 1):
-        ref_ngrams = Counter(ref[index:index + n] for index in range(len(ref) - n + 1))
-        hyp_ngrams = Counter(hyp[index:index + n] for index in range(len(hyp) - n + 1))
-        if not ref_ngrams or not hyp_ngrams:
-            break
-        matched = sum(min(count, hyp_ngrams[gram]) for gram, count in ref_ngrams.items())
-        precisions.append(matched / sum(hyp_ngrams.values()))
-        recalls.append(matched / sum(ref_ngrams.values()))
-
-    precision = sum(precisions) / len(precisions)
-    recall = sum(recalls) / len(recalls)
-    if precision <= 0 or recall <= 0:
-        return 0.0
-    beta_squared = beta * beta
-    return 100 * (1 + beta_squared) * precision * recall / (beta_squared * precision + recall)
+    return chrf_score(chrf_statistics(reference, hypothesis))
 
 
 def compute_timestamp_accuracy(

@@ -126,8 +126,34 @@ class BenchmarkReport:
 
     @property
     def avg_chrf(self) -> Optional[float]:
+        """Unweighted mean of the per-row chrF values, for inspection.
+
+        Not the report's chrF: averaging per-sentence scores overweights short
+        rows. Read :attr:`corpus_chrf` for the score to quote.
+        """
         values = [r.chrf for r in self.successful_results if r.chrf is not None]
         return sum(values) / len(values) if values else None
+
+    @property
+    def corpus_chrf(self) -> Optional[float]:
+        """chrF over every scored row, from character n-gram counts summed over the pair.
+
+        This is sacrebleu's corpus score for the language pair: the per-order
+        match counts of each row are added up first and the F-score is taken
+        over the totals. Taking the mean of the per-row scores instead would
+        weight a four-character row like a forty-character one.
+        """
+        from whisperlivekit.metrics import CHRF_CHAR_ORDER, chrf_score, chrf_statistics
+
+        scored = [r for r in self.successful_results if r.chrf is not None]
+        if not scored:
+            return None
+        totals = [0] * (3 * CHRF_CHAR_ORDER)
+        for result in scored:
+            for index, count in enumerate(chrf_statistics(result.translation_reference,
+                                                          result.translation)):
+                totals[index] += count
+        return chrf_score(totals)
 
     def percentile(self, field_name, quantile=.95):
         values = sorted(value for r in self.successful_results
@@ -143,8 +169,9 @@ class BenchmarkReport:
             "benchmark_version": "3.2",
             "timestamp": self.timestamp,
             "system_info": self.system_info,
-            "config": {"backend": self.backend, "model_size": self.model_size,
-                       "feed_speed": self.feed_speed, "translation": self.translation},
+            "config": {"asr": describe_asr_config(self.backend, self.model_size),
+                       "translation": self.translation,
+                       "feed_speed": self.feed_speed},
             "measurement": {
                 "audio_pacing": "speed>0: absolute chunk-end deadlines; no post-feed sleep. speed=0: immediate",
                 "rtf": "successful ASR call time / audio duration",
@@ -157,7 +184,9 @@ class BenchmarkReport:
                 "rss_peak_bytes": "largest process RSS sampled every 50 ms, including startup; not an exact high-water mark",
                 "mlx_peak_bytes": "MLX allocator peak since per-sample reset; separate from RSS, do not add them",
                 "quality": "NFC, lowercase, punctuation-normalized WER; Chinese uses CER with whitespace removed",
-                "chrf": "character n-gram F-beta (n=1..6, beta=2) of the translation against the same sentence_id's reference in the target language; both sides use the WER normalization and drop whitespace; null without a translation hypothesis and reference",
+                "chrf": "per-row chrF: sacrebleu's CHRF(char_order=6, word_order=0, beta=2) for the translation against the same sentence_id's reference in the target language, whitespace removed and case and punctuation kept; null without a translation hypothesis and reference",
+                "corpus_chrf": "the report's chrF: character n-gram counts summed over every scored row of the language pair, scored once as sacrebleu scores a corpus; the headline quality figure",
+                "avg_chrf": "unweighted mean of the per-row chrf values, kept for inspection only; it overweights short rows and is not corpus chrF",
                 "translation_reference": "reference of the same sentence_id in the target language, joined from the corpus manifest",
                 "final_translation_time_s": "last committed line that first showed a translation, since feed start; paced runs only",
                 "provisional_lead_s": "final_translation_time_s minus first_translation_time_s, so how long drafting ran before the translation settled; null unless the backend drafted provisional text",
@@ -177,6 +206,7 @@ class BenchmarkReport:
                 "avg_wer": self.avg_wer,
                 "weighted_wer": self.weighted_wer,
                 "weighted_cer": self.weighted_cer,
+                "corpus_chrf": self.corpus_chrf,
                 "avg_chrf": self.avg_chrf,
                 "first_translation_p95_s": self.percentile("first_translation_time_s"),
                 "final_translation_p95_s": self.percentile("final_translation_time_s"),
@@ -266,16 +296,27 @@ def get_system_info() -> Dict[str, Any]:
     return info
 
 
-def describe_translation_config(config: Dict[str, Any]) -> Dict[str, Any]:
+def describe_asr_config(backend: str, model: str) -> Dict[str, Any]:
+    """Record the ASR half of a run: the resolved backend and the model it loaded.
+
+    An audio-to-translation report has to state both halves, because the same
+    MT settings score differently behind a different recognizer.
+    """
+    return {"backend": backend, "model": model}
+
+
+def describe_translation_config(config: Dict[str, Any],
+                                source_languages=()) -> Dict[str, Any]:
     """Record the MT half of an audio-to-translation run.
 
     An audio-to-translation benchmark has to state what produced the target
-    text, not only the ASR backend: the language pair, the backend and the
-    loaded model. Drafting changes what a latency number means, so it is
-    recorded beside them.
+    text, not only the ASR backend: the direction (the source languages that
+    were fed against the target language), the backend and the loaded model.
+    Drafting changes what a latency number means, so it is recorded beside them.
     """
     backend = config.get("translation_backend", "")
     return {
+        "source_languages": sorted({language for language in source_languages if language}),
         "target_language": config.get("target_language", ""),
         "backend": backend,
         "model": config.get("mlx_llm_mt_model") if backend == "mlx-llm-mt" else None,
