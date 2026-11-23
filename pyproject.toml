@@ -42,7 +42,7 @@ test = [
     "pytest-asyncio>=0.21",
     "datasets>=2.14",
     "librosa",
-    "deepgram-sdk==7.8.1",
+    "deepgram-sdk==7.19.0",
     "psutil>=5.9",
     "matplotlib>=3.8",
 ]
@@ -63,8 +63,8 @@ voxtral-mlx = [
 # pulls transformers>=5; conflicts with qwen3-asr-causal[streaming] which pins
 # transformers==4.57.6. Declare the conflict below; install only one.
 mlx-llm-mt = [
-    'mlx>=0.31.2,<0.32; sys_platform == "darwin" and platform_machine == "arm64"',
-    'mlx-lm>=0.31.3,<0.32; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx>=0.31.2,<0.33; sys_platform == "darwin" and platform_machine == "arm64"',
+    'mlx-lm>=0.31.3,<0.33; sys_platform == "darwin" and platform_machine == "arm64"',
 ]
 nemotron-mlx-asr = [
     'mlx>=0.11.0; sys_platform == "darwin" and platform_machine == "arm64"',
@@ -114,7 +114,7 @@ diarization-diart = [
 ]
 
 [dependency-groups]
-dev = ["rich>=14.3.3", "ruff==0.16.*"]
+dev = ["rich>=14.3.3", "ruff>=0.16,<0.18"]
 
 [tool.uv]
 # Resolve Diart's Python <3.13 dependency graph separately from Python 3.13.
